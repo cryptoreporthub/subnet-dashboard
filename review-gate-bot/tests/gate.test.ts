@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   computeGate,
   cursorDittoTagKey,
+  gateActions,
+  needsReviewTurn,
   replitAskKey,
   replitTagKey,
   verdictAt,
@@ -161,4 +163,71 @@ test("tag and ask keys are distinct per slot and per head", () => {
   assert.notEqual(replitTagKey(1515, HEAD), replitAskKey(1515, HEAD));
   assert.notEqual(cursorDittoTagKey(1515, HEAD), cursorDittoTagKey(1515, OTHER));
   assert.notEqual(cursorDittoTagKey(1515, HEAD), cursorDittoTagKey(1516, HEAD));
+});
+
+// --- Finding 8: the draft guard, for every delivery ----------------------
+
+test("a draft is never tagged, asked about or reviewed, at any gate state", () => {
+  const states = [
+    input(),
+    input({ verdicts: [v("mc", "PASS")] }),
+    input({ verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")], suite: "clean" }),
+    input({
+      verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")],
+      suite: "clean",
+      replitTaggedForSha: HEAD,
+    }),
+    input({ verdicts: [v("cursor", "FAIL")] }),
+  ];
+  for (const gateInput of states) {
+    const state = computeGate(gateInput);
+    const actions = gateActions(state, true);
+    assert.equal(actions.draft, true);
+    assert.equal(actions.tagCursorDitto, false, `draft tagged at ${state.next}`);
+    assert.equal(actions.tagReplit, false);
+    assert.equal(actions.askReplit, false);
+    assert.equal(actions.needsReviewTurn, false, `draft reviewed at ${state.next}`);
+  }
+});
+
+test("a non-draft is tagged and asked exactly as the gate allows", () => {
+  const tagReplitState = computeGate(
+    input({ verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")], suite: "clean" }),
+  );
+  const atTag = gateActions(tagReplitState, false);
+  assert.equal(atTag.tagCursorDitto, true);
+  assert.equal(atTag.tagReplit, true);
+  assert.equal(atTag.askReplit, true);
+
+  const awaitReplitState = computeGate(
+    input({
+      verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")],
+      suite: "clean",
+      replitTaggedForSha: HEAD,
+    }),
+  );
+  const atAwait = gateActions(awaitReplitState, false);
+  assert.equal(atAwait.tagReplit, false, "the tag is not posted twice");
+  assert.equal(atAwait.askReplit, true, "a failed ask is retried from await_replit");
+});
+
+test("a blocked gate posts no tag", () => {
+  const actions = gateActions(computeGate(input({ verdicts: [v("cursor", "FAIL")] })), false);
+  assert.equal(actions.tagCursorDitto, false);
+  assert.equal(actions.tagReplit, false);
+  assert.equal(actions.askReplit, false);
+});
+
+test("a model turn is spent only when MC has no verdict at this head", () => {
+  assert.equal(needsReviewTurn(computeGate(input())), true, "no MC verdict: review it");
+  assert.equal(
+    needsReviewTurn(computeGate(input({ verdicts: [v("mc", "PASS")] }))),
+    false,
+    "MC already passed: the gate is waiting on the others, not on MC",
+  );
+  assert.equal(
+    needsReviewTurn(computeGate(input({ verdicts: [v("mc", "MODIFY")] }))),
+    false,
+    "MC already said MODIFY: post_verdict is at-most-once, so a second review posts nothing",
+  );
 });

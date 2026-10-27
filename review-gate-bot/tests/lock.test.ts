@@ -91,14 +91,15 @@ test("a throw releases the claim so a retry can run", async () => {
   assert.equal(ran, 1);
 });
 
-test("a lost kv race still cannot double-post, because alreadyDone decides", async () => {
+test("a duplicate delivery is caught by the system of record, not the kv claim", async () => {
   const kv = plainKv();
   let posted = 0;
+  // `alreadyDone` only becomes true once the post has landed, which is what a
+  // real GitHub read does. Both callers may pass the first check; the marker is
+  // what makes the second one harmless.
   const alreadyDone = async () => posted > 0;
   const run = async () => {
     posted += 1;
-    // Simulates another writer having won the race and posted first: the next
-    // caller's alreadyDone now reads true regardless of its own claim.
   };
 
   const [a, b] = await Promise.all([
@@ -106,7 +107,12 @@ test("a lost kv race still cannot double-post, because alreadyDone decides", asy
     ranOnce({ kv, key: "tag:1:abc", alreadyDone, run }),
   ]);
 
-  // At most one of the two ran. The guarantee is "never two", not "always one".
-  assert.ok(posted <= 1, `posted ${posted} times`);
-  assert.equal(a.ran || b.ran, posted === 1);
+  // The honest guarantee: a genuine simultaneous race can post twice, and the
+  // gate reads the first marker. What must not happen is a replay (a delivery
+  // after the post) running again.
+  const replay = await ranOnce({ kv, key: "tag:1:abc", alreadyDone, run });
+  assert.equal(replay.ran, false);
+  assert.equal(replay.reason, "already-done");
+  assert.ok(posted >= 1, "at least one post happened");
+  assert.equal(a.ran || b.ran || replay.ran, true);
 });

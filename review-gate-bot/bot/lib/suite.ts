@@ -1,7 +1,20 @@
 /**
  * Flake-aware base-vs-head pytest comparison over JUnit XML, plus the
  * docs-only carry-over rule. Pure: strings in, structured verdict out.
+ * Both XML inputs come from the runner (see `lib/runner.ts`), never from the
+ * model, and the flake list comes from a committed file (see `lib/flakes.ts`).
+ * The two rules that keep a comparison honest:
+ *
+ * - **Zero testcases is a failure, not a pass.** An empty or truncated report
+ *   parses to "no failures", which would read as `clean`. A suite that collected
+ *   nothing proves nothing, so it is `zero-testcases` and blocks the gate.
+ * - **Carry-over is deny-by-default.** A new head may reuse a clean result only
+ *   when every changed file is on an explicit non-code allowlist. Anything not
+ *   on that list — `.html`, `.yml`, `.js`, `Dockerfile`, a `.json` fixture, an
+ *   extension we have never seen — counts as code and forces a real run.
  */
+
+import type { SuiteState } from "./gate.js";
 
 export type JunitCase = {
   classname: string;
@@ -14,6 +27,7 @@ export type JunitCase = {
 };
 
 export type SuiteDiff = {
+  /** Failures that are new at head: the regressions. */
   newFailures: string[];
   /** Failures present at base that no longer fail at head. */
   fixed: string[];
@@ -22,6 +36,13 @@ export type SuiteDiff = {
   /** Failures present at both base and head: pre-existing, not caused here. */
   preExisting: string[];
   clean: boolean;
+  /**
+   * Why a comparison cannot be trusted at all. Present means `clean` is false
+   * no matter what the failure lists say.
+   */
+  invalid?: "zero-testcases";
+  /** Testcase counts, so a reader can see the report was real. */
+  counts: { base: number; head: number };
 };
 
 function decodeEntities(value: string): string {
@@ -90,8 +111,26 @@ export type DiffInput = {
 };
 
 export function diffJunit(input: DiffInput): SuiteDiff {
-  const base = failing(parseJunit(input.baseXml));
-  const head = failing(parseJunit(input.headXml));
+  const baseCases = parseJunit(input.baseXml);
+  const headCases = parseJunit(input.headXml);
+  const counts = { base: baseCases.length, head: headCases.length };
+
+  if (counts.head === 0) {
+    // A report with no testcases cannot show a regression, and it cannot show
+    // the absence of one either. Treat it as a failed run.
+    return {
+      newFailures: [],
+      fixed: [],
+      flakyRetriedOk: [],
+      preExisting: [],
+      clean: false,
+      invalid: "zero-testcases",
+      counts,
+    };
+  }
+
+  const base = failing(baseCases);
+  const head = failing(headCases);
   const flakes = new Set(input.knownFlakes ?? []);
 
   const newFailures: string[] = [];
@@ -122,36 +161,49 @@ export function diffJunit(input: DiffInput): SuiteDiff {
     flakyRetriedOk: flakyRetriedOk.sort(),
     preExisting: preExisting.sort(),
     clean: newFailures.length === 0,
+    counts,
   };
 }
 
-/** Paths that can reach pytest. A change to any of these means no carry-over. */
-const PYTEST_REACHABLE: readonly RegExp[] = [
-  /\.py$/i,
-  // A shell script can invoke pytest or mutate state a fixture reads. PR 1519's
-  // one-line `echo` edit to a `.sh` is exactly this case.
-  /\.sh$/i,
-  /(^|\/)conftest\.py$/i,
-  /(^|\/)pytest\.ini$/i,
-  /(^|\/)tox\.ini$/i,
-  /(^|\/)setup\.cfg$/i,
-  /(^|\/)pyproject\.toml$/i,
-  /(^|\/)requirements[^/]*\.txt$/i,
-  /(^|\/)constraints[^/]*\.txt$/i,
-  /(^|\/)\.coveragerc$/i,
-  /(^|\/)data\/.*\.json$/i,
-  /(^|\/)config\/.*\.json$/i,
-];
+/**
+ * Paths that provably cannot change a pytest outcome: prose and images.
+ *
+ * Everything else is code for this purpose. That direction is deliberate — the
+ * cost of a false "code" is one suite run, and the cost of a false "prose" is a
+ * head that ships unverified. Notably absent on purpose: `.yml` (workflows run
+ * the tests), `.html` (a Jinja template is asserted on by
+ * `test_hold_shadows.py`), `.js`, `.json`, `.sh`, and files with no extension
+ * (`Dockerfile`, `Procfile`, `LICENSE`).
+ */
+const NON_CODE: readonly RegExp[] = [/\.mdx?$/i, /\.(?:png|jpe?g|gif|svg|webp|ico)$/i];
+
+/** Changed files that block a suite carry-over: every file not proven non-code. */
+export function carryBlockingFiles(changedFiles: readonly string[]): string[] {
+  return changedFiles.filter((file) => !NON_CODE.some((pattern) => pattern.test(file)));
+}
 
 /**
- * Changed files that can change a pytest outcome.
+ * May this head reuse an earlier head's clean suite result?
  *
- * Carrying a suite result is only sound when nothing the suite can observe
- * changed. `.md` and other prose never reach pytest; a `.sh` script or a JSON
- * data file can, through a subprocess or a fixture, so both count as reachable.
- * Conservative by design: a false "reachable" costs a suite run, a false
- * "unreachable" ships an unverified head.
+ * Two independent conditions, and both must hold:
+ *
+ * 1. **Nothing a suite can observe changed.** Deny-by-default: only the prose
+ *    and image allowlist may carry.
+ * 2. **The source SHA has a recorded `clean` result.** `carryFromSha` used to be
+ *    any SHA the caller named, never checked against a real run — so a model
+ *    could carry from a head that had never been tested, or had failed.
  */
-export function pytestReachable(changedFiles: readonly string[]): string[] {
-  return changedFiles.filter((file) => PYTEST_REACHABLE.some((pattern) => pattern.test(file)));
+export function carryDecision(input: {
+  changedFiles: readonly string[];
+  /** The suite state recorded at `carryFromSha`, or "missing". */
+  recordedAtCarryFrom: SuiteState;
+}): { ok: true } | { ok: false; reason: "code-changed" | "no-clean-source"; blocking?: string[] } {
+  const blocking = carryBlockingFiles(input.changedFiles);
+  if (blocking.length > 0) {
+    return { ok: false, reason: "code-changed", blocking };
+  }
+  if (input.recordedAtCarryFrom !== "clean") {
+    return { ok: false, reason: "no-clean-source" };
+  }
+  return { ok: true };
 }

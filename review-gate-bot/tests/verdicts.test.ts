@@ -2,15 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   collectPinnedVerdicts,
+  firstLine,
+  GATE_APP_SLUG,
+  hasOwnMarker,
   isDittoComment,
   isDittoReview,
   isJoshuaComment,
+  isOwnComment,
+  marker,
+  parseMarkers,
+  parseVerdictToken,
+  shaClaimedByComment,
   verdictFromReview,
   type CommentLike,
   type ReviewLike,
 } from "../bot/lib/verdicts.js";
 
 const HEAD = "e4eae96b5ae45b7807abf440d162c21f322f4ae0";
+const OTHER = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
 
 function comment(overrides: Partial<CommentLike> = {}): CommentLike {
   return {
@@ -109,7 +118,7 @@ test("a comment verdict is pinned to the SHA it names", () => {
 test("an unpinned comment verdict is dropped, so a stale PASS cannot release the gate", () => {
   const pinned = collectPinnedVerdicts({
     reviews: [],
-    comments: [comment({ body: "@cursor says PASS on this change" })],
+    comments: [comment({ body: "PASS" })],
   });
   assert.deepEqual(pinned, []);
 });
@@ -122,7 +131,7 @@ test("a Ditto-App comment is attributed to ditto even when posted under Joshua's
     reviews: [],
     comments: [
       comment({
-        body: "MC: **PASS** at `" + HEAD + "`",
+        body: "PASS at `" + HEAD + "`",
         user: { login: "cryptoreporthub", type: "User" },
         performedViaGithubApp: { slug: "ditto-code" },
       }),
@@ -141,4 +150,241 @@ test("the newest verdict sorts last so latest-wins reads correctly", () => {
     pinned.map((p) => p.verdict),
     ["MODIFY", "PASS"],
   );
+});
+
+// --- Finding 2: the prose fallback is gone, negations are checked ----------
+
+test("there is no prose PASS fallback: 'approved' and 'no blocking findings' alone are not verdicts", () => {
+  for (const body of [
+    "Ditto: approved — no blocking findings in a complete review.",
+    "This is approved.",
+    "Looks good, approved.",
+  ]) {
+    assert.equal(parseVerdictToken(body), undefined, `"${body}" must not parse as a verdict`);
+    const pinned = collectPinnedVerdicts({
+      reviews: [],
+      comments: [
+        comment({
+          body,
+          user: { login: "ditto-code[bot]", type: "Bot" },
+          performedViaGithubApp: { slug: "ditto-code" },
+        }),
+      ],
+    });
+    assert.deepEqual(pinned, [], `"${body}" must not produce a pinned verdict`);
+  }
+});
+
+test("a bare 'PASS' first line is still a verdict", () => {
+  assert.equal(parseVerdictToken("PASS"), "PASS");
+  assert.equal(parseVerdictToken("**PASS** — clean."), "PASS");
+  assert.equal(parseVerdictToken("## Verdict: **MODIFY** at `abc`"), "MODIFY");
+  assert.equal(parseVerdictToken("Replit: FAIL — two blockers."), "FAIL");
+});
+
+const NEGATED = ["not a PASS", "PASS? no", "no PASS yet", "not approved", "Not approved.", "FAIL — not a PASS"];
+
+for (const phrase of NEGATED) {
+  test(`negation "${phrase}" is not a PASS`, () => {
+    assert.notEqual(parseVerdictToken(phrase), "PASS", `"${phrase}" must not read as PASS`);
+  });
+}
+
+test("a token later in the body is not the verdict", () => {
+  // The old parser took the first token anywhere, so "tests FAIL ... PASS" read
+  // as PASS. The verdict has to be on the first line.
+  assert.equal(parseVerdictToken("Summary: everything looked fine.\n\nPASS"), undefined);
+  assert.equal(parseVerdictToken("Tests: 71 pass.\nSo: PASS"), undefined);
+  assert.equal(firstLine("Summary\n\nPASS"), "Summary");
+});
+
+test("a first-line FAIL is never overridden by a PASS further down", () => {
+  // The dangerous direction of the same bug: read the first line only, so a PASS
+  // written later can never turn a FAIL into approval.
+  assert.equal(parseVerdictToken("FAIL\nTwo blockers, so not a PASS."), "FAIL");
+  assert.equal(parseVerdictToken("The suite has tests FAIL on two cases, so overall not PASS."), "FAIL");
+});
+
+test("a leading HTML marker does not hide the first real line", () => {
+  const body = `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``;
+  assert.equal(firstLine(body), `MC: **PASS** at \`${HEAD}\``);
+  assert.equal(parseVerdictToken(body), "PASS");
+});
+
+test("a body with a PASS on the first line and FAIL later still reads PASS", () => {
+  assert.equal(parseVerdictToken("PASS\nThe prior head had a FAIL."), "PASS");
+});
+
+// --- Finding 4: marker authorship ----------------------------------------
+
+test("a marker only counts when this bot wrote it", () => {
+  const own = comment({ body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**` });
+  assert.equal(hasOwnMarker(own, "mc-verdict", HEAD), false, "wording alone is not authorship");
+
+  const bot: CommentLike = {
+    ...own,
+    user: { login: "subnet-review-gate[bot]", type: "Bot" },
+    performedViaGithubApp: { slug: "subnet-review-gate" },
+  };
+  assert.equal(isOwnComment(bot), true);
+  assert.equal(hasOwnMarker(bot, "mc-verdict", HEAD), true);
+});
+
+test("a stranger copying the marker is not the bot", () => {
+  const forged = comment({
+    body: `${marker("replit", HEAD)}\n@replit review`,
+    user: { login: "elev8jax", type: "User" },
+  });
+  assert.equal(isOwnComment(forged), false);
+  assert.equal(hasOwnMarker(forged, "replit", HEAD), false);
+});
+
+test("a different App posting under the bot's login is not the bot", () => {
+  const wrongApp: CommentLike = {
+    id: 5,
+    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
+    createdAt: "2026-10-26T04:00:00Z",
+    user: { login: "some-outsider", type: "Bot" },
+    performedViaGithubApp: { slug: "ditto-code" },
+  };
+  assert.equal(isOwnComment(wrongApp), false);
+});
+
+test("the bare bot name is not trusted: a human could register it", () => {
+  const squatter: CommentLike = {
+    id: 9,
+    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
+    createdAt: "2026-10-26T04:00:00Z",
+    user: { login: "subnet-review-gate", type: "User" },
+    performedViaGithubApp: null,
+  };
+  assert.equal(isOwnComment(squatter), false);
+});
+
+test("two markers in one body are not trusted", () => {
+  const doubled: CommentLike = {
+    id: 6,
+    body: `${marker("mc-verdict", HEAD)}\n${marker("mc-verdict", OTHER)}\nMC: **PASS**`,
+    createdAt: "2026-10-26T04:00:00Z",
+    user: { login: "subnet-review-gate[bot]", type: "Bot" },
+    performedViaGithubApp: { slug: "subnet-review-gate" },
+  };
+  assert.equal(hasOwnMarker(doubled, "mc-verdict", HEAD), false);
+});
+
+test("parseMarkers reads slot and SHA and ignores anything else", () => {
+  const parsed = parseMarkers(
+    [marker("replit", HEAD), "<!-- subnet-review-gate:bogus:" + HEAD + " -->", "<!-- unrelated -->"].join("\n"),
+  );
+  assert.deepEqual(parsed, [{ slot: "replit", headSha: HEAD }]);
+});
+
+test("the resolved posting identity is honoured, because cursorAccount decides the login", () => {
+  // Claude's open question: which identity does the hosted bot post as? Under
+  // `cursorAccount` it is the signed-in Cursor account's GitHub login, which
+  // source cannot know. `resolveOwnIdentity` reads it from GET /user; the gate
+  // must then accept that login as the bot's own.
+  const comment: CommentLike = {
+    id: 7,
+    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
+    createdAt: "2026-10-26T04:00:00Z",
+    user: { login: "some-cursor-account", type: "User" },
+    performedViaGithubApp: null,
+  };
+  assert.equal(hasOwnMarker(comment, "mc-verdict", HEAD), false, "not the default identity");
+
+  const identity = { logins: ["some-cursor-account"], appSlug: GATE_APP_SLUG };
+  assert.equal(hasOwnMarker(comment, "mc-verdict", HEAD, identity), true);
+
+  const pinned = collectPinnedVerdicts({ reviews: [], comments: [comment], identity });
+  assert.equal(pinned.length, 1);
+  assert.equal(pinned[0]?.reviewer, "mc");
+  assert.equal(pinned[0]?.verdict, "PASS");
+});
+
+test("a comment from a different App never matches, whatever the resolved login", () => {
+  const otherApp: CommentLike = {
+    id: 8,
+    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
+    createdAt: "2026-10-26T04:00:00Z",
+    user: { login: "some-outsider", type: "User" },
+    performedViaGithubApp: { slug: "claude" },
+  };
+  const identity = { logins: ["some-cursor-account"], appSlug: GATE_APP_SLUG };
+  assert.equal(hasOwnMarker(otherApp, "mc-verdict", HEAD, identity), false);
+});
+
+test("a post under our resolved login through another App still counts", () => {
+  // Under `cursorAccount` the attribution can name the App that carried the
+  // post; the unique login is what identifies the author.
+  const viaCursorApp: CommentLike = {
+    id: 11,
+    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
+    createdAt: "2026-10-26T04:00:00Z",
+    user: { login: "some-cursor-account", type: "User" },
+    performedViaGithubApp: { slug: "cursor" },
+  };
+  const identity = { logins: ["some-cursor-account"], appSlug: GATE_APP_SLUG };
+  assert.equal(hasOwnMarker(viaCursorApp, "mc-verdict", HEAD, identity), true);
+});
+
+test("an app-attributed owner comment cannot be a Replit verdict", () => {
+  const pinned = collectPinnedVerdicts({
+    reviews: [],
+    comments: [
+      comment({
+        body: `Replit: PASS at ${HEAD}`,
+        user: { login: "cryptoreporthub", type: "User" },
+        performedViaGithubApp: { slug: "claude" },
+      }),
+    ],
+  });
+  assert.deepEqual(pinned, []);
+});
+
+test("a plain owner-account Replit report is still a Replit verdict", () => {
+  const pinned = collectPinnedVerdicts({
+    reviews: [],
+    comments: [comment({ body: `Replit: PASS at ${HEAD}` })],
+  });
+  assert.equal(pinned.length, 1);
+  assert.equal(pinned[0]?.reviewer, "replit");
+});
+
+// --- Finding 8: the short-SHA matcher ------------------------------------
+
+test("an all-lowercase keyword plus hex word is a claim only when the word is hex-looking prose", () => {
+  // The reported bug: `\b(?:head|at)\s*([0-9a-f]{7,12})` matched "at defaced".
+  // "defaced" is a real word, so the bare `at` form is no longer accepted.
+  assert.equal(shaClaimedByComment(comment({ body: "looked at defaced output" })), undefined);
+  assert.equal(shaClaimedByComment(comment({ body: "seen at deadbee yesterday" })), undefined);
+});
+
+test("a documented minimum of 7 hex characters is required, and 6 is not a claim", () => {
+  assert.equal(shaClaimedByComment(comment({ body: "head deadbee" })), "deadbee");
+  assert.equal(shaClaimedByComment(comment({ body: "head deadbe" })), undefined);
+});
+
+test("a delimited short SHA is a claim without a keyword", () => {
+  assert.equal(shaClaimedByComment(comment({ body: "on `deadbee` only" })), "deadbee");
+});
+
+test("a full 40-character SHA is never truncated to a shorter one", () => {
+  assert.equal(shaClaimedByComment(comment({ body: `head ${HEAD}` })), HEAD);
+  // A 39-character run must not match as a 39-character abbreviation of nothing.
+  const short39 = HEAD.slice(0, 39);
+  assert.equal(shaClaimedByComment(comment({ body: `head ${short39}` })), short39);
+});
+
+test("upper-case hex is not a claim: GitHub writes abbreviations in lower case", () => {
+  assert.equal(shaClaimedByComment(comment({ body: "head DEADBEEF" })), undefined);
+});
+
+test("a claim is resolved against real heads, so a hex word that names none is dropped", () => {
+  const pinned = collectPinnedVerdicts({
+    reviews: [],
+    comments: [comment({ body: "Replit: PASS head deadbee" })],
+    resolveSha: (claimed) => (HEAD.startsWith(claimed) ? HEAD : undefined),
+  });
+  assert.deepEqual(pinned, [], "deadbee does not prefix the head, so it pins to nothing");
 });

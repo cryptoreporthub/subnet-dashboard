@@ -2,14 +2,11 @@ import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GateInput, GateState, PinnedVerdict, SuiteState } from "./gate.js";
 import { computeGate } from "./gate.js";
-import type { CommentLike, ReviewLike } from "./verdicts.js";
-import { collectPinnedVerdicts } from "./verdicts.js";
+import type { CommentLike, GateIdentity, ReviewLike } from "./verdicts.js";
+import { collectPinnedVerdicts, DEFAULT_IDENTITY, hasOwnMarker } from "./verdicts.js";
 
 export const OWNER = "cryptoreporthub";
 export const REPO = "subnet-dashboard";
-
-/** Marker on every comment this bot posts, so a duplicate is detectable. */
-export const BOT_MARKER = "<!-- subnet-review-gate -->";
 
 export type PrRef = { owner: string; repo: string; number: number };
 
@@ -46,12 +43,22 @@ export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> 
   };
 }
 
+/** Head SHA the @replit tag was recorded for in kv, when it was. */
+export async function readReplitTaggedFor(kv: HostKvApi, prNumber: number): Promise<string | undefined> {
+  const raw = await kv.get(`replit-tag:${prNumber}`);
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+  const sha = (raw as { headSha?: unknown }).headSha;
+  return typeof sha === "string" ? sha : undefined;
+}
+
 /**
- * GitHub returns `performed_via_github_app` on timeline comments under the
- * snake_case key and `null` when no App was involved. Normalize it so the
- * pure verdict parser never sees a raw payload.
+ * Normalize a raw GitHub API payload. Exported so a test can start from the
+ * bytes GitHub actually returns and run the whole read path, instead of
+ * hand-building the internal shape and skipping the parser.
  */
-function asComment(raw: {
+export function asComment(raw: {
   id: number;
   body?: string | null;
   created_at: string;
@@ -67,7 +74,8 @@ function asComment(raw: {
   };
 }
 
-function asReview(raw: {
+/** Normalize a raw GitHub review payload. Exported for the same reason as `asComment`. */
+export function asReview(raw: {
   id: number;
   body?: string | null;
   state: string;
@@ -114,30 +122,129 @@ export type RecordedSuite = {
   state: SuiteState;
   newFailures?: string[];
   carriedFrom?: string;
+  /** The workflow run the JUnit came from. Absent for a carried result. */
+  runId?: number;
   at?: number;
 };
+
+/** A recorded suite result, or undefined when this head has none. */
+export async function readSuiteRecord(
+  kv: HostKvApi,
+  prNumber: number,
+  headSha: string,
+): Promise<RecordedSuite | undefined> {
+  const raw = await kv.get(suiteKey(prNumber, headSha));
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+  const record = raw as RecordedSuite;
+  const state = record.state;
+  if (state !== "clean" && state !== "regressed" && state !== "carried") {
+    return undefined;
+  }
+  return record;
+}
 
 export async function readSuiteState(
   kv: HostKvApi,
   prNumber: number,
   headSha: string,
 ): Promise<SuiteState> {
-  const raw = await kv.get(suiteKey(prNumber, headSha));
-  if (typeof raw !== "object" || raw === null) {
-    return "missing";
-  }
-  const state = (raw as RecordedSuite).state;
-  return state === "clean" || state === "regressed" || state === "carried" ? state : "missing";
+  return (await readSuiteRecord(kv, prNumber, headSha))?.state ?? "missing";
 }
 
-/** Head SHA the @replit tag was recorded for, when it was. */
-export async function readReplitTaggedFor(kv: HostKvApi, prNumber: number): Promise<string | undefined> {
-  const raw = await kv.get(`replit-tag:${prNumber}`);
-  if (typeof raw !== "object" || raw === null) {
-    return undefined;
+/**
+ * Which GitHub identity is this bot actually posting as?
+ *
+ * The channel authenticates with `cursorAccount`, so the posting login is the
+ * GitHub account behind the signed-in Cursor connection — not something that can
+ * be read from source. Claude flagged this as the unknown that decides how
+ * severe the MC-read-back bug is; hardcoding `subnet-review-gate[bot]` and being
+ * wrong would silently make the gate blind to its own verdict again.
+ *
+ * `GET /user` answers it for the token in hand. The App slug is merged in from
+ * `botName`-derived constants, because an App-installed comment carries
+ * `performed_via_github_app` and matches on that instead of the login. If the
+ * lookup fails the fallback constants are used, so a transient API error
+ * degrades to the previous behaviour rather than to "the bot does not recognise
+ * itself".
+ */
+export async function resolveOwnIdentity(octokit: Octokit): Promise<GateIdentity> {
+  try {
+    const { data } = await octokit.rest.users.getAuthenticated();
+    const login = data.login;
+    if (login === undefined || login === "") {
+      return DEFAULT_IDENTITY;
+    }
+    return {
+      logins: [...new Set([login, ...DEFAULT_IDENTITY.logins])],
+      appSlug: DEFAULT_IDENTITY.appSlug,
+    };
+  } catch {
+    return DEFAULT_IDENTITY;
   }
-  const sha = (raw as { headSha?: unknown }).headSha;
-  return typeof sha === "string" ? sha : undefined;
+}
+
+/**
+ * The gate state from already-read GitHub data. Pure and exported, so the
+ * end-to-end test can run raw API payloads through `asComment` / `asReview`,
+ * this function and `computeGate` without stubbing Octokit.
+ */
+export function gateStateFrom(input: {
+  headSha: string;
+  comments: readonly CommentLike[];
+  reviews: readonly ReviewLike[];
+  suite: SuiteState;
+  replitTaggedForSha?: string;
+  identity?: GateIdentity;
+}): GateState {
+  const known = new Set<string>([input.headSha]);
+  const resolveSha = (claimed: string): string | undefined => {
+    for (const sha of known) {
+      if (sha.startsWith(claimed)) {
+        return sha;
+      }
+    }
+    return undefined;
+  };
+
+  const pinned = collectPinnedVerdicts({
+    reviews: input.reviews,
+    comments: input.comments,
+    resolveSha,
+    identity: input.identity,
+  });
+  const verdicts: PinnedVerdict[] = pinned.map((p) => ({
+    reviewer: p.reviewer,
+    headSha: p.headSha,
+    verdict: p.verdict,
+  }));
+
+  return computeGate({
+    headSha: input.headSha,
+    verdicts,
+    suite: input.suite,
+    replitTaggedForSha: input.replitTaggedForSha,
+  });
+}
+
+/**
+ * Was the @replit tag posted for this head, in these already-read comments?
+ *
+ * GitHub is the system of record: the tag comment carries
+ * `<!-- subnet-review-gate:replit:<sha> -->`, so a tag posted by an earlier
+ * process — or by an earlier deployment that has since lost its kv — is still
+ * visible. Reading the comment rather than kv-only is what fixes the stall
+ * where the tag already existed (posted by another turn, or before a redeploy)
+ * and the gate sat on `tag_replit` forever because this process never wrote
+ * `replit-tag:<pr>`.
+ */
+export function replitTaggedIn(
+  comments: readonly CommentLike[],
+  headSha: string,
+  identity: GateIdentity = DEFAULT_IDENTITY,
+): string | undefined {
+  return comments.some((c) => hasOwnMarker(c, "replit", headSha, identity)) ? headSha : undefined;
 }
 
 /**
@@ -152,33 +259,21 @@ export async function readGateState(input: {
   ref: PrRef;
   headSha: string;
 }): Promise<GateState> {
-  const [comments, reviews] = await Promise.all([
+  const [comments, reviews, identity] = await Promise.all([
     readComments(input.octokit, input.ref),
     readReviews(input.octokit, input.ref),
+    resolveOwnIdentity(input.octokit),
   ]);
 
-  const known = new Set<string>([input.headSha]);
-  const resolveSha = (claimed: string): string | undefined => {
-    for (const sha of known) {
-      if (sha.startsWith(claimed)) {
-        return sha;
-      }
-    }
-    return undefined;
-  };
+  const fromGithub = replitTaggedIn(comments, input.headSha, identity);
+  const kvTag = await readReplitTaggedFor(input.kv, input.ref.number);
 
-  const pinned = collectPinnedVerdicts({ reviews, comments, resolveSha });
-  const verdicts: PinnedVerdict[] = pinned.map((p) => ({
-    reviewer: p.reviewer,
-    headSha: p.headSha,
-    verdict: p.verdict,
-  }));
-
-  const gateInput: GateInput = {
+  return gateStateFrom({
     headSha: input.headSha,
-    verdicts,
+    comments,
+    reviews,
+    identity,
     suite: await readSuiteState(input.kv, input.ref.number, input.headSha),
-    replitTaggedForSha: await readReplitTaggedFor(input.kv, input.ref.number),
-  };
-  return computeGate(gateInput);
+    replitTaggedForSha: fromGithub ?? kvTag,
+  });
 }

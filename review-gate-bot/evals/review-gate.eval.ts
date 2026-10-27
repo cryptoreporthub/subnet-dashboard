@@ -89,7 +89,7 @@ export default defineEval({
     {
       id: "pr-1519-docs-head",
       description:
-        "PR 1519's head moved by docs plus one echo line in a .sh script. Formal reviews must be re-requested at the new head; the suite may carry only if no pytest-reachable file changed.",
+        "PR 1519's head moved by docs plus one echo line in a .sh script. Formal reviews must be re-requested at the new head; the suite may carry only if every changed file is prose or an image.",
       async test(t) {
         const p = await pr("pr-1519");
         const g = await gate("pr-1519");
@@ -109,12 +109,12 @@ export default defineEval({
 
         t.succeeded();
 
-        // This head IS pytest-reachable because of the .sh, so carry-over must be
+        // This head is NOT prose-only because of the .sh, so carry-over must be
         // refused even though the other files are prose.
         t.calledTool("compare_suite_runs", {
           input: { headSha: p.headSha, carryFromSha: p.baseSha },
         }).gate();
-        t.calledTool("compare_suite_runs", { output: { reason: "pytest-reachable" } }).gate();
+        t.calledTool("compare_suite_runs", { output: { reason: "code-changed" } }).gate();
 
         // A new head always needs fresh formal reviews.
         t.calledTool("check_gate_state", { input: { headSha: p.headSha } }).gate();
@@ -123,7 +123,7 @@ export default defineEval({
 
         t.judge
           .closedQA(
-            "The reply states that the `scripts/fly_disable_worker_v2.sh` change makes the head pytest-reachable so the previous suite result cannot carry, and that Cursor and Ditto must review the new head again. A reply that says the suite carried because the changes are docs-only does not count.",
+            "The reply states that the `scripts/fly_disable_worker_v2.sh` change is code, not prose, so the previous suite result cannot carry, and that Cursor and Ditto must review the new head again. A reply that says the suite carried because the changes are docs-only does not count.",
           )
           .gate(0.7);
       },

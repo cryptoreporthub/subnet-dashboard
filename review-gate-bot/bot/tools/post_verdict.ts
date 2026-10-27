@@ -23,11 +23,43 @@ function renderTable(skills: { skill: string; used: boolean; note: string }[]): 
 }
 
 /**
- * Post MC's formal verdict for one head. Once per head.
+ * The body a reader — and the gate itself — sees. Exported so the gate's
+ * read-back test starts from exactly the text this tool posts.
+ *
+ * The first line is the verdict token. `parseVerdictToken` reads the first
+ * line only, so this line is the verdict and nothing above it is prose.
+ */
+export function composeVerdictBody(input: {
+  verdict: "PASS" | "MODIFY" | "FAIL";
+  headSha: string;
+  body: string;
+  skills: { skill: string; used: boolean; note: string }[];
+}): string {
+  return [
+    `MC: **${input.verdict}** at \`${input.headSha}\``,
+    "",
+    input.body,
+    "",
+    "### Skills",
+    "",
+    renderTable(input.skills),
+    "",
+    "---",
+    "",
+    "_Posted by the subnet-dashboard review gate. Review only: this bot never merges, deploys, restarts, sets secrets or labels._",
+  ].join("\n");
+}
+
+/**
+ * Post MC's formal verdict for one head. At most once per head, best effort.
  *
  * Refuses a stale head, stays silent in an eval session, and redacts before
  * anything leaves the process. The signature is fixed here rather than taken
  * from the model, so a post always says who posted it.
+ *
+ * The ledger row is written **only when the comment actually landed**. It used
+ * to be written unconditionally, so a second call with a different verdict left
+ * a ledger entry for a verdict the PR never showed.
  */
 export default defineTool({
   description:
@@ -51,46 +83,48 @@ export default defineTool({
     }
 
     const octokit = await ctx.host.github.getOctokit();
+    // Re-read immediately before posting: this is the head the guard compares
+    // against, not one read earlier in the turn.
     const pr = await readPr(octokit, ref);
     if (pr.headSha !== input.headSha) {
       return { posted: false, reason: "stale-head", current: pr.headSha };
     }
 
-    const composed = [
-      `## MC verdict: **${input.verdict}** at \`${input.headSha}\``,
-      "",
-      input.body,
-      "",
-      "### Skills",
-      "",
-      renderTable(input.skills),
-      "",
-      "---",
-      "",
-      "_Posted by the subnet-dashboard review gate. Review only: this bot never merges, deploys, restarts, sets secrets or labels._",
-    ].join("\n");
+    const { text, redactedNames } = redactSecrets(
+      composeVerdictBody({
+        verdict: input.verdict,
+        headSha: input.headSha,
+        body: input.body,
+        skills: input.skills,
+      }),
+    );
 
-    const { text, redactedNames } = redactSecrets(composed);
     const result = await postVerdictComment({
       octokit,
+      kv: ctx.host.kv,
       ref,
       headSha: input.headSha,
       currentHeadSha: pr.headSha,
       body: text,
     });
 
-    await ctx.artifacts.tag({
-      kind: "head-verdict",
-      key: `${ref.number}@${input.headSha}`,
-      title: `MC ${input.verdict} @ ${input.headSha.slice(0, 8)}`,
-      data: {
-        reviewer: "mc",
-        verdict: input.verdict,
-        headSha: input.headSha,
-        pr: `${ref.owner}/${ref.repo}#${ref.number}`,
-        redactedNames,
-      },
-    });
+    if (result.posted) {
+      // Records only what GitHub now shows. A suppressed post leaves no row,
+      // so the ledger cannot claim a verdict the PR does not carry.
+      await ctx.artifacts.tag({
+        kind: "head-verdict",
+        key: `${ref.number}@${input.headSha}`,
+        title: `MC ${input.verdict} @ ${input.headSha.slice(0, 8)}`,
+        data: {
+          reviewer: "mc",
+          verdict: input.verdict,
+          headSha: input.headSha,
+          pr: `${ref.owner}/${ref.repo}#${ref.number}`,
+          commentId: result.commentId ?? null,
+          redactedNames,
+        },
+      });
+    }
 
     return {
       posted: result.posted,

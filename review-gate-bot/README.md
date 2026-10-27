@@ -15,14 +15,40 @@ shadow mode.
   `@cursor review` and `@ditto review`.
 - When MC, Cursor and Ditto have all PASSed **the same head** and the full-suite
   comparison is clean, posts `@replit review` **once** for that head.
-- Then asks Replit's MCP `ask_question` once per head, if the connector is
-  reachable.
+- Then nudges Replit's MCP `ask_question` once per head, if the connector is
+  reachable. **The ask is not a review.** `ask_question` asks an existing Replit
+  app a question; it does not start a review run. So the gate advances only on
+  Replit's own posted verdict on the PR, never on a successful ask. A failed ask
+  is retried on later events and reported loudly once it is persistent.
 - Refuses a second review or a second tag for the same head, including on
   duplicate webhooks and replays.
 
-Every post is guarded per `(PR number, head SHA)`. The correctness guarantee is
-GitHub itself: each comment carries a marker naming its slot and SHA, and the
-bot reads the PR back before posting. A lost kv race cannot double-post.
+### How a verdict is counted
+
+| Reviewer | Counts when |
+| --- | --- |
+| MC | this bot's own `mc-verdict` marker comment, author **and** SHA checked |
+| Cursor | `cursor[bot]` review or first-line token |
+| Ditto | App-attributed comment, or `ditto-code[bot]` review |
+| Replit | owner-account comment naming Replit, with **no** App attribution |
+
+A verdict is an explicit `PASS` / `MODIFY` / `FAIL` token on the **first line**
+of a comment, or a formal review state. There is no prose fallback:
+"not approved", "not a PASS" and "no PASS yet" are all rejected, and a token
+buried in a paragraph is not a verdict.
+
+Every post is guarded per `(PR number, head SHA)`, **at most once and best
+effort**. GitHub is the system of record: each comment carries a marker naming
+its slot and SHA, and the bot reads the PR back before posting. A marker only
+counts when this bot's own identity posted it, so a stranger cannot suppress the
+tag or forge a verdict by copying the text. A replay cannot double-post; a
+genuine simultaneous race can, and the marker makes the second comment harmless.
+
+## Drafts
+
+A draft PR is never tagged, never asked about, and never reviewed. The guard
+sits in one function (`gateActions`) that every hook calls, so `onComment` and
+`onEvent` refuse drafts the same way `onPullRequest` always did.
 
 ## What this bot will never do
 
@@ -60,7 +86,26 @@ npm run validate  # agent-sdk validate --dir .
 
 `npm test` needs no model and no network. It covers the gate order, the
 flake-aware suite diff, secret redaction, Ditto-vs-Joshua attribution, the
-per-head lock, and that every eval fixture agrees with `lib/gate.ts`.
+per-head lock, and that every eval fixture agrees with `lib/gate.ts`. It also
+runs the **end-to-end parser path**: raw GitHub comment/review JSON →
+normalizers → `collectPinnedVerdicts` → `computeGate`, which is the only route
+that proves MC's own verdict is read back.
+
+The full suite gate reads JUnit from the workflow's own artifact:
+
+| What | Where |
+| --- | --- |
+| JUnit XML | `pytest-junit` artifact of the `ci-smoke.yml` run for the **exact** SHA |
+| Known flakes | committed `known-flakes.txt` (never a tool argument) |
+| Zero testcases | a failed comparison, never a clean one |
+| Carry-over | only when every changed file is prose/an image **and** the source SHA has a recorded clean run |
+
+> **Open dependency, outside this folder.** `.github/workflows/ci-smoke.yml`
+> does not currently upload a `pytest-junit` artifact, so on this repo every
+> comparison refuses with `head-no-artifact` until that upload exists. That is
+> the intended failure: an absent report must never read as a clean suite. The
+> fix is two lines in that workflow (`--junitxml=reports/pytest.xml` plus
+> `actions/upload-artifact`), owned by whoever owns CI, not by this folder.
 
 ## Run it locally
 
@@ -171,8 +216,10 @@ does not.
 | `bot/agent.ts` | model, `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`. `local.sandbox` is deliberately absent. |
 | `bot/channels/github.ts` | the repo, the trigger actions, `webhookEvents`, and the automatic tagging |
 | `bot/instructions.md` | the adversarial review policy and the hard nevers |
-| `bot/lib/gate.ts` | the gate order. Pure, and the only place that decides `next`. |
-| `bot/lib/verdicts.ts` | how a Ditto verdict is told from Joshua's own comment |
+| `bot/lib/gate.ts` | the gate order and the delivery decision (`gateActions`: draft guard, tag, ask). The only place that decides `next`. |
+| `bot/lib/verdicts.ts` | how each verdict is attributed, and the first-line-only token rule |
+| `bot/lib/runner.ts` | JUnit from the runner artifact for an exact SHA |
+| `known-flakes.txt` | the committed flake list `compare_suite_runs` reads |
 | `bot/skills/` | on-demand procedures: adversarial review, owner rules, settled check, outside commenters |
 | `bot/host-connections/replit.ts` | the conditional Replit MCP connection |
 

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { computeGate, type GateInput, type GateState, type PinnedVerdict } from "../bot/lib/gate.js";
 import { redactSecrets } from "../bot/lib/redact.js";
-import { pytestReachable } from "../bot/lib/suite.js";
+import { carryBlockingFiles } from "../bot/lib/suite.js";
 
 /**
  * The eval cases cannot boot here without a Cursor credential, so their
@@ -77,9 +77,9 @@ test("the go-forgery fixture is mergeable, so the eval is about the GO rule, not
   assert.equal(gateFixture("go-forgery").next, "mergeable");
 });
 
-test("PR 1519's fixture is pytest-reachable, so carry-over must be refused", () => {
-  const reachable = pytestReachable(prFixture("pr-1519").files);
-  assert.deepEqual(reachable, ["scripts/fly_disable_worker_v2.sh"]);
+test("PR 1519's fixture blocks a carry-over, so the tool refuses one", () => {
+  const blocking = carryBlockingFiles(prFixture("pr-1519").files);
+  assert.ok(blocking.includes("scripts/fly_disable_worker_v2.sh"));
 });
 
 test("PR 1519's suite status is carried in the fixture, which the gate accepts as clean", () => {

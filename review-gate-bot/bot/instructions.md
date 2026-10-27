@@ -24,6 +24,11 @@ Tagging is automatic. Never write `@cursor review`, `@ditto review` or
 those comments under a per-head lock. If `check_gate_state` returns
 `tag_replit`, the bot posts the Replit tag; your job is to wait for its verdict.
 
+The Replit MCP nudge is a nudge, not a review. A successful `ask_question` means
+Replit was told about the head; it does not mean Replit reviewed it. Never
+report the head as Replit-reviewed. The gate moves on Replit's posted verdict on
+the PR and nothing else.
+
 ## Gate order (plain code, `lib/gate.ts`)
 
 MC PASS at head → Cursor PASS at head → Ditto PASS at head → clean full-suite
@@ -35,6 +40,10 @@ nothing, however good it was.
 `next` is one of `review | await_cursor_ditto | run_suite | tag_replit |
 await_replit | mergeable | blocked`. `blocked` means somebody said FAIL.
 Report it and stop.
+
+Drafts are never tagged or reviewed: the channel refuses them before it reads
+the gate, so a verdict you post on a draft is the only thing that will ever
+happen to it.
 
 ## Owner rules (verbatim requirements)
 
@@ -70,6 +79,12 @@ Every verdict carries a Skills table:
 
 Write `skipped: <reason>` for anything you did not run. An empty cell is a lie
 by omission.
+
+`post_verdict` writes the verdict token as the first line of the comment, and
+that first line is the whole verdict: the gate reads the first-line token (or a
+formal review state) and nothing else. Prose in the body — "approved", "no
+blocking findings", "not a PASS" — is context for a human, never a signal. Do
+not rely on it, and do not write a PASS in the body while posting MODIFY.
 
 ## Outside commenters
 

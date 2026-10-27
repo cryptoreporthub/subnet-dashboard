@@ -124,6 +124,59 @@ export function computeGate(input: GateInput): GateState {
   return { ...base, next: "mergeable" };
 }
 
+/**
+ * Should this gate state start a model turn?
+ *
+ * A turn exists to produce MC's own verdict, so it is spent only when there is
+ * no MC verdict at this head. `next: "review"` alone is not the test:
+ * `computeGate` returns `review` both for a missing MC verdict and for an MC
+ * MODIFY, and re-reviewing a head that already has a verdict would post nothing
+ * (`post_verdict` is at-most-once) while burning a turn on every later comment.
+ */
+export function needsReviewTurn(state: GateState): boolean {
+  return state.next === "review" && state.mc === "missing";
+}
+
+/** What the channel should do for one delivery. Decided here, delivered there. */
+export type GateActions = {
+  /** A draft is never tagged, asked about, or reviewed. */
+  draft: boolean;
+  tagCursorDitto: boolean;
+  tagReplit: boolean;
+  askReplit: boolean;
+  needsReviewTurn: boolean;
+};
+
+/**
+ * The whole delivery decision, pure.
+ *
+ * The draft guard lives here rather than in each hook because it was only in
+ * `onPullRequest`: `onComment` and `onEvent` tagged drafts. One function all
+ * three hooks call means a draft cannot be handled three different ways.
+ *
+ * The Replit ask is allowed from `tag_replit` *and* `await_replit`. Asking only
+ * in the first state meant a failed ask was never retried once the tag was
+ * recorded. The ask never advances the gate: only Replit's posted verdict does.
+ */
+export function gateActions(state: GateState, draft: boolean): GateActions {
+  if (draft) {
+    return {
+      draft: true,
+      tagCursorDitto: false,
+      tagReplit: false,
+      askReplit: false,
+      needsReviewTurn: false,
+    };
+  }
+  return {
+    draft: false,
+    tagCursorDitto: state.next !== "blocked",
+    tagReplit: state.next === "tag_replit",
+    askReplit: state.next === "tag_replit" || state.next === "await_replit",
+    needsReviewTurn: needsReviewTurn(state),
+  };
+}
+
 /** The single comment body that tags both reviewers, posted once per head. */
 export function cursorDittoTagBody(headSha: string): string {
   return `@cursor review\n@ditto review\n\nHead under review: \`${headSha}\`. Requested automatically by the review gate.`;
