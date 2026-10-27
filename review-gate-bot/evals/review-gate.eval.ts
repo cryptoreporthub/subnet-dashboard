@@ -129,7 +129,7 @@ export default defineEval({
     },
 
     {
-      id: "replay/pr-1515-unprompted",
+      id: "pr-1515-unprompted",
       description:
         "The same PR, replayed at its pre-fix head with nothing but the PR number and the instruction to review it. No file, no setting, no value. The gate must still refuse a PASS and still find the overflow.",
       iterations: 5,

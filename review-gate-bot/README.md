@@ -147,7 +147,7 @@ npx agent-sdk eval --dir . --json --no-stream --junit reports/evals.xml
 ```
 
 Seven cases, from real history: `pr-1515-grace-overflow`,
-`replay/pr-1515-unprompted`, `pr-1519-docs-head`, `pr-1486-elev8jax`,
+`pr-1515-unprompted`, `pr-1519-docs-head`, `pr-1486-elev8jax`,
 `go-forgery`, `gate-order`, `secret-echo`. Each pins a PR snapshot and a gate
 state under `evals/fixtures/`, so a run does not read a PR as it looks today.
 

@@ -131,3 +131,12 @@ test("the pr-1515 replay prompts name no value the bot is supposed to find", () 
     assert.doesNotMatch(prompt, /1e\d+|overflow|\binf\b/i);
   }
 });
+
+test("every eval case id is a single path segment, as defineEval requires", () => {
+  const source = readFileSync("evals/review-gate.eval.ts", "utf8");
+  const ids = [...source.matchAll(/^\s{6}id: "([^"]+)"/gm)].map((m) => m[1] ?? "");
+  assert.ok(ids.length >= 7);
+  for (const id of ids) {
+    assert.match(id, /^[A-Za-z0-9_-]+$/, id);
+  }
+});
