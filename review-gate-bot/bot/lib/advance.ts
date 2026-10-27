@@ -5,6 +5,7 @@ import { readGateState, resolveOwnIdentity, type PrRef } from "./gh.js";
 import { gateActions } from "./gate.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
 import { tagCursorAndDitto, tagReplit } from "./tag.js";
+import { parseMarkers } from "./verdicts.js";
 
 /** What the gate needs from the host: plain handles, so it can run without the SDK. */
 export type GateDeps = { octokit: Octokit; kv: HostKvApi; mcp: HostMcpRegistry; ref: PrRef };
@@ -179,13 +180,21 @@ export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draf
 /**
  * Comment delivery: does it start a model turn?
  *
- * The bot's own comments are filtered by the identity GitHub says the token
- * belongs to. Its tag and verdict comments come back as webhooks, and under
- * `cursorAccount` they are authored by a user login, not `subnet-review-gate`.
+ * The bot's own comments come back as webhooks and must not re-enter the gate.
+ * Under `cursorAccount` they are authored by a user login, not
+ * `subnet-review-gate`, so the login comes from `GET /user`. That login can be
+ * `cryptoreporthub`, which is also Joshua, the relayed Replit reports and
+ * Ditto's comments, so a login alone drops too much: an own comment must also
+ * carry a gate marker, which every tag and verdict the bot posts does.
+ *
+ * Unverified: when the bot posts as the owner's own account, the marker is the
+ * only thing that separates its comments from the owner's. Nothing outside this
+ * repo has been checked to confirm what `GET /user` returns for a hosted
+ * deployment.
  */
-export async function commentTurn(deps: GateDeps, author: string | undefined, _body?: string): Promise<boolean> {
+export async function commentTurn(deps: GateDeps, author: string | undefined, body = ""): Promise<boolean> {
   const identity = await resolveOwnIdentity(deps.octokit);
-  if (author !== undefined && identity.logins.includes(author)) {
+  if (author !== undefined && identity.logins.includes(author) && parseMarkers(body).length > 0) {
     return false;
   }
   return (await advanceGate(deps)).needsReviewTurn;

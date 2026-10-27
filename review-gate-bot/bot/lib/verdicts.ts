@@ -241,10 +241,16 @@ export function firstLine(text: string): string {
  * heading mark, an optional `Label:` of up to 25 letters, and markdown emphasis.
  * `PASS?` is not a verdict, and neither is a token that merely appears.
  */
-const VERDICT_LINE = /^(?:#{1,6}\s*)?(?:[A-Za-z][A-Za-z ]{0,24}:\s*)?[*_`]*(PASS|MODIFY|FAIL)[*_`]*(?![\w?])(.*)$/;
+const VERDICT_LINE =
+  /^(?:#{1,6}\s*)?(?:[*_\s]|\p{Extended_Pictographic}\uFE0F?)*(?:[A-Za-z][A-Za-z ]{0,24}:\s*)?[*_`]*(PASS|MODIFY|FAIL)[*_`]*(?![\w?])(.*)$/u;
 
-/** A PASS line that goes on to take the PASS back. */
-const WITHDRAWN = /\b(?:not|never|cannot|yet|but|however|until|unless)\b|n't\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
+/**
+ * A PASS line that goes on to take the PASS back. A caveat is not a withdrawal:
+ * "PASS, but docs lag" and "PASS, not blocking" still pass, so `but`, `however`
+ * and a bare `not` are deliberately absent.
+ */
+const WITHDRAWN =
+  /\bnot\s+(?:approved|yet|ready|passing|final|signed|a\s+pass)\b|\b(?:never|cannot|until|unless|yet)\b|n't\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
 
 /**
  * The verdict a comment's **first line** opens with, if it opens with one.
@@ -253,7 +259,8 @@ const WITHDRAWN = /\b(?:not|never|cannot|yet|but|however|until|unless)\b|n't\b|\
  * two words is the verdict is how a gate approves the wrong thing.
  */
 export function parseVerdictToken(text: string): Verdict | undefined {
-  const match = VERDICT_LINE.exec(firstLine(text));
+  const line = firstLine(text);
+  const match = VERDICT_LINE.exec(line);
   if (match === null) {
     return undefined;
   }
@@ -312,9 +319,11 @@ export type PinnedReviewer = {
  *
  * - **Full (40):** after `head` / `sha` / `commit` (up to 20 characters of
  *   gap, for "head commit was ..."), after `at`, or in backticks or quotes.
- * - **Abbreviated (7-39):** after `head` / `sha` / `commit`, or delimited.
+ * - **Abbreviated (12-39):** after `head` / `sha` / `commit`, or delimited.
  *   Lower case only, as GitHub writes them. The bare `at` form is not accepted
  *   here: "at defaced" is a sentence fragment and also seven hex characters.
+ *   Twelve, not GitHub's seven: seven hex characters is 28 bits, and a PR author
+ *   can grind a commit whose SHA starts with the same seven as a stale PASS.
  *
  * A SHA inside a URL, a fenced code block, or a quoted (`>`) line is never a
  * claim. It is evidence the reviewer looked at something, not a statement of
@@ -331,8 +340,8 @@ export type PinnedReviewer = {
 const CLAIM_PATTERNS: readonly RegExp[] = [
   /\b(?:head|sha|commit)\b[^\n]{0,20}?(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])/g,
   /\bat\s+`?([0-9a-f]{40})(?![0-9a-f])/g,
-  /[`'"]([0-9a-f]{7,40})[`'"]/g,
-  /\b(?:head|sha|commit)\b[^\n]{0,3}?[`'"]?(?<![0-9a-f])([0-9a-f]{7,39})(?![0-9a-f])/g,
+  /[`'"]([0-9a-f]{12,40})[`'"]/g,
+  /\b(?:head|sha|commit)\b[^\n]{0,3}?[`'"]?(?<![0-9a-f])([0-9a-f]{12,39})(?![0-9a-f])/g,
 ];
 
 /** The body with everything that is not the reviewer's own statement removed. */
@@ -370,6 +379,26 @@ export function shaClaimedByComment(comment: CommentLike): string | undefined {
 export function isReplitReport(body: string): boolean {
   const line = firstLine(body);
   return /^(?:#{1,6}\s*)?[*_]*Replit\b/.test(line) && parseVerdictToken(body) !== undefined;
+}
+
+/**
+ * A first line that names a verdict word but does not parse as one. The parser
+ * is an allowlist, so a reviewer who words a verdict in a shape it does not know
+ * stalls the gate silently. This makes the stall visible.
+ */
+function noteUnparsed(comment: CommentLike): void {
+  const line = firstLine(comment.body);
+  if (/\b(?:PASS|MODIFY|FAIL)\b/.test(line)) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        event: "verdict_line_unparsed",
+        comment: comment.id,
+        author: comment.user?.login ?? null,
+        line: line.slice(0, 160),
+      }),
+    );
+  }
 }
 
 /**
@@ -442,6 +471,7 @@ export function collectPinnedVerdicts(input: {
 
     const verdict = verdictFromComment(comment);
     if (verdict === undefined) {
+      noteUnparsed(comment);
       continue;
     }
     let reviewer: ReviewerName | undefined;

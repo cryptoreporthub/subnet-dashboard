@@ -45,7 +45,7 @@ export type SuiteDiff = {
    * Why a comparison cannot be trusted at all. Present means `clean` is false
    * no matter what the failure lists say.
    */
-  invalid?: "zero-testcases" | "malformed-xml";
+  invalid?: "zero-testcases" | "malformed-xml" | "suite-shrunk";
   /** Testcase counts, so a reader can see the report was real. */
   counts: { base: number; head: number };
 };
@@ -130,6 +130,15 @@ export type DiffInput = {
   knownFlakes?: readonly string[];
 };
 
+const emptyCase = (): JunitCase => ({ classname: "", name: "", id: "", outcome: "passed" });
+
+/**
+ * A head with less than this share of base's testcases is not the same suite.
+ * A conftest deselect or a module-level skip drops tests without failing any,
+ * and 500 passing tests at base against 1 at head compared clean (measured).
+ */
+const MIN_HEAD_SHARE = 0.9;
+
 /** Cases from a report, or the reason it cannot be trusted. */
 function readReport(xml: string): { cases: JunitCase[]; malformed: boolean } {
   try {
@@ -138,8 +147,10 @@ function readReport(xml: string): { cases: JunitCase[]; malformed: boolean } {
     if (!(error instanceof MalformedXmlError)) {
       throw error;
     }
-    // The testcases are still counted so the audit line shows how far the run got.
-    return { cases: parseTestcases(xml), malformed: true };
+    // Count the opening tags, nothing more, so the audit line shows how far the
+    // run got. The text is a failed run's output and may be hostile; nothing
+    // here parses it.
+    return { cases: Array.from({ length: (xml.match(/<testcase\b/g) ?? []).length }, emptyCase), malformed: true };
   }
 }
 
@@ -157,7 +168,9 @@ export function diffJunit(input: DiffInput): SuiteDiff {
         "zero-testcases"
       : baseReport.malformed || headReport.malformed
         ? "malformed-xml"
-        : undefined;
+        : counts.head < counts.base * MIN_HEAD_SHARE
+          ? "suite-shrunk"
+          : undefined;
   if (invalid !== undefined) {
     return {
       newFailures: [],

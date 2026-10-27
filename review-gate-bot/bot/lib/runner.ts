@@ -29,6 +29,9 @@ export type ZipEntry = { name: string; data: Uint8Array };
 
 /** The most one report may inflate to. The head's artifact is written by the PR's own code. */
 export const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+/** And the most a whole archive may inflate to, and how many entries it may hold. */
+export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
+export const MAX_ENTRIES = 512;
 
 const EOCD = 0x06054b50;
 const CENTRAL = 0x02014b50;
@@ -59,7 +62,12 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
     throw new Error("zip: central directory runs past the end of the archive");
   }
 
+  if (count > MAX_ENTRIES) {
+    throw new Error(`zip: ${count} entries, too many (limit ${MAX_ENTRIES})`);
+  }
+
   const entries: ZipEntry[] = [];
+  let totalBytes = 0;
   let cursor = directoryOffset;
   for (let index = 0; index < count; index += 1) {
     if (view.getUint32(cursor, true) !== CENTRAL) {
@@ -75,8 +83,11 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
     const name = new TextDecoder().decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
 
     if (!name.endsWith("/")) {
-      if (declaredSize > MAX_ENTRY_BYTES) {
-        throw new Error(`zip: ${name} is too large (${declaredSize} bytes declared, limit ${MAX_ENTRY_BYTES})`);
+      totalBytes += declaredSize;
+      if (declaredSize > MAX_ENTRY_BYTES || totalBytes > MAX_TOTAL_BYTES) {
+        throw new Error(
+          `zip: ${name} is too large (${declaredSize} bytes declared, ${totalBytes} in total; limits ${MAX_ENTRY_BYTES} per entry and ${MAX_TOTAL_BYTES} in total)`,
+        );
       }
       if (view.getUint32(localOffset, true) !== LOCAL) {
         throw new Error(`zip: bad local header for ${name}`);
