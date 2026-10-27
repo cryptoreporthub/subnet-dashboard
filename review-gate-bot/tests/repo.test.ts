@@ -223,3 +223,11 @@ test("a listing GitHub itself truncated says so", async () => {
   const listing = await listRepoFiles(octokit, REF, HEAD, {});
   assert.equal(listing.truncated, true);
 });
+
+test("a live listing past the cap is cut to 2,000 paths and flagged", async () => {
+  const tree = Array.from({ length: 2_050 }, (_, i) => ({ path: `internal/f${i}.py`, type: "blob" }));
+  const { octokit } = fake({ tree });
+  const listing = await listRepoFiles(octokit, REF, HEAD, {});
+  assert.equal(listing.paths.length, 2_000);
+  assert.equal(listing.truncated, true);
+});

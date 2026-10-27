@@ -3,7 +3,7 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { readPrFixture, readRepoFixture } from "../lib/fixtures.js";
-import { listRepoFiles } from "../lib/repo.js";
+import { capListing, listRepoFiles } from "../lib/repo.js";
 
 /**
  * Which files exist, at the PR's head or its base. Lets the reviewer find the
@@ -24,8 +24,8 @@ export default defineTool({
         return { ok: false, reason: "no repository in this fixture" };
       }
       const prefix = input.prefix ?? "";
-      const paths = Object.keys(repo.files).filter((path) => path.startsWith(prefix));
-      return { ok: true, sha: input.at === "head" ? pr.headSha : pr.baseSha, paths, truncated: false, source: "fixture" };
+      const capped = capListing(Object.keys(repo.files).filter((path) => path.startsWith(prefix)));
+      return { ok: true, sha: input.at === "head" ? pr.headSha : pr.baseSha, ...capped, source: "fixture" };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");

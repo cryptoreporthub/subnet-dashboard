@@ -178,6 +178,11 @@ export async function readRepoFile(
   };
 }
 
+/** The first `listEntries` paths, and whether the listing was cut to fit. */
+export function capListing(paths: readonly string[]): { paths: string[]; truncated: boolean } {
+  return { paths: paths.slice(0, LIMITS.listEntries), truncated: paths.length > LIMITS.listEntries };
+}
+
 export type Listing = { sha: string; paths: string[]; truncated: boolean };
 
 export async function listRepoFiles(
@@ -191,9 +196,6 @@ export async function listRepoFiles(
   const matching = data.tree
     .filter((node) => node.type === "blob" && typeof node.path === "string" && node.path.startsWith(prefix))
     .map((node) => node.path as string);
-  return {
-    sha,
-    paths: matching.slice(0, LIMITS.listEntries),
-    truncated: Boolean(data.truncated) || matching.length > LIMITS.listEntries,
-  };
+  const capped = capListing(matching);
+  return { sha, paths: capped.paths, truncated: Boolean(data.truncated) || capped.truncated };
 }
