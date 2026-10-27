@@ -215,7 +215,7 @@ does not.
 
 | Where | What |
 | --- | --- |
-| `bot/agent.ts` | model, `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`. `local.sandbox` is deliberately absent. |
+| `bot/agent.ts` | `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`, and the Actions artifact storage hosts `*.blob.core.windows.net` and `*.actions.githubusercontent.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`. `local.sandbox` is deliberately absent. |
 | `bot/channels/github.ts` | the repo, the trigger actions, `webhookEvents`, and the automatic tagging |
 | `bot/instructions.md` | the adversarial review policy and the hard nevers |
 | `bot/lib/gate.ts` | the gate order and the delivery decision (`gateActions`: draft guard, tag, ask). The only place that decides `next`. |

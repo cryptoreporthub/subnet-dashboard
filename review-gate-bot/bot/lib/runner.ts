@@ -181,20 +181,41 @@ export type RunnerReader = {
 };
 
 /**
- * The bytes of a downloaded artifact.
- *
- * `downloadArtifact` types its payload as `unknown` and, for a zip, resolves an
- * `ArrayBuffer`. A cast to `Uint8Array` compiles and then fails inside the
- * reader, which reported every real artifact as unreadable.
+ * Hosts GitHub redirects an artifact download to. Measured 2026-10-27: the zip
+ * endpoint answers 302 with a signed URL on `productionresultssa<N>.blob.core.windows.net`.
+ * Anything else is refused, so a redirect cannot send the bot to a host of
+ * someone else's choosing, and a hosted egress block shows up as a named host.
  */
-export function artifactBytes(data: unknown): Uint8Array {
-  if (data instanceof Uint8Array) {
-    return data;
+const ARTIFACT_HOST = /^(?:productionresultssa\d+\.blob\.core\.windows\.net|[a-z0-9-]+\.actions\.githubusercontent\.com)$/;
+
+/**
+ * The artifact zip, fetched by hand so the redirect host is checked before any
+ * byte moves. The signed URL carries its own credential, so no token is sent.
+ */
+export async function downloadViaRedirect(steps: {
+  locate: () => Promise<string | undefined>;
+  fetchBytes: (url: string) => Promise<Uint8Array>;
+}): Promise<Uint8Array> {
+  const location = await steps.locate();
+  if (location === undefined) {
+    throw new Error("artifact download gave no redirect location");
   }
-  if (data instanceof ArrayBuffer) {
-    return new Uint8Array(data);
+  let host: string;
+  try {
+    host = new URL(location).hostname.toLowerCase();
+  } catch {
+    throw new Error("artifact download redirected to an unreadable URL");
   }
-  throw new Error(`artifact download was ${data === null ? "null" : typeof data}, not binary`);
+  if (!ARTIFACT_HOST.test(host)) {
+    throw new Error(`artifact download redirected to ${host}, which is not an Actions storage host; refusing`);
+  }
+  try {
+    return await steps.fetchBytes(location);
+  } catch (error) {
+    throw new Error(
+      `could not fetch the artifact from ${host} (is it in hosting.egressDomains?): ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /** The reader backed by the real GitHub API. */
@@ -220,13 +241,26 @@ export function octokitRunner(octokit: Octokit, ref: { owner: string; repo: stri
       return data.artifacts.map((artifact) => ({ id: artifact.id, name: artifact.name }));
     },
     async artifactZip(artifactId) {
-      const { data } = await octokit.rest.actions.downloadArtifact({
-        owner: ref.owner,
-        repo: ref.repo,
-        artifact_id: artifactId,
-        archive_format: "zip",
+      return downloadViaRedirect({
+        async locate() {
+          const response = await octokit.request("GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/{archive_format}", {
+            owner: ref.owner,
+            repo: ref.repo,
+            artifact_id: artifactId,
+            archive_format: "zip",
+            request: { redirect: "manual" },
+          });
+          const location = response.headers.location;
+          return typeof location === "string" ? location : undefined;
+        },
+        async fetchBytes(url) {
+          const response = await fetch(url, { redirect: "error" });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return new Uint8Array(await response.arrayBuffer());
+        },
       });
-      return artifactBytes(data);
     },
   };
 }

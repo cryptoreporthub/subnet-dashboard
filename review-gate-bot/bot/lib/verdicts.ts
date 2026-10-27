@@ -68,6 +68,8 @@ export type CommentLike = {
   id: number;
   body: string;
   createdAt: string;
+  /** When the body was last edited. Absent when the source does not say. */
+  updatedAt?: string;
   user: { login: string; type?: string } | null;
   performedViaGithubApp: { slug?: string | null } | null;
 };
@@ -463,7 +465,7 @@ export function collectPinnedVerdicts(input: {
         verdict,
         headSha: mcHead,
         sourceId: comment.id,
-        at: comment.createdAt,
+        at: lastSaid(comment),
         source: "comment",
       });
       continue;
@@ -506,7 +508,7 @@ export function collectPinnedVerdicts(input: {
     if (headSha === undefined) {
       continue;
     }
-    out.push({ reviewer, verdict, headSha, sourceId: comment.id, at: comment.createdAt, source: "comment" });
+    out.push({ reviewer, verdict, headSha, sourceId: comment.id, at: lastSaid(comment), source: "comment" });
   }
 
   // Newest last, so `verdictAt` taking the last match reads "latest wins".
@@ -517,6 +519,17 @@ export function collectPinnedVerdicts(input: {
     return Number.isNaN(parsed) ? 0 : parsed;
   };
   return out.sort((a, b) => time(a.at) - time(b.at) || a.sourceId - b.sourceId);
+}
+
+/**
+ * When a comment last said what it says now. An edit is a new statement: an old
+ * comment rewritten after a newer one is the latest word, not the oldest.
+ */
+function lastSaid(comment: CommentLike): string {
+  if (comment.updatedAt === undefined) {
+    return comment.createdAt;
+  }
+  return Date.parse(comment.updatedAt) > Date.parse(comment.createdAt) ? comment.updatedAt : comment.createdAt;
 }
 
 /** Does a comment claim a merge/deploy GO? Detection only, never an action. */

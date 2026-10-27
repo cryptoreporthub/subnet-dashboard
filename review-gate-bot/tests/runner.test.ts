@@ -178,52 +178,70 @@ test("an unreadable artifact is a refusal", async () => {
   }
 });
 
-// --- What Octokit actually hands back, and the documented upload path -----
+const SIGNED = "https://productionresultssa19.blob.core.windows.net/actions-results/abc?sig=x";
+
+// --- What the real download path does: a 302 to a signed storage host --------
 
 /**
- * The smallest Octokit that answers the three calls the runner makes.
- * `downloadArtifact` returns what the real endpoint does for a zip: an
- * ArrayBuffer, not a Uint8Array.
+ * The smallest Octokit that answers the calls the runner makes. The artifact
+ * endpoint answers with a redirect, as the real one does, and the bytes come
+ * from a stubbed `fetch` to the signed URL.
  */
-function octokitServing(archive: Uint8Array): Octokit {
-  const bytes = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength);
+function octokitServing(): Octokit {
   return {
     rest: {
       actions: {
         listWorkflowRuns: async () => ({ data: { workflow_runs: [{ id: 7, conclusion: "success" }] } }),
         listWorkflowRunArtifacts: async () => ({ data: { artifacts: [{ id: 2, name: "pytest-junit" }] } }),
-        downloadArtifact: async () => ({ data: bytes }),
       },
     },
+    request: async () => ({ headers: { location: SIGNED } }),
   } as unknown as Octokit;
 }
 
-test("the real runner reads a zip that Octokit returns as an ArrayBuffer", async () => {
-  const octokit = octokitServing(zip([{ name: "junit.xml", body: REPORT }]));
-  const result = await fetchJunit(octokitRunner(octokit, { owner: "o", repo: "r" }), "a".repeat(40));
+async function withStorage<T>(respond: () => Response, run: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => respond()) as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+test("the real runner reads a zip served from the signed storage URL", async () => {
+  const archive = zip([{ name: "junit.xml", body: REPORT }]);
+  const body = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength) as ArrayBuffer;
+  const result = await withStorage(
+    () => new Response(body),
+    () => fetchJunit(octokitRunner(octokitServing(), { owner: "o", repo: "r" }), "a".repeat(40)),
+  );
   assert.equal(result.ok, true, JSON.stringify(result));
   if (result.ok) {
     assert.ok(result.xml.includes('name="one"'));
   }
 });
 
-test("a Buffer from Octokit is accepted as it is", async () => {
-  const archive = zip([{ name: "junit.xml", body: REPORT }]);
-  const octokit = octokitServing(archive);
-  const actions = (octokit as unknown as { rest: { actions: { downloadArtifact: unknown } } }).rest.actions;
-  actions.downloadArtifact = async () => ({ data: Buffer.from(archive) });
-  const result = await fetchJunit(octokitRunner(octokit, { owner: "o", repo: "r" }), "a".repeat(40));
-  assert.equal(result.ok, true, JSON.stringify(result));
-});
-
-test("a download that is not binary is an unreadable refusal, not a crash", async () => {
-  const octokit = octokitServing(zip([{ name: "junit.xml", body: REPORT }]));
-  const actions = (octokit as unknown as { rest: { actions: { downloadArtifact: unknown } } }).rest.actions;
-  actions.downloadArtifact = async () => ({ data: "<html>not a zip</html>" });
-  const result = await fetchJunit(octokitRunner(octokit, { owner: "o", repo: "r" }), "a".repeat(40));
+test("a download that is not a zip is an unreadable refusal, not a crash", async () => {
+  const result = await withStorage(
+    () => new Response("<html>not a zip</html>"),
+    () => fetchJunit(octokitRunner(octokitServing(), { owner: "o", repo: "r" }), "a".repeat(40)),
+  );
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.equal(result.reason, "unreadable");
+  }
+});
+
+test("a storage host that answers with an error is an unreadable refusal that names the host", async () => {
+  const result = await withStorage(
+    () => new Response("denied", { status: 403 }),
+    () => fetchJunit(octokitRunner(octokitServing(), { owner: "o", repo: "r" }), "a".repeat(40)),
+  );
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.reason, "unreadable");
+    assert.match(result.detail, /productionresultssa19\.blob\.core\.windows\.net/);
   }
 });
 
@@ -268,8 +286,6 @@ test("an archive with a very large number of entries is refused", () => {
   const entries = Array.from({ length: 2_000 }, (_, i) => ({ name: `f${i}.txt`, body: "x", store: true }));
   assert.throws(() => readZip(zip(entries)), /entries|too many/i);
 });
-
-const SIGNED = "https://productionresultssa19.blob.core.windows.net/actions-results/abc?sig=x";
 
 test("the artifact is fetched from the Actions storage host the redirect names", async () => {
   const bytes = new Uint8Array([80, 75, 3, 4]);

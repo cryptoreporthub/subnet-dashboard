@@ -11,7 +11,11 @@ export default defineAgent({
   description:
     "Mission Control review gate for cryptoreporthub/subnet-dashboard. Adversarial PR review, deterministic gate order, automatic @cursor/@ditto/@replit tagging. Never merges, deploys, restarts, sets secrets or labels.",
   hosting: {
-    egressDomains: ["api.github.com", "mcp.replit.com"],
+    // GitHub answers an artifact download with a 302 to a signed URL on Azure
+    // blob storage (measured: productionresultssa19.blob.core.windows.net), so
+    // that host family is needed for the suite comparison. `lib/runner.ts`
+    // refuses any redirect host outside this family.
+    egressDomains: ["api.github.com", "mcp.replit.com", "*.blob.core.windows.net", "*.actions.githubusercontent.com"],
     secretNames: ["GITHUB_TOKEN"],
   },
   concurrency: { maxRunningTurns: 4 },

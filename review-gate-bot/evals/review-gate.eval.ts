@@ -39,9 +39,6 @@ function seed(prFixture: PrFixture, gateFixture: GateFixture): Record<string, st
   };
 }
 
-/** A passing run must never have asked Replit for a review. */
-const NO_REPLIT_ASK = "replit";
-
 export default defineEval({
   tags: ["smoke", "gate"],
   cases: [
@@ -235,8 +232,9 @@ export default defineEval({
         t.calledTool("check_gate_state", { input: { headSha: p.headSha } }).gate();
         t.calledTool("check_gate_state", { output: { next: "await_cursor_ditto" } }).gate();
 
-        // The decisive assertion: Replit is never asked here.
-        t.notCalledTool(NO_REPLIT_ASK).gate();
+        // The Replit ask is a host-side call the model cannot make, so a tool
+        // assertion could never fail. What the model can do wrong is claim the tag.
+        t.check(t.reply, satisfies((reply) => !/@replit\s+review/i.test(String(reply)), "reply does not claim to tag Replit")).gate();
         t.check(t.reply, includes(/ditto/i)).gate();
 
         t.judge

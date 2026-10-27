@@ -64,6 +64,7 @@ export function asComment(raw: {
   id: number;
   body?: string | null;
   created_at: string;
+  updated_at?: string;
   user: { login: string; type?: string } | null;
   performed_via_github_app?: { slug?: string | null } | null;
 }): CommentLike {
@@ -71,6 +72,7 @@ export function asComment(raw: {
     id: raw.id,
     body: raw.body ?? "",
     createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
     user: raw.user,
     performedViaGithubApp: raw.performed_via_github_app ?? null,
   };
