@@ -178,6 +178,13 @@ A marker comment counts as the gate's own only when its author is
 `simi-revision[bot]`. A `[bot]` login cannot be registered by a person, so a
 copied marker from anyone else is ignored.
 
+The Grokbot App posts MC verdicts as `simibot[bot]`. Its MC verdict counts only
+when GitHub attributes the comment to App ID **5501340** (slug `simibot`). A
+comment named `simibot[bot]` with any other App ID, or with no App attribution,
+is ignored, and so is anything simibot posts into the Cursor, Ditto or Replit
+slots. Reviews from simibot never count. The App ID was read from the REST API
+on PR #1522's simibot comments.
+
 **Remaining limit.** MC and Claude still post from `cryptoreporthub`, the owner's
 account, so their verdict comments are only as trustworthy as that account.
 Giving each of them its own App closes it.

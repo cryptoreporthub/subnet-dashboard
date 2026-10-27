@@ -35,10 +35,10 @@
  * nowhere else. Two things are validated before it counts, because a comment
  * body is attacker-controlled input:
  *
- * 1. **The author.** Only this bot's own login (`GATE_BOT_LOGIN`) may fill a
- *    slot. Anyone else who
- *    copies a marker is ignored, which is what stops a stranger from either
- *    forging an MC PASS or suppressing the real one.
+ * 1. **The author.** Only this bot's own login (`GATE_BOT_LOGIN`), or the
+ *    simibot App by its App ID, may fill the MC slot. Anyone else who copies a
+ *    marker is ignored, which is what stops a stranger from either forging an
+ *    MC PASS or suppressing the real one.
  * 2. **The SHA.** The marker names the head it was written for, so an MC
  *    verdict only ever applies to that head and a new head resets it like every
  *    other verdict.
@@ -105,6 +105,15 @@ export const OWNER_LOGIN = "cryptoreporthub";
  */
 export const GATE_BOT_LOGIN = "simi-revision[bot]";
 
+/**
+ * The Grokbot App, which posts MC verdicts as its own user. The login must match
+ * and the comment must carry this App ID. The login alone is a name, and GitHub
+ * attributes a comment to its App by ID, so a comment without that attribution
+ * is not the App's, whatever its login says.
+ */
+export const SIMIBOT_LOGIN = "simibot[bot]";
+export const SIMIBOT_APP_ID = 5501340;
+
 export type MarkerSlot = "mc-verdict" | "cursor-ditto" | "replit";
 
 export function marker(slot: MarkerSlot, headSha: string): string {
@@ -139,14 +148,24 @@ export function isOwnComment(comment: CommentLike): boolean {
   return comment.user?.login === GATE_BOT_LOGIN;
 }
 
-/** The head SHA this bot's own marker names for a slot, when the author checks out. */
-export function ownMarkerHead(comment: CommentLike, slot: MarkerSlot): string | undefined {
-  if (!isOwnComment(comment)) {
-    return undefined;
-  }
+/** The head SHA a comment's single marker names for a slot. Author-agnostic: the caller decides whose marker counts. */
+function singleMarkerHead(comment: CommentLike, slot: MarkerSlot): string | undefined {
   const found = parseMarkers(comment.body).filter((m) => m.slot === slot);
   // More than one marker in one body is not something this bot ever writes.
   return found.length === 1 ? found[0]?.headSha : undefined;
+}
+
+/** The head SHA this bot's own marker names for a slot, when the author checks out. */
+export function ownMarkerHead(comment: CommentLike, slot: MarkerSlot): string | undefined {
+  return isOwnComment(comment) ? singleMarkerHead(comment, slot) : undefined;
+}
+
+/** True when the comment may carry the MC verdict: this bot's own login, or the simibot App by ID. */
+export function isMcVerdictAuthor(comment: CommentLike): boolean {
+  if (isOwnComment(comment)) {
+    return true;
+  }
+  return comment.user?.login === SIMIBOT_LOGIN && comment.performedViaGithubApp?.id === SIMIBOT_APP_ID;
 }
 
 /** True when this bot itself posted the given slot for the given head. */
@@ -401,8 +420,9 @@ export function collectPinnedVerdicts(input: {
 
     if (markers.length > 0) {
       // A marker means "this came from the gate". Only the gate's own identity
-      // may fill a slot, and only the mc-verdict slot is a verdict at all.
-      const mcHead = ownMarkerHead(comment, "mc-verdict");
+      // or simibot's App may fill a slot, and only the mc-verdict slot is a
+      // verdict at all.
+      const mcHead = isMcVerdictAuthor(comment) ? singleMarkerHead(comment, "mc-verdict") : undefined;
       if (mcHead === undefined) {
         continue;
       }
