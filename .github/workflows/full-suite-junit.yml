@@ -1,0 +1,50 @@
+# Full-repo pytest run that only records results. It is NOT a required check
+# and never gates a merge or deploy: the required gate stays "smoke" in
+# ci-smoke.yml. This job exists so the review gate bot has a complete JUnit
+# report per commit to compare base against head ("pytest-junit" artifact).
+# The suite has known failures, so the test step may fail; the report is
+# uploaded regardless and the job result is not a signal.
+name: Full Suite JUnit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: full-suite-junit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  full-suite:
+    name: full-suite (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
+      - name: Run full suite
+        continue-on-error: true
+        env:
+          DISABLE_BACKGROUND_SCANS: "1"
+        run: python -m pytest tests -q -p no:cacheprovider --junitxml=pytest.xml
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-junit
+          path: pytest.xml
+          retention-days: 30
+          if-no-files-found: error
