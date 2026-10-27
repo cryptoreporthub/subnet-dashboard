@@ -29,11 +29,13 @@ import {
  * themselves. `hasOwnMarker` checks the author login, and the
  * `performed_via_github_app` slug, before the marker is believed.
  *
- * The concurrency claim is **at most once, best effort**. There is no
- * compare-and-swap on a GitHub comment, so two turns can both pass the
- * "already posted?" read and both post. `postVerdictComment` re-reads
- * immediately before posting to make that window as small as it can be; it
- * does not close it, and nothing here pretends otherwise.
+ * Inside one process every post is **exactly once**: `ranOnce` runs callers for
+ * a key one at a time, so the second finds the first one's comment. Across
+ * processes it is **at most once, best effort**. There is no compare-and-swap on
+ * a GitHub comment, so two processes can both pass the "already posted?" read
+ * and both post. `postVerdictComment` re-reads immediately before posting to
+ * make that window as small as it can be; it does not close it, and nothing
+ * here pretends otherwise.
  */
 
 export type TagSlot = MarkerSlot;
@@ -148,15 +150,27 @@ export async function tagReplit(input: {
   }
 
   let commentId: number | undefined;
+  let superseded = false;
   const result = await ranOnce({
     kv,
     key: replitTagKey(ref.number, headSha),
     alreadyDone: () => alreadyPosted(octokit, ref, "replit", headSha),
     run: async () => {
+      // The caller's head was read before the gate state, and reading the gate
+      // state is several round trips. Ask GitHub once more, as the last thing
+      // before the write, so Replit is never asked to review a superseded head.
+      const { data: pr } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
+      if (pr.head.sha !== headSha) {
+        superseded = true;
+        return;
+      }
       commentId = await postComment(octokit, ref, `${marker("replit", headSha)}\n${replitTagBody(headSha)}`);
     },
   });
 
+  if (superseded) {
+    return { posted: false, reason: "gate-not-ready", next: "blocked" };
+  }
   return {
     posted: result.ran,
     reason:
@@ -189,11 +203,12 @@ export type VerdictPost = {
  *    is the one that matters: the check and the `createComment` call are
  *    adjacent, so the window between them is a single HTTP round trip.
  *
- * None of that is a compare-and-swap; GitHub has none for comments. **At most
- * once, best effort** is the claim. A replay never double-posts (guard 3 sees
- * the first comment). A genuine simultaneous race can still produce two
- * comments — the marker makes the second harmful to nothing, because the gate
- * reads whichever carries it.
+ * None of that is a compare-and-swap; GitHub has none for comments. Inside one
+ * process the claim is exactly once. Across processes it is **at most once,
+ * best effort**. A replay never double-posts (guard 3 sees the first comment).
+ * A genuine simultaneous cross-process race can still produce two comments, and
+ * the gate reads the **latest** marker, so if the two carry different verdicts
+ * the later one wins. That is a narrow window, not a harmless one.
  */
 export async function postVerdictComment(input: {
   octokit: Octokit;

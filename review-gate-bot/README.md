@@ -41,8 +41,11 @@ Every post is guarded per `(PR number, head SHA)`, **at most once and best
 effort**. GitHub is the system of record: each comment carries a marker naming
 its slot and SHA, and the bot reads the PR back before posting. A marker only
 counts when this bot's own identity posted it, so a stranger cannot suppress the
-tag or forge a verdict by copying the text. A replay cannot double-post; a
-genuine simultaneous race can, and the marker makes the second comment harmless.
+tag or forge a verdict by copying the text. A replay cannot double-post, and
+neither can overlapping events inside one process (callers for a key run one at a
+time). A genuine simultaneous race between two processes can, because the hosted
+kv has no compare-and-swap; the gate reads the latest marker, so two different
+verdicts racing across processes resolve to the later one.
 
 ## Drafts
 

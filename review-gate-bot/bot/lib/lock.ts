@@ -124,7 +124,7 @@ async function release(kv: HostKvApi, key: string, token: string): Promise<void>
 const queues = new Map<string, Promise<unknown>>();
 
 /** Run `body` after every earlier caller for `key` in this process has finished. */
-async function exclusive<T>(key: string, body: () => Promise<T>): Promise<T> {
+export async function exclusive<T>(key: string, body: () => Promise<T>): Promise<T> {
   const previous = queues.get(key) ?? Promise.resolve();
   const mine = previous.then(body, body);
   queues.set(key, mine);
