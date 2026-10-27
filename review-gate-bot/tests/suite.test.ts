@@ -32,6 +32,27 @@ test("parseJunit reads outcomes from nested children", () => {
   assert.equal(cases[1]?.detail, "boom");
 });
 
+test("a `>` inside a self-closing failure's message does not end the tag", () => {
+  const cases = parseJunit(
+    '<testsuite><testcase classname="t" name="x"><failure message="1 > 0" /></testcase></testsuite>',
+  );
+  assert.equal(cases[0]?.outcome, "failed");
+  assert.equal(cases[0]?.detail, "1 > 0");
+});
+
+test("a `>` inside a testcase name does not merge it with the next testcase", () => {
+  const cases = parseJunit(
+    '<testsuite><testcase classname="t" name="a > b"/><testcase classname="t" name="c"><failure message="boom"/></testcase></testsuite>',
+  );
+  assert.deepEqual(
+    cases.map((c) => [c.name, c.outcome]),
+    [
+      ["a > b", "passed"],
+      ["c", "failed"],
+    ],
+  );
+});
+
 test("a self-closing testcase parses as passed", () => {
   const cases = parseJunit('<testsuite><testcase classname="t" name="ok"/></testsuite>');
   assert.equal(cases.length, 1);
