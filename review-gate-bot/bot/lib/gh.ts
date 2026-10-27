@@ -176,10 +176,7 @@ export async function resolveOwnIdentity(octokit: Octokit): Promise<GateIdentity
     if (login === undefined || login === "") {
       return DEFAULT_IDENTITY;
     }
-    return {
-      logins: [...new Set([login, ...DEFAULT_IDENTITY.logins])],
-      appSlug: DEFAULT_IDENTITY.appSlug,
-    };
+    return { logins: [...new Set([login, ...DEFAULT_IDENTITY.logins])] };
   } catch {
     return DEFAULT_IDENTITY;
   }

@@ -49,11 +49,14 @@
  *
  * ## What is not a verdict
  *
- * Reviewer prose. A verdict is an explicit `PASS` / `MODIFY` / `FAIL` token on
- * the **first line** of a comment, or a formal review state (`APPROVED`,
- * `CHANGES_REQUESTED`). "not a PASS", "PASS? no", "no PASS yet" and "not
- * approved" are negations and are checked before the token, so prose can never
- * release the gate in the dangerous direction.
+ * Reviewer prose. A verdict is an explicit `PASS` / `MODIFY` / `FAIL` token that
+ * **opens the first line** of a comment (after an optional heading mark and
+ * `Label:`), or a formal review state (`APPROVED`, `CHANGES_REQUESTED`). Any
+ * other first line has no verdict. That is an allowlist on purpose: a list of
+ * negations ("not a PASS", "Cannot PASS", "~~PASS~~ MODIFY", "Was PASS, now
+ * MODIFY"...) can only ever be as long as the phrasings someone has thought of.
+ * A PASS whose line goes on to withdraw it ("PASS, not approved") is no PASS.
+ * FAIL and MODIFY are never softened by their tail.
  */
 
 export type Verdict = "PASS" | "MODIFY" | "FAIL";
@@ -108,11 +111,9 @@ export const GATE_APP_SLUG = "subnet-review-gate";
 export type GateIdentity = {
   /** Logins that count as this bot. */
   logins: readonly string[];
-  /** App slug that counts as this bot, when the post carries one. */
-  appSlug?: string;
 };
 
-export const DEFAULT_IDENTITY: GateIdentity = { logins: GATE_BOT_LOGINS, appSlug: GATE_APP_SLUG };
+export const DEFAULT_IDENTITY: GateIdentity = { logins: GATE_BOT_LOGINS };
 
 export type MarkerSlot = "mc-verdict" | "cursor-ditto" | "replit";
 
@@ -144,29 +145,22 @@ export function appSlug(subject: {
 }
 
 /**
- * Did this bot post the comment? Author and App attribution are both checked;
- * a marker copied by anyone else is not evidence of anything.
+ * Did this bot post the comment? A marker copied by anyone else is not
+ * evidence of anything.
  *
- * **The login is authoritative.** A GitHub login is unique, so a comment whose
+ * **The login is the whole test.** A GitHub login is unique, so a comment whose
  * `user.login` is the account this bot's token belongs to was authored by this
- * bot — even when `performed_via_github_app` names some other App that posted on
- * its behalf. Requiring one specific slug was wrong for the `cursorAccount`
- * deployment, where the App in the attribution is not ours to name; it would
- * have made the gate blind to its own verdict again.
- *
- * The configured App slug is accepted as an alternative, because an
- * App-installed comment can be rendered under a login that is not the App's.
+ * bot, whatever `performed_via_github_app` says about the App that carried it.
+ * The App slug is not a second way in: it is attached to any comment made with
+ * that App's user token, so a stranger who authorised the App would carry it
+ * under their own login.
  */
 export function isOwnComment(
   comment: CommentLike,
   identity: GateIdentity = DEFAULT_IDENTITY,
 ): boolean {
   const login = comment.user?.login ?? "";
-  if (login !== "" && identity.logins.includes(login)) {
-    return true;
-  }
-  const slug = appSlug(comment);
-  return slug !== undefined && identity.appSlug !== undefined && slug === identity.appSlug;
+  return login !== "" && identity.logins.includes(login);
 }
 
 /** The head SHA this bot's own marker names for a slot, when the author checks out. */
@@ -193,9 +187,15 @@ export function hasOwnMarker(
   return ownMarkerHead(comment, slot, identity) === headSha;
 }
 
-/** True when a timeline comment was posted by the Ditto App. */
+/**
+ * True when a timeline comment was posted by the Ditto App, as the account it
+ * posts as. Measured: the slug arrives with Joshua's login (Ditto acts through
+ * his account) or the App's own bot login. The slug under any other login is a
+ * stranger who authorised the App, not Ditto.
+ */
 export function isDittoComment(comment: CommentLike): boolean {
-  return appSlug(comment) === DITTO_APP_SLUG;
+  const login = comment.user?.login;
+  return appSlug(comment) === DITTO_APP_SLUG && (login === OWNER_LOGIN || login === DITTO_BOT_LOGIN);
 }
 
 /**
@@ -219,24 +219,11 @@ export function isDittoReview(review: ReviewLike): boolean {
  * account it came from.
  */
 export function isJoshuaComment(comment: CommentLike): boolean {
-  if (appSlug(comment) !== undefined) {
+  if (comment.performedViaGithubApp !== null) {
     return false;
   }
   return comment.user?.login === OWNER_LOGIN && comment.user?.type !== "Bot";
 }
-
-/**
- * Phrases that invert a verdict word. Stripped before the token is read, so a
- * negation can never be read as approval.
- */
-const NEGATIONS: readonly RegExp[] = [
-  /\b(?:PASS|MODIFY|FAIL)\s*\?+\s*,?\s*no\b/gi,
-  /\bnot\s+(?:a\s+|an\s+)?(?:PASS|MODIFY|FAIL)\b/gi,
-  /\bno\s+(?:PASS|MODIFY|FAIL)\b(?:\s+yet)?/gi,
-  /\bnot\s+approved\b/gi,
-  /\bno\s+approval\b/gi,
-  /\bnot\s+signed\s*off\b/gi,
-];
 
 /** The first non-empty, non-marker line: where a verdict token must appear. */
 export function firstLine(text: string): string {
@@ -250,32 +237,47 @@ export function firstLine(text: string): string {
 }
 
 /**
- * Extract a verdict token from the **first line** of a comment.
+ * `PASS` / `MODIFY` / `FAIL` as the opening word of the line, after an optional
+ * heading mark, an optional `Label:` of up to 25 letters, and markdown emphasis.
+ * `PASS?` is not a verdict, and neither is a token that merely appears.
+ */
+const VERDICT_LINE = /^(?:#{1,6}\s*)?(?:[A-Za-z][A-Za-z ]{0,24}:\s*)?[*_`]*(PASS|MODIFY|FAIL)[*_`]*(?![\w?])(.*)$/;
+
+/** A PASS line that goes on to take the PASS back. */
+const WITHDRAWN = /\b(?:not|never|cannot|yet|but|however|until|unless)\b|n't\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
+
+/**
+ * The verdict a comment's **first line** opens with, if it opens with one.
  *
- * `PASS`, `MODIFY`, `FAIL`, with optional markdown around them. Tokens later in
- * the body are ignored: "tests FAIL, so overall PASS" states no verdict on its
- * first line, and guessing which of the two words is the verdict is how a gate
- * approves the wrong thing.
+ * "tests FAIL, so overall PASS" states no verdict, and guessing which of the
+ * two words is the verdict is how a gate approves the wrong thing.
  */
 export function parseVerdictToken(text: string): Verdict | undefined {
-  let line = firstLine(text);
-  for (const negation of NEGATIONS) {
-    line = line.replace(negation, " ");
-  }
-  const match = /\b(PASS|MODIFY|FAIL)\b/.exec(line);
+  const match = VERDICT_LINE.exec(firstLine(text));
   if (match === null) {
     return undefined;
   }
-  return match[1] as Verdict;
+  const verdict = match[1] as Verdict;
+  if (verdict === "PASS" && WITHDRAWN.test(match[2] ?? "")) {
+    return undefined;
+  }
+  return verdict;
 }
 
-/** A review's own state is the strongest signal; the body is the fallback. */
+/**
+ * A review's own state is the strongest signal; the body is the fallback for a
+ * plain comment-style review. A dismissed review was withdrawn and a pending one
+ * was never submitted, so neither speaks whatever its body says.
+ */
 export function verdictFromReview(review: ReviewLike): Verdict | undefined {
   if (review.state === "APPROVED") {
     return "PASS";
   }
   if (review.state === "CHANGES_REQUESTED") {
     return "MODIFY";
+  }
+  if (review.state === "DISMISSED" || review.state === "PENDING") {
+    return undefined;
   }
   return parseVerdictToken(review.body);
 }
@@ -298,58 +300,76 @@ export type PinnedReviewer = {
   headSha: string;
   /** Where it came from, so a reader can check it. */
   sourceId: number;
+  /** When it was posted. Reviews and comments number separately; time orders them. */
+  at: string;
   source: "review" | "comment";
 };
 
 /**
- * An abbreviated SHA, per GitHub's documented rule: lower case, at least 7
- * characters, and never a prefix of something longer.
+ * The head a reviewer comment says it reviewed.
  *
- * Three fixes over a bare `\b(?:head|at)\s*([0-9a-f]{7,12})`:
+ * A SHA is a claim only when the comment visibly ties it to the head:
  *
- * - `(?:head|at)` was the whole problem. "at defaced" is a sentence fragment
- *   and also a valid 7-character hex run, so it read as a SHA claim. The
- *   keyword is now `head` / `sha` / `commit`, and a bare word only counts when
- *   it is delimited (backticks or quotes) so it is visibly a SHA and not prose.
- * - The length is no longer a 7–12 guess. It is exactly "at least 7", up to the
- *   length where the full-SHA branch takes over, and `(?![0-9a-f])` on both
- *   sides stops a 40-character SHA from being truncated to 39.
- * - `[0-9a-f]`, not `[0-9a-f]` with `/i`: GitHub writes abbreviations in lower
- *   case, and accepting upper case invites a match on an ordinary ALL-CAPS word
- *   like `DEFACED`.
+ * - **Full (40):** after `head` / `sha` / `commit` (up to 20 characters of
+ *   gap, for "head commit was ..."), after `at`, or in backticks or quotes.
+ * - **Abbreviated (7-39):** after `head` / `sha` / `commit`, or delimited.
+ *   Lower case only, as GitHub writes them. The bare `at` form is not accepted
+ *   here: "at defaced" is a sentence fragment and also seven hex characters.
  *
- * A match here is a *claim*, not a verdict. It is resolved against the heads
- * the caller actually knows (see `resolveSha` in `collectPinnedVerdicts`), so a
- * hex-looking word that names no real head is dropped rather than guessed.
+ * A SHA inside a URL, a fenced code block, or a quoted (`>`) line is never a
+ * claim. It is evidence the reviewer looked at something, not a statement of
+ * which head the verdict is for. A bare 40-character run in prose ("compare
+ * <sha> with the earlier run") is not a claim either, which is how a stale PASS
+ * that happens to mention the current head used to pin to it.
+ *
+ * **One head per verdict.** When the comment makes claims for two different
+ * commits, it pins to neither. A short and a full form of the same commit
+ * (one a prefix of the other) are one claim. A claim is still resolved against
+ * the heads the caller knows (see `resolveSha`), so a hex-looking word that
+ * names no real head is dropped rather than guessed.
  */
-const DELIMITED_SHA = /[`'"]([0-9a-f]{7,39})[`'"]/;
-const KEYWORD_SHA = /\b(?:head|sha|commit)\b[^\n]{0,3}?[`'"]?([0-9a-f]{7,39})(?![0-9a-f])/;
+const CLAIM_PATTERNS: readonly RegExp[] = [
+  /\b(?:head|sha|commit)\b[^\n]{0,20}?(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])/g,
+  /\bat\s+`?([0-9a-f]{40})(?![0-9a-f])/g,
+  /[`'"]([0-9a-f]{7,40})[`'"]/g,
+  /\b(?:head|sha|commit)\b[^\n]{0,3}?[`'"]?(?<![0-9a-f])([0-9a-f]{7,39})(?![0-9a-f])/g,
+];
 
-/** The head SHA a comment claims, when it names one. */
+/** The body with everything that is not the reviewer's own statement removed. */
+function statedText(body: string): string {
+  return body
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/^[ \t]*>.*$/gm, " ")
+    .replace(/https?:\/\/\S+/g, " ");
+}
+
+/** The head SHA a comment claims, when it names exactly one. */
 export function shaClaimedByComment(comment: CommentLike): string | undefined {
-  const full = /(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])/.exec(comment.body);
-  if (full !== null) {
-    return full[0];
+  const text = statedText(comment.body);
+  const claims = new Set<string>();
+  for (const pattern of CLAIM_PATTERNS) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[1] !== undefined) {
+        claims.add(match[1]);
+      }
+    }
   }
-  const keyword = KEYWORD_SHA.exec(comment.body);
-  if (keyword !== null) {
-    return keyword[1];
-  }
-  const delimited = DELIMITED_SHA.exec(comment.body);
-  return delimited?.[1];
+  const longestFirst = [...claims].sort((a, b) => b.length - a.length);
+  const distinct = longestFirst.filter((claim, index) => !longestFirst.slice(0, index).some((kept) => kept.startsWith(claim)));
+  return distinct.length === 1 ? distinct[0] : undefined;
 }
 
 /**
  * Is this owner-account prose a Replit report?
  *
- * The body must name Replit, and must not be one of the gate's own request
- * comments (`@replit review`) or a Ditto/Claude note that merely mentions it.
+ * Replit's reports are pasted in by MC under the owner's login. The **first
+ * line** must open with the name `Replit` and carry the verdict, so a status
+ * note that merely mentions Replit ("Replit: not reviewed yet", "still waiting
+ * on Replit") is not one.
  */
 export function isReplitReport(body: string): boolean {
-  if (/^\s*@replit\s+review\b/im.test(body)) {
-    return false;
-  }
-  return /\bReplit\s*:/i.test(body) || /^\s*\**Replit\b[^\n]{0,40}\b(PASS|MODIFY|FAIL)\b/im.test(body);
+  const line = firstLine(body);
+  return /^(?:#{1,6}\s*)?[*_]*Replit\b/.test(line) && parseVerdictToken(body) !== undefined;
 }
 
 /**
@@ -385,7 +405,14 @@ export function collectPinnedVerdicts(input: {
     if (reviewer === undefined || review.commitId === null) {
       continue;
     }
-    out.push({ reviewer, verdict, headSha: review.commitId, sourceId: review.id, source: "review" });
+    out.push({
+      reviewer,
+      verdict,
+      headSha: review.commitId,
+      sourceId: review.id,
+      at: review.submittedAt ?? "",
+      source: "review",
+    });
   }
 
   for (const comment of input.comments) {
@@ -402,7 +429,14 @@ export function collectPinnedVerdicts(input: {
       if (verdict === undefined) {
         continue;
       }
-      out.push({ reviewer: "mc", verdict, headSha: mcHead, sourceId: comment.id, source: "comment" });
+      out.push({
+        reviewer: "mc",
+        verdict,
+        headSha: mcHead,
+        sourceId: comment.id,
+        at: comment.createdAt,
+        source: "comment",
+      });
       continue;
     }
 
@@ -417,14 +451,16 @@ export function collectPinnedVerdicts(input: {
       reviewer = "cursor";
     } else if (
       comment.user?.login === OWNER_LOGIN &&
-      appSlug(comment) === undefined &&
+      comment.user.type !== "Bot" &&
+      comment.performedViaGithubApp === null &&
       isReplitReport(comment.body)
     ) {
       // Replit's reports arrive as owner-account prose, pasted in by MC. Only a
-      // body that names Replit counts, so Joshua's own `PASS` stays his and is
-      // never read as a reviewer verdict. A comment carrying *any* App
-      // attribution is not a Replit report: an App comment surfaced under the
-      // owner's login could otherwise fill the Replit slot without a review.
+      // first line that opens with Replit counts, so Joshua's own `PASS` stays
+      // his and is never read as a reviewer verdict. The comment must carry no
+      // App attribution at all (an empty `{}` or `{slug: null}` included) and
+      // must not be a bot: another agent posting through the owner's token is
+      // not Replit.
       reviewer = "replit";
     }
     if (reviewer === undefined) {
@@ -440,11 +476,17 @@ export function collectPinnedVerdicts(input: {
     if (headSha === undefined) {
       continue;
     }
-    out.push({ reviewer, verdict, headSha, sourceId: comment.id, source: "comment" });
+    out.push({ reviewer, verdict, headSha, sourceId: comment.id, at: comment.createdAt, source: "comment" });
   }
 
   // Newest last, so `verdictAt` taking the last match reads "latest wins".
-  return out.sort((a, b) => a.sourceId - b.sourceId);
+  // Reviews and issue comments are numbered by separate counters, so ids only
+  // break a tie between two posts in the same second.
+  const time = (value: string): number => {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+  return out.sort((a, b) => time(a.at) - time(b.at) || a.sourceId - b.sourceId);
 }
 
 /** Does a comment claim a merge/deploy GO? Detection only, never an action. */

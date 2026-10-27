@@ -202,7 +202,9 @@ test("a first-line FAIL is never overridden by a PASS further down", () => {
   // The dangerous direction of the same bug: read the first line only, so a PASS
   // written later can never turn a FAIL into approval.
   assert.equal(parseVerdictToken("FAIL\nTwo blockers, so not a PASS."), "FAIL");
-  assert.equal(parseVerdictToken("The suite has tests FAIL on two cases, so overall not PASS."), "FAIL");
+  // A sentence that merely contains the word opens no verdict at all, and
+  // "no verdict" can never release the gate.
+  assert.equal(parseVerdictToken("The suite has tests FAIL on two cases, so overall not PASS."), undefined);
 });
 
 test("a leading HTML marker does not hide the first real line", () => {
