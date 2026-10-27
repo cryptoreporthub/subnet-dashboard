@@ -1,6 +1,6 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import type { GateInput, GateState, PinnedVerdict, SuiteState } from "./gate.js";
+import type { GateState, PinnedVerdict, SuiteState } from "./gate.js";
 import { computeGate } from "./gate.js";
 import type { CommentLike, GateIdentity, ReviewLike } from "./verdicts.js";
 import { collectPinnedVerdicts, DEFAULT_IDENTITY, hasOwnMarker } from "./verdicts.js";
