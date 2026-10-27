@@ -71,7 +71,7 @@ export type CommentLike = {
   /** When the body was last edited. Absent when the source does not say. */
   updatedAt?: string;
   user: { login: string; type?: string } | null;
-  performedViaGithubApp: { slug?: string | null } | null;
+  performedViaGithubApp: { id?: number | null; slug?: string | null } | null;
 };
 
 /** The subset of a GitHub review this module reads. */

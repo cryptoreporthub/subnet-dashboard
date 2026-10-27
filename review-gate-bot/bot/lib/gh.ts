@@ -63,7 +63,7 @@ export function asComment(raw: {
   created_at: string;
   updated_at?: string;
   user: { login: string; type?: string } | null;
-  performed_via_github_app?: { slug?: string | null } | null;
+  performed_via_github_app?: { id?: number | null; slug?: string | null } | null;
 }): CommentLike {
   return {
     id: raw.id,

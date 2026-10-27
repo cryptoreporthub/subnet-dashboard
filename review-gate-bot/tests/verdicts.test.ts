@@ -294,6 +294,64 @@ test("a marker from the owner's own account is not the gate's, because MC and Cl
   assert.deepEqual(collectPinnedVerdicts({ reviews: [], comments: [fromOwner] }), [], "no MC verdict is read from it");
 });
 
+// --- simibot: the Grokbot App posts MC verdicts, trusted by App ID ---------
+
+const SIMIBOT = { login: "simibot[bot]", type: "Bot" };
+const SIMIBOT_APP = { id: 5501340, slug: "simibot" };
+
+function mcVerdictFrom(overrides: Partial<CommentLike>): CommentLike {
+  return comment({ body: `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``, ...overrides });
+}
+
+function pinned(comments: CommentLike[], reviews: ReviewLike[] = []): string[][] {
+  return collectPinnedVerdicts({ reviews, comments }).map((p) => [p.reviewer, p.verdict, p.headSha]);
+}
+
+test("simibot's MC verdict, posted by the simibot App (id 5501340), is the MC verdict", () => {
+  assert.deepEqual(pinned([mcVerdictFrom({ user: SIMIBOT, performedViaGithubApp: SIMIBOT_APP })]), [["mc", "PASS", HEAD]]);
+});
+
+test("a comment named simibot but attributed to a different App is refused", () => {
+  const squatter = mcVerdictFrom({ user: SIMIBOT, performedViaGithubApp: { id: 1236702, slug: "simibot" } });
+  assert.deepEqual(pinned([squatter]), []);
+});
+
+test("a simibot comment with no App attribution is refused: the login alone is only a name", () => {
+  assert.deepEqual(pinned([mcVerdictFrom({ user: SIMIBOT, performedViaGithubApp: null })]), []);
+});
+
+test("the owner's account carrying simibot's App id is still not simibot's verdict", () => {
+  const ownerViaApp = mcVerdictFrom({ user: { login: "cryptoreporthub", type: "User" }, performedViaGithubApp: SIMIBOT_APP });
+  assert.deepEqual(pinned([ownerViaApp]), []);
+});
+
+test("simibot cannot fill the cursor-ditto or replit slots, only the MC slot", () => {
+  const cursorDitto = comment({
+    body: `${marker("cursor-ditto", HEAD)}\nCursor: **PASS**`,
+    user: SIMIBOT,
+    performedViaGithubApp: SIMIBOT_APP,
+  });
+  const replit = comment({
+    body: `${marker("replit", HEAD)}\nReplit: **PASS**`,
+    user: SIMIBOT,
+    performedViaGithubApp: SIMIBOT_APP,
+  });
+  assert.deepEqual(pinned([cursorDitto, replit]), []);
+});
+
+test("a simibot comment carrying two MC markers is refused, as the gate's own bot's is", () => {
+  const doubled = mcVerdictFrom({
+    body: `${marker("mc-verdict", HEAD)}\n${marker("mc-verdict", OTHER)}\nMC: **PASS**`,
+    user: SIMIBOT,
+    performedViaGithubApp: SIMIBOT_APP,
+  });
+  assert.deepEqual(pinned([doubled]), []);
+});
+
+test("a review from simibot is never an MC verdict", () => {
+  assert.deepEqual(pinned([], [review({ user: SIMIBOT, body: "MC: **PASS**" })]), []);
+});
+
 test("an app-attributed owner comment cannot be a Replit verdict", () => {
   const pinned = collectPinnedVerdicts({
     reviews: [],

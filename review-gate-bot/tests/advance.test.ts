@@ -17,7 +17,7 @@ type Raw = {
   body: string;
   created_at: string;
   user: { login: string; type: string };
-  performed_via_github_app: { slug: string } | null;
+  performed_via_github_app: { id?: number; slug: string } | null;
 };
 
 type CheckCall = { name: string; sha: string; conclusion?: string };
@@ -152,6 +152,26 @@ test("a comment from the bare name 'simi-revision' is just a person", async () =
 
 test("a comment from the owner's account is never the bot's, even one that carries a marker", async () => {
   assert.equal(await commentTurn(world().deps, "cryptoreporthub"), true, "the owner account is shared, so it still runs the gate");
+});
+
+function simibotPass(appId: number): Raw {
+  return {
+    id: 2,
+    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``,
+    created_at: "2026-10-26T05:00:00Z",
+    user: { login: "simibot[bot]", type: "Bot" },
+    performed_via_github_app: { id: appId, slug: "simibot" },
+  };
+}
+
+test("simibot's PASS from its App (id 5501340) is the MC verdict, so no second review starts", async () => {
+  const w = world({ comments: [simibotPass(5501340)] });
+  assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), false);
+});
+
+test("a PASS named simibot from another App id does not count, so the review turn still starts", async () => {
+  const w = world({ comments: [simibotPass(1236702)] });
+  assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
 });
 
 test("a failing tag post on a pull_request event does not lose the review turn", async () => {
