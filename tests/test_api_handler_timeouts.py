@@ -281,7 +281,11 @@ def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json() == second.json()
+    first_body, second_body = first.json(), second.json()
+    first_age = first_body["freshness"].pop("age_seconds")
+    second_age = second_body["freshness"].pop("age_seconds")
+    assert first_body == second_body
+    assert second_age > first_age
     assert calls["n"] == 1
 
 
