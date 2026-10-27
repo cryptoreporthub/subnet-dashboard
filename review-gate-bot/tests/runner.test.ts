@@ -3,6 +3,7 @@ import test from "node:test";
 import { deflateRawSync } from "node:zlib";
 import type { Octokit } from "@octokit/rest";
 import {
+  downloadViaRedirect,
   fetchJunit,
   junitFromEntries,
   octokitRunner,
@@ -266,4 +267,64 @@ test("many entries cannot add up past the total cap", () => {
 test("an archive with a very large number of entries is refused", () => {
   const entries = Array.from({ length: 2_000 }, (_, i) => ({ name: `f${i}.txt`, body: "x", store: true }));
   assert.throws(() => readZip(zip(entries)), /entries|too many/i);
+});
+
+const SIGNED = "https://productionresultssa19.blob.core.windows.net/actions-results/abc?sig=x";
+
+test("the artifact is fetched from the Actions storage host the redirect names", async () => {
+  const bytes = new Uint8Array([80, 75, 3, 4]);
+  let fetched = "";
+  const got = await downloadViaRedirect({
+    locate: async () => SIGNED,
+    fetchBytes: async (url) => {
+      fetched = url;
+      return bytes;
+    },
+  });
+  assert.deepEqual(got, bytes);
+  assert.equal(fetched, SIGNED);
+});
+
+test("a redirect to any other host is refused before a byte is fetched", async () => {
+  let called = false;
+  await assert.rejects(
+    downloadViaRedirect({
+      locate: async () => "https://evil.example.com/steal?sig=x",
+      fetchBytes: async () => {
+        called = true;
+        return new Uint8Array();
+      },
+    }),
+    /evil\.example\.com/,
+  );
+  assert.equal(called, false);
+});
+
+test("a look-alike host that only ends with the storage name is refused", async () => {
+  await assert.rejects(
+    downloadViaRedirect({
+      locate: async () => "https://productionresultssa19.blob.core.windows.net.evil.test/x",
+      fetchBytes: async () => new Uint8Array(),
+    }),
+    /evil\.test/,
+  );
+});
+
+test("a refused connection names the host so an egress block can be read off the reason", async () => {
+  await assert.rejects(
+    downloadViaRedirect({
+      locate: async () => SIGNED,
+      fetchBytes: async () => {
+        throw new Error("fetch failed");
+      },
+    }),
+    /productionresultssa19\.blob\.core\.windows\.net.*egress/s,
+  );
+});
+
+test("no redirect location at all is a refusal, not an empty report", async () => {
+  await assert.rejects(
+    downloadViaRedirect({ locate: async () => undefined, fetchBytes: async () => new Uint8Array() }),
+    /redirect/i,
+  );
 });

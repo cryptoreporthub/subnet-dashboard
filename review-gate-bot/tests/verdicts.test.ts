@@ -549,3 +549,42 @@ test("a caveat after a PASS is not a withdrawal of it", () => {
   assert.equal(parseVerdictToken("PASS — not approved"), undefined);
   assert.equal(parseVerdictToken("PASS until the suite runs"), undefined);
 });
+
+test("a verdict comment edited after a later one is the last thing said, so it sorts last", () => {
+  const pinned = collectPinnedVerdicts({
+    reviews: [],
+    comments: [
+      comment({
+        id: 1,
+        body: `PASS at \`${HEAD}\``,
+        createdAt: "2026-10-26T04:00:00Z",
+        updatedAt: "2026-10-26T04:10:00Z",
+        user: CURSOR,
+      }),
+      comment({
+        id: 2,
+        body: `FAIL at \`${HEAD}\``,
+        createdAt: "2026-10-26T04:05:00Z",
+        user: CURSOR,
+      }),
+    ],
+  });
+  assert.deepEqual(
+    pinned.map((p) => p.verdict),
+    ["FAIL", "PASS"],
+  );
+});
+
+test("an unedited comment keeps its creation order", () => {
+  const pinned = collectPinnedVerdicts({
+    reviews: [],
+    comments: [
+      comment({ id: 1, body: `PASS at \`${HEAD}\``, createdAt: "2026-10-26T04:00:00Z", updatedAt: "2026-10-26T04:00:00Z", user: CURSOR }),
+      comment({ id: 2, body: `FAIL at \`${HEAD}\``, createdAt: "2026-10-26T04:05:00Z", user: CURSOR }),
+    ],
+  });
+  assert.deepEqual(
+    pinned.map((p) => p.verdict),
+    ["PASS", "FAIL"],
+  );
+});
