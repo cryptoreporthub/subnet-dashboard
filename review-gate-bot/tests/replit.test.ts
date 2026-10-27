@@ -141,3 +141,57 @@ test("attempts are per head, so a new head starts fresh", async () => {
   const outcome = await askReplitOnce({ kv: store, mcp: mcp(), prNumber: 1, headSha: newHead });
   assert.equal(outcome.asked, true);
 });
+
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+/** An MCP whose call takes a moment, so overlapping callers really overlap. */
+function slowMcp(outcome: "ok" | "error"): HostMcpRegistry & { calls: number } {
+  const state = { calls: 0 };
+  const registry = {
+    get calls() {
+      return state.calls;
+    },
+    names: () => ["replit"],
+    listTools: async () => [{ name: REPLIT_TOOL }],
+    callTool: async () => {
+      state.calls += 1;
+      await settle();
+      return outcome === "ok"
+        ? { isError: false, content: [{ type: "text", text: "ok" }] }
+        : { isError: true, content: [{ type: "text", text: "busy" }] };
+    },
+  };
+  return registry as unknown as HostMcpRegistry & { calls: number };
+}
+
+test("overlapping calls for one head ask Replit once", async () => {
+  const store = kv();
+  const registry = slowMcp("ok");
+  const outcomes = await Promise.all(
+    Array.from({ length: 6 }, () => askReplitOnce({ kv: store, mcp: registry, prNumber: 1, headSha: HEAD })),
+  );
+  assert.equal(registry.calls, 1, "one ask, however many events arrived together");
+  assert.equal(outcomes.filter((o) => o.asked).length, 1);
+});
+
+test("overlapping failing calls spend the attempt budget once, not once per caller", async () => {
+  const store = kv();
+  const registry = slowMcp("error");
+  await Promise.all(
+    Array.from({ length: 6 }, () => askReplitOnce({ kv: store, mcp: registry, prNumber: 1, headSha: HEAD })),
+  );
+  assert.equal(registry.calls, ASK_ATTEMPTS);
+});
+
+test("a late failure can never overwrite a recorded success", async () => {
+  const store = kv();
+  const ok = slowMcp("ok");
+  await askReplitOnce({ kv: store, mcp: ok, prNumber: 1, headSha: HEAD });
+  const failing = slowMcp("error");
+  await Promise.all([
+    askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD }),
+    askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD }),
+  ]);
+  assert.equal(failing.calls, 0);
+  assert.ok((store.store.get(replitAskKey(1, HEAD)) as { askedAt?: number }).askedAt !== undefined);
+});

@@ -50,13 +50,15 @@ type RawReview = {
 function fakeOctokit(
   initial: RawComment[] = [],
   reviews: RawReview[] = [],
-): Octokit & { comments: RawComment[]; created: string[] } {
+): Octokit & { comments: RawComment[]; created: string[]; liveHead: string } {
   const comments = [...initial];
   const created: string[] = [];
   let nextId = 9000;
   const octokit = {
     comments,
     created,
+    /** The head `pulls.get` reports. A test moves it to simulate a push. */
+    liveHead: HEAD,
     paginate: async (fn: unknown) => {
       if (fn === octokit.rest.pulls.listReviews) {
         return reviews;
@@ -80,10 +82,11 @@ function fakeOctokit(
       },
       pulls: {
         listReviews: async () => ({ data: reviews }),
+        get: async () => ({ data: { head: { sha: octokit.liveHead } } }),
       },
     },
   };
-  return octokit as unknown as Octokit & { comments: RawComment[]; created: string[] };
+  return octokit as unknown as Octokit & { comments: RawComment[]; created: string[]; liveHead: string };
 }
 
 /** The three other passes at HEAD, so the gate sits on `tag_replit`. */
@@ -275,4 +278,26 @@ test("a forged replit marker does not suppress the real tag", async () => {
   });
   assert.equal(result.posted, true, "a stranger's marker cannot stand in for the gate's tag");
   assert.equal(octokit.created.length, 1);
+});
+
+test("tagReplit does not tag a head the PR moved off while the gate was being read", async () => {
+  const { comments, reviews, kv: store } = passesAtHead();
+  const octokit = fakeOctokit(comments, reviews);
+  // The caller read HEAD as current; by the time the tag is about to be written
+  // a push has replaced it.
+  octokit.liveHead = OTHER;
+  const result = await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
+  assert.equal(result.posted, false);
+  assert.equal(result.reason, "gate-not-ready");
+  assert.equal(octokit.created.length, 0, "Replit must not be asked to review a superseded head");
+});
+
+test("the stale-head refusal does not leave a claim that blocks the real head", async () => {
+  const { comments, reviews, kv: store } = passesAtHead();
+  const octokit = fakeOctokit(comments, reviews);
+  octokit.liveHead = OTHER;
+  await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
+  octokit.liveHead = HEAD;
+  const retry = await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
+  assert.equal(retry.posted, true);
 });
