@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { alreadyPosted, postVerdictComment, tagReplit } from "../bot/lib/tag.js";
+import { alreadyPosted, postVerdictComment, tagCursorAndDitto, tagReplit } from "../bot/lib/tag.js";
 import { marker } from "../bot/lib/verdicts.js";
 
 const HEAD = "a".repeat(40);
@@ -303,4 +303,29 @@ test("the stale-head refusal does not leave a claim that blocks the real head", 
   octokit.liveHead = HEAD;
   const retry = await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
   assert.equal(retry.posted, true);
+});
+
+test("tagCursorAndDitto does not request review of a head the PR moved off", async () => {
+  const octokit = fakeOctokit();
+  octokit.liveHead = OTHER;
+  const state = { headSha: HEAD, next: "await_cursor_ditto" } as never;
+  const result = await tagCursorAndDitto({ octokit, kv: kv(), ref: REF, headSha: HEAD, state });
+  assert.equal(result.posted, false);
+  assert.equal(octokit.created.length, 0, "@cursor review must not land on a newer head");
+});
+
+test("a verdict is not posted for a head the PR moved off between the check and the write", async () => {
+  const octokit = fakeOctokit();
+  octokit.liveHead = OTHER;
+  const result = await postVerdictComment({
+    octokit,
+    kv: kv(),
+    ref: REF,
+    headSha: HEAD,
+    currentHeadSha: HEAD,
+    body: "MC: **PASS**",
+  });
+  assert.equal(result.posted, false);
+  assert.equal(result.reason, "stale-head");
+  assert.equal(octokit.created.length, 0);
 });

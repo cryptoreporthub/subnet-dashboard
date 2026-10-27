@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { computeGate, type GateInput, type GateState, type PinnedVerdict } from "../bot/lib/gate.js";
@@ -82,11 +82,29 @@ test("PR 1519's fixture blocks a carry-over, so the tool refuses one", () => {
   assert.ok(blocking.includes("scripts/fly_disable_worker_v2.sh"));
 });
 
-test("PR 1519's suite status is carried in the fixture, which the gate accepts as clean", () => {
-  // The fixture records the pre-existing carried suite so the case exercises the
-  // "new head still needs fresh reviews" half, while the .sh makes a *new*
-  // carry impossible through compare_suite_runs.
-  assert.equal(gateFixture("pr-1519").suite, "carried");
+test("PR 1519's fixture has no suite result, because the carry it would need is refused", () => {
+  // The .sh makes a carry impossible through compare_suite_runs, so a fixture
+  // that recorded `carried` at this head would be a state the tool cannot reach.
+  assert.equal(gateFixture("pr-1519").suite, "missing");
+});
+
+test("fixtures that name the same PR at the same head agree on its changed files", () => {
+  const seen = new Map<string, { files: string[]; from: string }>();
+  for (const name of readdirSync(FIXTURES)) {
+    let pr: { number: number; headSha: string; files: string[] };
+    try {
+      pr = JSON.parse(readFileSync(join(FIXTURES, name, "pr.json"), "utf8")) as typeof pr;
+    } catch {
+      continue;
+    }
+    const key = `${pr.number}@${pr.headSha}`;
+    const earlier = seen.get(key);
+    if (earlier === undefined) {
+      seen.set(key, { files: pr.files, from: name });
+    } else {
+      assert.deepEqual(pr.files, earlier.files, `${name} and ${earlier.from} both pin ${key}`);
+    }
+  }
 });
 
 test("the secret-echo fixture head starts with no MC verdict", () => {

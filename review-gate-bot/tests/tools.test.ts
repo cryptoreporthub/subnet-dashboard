@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import { readPr } from "../bot/lib/gh.js";
@@ -93,4 +96,33 @@ test("a rename's old path counts as changed, so x.py to x.md cannot look like pr
   });
   const snapshot = await readPr(octokit, { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 });
   assert.deepEqual([...snapshot.files].sort(), ["README.md", "docs/x.md", "internal/x.py"]);
+});
+
+// --- An eval session answers for the head its fixture pins, and only that ---
+
+async function evalContext(gate: object): Promise<unknown> {
+  const dir = await mkdtemp(join(tmpdir(), "gate-eval-"));
+  await writeFile(join(dir, "gate.json"), JSON.stringify(gate));
+  return { session: { purpose: "eval" }, workspaceDir: dir };
+}
+
+const FIXTURE_GATE = {
+  headSha: HEAD,
+  mc: "PASS",
+  cursor: "missing",
+  ditto: "missing",
+  replit: "missing",
+  suite: "missing",
+  replitTagged: false,
+  next: "await_cursor_ditto",
+};
+
+test("an eval gate state is the fixture's, for the head it pins", async () => {
+  const result = (await run(checkGateState)({ headSha: HEAD }, await evalContext(FIXTURE_GATE))) as Record<string, unknown>;
+  assert.equal(result.headSha, HEAD);
+  assert.equal(result.source, "fixture");
+});
+
+test("an eval gate state is not relabelled with a head the fixture does not pin", async () => {
+  await assert.rejects(run(checkGateState)({ headSha: OLD }, await evalContext(FIXTURE_GATE)), /does not match|fixture/i);
 });
