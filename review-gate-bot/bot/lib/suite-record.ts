@@ -32,7 +32,10 @@ export async function recordSuiteComparison(input: {
     repo: input.ref.repo,
     basehead: `${input.baseSha}...${input.headSha}`,
   });
-  const changed = (data.files ?? []).map((file) => file.filename);
+  // A rename lists the new path and the old one. The old path is the one the PR stops being: both count.
+  const changed = (data.files ?? []).flatMap((file) =>
+    file.previous_filename === undefined ? [file.filename] : [file.filename, file.previous_filename],
+  );
   if ((data.files ?? []).length >= DIFF_FILE_CAP) {
     return { ok: false, step: "head", reason: "diff-incomplete", detail: `the PR changes ${DIFF_FILE_CAP} or more files, so its suite definition cannot be read whole` };
   }

@@ -83,3 +83,20 @@ test("a PR that changes no suite-definition file is recorded as before", async (
   assert.equal(outcome.ok, true);
   assert.equal((f.store.get(suiteKey(REF, HEAD)) as { state?: string }).state, "clean");
 });
+
+test("renaming a suite-definition file away from its path is refused: the old path counts too", async () => {
+  const f = fixture([]);
+  const renamed = {
+    rest: {
+      repos: {
+        compareCommitsWithBasehead: async () => ({
+          data: { files: [{ filename: "tests/conftest_old.py", previous_filename: "tests/conftest.py", status: "renamed" }] },
+        }),
+      },
+    },
+  } as unknown as Octokit;
+  const outcome = await recordSuiteComparison({ octokit: renamed, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
+  assert.equal(f.downloads.count, 0);
+});
+
