@@ -164,3 +164,27 @@ test("a private key with no END line is removed to the end of the text", () => {
   const { text } = redactSecrets("log:\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nmore");
   assert.equal(text.includes("b3BlbnNz"), false);
 });
+
+// Timing guards: the scrubber is synchronous, so a slow pattern stalls the whole bot. The
+// limits are generous; the fixed patterns finish in milliseconds.
+function timed(input: string): { text: string; ms: number } {
+  const started = performance.now();
+  const { text } = redactSecrets(input);
+  return { text, ms: performance.now() - started };
+}
+
+test("a 100 KB run of name characters with no keyword scrubs in under a second", () => {
+  const { ms } = timed("a.b-".repeat(25_000));
+  assert.ok(ms < 1000, `took ${Math.round(ms)} ms`);
+});
+
+test("a 100 KB run of keyword-dense name characters scrubs in under a second", () => {
+  const { ms } = timed("token".repeat(20_000));
+  assert.ok(ms < 1000, `took ${Math.round(ms)} ms`);
+});
+
+test("a credential name longer than any fixed bound is still redacted", () => {
+  const { text, redactedNames } = redactSecrets(`${"X".repeat(120)}_TOKEN=plainvalue9Z8Y7X6W`);
+  assert.equal(text.includes("plainvalue9Z8Y7X6W"), false);
+  assert.equal(redactedNames.length, 1);
+});

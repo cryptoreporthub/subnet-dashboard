@@ -54,6 +54,10 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/=-]{16,}/gi,
 ];
 
+/** Words that make a name a credential name. */
+const CREDENTIAL_WORD =
+  /token|secret|password|passwd|passphrase|api[_-]?key|apikey|private[_-]?key|client[_-]?secret|credential|authorization|bearer|access[_-]?key|session[_-]?id|pwd|(?<![a-z])pass(?![a-z])/i;
+
 /**
  * `NAME=value` / `NAME: value` / `"name": "value"` where NAME looks like a
  * credential variable.
@@ -64,10 +68,10 @@ const VALUE_PATTERNS: readonly RegExp[] = [
  * the value is a quoted string or a bare run up to a delimiter.
  */
 const NAMED_ASSIGNMENT =
-  /\b([A-Za-z0-9_.-]*(?:token|secret|password|passwd|passphrase|api[_-]?key|apikey|private[_-]?key|client[_-]?secret|credential|authorization|bearer|access[_-]?key|session[_-]?id|pwd|(?<![a-z])pass(?![a-z]))[A-Za-z0-9_.-]*)"?\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+)/gi;
+  /(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+)"?\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+)/gi;
 
 /** `scheme://user:password@host`: the userinfo goes, the host stays readable. */
-const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi;
+const URL_USERINFO = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi;
 
 const REDACTED = "<redacted>";
 
@@ -105,7 +109,7 @@ export function redactSecrets(input: string): RedactResult {
   let text = input;
 
   text = text.replace(NAMED_ASSIGNMENT, (match, name: string, value: string) => {
-    if (isPlaceholder(value)) {
+    if (!CREDENTIAL_WORD.test(name) || isPlaceholder(value)) {
       return match;
     }
     redactedNames.push(name);
