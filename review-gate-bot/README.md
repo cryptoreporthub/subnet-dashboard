@@ -13,8 +13,10 @@ shadow mode.
 - On **PR opened, new head (`synchronize`), and review/comment events**: posts
   the bot's verdict for that head, then exactly **one** comment tagging
   `@cursor review` and `@ditto review`.
-- When MC, Cursor and Ditto have all PASSed **the same head** and the full-suite
-  comparison is clean, posts `@replit review` **once** for that head.
+- When MC, Cursor and Ditto have all PASSed **the same head**, the gate runs the
+  full-suite comparison itself (see below) and, once it is clean, posts
+  `@replit review` **once** for that head. A Replit PASS counts only if it was
+  said after that tag: one said earlier answers nothing.
 - Then nudges Replit's MCP `ask_question` once per head, if the connector is
   reachable. **The ask is not a review.** `ask_question` asks an existing Replit
   app a question; it does not start a review run. So the gate advances only on
@@ -110,7 +112,23 @@ The full suite gate reads JUnit from the workflow's own artifact:
 | JUnit XML | `pytest-junit` artifact of the `full-suite-junit.yml` run for the **exact** SHA |
 | Known flakes | committed `known-flakes.txt` (never a tool argument) |
 | Zero testcases | a failed comparison, never a clean one |
-| Carry-over | only when every changed file is prose/an image **and** the source SHA has a recorded clean run |
+| Carry-over | only when every changed file is prose/an image **and** the source SHA has a recorded clean run. `AGENTS.md`, `model-guide.md`, `DEPLOY.md` and `favicon.svg` are read by suite tests, so they always block a carry |
+| Base and head | both read from the live PR (the head checked, the base taken from the PR), never from the model |
+| Download ceiling | an artifact body stops at 32 MB as it streams; the zip reader's own inflated limits still apply |
+
+**The gate runs the suite itself.** When the gate reaches `run_suite`, the delivery
+records the comparison for the PR's live base and head, then reads the gate again
+so the tag and check that follow see the result. A missing run or artifact is a
+wait: nothing is recorded and nothing is refused as regressed. An artifact that
+is corrupt or over the ceiling is refused, and that run is remembered under its
+own key, so later deliveries skip it while it is still the newest run. Deliveries
+for one head queue in this process, so a burst of webhooks downloads once.
+
+**Known limit: a late artifact.** The bot subscribes to `pull_request`,
+`issue_comment`, `pull_request_review_comment` and `pull_request_review` only. No
+event fires when `full-suite-junit.yml` finishes. If the last reviewer's event
+arrives before the artifact, the gate waits until the next PR comment, review or
+push. The fix is a `workflow_run` subscription, which is not in place.
 
 > **Dependency, outside this folder.** `.github/workflows/full-suite-junit.yml`
 > (PR #1525) runs the whole suite and uploads the `pytest-junit` artifact. It is
@@ -291,7 +309,8 @@ does not.
 | `bot/lib/verdicts.ts` | how each verdict is attributed, and the first-line-only token rule |
 | `bot/lib/repo.ts` | the read-only diff, file and listing helpers behind the read tools |
 | `bot/hooks/review-turn.ts` | a failed or cancelled review turn frees its lease, so the next delivery may ask again |
-| `bot/lib/runner.ts` | JUnit from the runner artifact for an exact SHA |
+| `bot/lib/runner.ts` | JUnit from the runner artifact for an exact SHA, with the download ceiling |
+| `bot/lib/suite-record.ts` | the one suite comparison both `compare_suite_runs` and the gate's own step call, and the per-head queue around it |
 | `known-flakes.txt` | the committed flake list `compare_suite_runs` reads |
 | `bot/skills/` | on-demand procedures: adversarial review, owner rules, settled check, outside commenters |
 | `bot/host-connections/replit.ts` | the conditional Replit MCP connection |
