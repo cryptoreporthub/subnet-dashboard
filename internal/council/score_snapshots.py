@@ -465,8 +465,9 @@ def volume_has_fresh_complete_snapshot(
     # Readers keep serving a moved snapshot; only the producer must rebuild it.
     if snapshot_membership_current(snap) is False:
         return False
-    built_with = (snap.get("provenance") or {}).get("weights_digest")
-    return built_with is None or built_with == current_weights_digest()
+    provenance = snap.get("provenance")
+    built_with = provenance.get("weights_digest") if isinstance(provenance, dict) else None
+    return isinstance(built_with, str) and built_with == current_weights_digest()
 
 
 def _served_snapshot_tuple(
