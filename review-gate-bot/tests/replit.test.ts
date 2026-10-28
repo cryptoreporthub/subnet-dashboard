@@ -196,3 +196,16 @@ test("a late failure can never overwrite a recorded success", async () => {
   assert.equal(failing.calls, 0);
   assert.ok((store.store.get(replitAskKey(REF, HEAD)) as { askedAt?: number }).askedAt !== undefined);
 });
+
+test("an MCP error that echoes a credential is scrubbed before it is stored or returned", async () => {
+  const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
+  const store = kv();
+  const registry = {
+    names: () => ["replit"],
+    listTools: async () => [{ name: REPLIT_TOOL }],
+    callTool: async () => ({ isError: true, content: [{ type: "text", text: `auth failed for ${token}` }] }),
+  } as unknown as HostMcpRegistry;
+  const outcome = await askReplitOnce({ kv: store, mcp: registry, ref: { owner: "o", repo: "r", number: 1 }, headSha: "a".repeat(40) });
+  assert.equal(JSON.stringify(outcome).includes(token), false, "the outcome carries no credential");
+  assert.equal(JSON.stringify([...store.store.entries()]).includes(token), false, "the stored failure carries no credential");
+});

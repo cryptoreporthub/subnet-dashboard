@@ -453,6 +453,31 @@ test("a Replit ask that gives up is logged under the repository-qualified PR key
   assert.equal(w.asks(), 0);
 });
 
+test("a gate step whose error echoes a credential logs the error without the credential", async () => {
+  const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
+  const w = world({
+    checkFails: true,
+    comments: [mcPass],
+    reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
+    seed: { [suiteKey(REF, HEAD)]: { state: "clean" } },
+  });
+  w.deps.createCheck = async () => {
+    throw new Error(`github 403 for token ${token}`);
+  };
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => {
+    lines.push(line);
+  };
+  try {
+    await reviewEventTurn(w.deps);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(lines.join("\n").includes(token), false, "a logged step error carries no credential");
+  assert.ok(lines.some((line) => JSON.parse(line).event === "gate_step_failed"), "the failure is still logged");
+});
+
 test("a failed gate step is logged under the repository-qualified PR key", async () => {
   const w = world({
     checkFails: true,

@@ -3,6 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { replitAskKey } from "./gate.js";
 import { exclusive } from "./lock.js";
 import type { PrRef } from "./gh.js";
+import { redactSecrets } from "./redact.js";
 
 /**
  * The conditional Replit step.
@@ -148,7 +149,10 @@ async function askReplit(input: {
     };
   }
 
-  const fail = async (reason: ReplitAskFailure, detail: string): Promise<ReplitAskOutcome> => {
+  // The detail is the connector's own text, which can echo a credential it was given. It is scrubbed
+  // here, once, so the stored failure, the returned outcome and every log line that carries it are clean.
+  const fail = async (reason: ReplitAskFailure, rawDetail: string): Promise<ReplitAskOutcome> => {
+    const detail = redactSecrets(rawDetail).text;
     const attempts = failedAttempts + 1;
     await input.kv.put(key, {
       at: Date.now(),

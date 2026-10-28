@@ -7,6 +7,7 @@ import { gateActions, prKey, reviewTurnKey } from "./gate.js";
 import { leaseToken, releaseLeaseIfHolder } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
 import { tagCursorAndDitto, tagReplit } from "./tag.js";
+import { redactSecrets } from "./redact.js";
 import { runSuiteIfDue } from "./suite-record.js";
 import type { RunnerReader } from "./runner.js";
 import { GATE_BOT_LOGIN } from "./verdicts.js";
@@ -141,7 +142,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
           step,
           pr: prKey(ref),
           head: headSha,
-          error: error instanceof Error ? error.message : String(error),
+          error: redactSecrets(error instanceof Error ? error.message : String(error)).text,
         }),
       );
       return `failed:${step}`;
