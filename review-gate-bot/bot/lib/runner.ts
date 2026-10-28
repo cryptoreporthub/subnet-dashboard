@@ -32,6 +32,13 @@ export const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 /** And the most a whole archive may inflate to, and how many entries it may hold. */
 export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 export const MAX_ENTRIES = 512;
+/**
+ * The most a downloaded artifact body may be, as it arrives (compressed bytes). The inflated
+ * limits above cap what the reader keeps; this caps what the download may pull before it
+ * is read at all. A deflated JUnit report is far smaller than its inflated size, so this
+ * is generous for any real suite run.
+ */
+export const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024;
 
 const EOCD = 0x06054b50;
 const CENTRAL = 0x02014b50;
@@ -226,6 +233,44 @@ export async function downloadViaRedirect(steps: {
   }
 }
 
+/**
+ * A response body, read whole but never past `limit` bytes. A declared length over the limit is
+ * refused before any byte moves. Otherwise the stream is read chunk by chunk and cut off the
+ * moment it passes the limit, so an endless or oversized body cannot fill memory first.
+ */
+export async function readCappedBody(response: Response, limit: number): Promise<Uint8Array> {
+  const declared = Number(response.headers.get("content-length"));
+  if (response.headers.has("content-length") && Number.isFinite(declared) && declared > limit) {
+    await response.body?.cancel();
+    throw new Error(`artifact is ${declared} bytes, over the ${limit}-byte download ceiling; refusing`);
+  }
+  if (response.body === null) {
+    return new Uint8Array();
+  }
+  const reader = response.body.getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      throw new Error(`artifact download passed the ${limit}-byte download ceiling; stopped reading`);
+    }
+    parts.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.byteLength;
+  }
+  return bytes;
+}
+
 /** The reader backed by the real GitHub API. */
 export function octokitRunner(octokit: Octokit, ref: { owner: string; repo: string }): RunnerReader {
   return {
@@ -266,7 +311,7 @@ export function octokitRunner(octokit: Octokit, ref: { owner: string; repo: stri
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
           }
-          return new Uint8Array(await response.arrayBuffer());
+          return readCappedBody(response, MAX_ARCHIVE_BYTES);
         },
       });
     },

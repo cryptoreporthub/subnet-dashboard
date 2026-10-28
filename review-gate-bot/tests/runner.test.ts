@@ -4,6 +4,8 @@ import { deflateRawSync } from "node:zlib";
 import type { Octokit } from "@octokit/rest";
 import {
   downloadViaRedirect,
+  MAX_ARCHIVE_BYTES,
+  readCappedBody,
   MAX_ENTRY_BYTES,
   fetchJunit,
   junitFromEntries,
@@ -357,4 +359,32 @@ test("no redirect location at all is a refusal, not an empty report", async () =
     downloadViaRedirect({ locate: async () => undefined, fetchBytes: async () => new Uint8Array() }),
     /redirect/i,
   );
+});
+
+test("an artifact whose declared size is past the download ceiling is refused before its body is read", async () => {
+  const declared = new Response(new Uint8Array(16), { headers: { "content-length": String(MAX_ARCHIVE_BYTES + 1) } });
+  await assert.rejects(readCappedBody(declared, MAX_ARCHIVE_BYTES), /ceiling/);
+});
+
+test("an artifact body that streams past the ceiling is cut off as it arrives, not buffered whole", async () => {
+  let pulled = 0;
+  const chunk = new Uint8Array(1024 * 1024);
+  const endless = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulled += 1;
+      if (pulled > 1000) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(chunk);
+    },
+  });
+  await assert.rejects(readCappedBody(new Response(endless), 4 * 1024 * 1024), /ceiling/);
+  assert.ok(pulled < 20, `read ${pulled} chunks before stopping; the ceiling should stop it after about 5`);
+});
+
+test("an artifact within the ceiling is read whole", async () => {
+  const body = new Uint8Array([1, 2, 3, 4, 5]);
+  const bytes = await readCappedBody(new Response(body), 1024);
+  assert.deepEqual([...bytes], [1, 2, 3, 4, 5]);
 });
