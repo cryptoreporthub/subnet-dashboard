@@ -225,14 +225,26 @@ test("a compare cut off at GitHub's file cap is refused as NEEDS-JOSHUA even whe
   assert.match(record?.detail ?? "", /300 or more files/);
 });
 
-test("a compare with no file list at all is unknown and refused, not read as 'no suite files changed'", async () => {
+test("a compare with no file list is a failed lookup: it records nothing, never reads as 'no suite files changed', and the next delivery tries again", async () => {
   const f = fixture([]);
-  const { octokit } = compareOf({});
   const lookups = { count: 0 };
-  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader(lookups) });
-  assert.equal(outcome, "refused:head-diff-incomplete");
-  assert.equal(lookups.count, 0);
-  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
+  const broken = compareOf({});
+  await assert.rejects(runSuiteIfDue({ octokit: broken.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader(lookups) }));
+  assert.equal(lookups.count, 0, "no run is looked up on a compare that could not be read");
+  assert.equal(f.store.get(suiteKey(REF, HEAD)), undefined, "a glitch is not recorded as a permanent block on this head");
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "missing");
+  await assert.rejects(recordSuiteComparison({ octokit: broken.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader }));
+  assert.equal(f.downloads.count, 0);
+  const good = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
+  const retry = await runSuiteIfDue({ octokit: good.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(retry, "recorded");
+});
+
+test("a genuinely empty diff has no suite files to refuse and goes on to the run", async () => {
+  const f = fixture([]);
+  const { octokit } = compareOf({ files: [] });
+  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(outcome, "recorded");
 });
 
 test("a capped compare is final: the next delivery neither compares nor looks up a run again", async () => {

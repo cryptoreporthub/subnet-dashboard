@@ -636,3 +636,17 @@ test("a suite refused as NEEDS-JOSHUA is not looked up again on later deliveries
   assert.match(last?.summary ?? "", /pytest\.ini/);
 });
 
+
+test("a compare cut off at the file cap is handled in the same delivery exactly as a changed suite definition is", async () => {
+  const outcomeFor = async (changedFiles: string[]) => {
+    const w = world({ changedFiles, comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
+    const { reader } = suiteReader({ runId: 77 });
+    const result = await reviewEventTurn({ ...w.deps, reader });
+    return { result, posted: w.posted.length, summary: w.checks.at(-1)?.summary ?? "" };
+  };
+  const refused = await outcomeFor(["pytest.ini"]);
+  const capped = await outcomeFor(Array.from({ length: 300 }, (_, i) => `app/module_${i}.py`));
+  assert.match(capped.summary, /NEEDS-JOSHUA/);
+  assert.equal(capped.posted, refused.posted, "the same tags and comments are posted");
+  assert.equal(capped.result, refused.result, "the delivery asks for the same follow-up");
+});

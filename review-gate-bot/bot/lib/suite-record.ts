@@ -19,8 +19,9 @@ function listed(label: string, names: readonly string[]): string {
 }
 
 /**
- * What the compare says about the suite's definition. A list GitHub cut off at its cap, or one that is missing,
- * is unknown, not empty: a suite-definition change could be among the files left out. Unknown is refused.
+ * What the compare says about the suite's definition. A list at GitHub's cap is cut short, so a suite-definition
+ * change could be among the files left out: that is unknown, not empty, and it is refused. The cap is on
+ * `files` alone. More than 250 commits trims `commits`, and the file list still covers the whole comparison.
  */
 export type DefinitionRead = { complete: true; files: string[] } | { complete: false; detail: string };
 
@@ -30,8 +31,12 @@ async function readDefinition(input: { octokit: Octokit; ref: PrRef; headSha: st
     repo: input.ref.repo,
     basehead: `${input.baseSha}...${input.headSha}`,
   });
-  if (data.files === undefined || data.files.length >= DIFF_FILE_CAP) {
-    return { complete: false, detail: `the compare lists ${DIFF_FILE_CAP} or more files, or none, so the PR's suite definition cannot be read whole` };
+  // No list at all is not a fact about this PR. It fails the delivery, so nothing is recorded and the next one asks again.
+  if (data.files === undefined) {
+    throw new Error("the compare returned no file list");
+  }
+  if (data.files.length >= DIFF_FILE_CAP) {
+    return { complete: false, detail: `the PR changes ${DIFF_FILE_CAP} or more files, so its suite definition cannot be read whole` };
   }
   // A rename counts both paths.
   const changed = data.files.flatMap((file) =>
