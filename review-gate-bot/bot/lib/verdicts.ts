@@ -219,7 +219,7 @@ const VERDICT_LINE =
   /^(?:#{1,6}\s*)?(?:[*_\s]|\p{Extended_Pictographic}\uFE0F?)*(?:[A-Za-z][A-Za-z ]{0,24}:\s*)?[*_`]*(PASS|MODIFY|FAIL)[*_`]*(?![\w?])(.*)$/u;
 
 /** A commit SHA, full or short. */
-const SHA_WORD = /^[0-9a-f]{7,40}$/i;
+const SHA_WORD = /^[0-9a-f]{12,40}$/i;
 
 /** A reviewer's `-grokbot` or `-simibot` signature. */
 const SIGNATURE_WORD = /^-?(?:grokbot|simibot)$/i;
@@ -228,11 +228,12 @@ const SIGNATURE_WORD = /^-?(?:grokbot|simibot)$/i;
  * What may follow `PASS` on its first line: an allowlist, and fail closed.
  *
  * Allowed, in this order: an optional head pointer (`at <sha>`, `at head <sha>`,
- * `head <sha>`, or a bare SHA, backticked or not), then an optional signature, then
- * trailing punctuation. Nothing else. A withdrawal list missed every phrasing it did
- * not name, so a PASS followed by a caveat or a note is no PASS: it has to be re-read.
+ * `head <sha>`, or a bare SHA of at least 12 characters, backticked or not), then an
+ * optional signature, then trailing punctuation. Nothing else. Twelve characters, because
+ * a short run of hex letters is an English word ("effaced", "defaced"). `on` is not a
+ * keyword. Returns whether the tail is allowed and the SHA it names, if any.
  */
-function passTailAllowed(tail: string): boolean {
+function passTail(tail: string): { allowed: boolean; sha?: string } {
   const words = tail
     .replace(/[*_`]/g, " ")
     .replace(/[—–,;:]/g, " ")
@@ -244,21 +245,33 @@ function passTailAllowed(tail: string): boolean {
   const keyword = words[0]?.toLowerCase();
   if (keyword === "at" && words[1]?.toLowerCase() === "head") {
     i = 2;
-  } else if (keyword === "at" || keyword === "head" || keyword === "on") {
+  } else if (keyword === "at" || keyword === "head") {
     i = 1;
   }
+  let sha: string | undefined;
   if (i > 0) {
     if (!SHA_WORD.test(words[i] ?? "")) {
-      return false;
+      return { allowed: false };
     }
+    sha = words[i]?.toLowerCase();
     i += 1;
   } else if (SHA_WORD.test(words[0] ?? "")) {
+    sha = words[0]?.toLowerCase();
     i = 1;
   }
   if (SIGNATURE_WORD.test(words[i] ?? "")) {
     i += 1;
   }
-  return i === words.length;
+  return i === words.length ? { allowed: true, sha } : { allowed: false };
+}
+
+/** The head SHA a first-line PASS names after itself, when it is an allowed PASS. */
+export function namedHeadOnPassLine(text: string): string | undefined {
+  const match = VERDICT_LINE.exec(firstLine(text));
+  if (match === null || match[1] !== "PASS") {
+    return undefined;
+  }
+  return passTail(match[2] ?? "").sha;
 }
 
 
@@ -275,7 +288,7 @@ export function parseVerdictToken(text: string): Verdict | undefined {
     return undefined;
   }
   const verdict = match[1] as Verdict;
-  if (verdict === "PASS" && !passTailAllowed(match[2] ?? "")) {
+  if (verdict === "PASS" && !passTail(match[2] ?? "").allowed) {
     return undefined;
   }
   return verdict;
@@ -472,7 +485,8 @@ export function collectPinnedVerdicts(input: {
     const simibotHead = simibotMcHead(comment);
     if (simibotHead !== undefined) {
       const verdict = verdictFromComment(comment);
-      if (verdict === undefined) {
+      const named = namedHeadOnPassLine(comment.body);
+      if (verdict === undefined || (named !== undefined && !simibotHead.startsWith(named))) {
         noteUnparsed(comment);
         continue;
       }

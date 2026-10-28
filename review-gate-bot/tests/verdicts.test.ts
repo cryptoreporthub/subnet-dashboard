@@ -504,7 +504,7 @@ test("a bare full SHA with nothing marking it as the head is not a claim", () =>
 test("a full SHA tied to the head by a keyword, 'at', or backticks is a claim", () => {
   assert.equal(pinnedFor(`PASS head ${HEAD}`), HEAD);
   assert.equal(pinnedFor(`PASS at ${HEAD}`), HEAD);
-  assert.equal(pinnedFor(`PASS on \`${HEAD}\``), HEAD);
+  assert.equal(pinnedFor(`PASS \`${HEAD}\``), HEAD);
   // A bare SHA after PASS parses as PASS, but the claim rule takes a bare 40-character run
   // as prose, so it pins to nothing and cannot count for a head.
   assert.equal(pinnedFor(`PASS ${HEAD}`), undefined);
@@ -665,7 +665,7 @@ const CLEAN_PASS = [
   "PASS at `" + HEAD + "`",
   "PASS at head " + HEAD,
   "PASS head " + HEAD,
-  "PASS on `" + HEAD + "`",
+  "PASS `" + HEAD + "`",
   "PASS `" + HEAD + "`",
   "PASS -grokbot",
   "PASS at `" + HEAD + "` -grokbot",
@@ -779,4 +779,28 @@ test("an older SimiBot verdict edited after a newer one is the last thing said, 
   });
   const newer = simibotMc(`MODIFY at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 2, createdAt: "2026-10-26T05:00:00Z" });
   assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "PASS");
+});
+
+// --- A SHA on the PASS line must name the head the verdict is pinned to ----------------------
+
+const OLD_HEAD = "44ce7ea5dad700194036aea5b79958e0f176952d";
+
+test("a SimiBot PASS that names an older head is no PASS for the head its marker names", () => {
+  const body = `PASS at ${OLD_HEAD}\n<!-- mc-verdict:${HEAD} -->`;
+  assert.deepEqual(pinned([simibotMc(body)]), []);
+});
+
+test("a SimiBot PASS whose SHA is a prefix of its marker's head still counts", () => {
+  const body = `PASS at ${HEAD.slice(0, 12)}\n<!-- mc-verdict:${HEAD} -->`;
+  assert.deepEqual(pinned([simibotMc(body)]), [["mc", "PASS", HEAD]]);
+});
+
+test("English words made of hex letters are not head pointers after a PASS", () => {
+  for (const word of ["effaced", "defaced", "facade1", "deadbeef", "beefcafe"]) {
+    assert.notEqual(parseVerdictToken(`PASS — ${word}`), "PASS", `"${word}" must not read as a head`);
+  }
+});
+
+test("a PASS on a head pointer written with 'on' is no PASS: the allowed forms are at, head and bare", () => {
+  assert.notEqual(parseVerdictToken(`PASS on \`${HEAD}\``), "PASS");
 });
