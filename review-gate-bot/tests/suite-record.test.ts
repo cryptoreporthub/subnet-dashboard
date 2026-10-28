@@ -181,3 +181,85 @@ test("a long list of missing tests is summarised in the detail, and the full lis
   assert.ok((record?.detail ?? "").length <= 1000, `detail is ${record?.detail?.length} characters`);
   assert.match(record?.detail ?? "", /3000/);
 });
+
+/** A compare whose file list the test controls, and a count of how many times it was asked for. */
+function compareOf(data: { files?: Array<{ filename: string; previous_filename?: string; status?: string }> }) {
+  const calls = { count: 0 };
+  const octokit = {
+    rest: {
+      repos: {
+        compareCommitsWithBasehead: async () => {
+          calls.count += 1;
+          return { data };
+        },
+      },
+    },
+  } as unknown as Octokit;
+  return { octokit, calls };
+}
+
+/** 300 changed files, the most GitHub's compare returns, none of them a suite-definition file. */
+const CAPPED = Array.from({ length: 300 }, (_, i) => ({ filename: `app/module_${i}.py`, status: "modified" }));
+
+function noRunReader(lookups: { count: number }): RunnerReader {
+  return {
+    runsForSha: async () => {
+      lookups.count += 1;
+      return [];
+    },
+    artifactsForRun: async () => [],
+    artifactZip: async () => new Uint8Array(),
+  };
+}
+
+test("a compare cut off at GitHub's file cap is refused as NEEDS-JOSHUA even when no run has finished", async () => {
+  const f = fixture([]);
+  const { octokit } = compareOf({ files: CAPPED });
+  const lookups = { count: 0 };
+  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader(lookups) });
+  assert.equal(outcome, "refused:head-diff-incomplete", "not waiting:no-run, which would let a PR that never finishes its run pass");
+  assert.equal(lookups.count, 0, "the refusal comes before any run is looked up");
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
+  const record = f.store.get(suiteKey(REF, HEAD)) as { invalid?: string; detail?: string } | undefined;
+  assert.equal(record?.invalid, "needs-joshua");
+  assert.match(record?.detail ?? "", /300 or more files/);
+});
+
+test("a compare with no file list at all is unknown and refused, not read as 'no suite files changed'", async () => {
+  const f = fixture([]);
+  const { octokit } = compareOf({});
+  const lookups = { count: 0 };
+  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader(lookups) });
+  assert.equal(outcome, "refused:head-diff-incomplete");
+  assert.equal(lookups.count, 0);
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
+});
+
+test("a capped compare is final: the next delivery neither compares nor looks up a run again", async () => {
+  const f = fixture([]);
+  const { octokit, calls } = compareOf({ files: CAPPED });
+  const lookups = { count: 0 };
+  const reader = noRunReader(lookups);
+  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
+  const afterFirst = calls.count;
+  const second = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
+  assert.equal(second, "already-refused");
+  assert.equal(calls.count, afterFirst);
+  assert.equal(lookups.count, 0);
+});
+
+test("the compare_suite_runs path records a capped compare as NEEDS-JOSHUA too, so both paths record the same thing", async () => {
+  const f = fixture([]);
+  const { octokit } = compareOf({ files: CAPPED });
+  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
+  assert.equal(f.downloads.count, 0, "no report is read for a diff that cannot be checked whole");
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
+});
+
+test("a compare just under the cap that changes no suite file still goes on to the run", async () => {
+  const f = fixture([]);
+  const { octokit } = compareOf({ files: CAPPED.slice(1) });
+  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(outcome, "recorded");
+});

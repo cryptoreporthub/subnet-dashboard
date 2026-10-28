@@ -18,31 +18,65 @@ function listed(label: string, names: readonly string[]): string {
   return `${label}: ${names.length} (${shown.join(", ")}${more > 0 ? `, and ${more} more` : ""})`;
 }
 
-/** The suite-definition files a PR changes, read before any run is looked up. A rename counts both paths. */
-async function definitionFiles(input: { octokit: Octokit; ref: PrRef; headSha: string; baseSha: string }): Promise<string[]> {
+/**
+ * What the compare says about the suite's definition. A list GitHub cut off at its cap, or one that is missing,
+ * is unknown, not empty: a suite-definition change could be among the files left out. Unknown is refused.
+ */
+type DefinitionRead = { complete: true; files: string[] } | { complete: false; detail: string };
+
+async function readDefinition(input: { octokit: Octokit; ref: PrRef; headSha: string; baseSha: string }): Promise<DefinitionRead> {
   const { data } = await input.octokit.rest.repos.compareCommitsWithBasehead({
     owner: input.ref.owner,
     repo: input.ref.repo,
     basehead: `${input.baseSha}...${input.headSha}`,
   });
-  const changed = (data.files ?? []).flatMap((file) =>
+  if (data.files === undefined || data.files.length >= DIFF_FILE_CAP) {
+    return { complete: false, detail: `the compare lists ${DIFF_FILE_CAP} or more files, or none, so the PR's suite definition cannot be read whole` };
+  }
+  // A rename counts both paths.
+  const changed = data.files.flatMap((file) =>
     file.previous_filename === undefined ? [file.filename] : [file.filename, file.previous_filename],
   );
-  return suiteDefinitionFiles(changed);
+  return { complete: true, files: suiteDefinitionFiles(changed) };
 }
 
-/** Record a head as NEEDS-JOSHUA: final, with the files that did it. No run is looked up for it again. */
-async function recordDefinitionRefusal(input: { kv: HostKvApi; ref: PrRef; headSha: string }, files: string[]): Promise<string> {
-  const detail = listed("suite definition changed", files);
-  console.warn(JSON.stringify({ level: "warn", event: "needs_joshua", reason: "suite-definition-changed", pr: prKey(input.ref), head: input.headSha, files }));
+/**
+ * Record a head as NEEDS-JOSHUA: final, with the reason. No run is looked up for it again. A changed suite
+ * definition passes the files that did it, and they are named in the detail.
+ */
+async function recordRefusal(
+  input: { kv: HostKvApi; ref: PrRef; headSha: string },
+  refusal: { reason: string; detail: string; files?: string[] },
+): Promise<string> {
+  console.warn(JSON.stringify({ level: "warn", event: "needs_joshua", reason: refusal.reason, pr: prKey(input.ref), head: input.headSha, files: refusal.files ?? [] }));
   await input.kv.put(suiteKey(input.ref, input.headSha), {
     state: "regressed",
     invalid: "needs-joshua",
-    detail,
+    detail: refusal.detail,
     newFailures: [],
     at: Date.now(),
   });
-  return detail;
+  return refusal.detail;
+}
+
+/** Refuse a head whose compare cannot be read whole, or whose PR changes the suite's definition. Undefined when it may go on. */
+async function refuseUnlessDefinitionClear(
+  input: { kv: HostKvApi; ref: PrRef; headSha: string },
+  definition: DefinitionRead,
+): Promise<{ reason: "diff-incomplete" | "suite-definition-changed"; detail: string } | undefined> {
+  if (!definition.complete) {
+    const detail = await recordRefusal(input, { reason: "diff-incomplete", detail: definition.detail });
+    return { reason: "diff-incomplete", detail };
+  }
+  if (definition.files.length > 0) {
+    const detail = await recordRefusal(input, {
+      reason: "suite-definition-changed",
+      detail: listed("suite definition changed", definition.files),
+      files: definition.files,
+    });
+    return { reason: "suite-definition-changed", detail };
+  }
+  return undefined;
 }
 
 export type SuiteComparison =
@@ -64,19 +98,10 @@ export async function recordSuiteComparison(input: {
   reader?: RunnerReader;
 }): Promise<SuiteComparison> {
   // The suite's definition comes from the PR. A change to it means the report can no longer be trusted
-  // as this suite's, so nothing is read or recorded. A compare too large to read whole is refused too.
-  const { data } = await input.octokit.rest.repos.compareCommitsWithBasehead({
-    owner: input.ref.owner,
-    repo: input.ref.repo,
-    basehead: `${input.baseSha}...${input.headSha}`,
-  });
-  if ((data.files ?? []).length >= DIFF_FILE_CAP) {
-    return { ok: false, step: "head", reason: "diff-incomplete", detail: `the PR changes ${DIFF_FILE_CAP} or more files, so its suite definition cannot be read whole` };
-  }
-  const definition = await definitionFiles(input);
-  if (definition.length > 0) {
-    const detail = await recordDefinitionRefusal(input, definition);
-    return { ok: false, step: "head", reason: "needs-joshua", detail };
+  // as this suite's, so nothing is read. A compare too large to read whole is refused the same way.
+  const refusal = await refuseUnlessDefinitionClear(input, await readDefinition(input));
+  if (refusal !== undefined) {
+    return { ok: false, step: "head", reason: "needs-joshua", detail: refusal.detail };
   }
 
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
@@ -120,6 +145,7 @@ function refusalKey(ref: PrRef, headSha: string): string {
  * The gate's own suite step: record the full-suite comparison for this head when the gate needs it,
  * and do nothing otherwise. Returns a label for the audit line.
  *
+ * - A compare cut off at GitHub's file cap, or a changed suite definition: refused as NEEDS-JOSHUA, before any run is looked up.
  * - No finished run yet: waiting, nothing recorded.
  * - The newest finished run is already recorded for this head: no download.
  * - The newest run's artifact is unreadable or missing: that run is remembered
@@ -144,10 +170,9 @@ export async function runSuiteIfDue(input: {
     if ((await readSuiteRecord(input.kv, input.ref, input.headSha))?.invalid === "needs-joshua") {
       return "already-refused";
     }
-    const definition = await definitionFiles(input);
-    if (definition.length > 0) {
-      await recordDefinitionRefusal(input, definition);
-      return "refused:head-needs-joshua";
+    const refusal = await refuseUnlessDefinitionClear(input, await readDefinition(input));
+    if (refusal !== undefined) {
+      return refusal.reason === "diff-incomplete" ? "refused:head-diff-incomplete" : "refused:head-needs-joshua";
     }
     const latest = pickRun(await reader.runsForSha(input.headSha));
     if (latest === undefined) {
