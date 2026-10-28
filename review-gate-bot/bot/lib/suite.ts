@@ -163,9 +163,11 @@ export function diffJunit(input: DiffInput): SuiteDiff {
   const counts = { base: baseCases.length, head: headCases.length };
 
   const invalid: SuiteDiff["invalid"] =
-    counts.head === 0
+    counts.head === 0 || counts.base === 0
       ? // A report with no testcases cannot show a regression, and it cannot show
-        // the absence of one either. Treat it as a failed run.
+        // the absence of one either. That holds for the base too: with no base
+        // tests, "no regression" is just the absence of anything to compare.
+        // Treat it as a failed run.
         "zero-testcases"
       : baseReport.malformed || headReport.malformed
         ? "malformed-xml"

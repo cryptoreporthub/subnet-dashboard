@@ -113,6 +113,13 @@ test("an empty head report is invalid, never clean", () => {
   assert.deepEqual(diff.counts, { base: 1, head: 0 });
 });
 
+test("an empty base report is invalid too: a zero-testcase base cannot prove a head clean", () => {
+  const diff = diffJunit({ baseXml: "", headXml: junit([{ name: "a" }]) });
+  assert.equal(diff.clean, false, "a base with nothing to compare against must not read as clean");
+  assert.equal(diff.invalid, "zero-testcases");
+  assert.deepEqual(diff.counts, { base: 0, head: 1 });
+});
+
 test("a report with only skipped tests still has testcases, so it is not invalid", () => {
   const diff = diffJunit({
     baseXml: junit([{ name: "a" }]),
