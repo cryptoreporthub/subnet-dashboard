@@ -117,6 +117,36 @@ export type TextWindow = {
   truncated: boolean;
 };
 
+const KEY_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/;
+const KEY_END = /-----END [A-Z ]*PRIVATE KEY-----/;
+
+/**
+ * Every line of a private key block, for the whole file, with the line count kept.
+ *
+ * The scrubber needs the BEGIN line to know a block is a key, so a window that starts inside
+ * the body saw only base64. Blocks are replaced here, before the window is cut, one line for
+ * each line. A block with no END line runs to the end of the file, as the scrubber does. A
+ * key that begins and ends on one line is left for the scrubber, which handles it there.
+ */
+function redactKeyBlockLines(lines: readonly string[]): string[] {
+  let inBlock = false;
+  return lines.map((line) => {
+    if (inBlock) {
+      if (KEY_END.test(line)) {
+        inBlock = false;
+      }
+      return REDACTED_KEY_LINE;
+    }
+    if (!KEY_BEGIN.test(line) || KEY_END.test(line)) {
+      return line;
+    }
+    inBlock = !KEY_END.test(line);
+    return REDACTED_KEY_LINE;
+  });
+}
+
+const REDACTED_KEY_LINE = "<redacted:private-key>";
+
 /**
  * The lines a reader asked for, scrubbed and then capped. Live and eval reads both
  * go through here, so they cannot disagree about what leaves.
@@ -128,7 +158,7 @@ export function windowText(content: string, options: { startLine?: number; endLi
   const lines = content.split("\n");
   const startLine = Math.max(1, options.startLine ?? 1);
   const endLine = Math.min(lines.length, options.endLine ?? lines.length);
-  const scrubbed = redactSecrets(lines.slice(startLine - 1, endLine).join("\n")).text;
+  const scrubbed = redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text;
   const truncated = scrubbed.length > LIMITS.fileChars;
   const text = truncated ? scrubbed.slice(0, LIMITS.fileChars) : scrubbed;
   return {

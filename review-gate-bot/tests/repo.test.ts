@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
-import { listRepoFiles, readDiff, readRepoFile, validRepoPath } from "../bot/lib/repo.js";
+import { listRepoFiles, readDiff, readRepoFile, validRepoPath, windowText } from "../bot/lib/repo.js";
 
 const REF = { owner: "o", repo: "r", number: 7 };
 const HEAD = "a".repeat(40);
@@ -230,4 +230,35 @@ test("a live listing past the cap is cut to 2,000 paths and flagged", async () =
   const listing = await listRepoFiles(octokit, REF, HEAD, {});
   assert.equal(listing.paths.length, 2_000);
   assert.equal(listing.truncated, true);
+});
+
+// --- A private key block is redacted whole, even when the window starts inside it -------------
+
+const KEY_BODY = "MIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu";
+
+test("a window that starts inside a private key block shows none of its body", () => {
+  const content = ["x", "-----BEGIN RSA PRIVATE KEY-----", KEY_BODY, "KbXSjfHfK3Ip8oDl0x0qgBqOVEXAMPLE", "-----END RSA PRIVATE KEY-----", "y"].join("\n");
+  const window = windowText(content, { startLine: 3, endLine: 4 });
+  assert.equal(window.text.includes(KEY_BODY), false);
+});
+
+test("a private key block with no END line is redacted to the end of the file", () => {
+  const content = ["-----BEGIN PRIVATE KEY-----", KEY_BODY, "more"].join("\n");
+  const window = windowText(content, { startLine: 2, endLine: 3 });
+  assert.equal(window.text.includes(KEY_BODY), false);
+});
+
+test("a private key that begins and ends on one line is redacted there, and only there", () => {
+  const content = [`-----BEGIN PRIVATE KEY-----${KEY_BODY}-----END PRIVATE KEY-----`, "ok"].join("\n");
+  const window = windowText(content, { startLine: 1, endLine: 2 });
+  assert.equal(window.text.includes(KEY_BODY), false);
+  assert.ok(window.text.includes("ok"));
+});
+
+test("scrubbing a key block keeps the line numbers of the file", () => {
+  const content = ["a", "-----BEGIN PRIVATE KEY-----", KEY_BODY, "-----END PRIVATE KEY-----", "b", "c"].join("\n");
+  const window = windowText(content, { startLine: 5, endLine: 6 });
+  assert.equal(window.startLine, 5);
+  assert.equal(window.endLine, 6);
+  assert.equal(window.totalLines, 6);
 });
