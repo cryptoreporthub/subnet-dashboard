@@ -69,7 +69,7 @@ const CREDENTIAL_WORD =
 const ASSIGNMENT_NAME = /(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+)"?\s*[:=]\s*/g;
 
 const ASSIGNED_VALUE =
-  /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+/y;
+  /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+/iy;
 
 /** `scheme://user:password@host`: the userinfo goes, the host stays readable. */
 const URL_USERINFO = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi;
@@ -126,7 +126,12 @@ function scrubAssignments(input: string, redactedNames: string[]): string {
     }
     values.lastIndex = names.lastIndex;
     const value = values.exec(input);
-    if (value === null || isPlaceholder(value[0])) {
+    if (value === null) {
+      continue;
+    }
+    if (isPlaceholder(value[0])) {
+      // A placeholder value is passed over whole, as the scrubber always did.
+      names.lastIndex = values.lastIndex;
       continue;
     }
     out += input.slice(copied, found.index + lead.length) + `${label}=<redacted:${label}>`;
