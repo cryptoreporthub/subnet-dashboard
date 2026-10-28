@@ -543,6 +543,8 @@ _INCONSISTENT = {
     "rpc_label_differs_from_chain": _edit("provenance.membership_rpc", "blockmachine"),
     "empty_weights_digest": _edit("provenance.weights_digest", ""),
     "non_string_input_digest": _edit("provenance.input_digest", 7),
+    "fresh_is_truthy_but_not_true": _edit("coverage.membership.fresh", "yes"),
+    "declared_day_expected_differs_from_chain": _edit("coverage.day.expected", [1, 2, 3]),
 }
 
 

@@ -28,3 +28,16 @@ def test_committed_seed_rows_are_exactly_its_chain_read():
 def test_committed_seed_passes_the_shipped_seed_gate():
     ok, reason = validate_shipped_seed(_seed())
     assert ok, reason
+
+
+def test_committed_seed_provenance_names_its_own_chain_read():
+    from internal.council.snapshot_coverage import membership_generation
+
+    seed = _seed()
+    chain = ChainRead.parse(seed["coverage"]["membership"].get("chain"))
+    assert chain is not None
+    provenance = seed["provenance"]
+    assert provenance["membership_generation"] == membership_generation(chain.netuids)
+    assert provenance["membership_block_hash"] == chain.block_hash
+    assert provenance["membership_rpc"] == chain.rpc
+    assert provenance["weights_digest"] and provenance["input_digest"]
