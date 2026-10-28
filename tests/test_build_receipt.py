@@ -6,7 +6,7 @@ import logging
 import pytest
 
 from internal import build_cost
-from tests.score_snapshot_testutil import chain_dict
+from tests.score_snapshot_testutil import receipt_provenance
 
 
 @pytest.fixture
@@ -23,9 +23,7 @@ def isolated_build(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "internal.council.snapshot_coverage.load_membership_receipt",
         lambda: {
-            "expected_netuids": [1],
-            "chain": chain_dict([1]),
-            "fresh": True,
+            **receipt_provenance([1]),
             "degraded": False,
             "cap_reached": False,
             "refresh_incomplete": False,

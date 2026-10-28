@@ -32,7 +32,7 @@ from internal.council.scorer_identity import (
 
 from internal import build_cost
 from internal.chain_read import ChainRead
-from internal.council.snapshot_coverage import env_int
+from internal.council.snapshot_coverage import env_int, membership_allows_admission, membership_generation
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
 
@@ -185,6 +185,21 @@ def _row_ids(rows: Any) -> Optional[List[int]]:
     return ids
 
 
+def _provenance_matches(provenance: Any, membership: Dict[str, Any], chain: ChainRead) -> bool:
+    """The snapshot's own provenance must agree with its embedded receipt and chain read."""
+    if not isinstance(provenance, dict):
+        return False
+    generation = membership_generation(chain.netuids)
+    if membership.get("generation") != generation or provenance.get("membership_generation") != generation:
+        return False
+    if provenance.get("membership_block_hash") != chain.block_hash or provenance.get("membership_rpc") != chain.rpc:
+        return False
+    return all(
+        isinstance(provenance.get(key), str) and provenance[key]
+        for key in ("weights_digest", "input_digest")
+    )
+
+
 def is_complete_snapshot(snap: Any) -> bool:
     """Single domain predicate for publish and serve (#1479). Total: never raises."""
     if not isinstance(snap, dict):
@@ -211,14 +226,15 @@ def is_complete_snapshot(snap: Any) -> bool:
     if declared is not None and sorted(declared) != expected:
         return False
     listed = membership.get("expected_netuids")
-    if listed is not None and (
-        not isinstance(listed, list) or any(type(n) is not int for n in listed) or sorted(listed) != expected
-    ):
+    if not isinstance(listed, list) or any(type(n) is not int for n in listed) or sorted(listed) != expected:
         return False
-    if (
-        any(membership.get(flag) for flag in ("refresh_incomplete", "degraded", "cap_reached"))
-        or membership.get("fresh") is not True
-    ):
+    if membership.get("fresh") is not True or not membership_allows_admission(membership):
+        return False
+    for horizon in ("day", "hour"):
+        block = coverage.get(horizon)
+        if not isinstance(block, dict) or block.get("complete") is not True:
+            return False
+    if not _provenance_matches(snap.get("provenance"), membership, chain):
         return False
     day = _row_ids(snap.get("day"))
     if day is None or sorted(day) != expected:

@@ -537,6 +537,12 @@ _INCONSISTENT = {
     "row_outside_membership": _add_day_row,
     "no_expected_netuids_key": _edit("coverage.membership.expected_netuids", None),
     "no_fresh_key": _edit("coverage.membership.fresh", None),
+    "provenance_is_a_string": lambda snap: snap.__setitem__("provenance", "x"),
+    "provenance_is_a_list": lambda snap: snap.__setitem__("provenance", [1]),
+    "no_receipt_generation": _edit("coverage.membership.generation", None),
+    "rpc_label_differs_from_chain": _edit("provenance.membership_rpc", "blockmachine"),
+    "empty_weights_digest": _edit("provenance.weights_digest", ""),
+    "non_string_input_digest": _edit("provenance.input_digest", 7),
 }
 
 
