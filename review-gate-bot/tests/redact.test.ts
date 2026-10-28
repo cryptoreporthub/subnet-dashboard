@@ -221,3 +221,8 @@ test("a credential after a placeholder-valued credential is still redacted", () 
   const { text } = redactSecrets('?TOKEN="$VAR?TOKEN":"basic??api_key":"SECRET2947x4Z');
   assert.equal(text.includes("SECRET2947x4Z"), false);
 });
+
+test("a 1 MB run of JWT-shaped segments joined by dashes scrubs in under half a second", () => {
+  const { ms } = timed("eyJaaaaaaaa-".repeat(90_000));
+  assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
+});
