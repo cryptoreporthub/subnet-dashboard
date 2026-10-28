@@ -318,3 +318,15 @@ test("a patch whose redacted form is longer than its raw form is charged its red
   assert.ok(diff.truncated, "the second patch is cut once the redacted budget is spent");
 });
 
+
+test("a filtered diff still reports the whole diff's file count", async () => {
+  const { octokit } = fake({
+    files: [
+      { filename: "a.py", status: "modified", additions: 1, deletions: 0, patch: "+a" },
+      { filename: "b.py", status: "modified", additions: 1, deletions: 0, patch: "+b" },
+    ],
+  });
+  const diff = await diffOf(octokit, ["b.py"]);
+  assert.deepEqual(diff.files.map((f) => f.path), ["b.py"]);
+  assert.equal(diff.totalFiles, 2, "the caller can tell a filtered view from a diff of one file");
+});

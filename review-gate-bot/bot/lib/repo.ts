@@ -112,7 +112,7 @@ export async function readDiff(
 
   return {
     ok: true,
-    totalFiles: wanted === undefined ? all.length : files.length,
+    totalFiles: all.length,
     files,
     truncated: omittedPaths.length > 0,
     omittedPaths,
