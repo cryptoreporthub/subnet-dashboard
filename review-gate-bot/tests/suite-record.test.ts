@@ -339,3 +339,24 @@ test("a delivery that finds the run already recorded still makes only the one co
   assert.equal(again, "already-recorded");
   assert.equal(gate.calls.count, 2, "one compare per delivery, none extra");
 });
+
+test("the exported comparison reads its own compare: a forged empty definition passed in cannot record a changed suite definition as clean", async () => {
+  const f = fixture([]);
+  const { octokit, calls } = compareOf({ files: [{ filename: "pytest.ini", status: "modified" }] });
+  const forged = { definition: { complete: true as const, files: [] as string[] } };
+  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader, ...forged });
+  assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
+  assert.equal(f.downloads.count, 0, "no report is read for a PR that changed how the suite runs");
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua", "the head is not recorded clean");
+  assert.equal(calls.count, 1, "the exported call made its own compare");
+});
+
+test("the exported comparison ignores a stale or incomplete definition passed in, and refuses a capped compare", async () => {
+  const f = fixture([]);
+  const { octokit } = compareOf({ files: CAPPED });
+  const stale = { definition: { complete: true as const, files: [] as string[] } };
+  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader, ...stale });
+  assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
+  assert.equal(f.downloads.count, 0);
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
+});

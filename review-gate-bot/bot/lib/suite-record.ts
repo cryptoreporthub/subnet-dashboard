@@ -90,29 +90,39 @@ export type SuiteComparison =
   | { ok: true; diff: SuiteDiff; headRunId: number; baseRunId: number; flakeList: string }
   | { ok: false; step: "head" | "base"; reason: string; detail: string };
 
-/**
- * Compare the full suite at `baseSha` and `headSha` from their JUnit artifacts, and record the head's
- * result. Shared by the `compare_suite_runs` tool and the gate's own driver, so both record the same
- * thing. A missing artifact is a wait and records nothing, so it is never a regressed result. A guard hit
- * (NEEDS-JOSHUA) records the head as regressed with its reason and files, so the block is visible.
- */
-export async function recordSuiteComparison(input: {
+type ComparisonInput = {
   octokit: Octokit;
   kv: HostKvApi;
   ref: PrRef;
   headSha: string;
   baseSha: string;
   reader?: RunnerReader;
-  /** The definition read the caller already made from this head's compare, so it is not fetched again. */
-  definition?: DefinitionRead;
-}): Promise<SuiteComparison> {
+};
+
+/**
+ * Compare the full suite at `baseSha` and `headSha` from their JUnit artifacts, and record the head's
+ * result. Shared by the `compare_suite_runs` tool and the gate's own driver, so both record the same
+ * thing. A missing artifact is a wait and records nothing, so it is never a regressed result. A guard hit
+ * (NEEDS-JOSHUA) records the head as regressed with its reason and files, so the block is visible.
+ *
+ * It always reads the compare itself. A caller cannot hand it a definition read, so no caller can skip
+ * the suite-definition check with an empty, stale or other-head value.
+ */
+export async function recordSuiteComparison(input: ComparisonInput): Promise<SuiteComparison> {
   // The suite's definition comes from the PR. A change to it means the report can no longer be trusted
   // as this suite's, so nothing is read. A compare too large to read whole is refused the same way.
-  const refusal = await refuseUnlessDefinitionClear(input, input.definition ?? (await readDefinition(input)));
+  const refusal = await refuseUnlessDefinitionClear(input, await readDefinition(input));
   if (refusal !== undefined) {
     return { ok: false, step: "head", reason: "needs-joshua", detail: refusal.detail };
   }
+  return recordComparison(input);
+}
 
+/**
+ * The comparison itself, with no definition check. Private: the only caller besides `recordSuiteComparison`
+ * is `runSuiteIfDue`, which has just checked the definition from the compare it read for this same head.
+ */
+async function recordComparison(input: ComparisonInput): Promise<SuiteComparison> {
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
   const head = await fetchJunit(reader, input.headSha);
   if (!head.ok) {
@@ -154,7 +164,7 @@ function refusalKey(ref: PrRef, headSha: string): string {
  * The gate's own suite step: record the full-suite comparison for this head when the gate needs it,
  * and do nothing otherwise. Returns a label for the audit line.
  *
- * - One compare per delivery: the definition check reads it once, and the comparison below reuses it.
+ * - One compare per delivery: the definition check reads it once, and the comparison below does not read it again.
  * - A compare cut off at GitHub's file cap, or a changed suite definition: refused as NEEDS-JOSHUA, before any run is looked up.
  * - No finished run yet: waiting, nothing recorded.
  * - The newest finished run is already recorded for this head: no download.
@@ -197,7 +207,7 @@ export async function runSuiteIfDue(input: {
     if (refused?.runId === latest.id) {
       return "already-refused";
     }
-    const outcome = await recordSuiteComparison({ ...input, reader, definition });
+    const outcome = await recordComparison({ ...input, reader });
     if (outcome.ok) {
       return "recorded";
     }
