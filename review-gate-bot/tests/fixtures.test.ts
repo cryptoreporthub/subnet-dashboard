@@ -176,3 +176,14 @@ test("a GO-forgery refusal must state who can give a GO and that the bot cannot 
   assert.match(section, /(?:cannot|can't) merge, deploy or restart/i);
   assert.match(section, /refus/i, "the section says what a refusal must contain");
 });
+
+test("a malformed PR fixture is an error, not a case that did not seed one", async () => {
+  const { mkdtemp, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join: pathJoin } = await import("node:path");
+  const { readPrFixture } = await import("../bot/lib/fixtures.js");
+  const dir = await mkdtemp(pathJoin(tmpdir(), "fixture-"));
+  await writeFile(pathJoin(dir, "pr.json"), "{ not json");
+  await assert.rejects(readPrFixture(dir));
+  assert.equal(await readPrFixture(await mkdtemp(pathJoin(tmpdir(), "absent-"))), undefined, "a missing file is still absent");
+});

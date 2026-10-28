@@ -67,9 +67,9 @@ test("a workspace with no fixtures returns undefined rather than throwing", asyn
   assert.equal(await readGateFixture(dir), undefined);
 });
 
-test("a malformed fixture returns undefined instead of a half-parsed object", async () => {
+test("a malformed fixture fails loudly: a broken case must not run as one that seeded nothing", async () => {
   const dir = await workspaceWith({ "pr.json": "{not json" });
-  assert.equal(await readPrFixture(dir), undefined);
+  await assert.rejects(readPrFixture(dir));
 });
 
 const VERDICT = {

@@ -24,13 +24,21 @@ export const GATE_FIXTURE = "gate.json";
 export const DIFF_FIXTURE = "diff.json";
 export const REPO_FIXTURE = "repo.json";
 
+/**
+ * A fixture that is not there means its case did not seed it. One that is there but unreadable or malformed
+ * is a broken case, and it fails loudly: otherwise an eval session would run without the PR it claims to test.
+ */
 async function readJson<T>(workspaceDir: string, name: string): Promise<T | undefined> {
+  let text: string;
   try {
-    const text = await readFile(join(workspaceDir, name), "utf8");
-    return JSON.parse(text) as T;
-  } catch {
-    return undefined;
+    text = await readFile(join(workspaceDir, name), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
   }
+  return JSON.parse(text) as T;
 }
 
 /** The PR a fixture describes, or undefined when the case did not seed one. */
