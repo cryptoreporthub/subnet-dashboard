@@ -293,11 +293,13 @@ export function carryDecision(input: {
 }
 
 /**
- * Files that define how the suite runs or what it collects. A PR that changes one of them can make the
- * report say whatever the PR wants, so the gate records nothing for it. Matched by path anywhere in the
+ * Files that define how the suite runs, what it collects, or what it installs. A PR that changes one of them can
+ * make the report say whatever the PR wants, so the gate records nothing for it. Joshua clears these by hand
+ * (NEEDS-JOSHUA), so they are never an automatic PASS. Matched by path anywhere in the
  * tree, because a conftest or a pytest.ini in a subfolder changes collection too.
  */
-const SUITE_DEFINITION = /(?:^|\/)(?:\.github\/workflows\/full-suite-junit\.yml|pytest\.ini|conftest\.py|pyproject\.toml|setup\.cfg|tox\.ini)$/;
+const SUITE_DEFINITION =
+  /(?:^|\/)(?:\.github\/workflows\/full-suite-junit\.yml|pytest\.ini|conftest\.py|pyproject\.toml|setup\.cfg|tox\.ini|requirements[^/]*\.txt|constraints[^/]*\.txt)$/;
 
 /** The changed files that define the suite. Empty when the PR leaves the suite's definition alone. */
 export function suiteDefinitionFiles(changedFiles: readonly string[]): string[] {

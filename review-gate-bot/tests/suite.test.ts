@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { carryBlockingFiles, carryDecision, diffJunit, parseJunit } from "../bot/lib/suite.js";
+import { carryBlockingFiles, carryDecision, diffJunit, parseJunit, suiteDefinitionFiles } from "../bot/lib/suite.js";
 
 function junit(cases: { name: string; outcome?: "failed" | "error" | "skipped" }[]): string {
   const body = cases
@@ -359,3 +359,11 @@ test("a malformed report made of unclosed testcases is rejected quickly", () => 
   assert.equal(diff.invalid, "malformed-xml");
   assert.ok(Date.now() - started < 1_000, `took ${Date.now() - started} ms`);
 });
+
+test("a dependency manifest is part of the suite definition, because the workflow installs from it", () => {
+  for (const file of ["requirements.txt", "requirements-dev.txt", "api/requirements.txt", "constraints.txt"]) {
+    assert.deepEqual(suiteDefinitionFiles([file]), [file], file);
+  }
+  assert.deepEqual(suiteDefinitionFiles(["review-gate-bot/bot/lib/suite.ts"]), []);
+});
+

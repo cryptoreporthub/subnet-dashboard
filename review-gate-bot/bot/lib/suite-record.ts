@@ -38,8 +38,8 @@ export async function recordSuiteComparison(input: {
   }
   const definition = suiteDefinitionFiles(changed);
   if (definition.length > 0) {
-    console.warn(JSON.stringify({ level: "warn", event: "suite_definition_changed", pr: prKey(input.ref), head: input.headSha, files: definition }));
-    return { ok: false, step: "head", reason: "suite-definition-changed", detail: definition.join(", ") };
+    console.warn(JSON.stringify({ level: "warn", event: "needs_joshua", reason: "suite-definition-changed", pr: prKey(input.ref), head: input.headSha, files: definition }));
+    return { ok: false, step: "head", reason: "needs-joshua", detail: definition.join(", ") };
   }
 
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });

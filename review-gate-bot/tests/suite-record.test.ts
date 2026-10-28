@@ -64,7 +64,7 @@ test("a PR that changes the suite's own definition is refused before any report 
   const f = fixture([".github/workflows/full-suite-junit.yml"]);
   const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
   assert.equal(outcome.ok, false);
-  assert.equal(!outcome.ok && outcome.reason, "suite-definition-changed");
+  assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0, "no artifact is downloaded for a PR that rewrote how the suite runs");
   assert.equal(f.store.get(suiteKey(REF, HEAD)), undefined, "a refusal records nothing");
 });
@@ -73,7 +73,7 @@ test("changing pytest.ini or a conftest anywhere in the tree is also refused", a
   for (const file of ["pytest.ini", "tests/conftest.py", "pyproject.toml"]) {
     const f = fixture([file]);
     const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
-    assert.equal(!outcome.ok && outcome.reason, "suite-definition-changed", file);
+    assert.equal(!outcome.ok && outcome.reason, "needs-joshua", file);
   }
 });
 
