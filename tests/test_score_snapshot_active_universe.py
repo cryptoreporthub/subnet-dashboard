@@ -161,3 +161,51 @@ def test_a_universe_without_a_chain_read_expects_nothing_and_blocks_admission():
     assert cov.membership_allows_admission(receipt) is False
     assert cov.membership_admission_block_reason(receipt) == "membership_without_chain_provenance"
     assert cov.membership_allows_admission(_receipt_for(membership)) is True
+
+
+def _with_chain(membership, chain_netuids, validity_map=None):
+    """The same universe, with the pinned chain read set to ``chain_netuids``."""
+    return UniverseSnapshot(
+        netuids=membership.netuids,
+        rows=membership.rows,
+        resolved_at=membership.resolved_at,
+        status="ok",
+        degraded=False,
+        validity_map=membership.validity_map if validity_map is None else validity_map,
+        chain=ChainRead(PINNED_HASH, tuple(sorted(chain_netuids)), "finney"),
+    )
+
+
+def test_receipt_expects_the_subnets_that_have_data():
+    receipt = _receipt_for(_with_chain(_membership(), ACTIVE))
+    assert receipt["expected_netuids"] == list(ACTIVE)
+
+
+@pytest.mark.parametrize(
+    "validity",
+    [
+        lambda: _validity_entry(validity="positive", sources=["blockmachine_probe"], disputed=True),
+        lambda: _validity_entry(validity="positive", sources=["taomarketcap"], refresh_incomplete=True),
+        lambda: _validity_entry(validity="unobserved", refresh_incomplete=True),
+    ],
+    ids=["probe_positive", "retained_positive", "unobserved"],
+)
+def test_a_member_without_row_data_stays_expected_unless_established_inactive(validity):
+    membership = _membership(placeholders=PLACEHOLDERS, placeholder_validity=validity)
+    receipt = _receipt_for(_with_chain(membership, ACTIVE + PLACEHOLDERS))
+    assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
+
+
+def test_a_member_with_no_validity_entry_stays_expected():
+    receipt = _receipt_for(_with_chain(_membership(), ACTIVE + PLACEHOLDERS, validity_map={}))
+    assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
+
+
+def test_a_negative_member_that_still_has_row_data_leaves_expected_immediately():
+    """Chain-deregistered members drop from expected_netuids at once; rows may linger 48h."""
+    membership = _membership(active=ACTIVE, placeholders=())
+    stale = tuple(ACTIVE[:3])
+    validity = dict(membership.validity_map)
+    validity.update({str(n): _deregistered() for n in stale})
+    receipt = _receipt_for(_with_chain(membership, set(ACTIVE) - set(stale), validity_map=validity))
+    assert receipt["expected_netuids"] == sorted(set(ACTIVE) - set(stale))
