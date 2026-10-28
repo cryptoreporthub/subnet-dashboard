@@ -162,8 +162,9 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     } else {
       suite = await attempt("run-suite", () => runSuiteIfDue({ octokit, kv, ref, headSha, baseSha, reader }));
     }
-    // A recorded result, or a refusal that makes the head NEEDS-JOSHUA, changes what the gate says: read it again.
-    if (suite === "recorded" || suite === "refused:head-needs-joshua") {
+    // A recorded result, or any refusal of the head (a changed suite definition, a compare cut off at the file cap),
+    // changes what the gate says: read it again. Every head refusal label is `refused:head-*`.
+    if (suite === "recorded" || suite.startsWith("refused:head-")) {
       state = await readGateState({ octokit, kv, ref, headSha });
       actions = gateActions(state, false);
     }

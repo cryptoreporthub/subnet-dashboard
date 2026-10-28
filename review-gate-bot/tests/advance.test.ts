@@ -650,3 +650,23 @@ test("a compare cut off at the file cap is handled in the same delivery exactly 
   assert.equal(capped.posted, refused.posted, "the same tags and comments are posted");
   assert.equal(capped.result, refused.result, "the delivery asks for the same follow-up");
 });
+
+test("a compare cut off at the file cap leaves the delivery at needs_joshua, not at the stale run_suite it read first", async () => {
+  const w = world({
+    changedFiles: Array.from({ length: 300 }, (_, i) => `app/module_${i}.py`),
+    comments: [mcPass],
+    reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
+  });
+  const { reader } = suiteReader({ runId: 77 });
+  const result = await advanceGate({ ...w.deps, reader });
+  assert.equal(result.suite, "refused:head-diff-incomplete");
+  assert.equal(result.next, "needs_joshua");
+});
+
+test("a changed suite definition leaves the delivery at needs_joshua too, so both refusals return the same next", async () => {
+  const w = world({ changedFiles: ["pytest.ini"], comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
+  const { reader } = suiteReader({ runId: 77 });
+  const result = await advanceGate({ ...w.deps, reader });
+  assert.equal(result.suite, "refused:head-needs-joshua");
+  assert.equal(result.next, "needs_joshua");
+});
