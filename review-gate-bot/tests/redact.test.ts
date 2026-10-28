@@ -242,3 +242,11 @@ test("an angle-bracketed credential is redacted; only generic placeholder words 
   assert.equal(leaked.includes("hunter2"), false, `leaked: ${leaked}`);
   assert.equal(redactSecrets("PASSWORD=<placeholder>").text.includes("<placeholder>"), true);
 });
+
+test("a dollar-prefixed credential is redacted: only ${VAR} and $VAR references are placeholders", () => {
+  assert.equal(redactSecrets("PASSWORD=$hunter2").text.includes("hunter2"), false);
+});
+
+test("an angle-bracketed value with a digit is a credential, not a placeholder word", () => {
+  assert.equal(redactSecrets("PASSWORD=<yourhunter2>").text.includes("yourhunter2"), false);
+});

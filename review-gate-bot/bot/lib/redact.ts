@@ -98,7 +98,12 @@ function isPlaceholder(value: string): boolean {
   if (trimmed === "") {
     return true;
   }
-  if (/^(\$\{|\$[A-Z_]|<(?:redacted[^>]*|placeholder|example|your[^>]*)>)/i.test(trimmed)) {
+  // `${VAR}` and `$VAR` are references, and only upper-case names count: `$hunter2` is a value.
+  if (/^(?:\$\{|\$[A-Z_])/.test(trimmed)) {
+    return true;
+  }
+  // A generic placeholder word, with no digits: `<yourhunter2>` is a value, `<your-password>` is not.
+  if (/^<(?:redacted|placeholder|example|your)[A-Za-z_\- :]*>$/i.test(trimmed)) {
     return true;
   }
   if (trimmed.toLowerCase() === "x") {
