@@ -104,6 +104,10 @@ export const SAMPLES: Record<string, Sample> = {
     ],
     paraphrases: [
       {
+        label: "no negative_since stamped, so it can never be dropped",
+        body: "subnet_universe.py `_merge_sources`: the replaced block now returns positive (disputed) when the chain probe says the netuid is not registered but TaoMarketCap still lists it, so TMC beats the chain. The netuid is never negative, `negative_since` stays None, and the entry can never be dropped while TMC lists it. The chain should win.",
+      },
+      {
         label: "TaoMarketCap beats the chain / never removed",
         body: "subnet_universe.py `_merge_sources`: when the chain probe says a netuid is not registered but TaoMarketCap lists it, the new dispute branch keeps it positive, so TaoMarketCap beats the chain. Because it is never marked negative, `negative_since` is never set and the 48h grace clock never starts; the subnet is never removed. The chain should win.",
       },

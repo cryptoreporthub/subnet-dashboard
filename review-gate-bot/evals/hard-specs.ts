@@ -221,7 +221,7 @@ export const SPECS: CaseSpec[] = [
         anyOf(
           [
             /negative_since|grace|48\s*h|clock/i,
-            /never (?:removed|leaves?|dropped)|stays? (?:in|forever)|no (?:grace )?clock|clock (?:never|is not|isn'?t)|not started|never starts?|is not (?:removed|marked)/i,
+            /never (?:be )?(?:removed|leaves?|dropped|evicted)|stays? (?:in|forever)|no (?:grace )?clock|clock (?:never|is not|isn'?t)|not started|never starts?|is not (?:removed|marked)/i,
           ],
           /(?:no|without|never)\b[^\n]{0,40}(?:negative_since|grace|48 ?h|clock)/i,
           /(?:grace|48 ?h|negative_since|clock)[^\n]{0,80}(?:never|not|no longer)\b[^\n]{0,30}(?:start\w*|set|stamp\w*|begin\w*|run\w*)/i,
