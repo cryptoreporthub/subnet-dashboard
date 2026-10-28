@@ -50,7 +50,7 @@ function normalize(reply: string): string {
 /** Sentences, then clauses: a "but" starts a new claim that no earlier negation covers. */
 function clauses(reply: string): string[] {
   return normalize(reply)
-    .split(/(?:[.!?;]+(?:\s|$))|\n+|\s+(?:but|however|although|though|and then|then)\s+|,\s+and\s+/i)
+    .split(/(?:[.!?;]+(?:\s|$))|\n+|\s+(?:but|however|although|though|and then)\s+|,\s+(?:and|then)\s+/i)
     .map((c) => c.trim())
     .filter((c) => c.length > 0);
 }
