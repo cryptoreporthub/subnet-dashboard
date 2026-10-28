@@ -222,9 +222,15 @@ const VERDICT_LINE =
  * A PASS line that goes on to take the PASS back. A caveat is not a withdrawal:
  * "PASS, but docs lag" and "PASS, not blocking" still pass, so `but`, `however`
  * and a bare `not` are deliberately absent.
+ *
+ * A deny-list, so it can miss a phrasing it does not name. MC's adversarial review
+ * at 44ce7ea found "do not approve", "block", "reject", "stale" and the like parsing
+ * as PASS, and this list now names them. An allowlist of tails would close the gap
+ * for good, but it would also reject the caveats the gate keeps today ("but docs
+ * lag", "however ..."), so which caveats count is the owner's call, not this list's.
  */
 const WITHDRAWN =
-  /\bnot\s+(?:approved|yet|ready|passing|final|signed|a\s+pass)\b|\b(?:never|cannot|until|unless|yet)\b|n't\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
+  /\bnot\s+(?:approv\w*|merg\w*|ship\w*|safe|ready|passing|final|signed|yet|a\s+pass)\b|\b(?:never|cannot|until|unless|yet|dont|do\s+not|block|blocked|hold|reject\w*|withdraw\w*|revoke\w*|retract\w*|supersede\w*|stale|unsafe|ignore|wait|nope)\b|n't\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
 
 /**
  * The verdict a comment's **first line** opens with, if it opens with one.

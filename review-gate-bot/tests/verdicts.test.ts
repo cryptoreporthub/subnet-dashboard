@@ -610,3 +610,60 @@ test("an unedited comment keeps its creation order", () => {
     ["PASS", "FAIL"],
   );
 });
+
+// --- A PASS takes back only the caveats it names -------------------------------------
+// A deny-list of withdrawals misses every phrasing it does not name. The keep list is the
+// corpus the gate must still read as PASS: MC's header shapes, Cursor's line and the caveats
+// that are real. The deny list is what MC reported as parsing as PASS at 44ce7ea.
+
+const WITHDRAWN_PASS = [
+  "PASS — do not approve this PR",
+  "PASS, do not merge",
+  "PASS (do not approve)",
+  "PASS — block this PR",
+  "PASS — reject",
+  "PASS — withdrawn",
+  "PASS — stale",
+  "PASS — unsafe",
+  "PASS — do not ship",
+  "PASS - do not merge",
+  "PASS, not approving",
+  "PASS — wait",
+  "PASS — nope",
+  "PASS, ignore this",
+  "PASS — hold",
+];
+
+const STILL_PASS = [
+  "PASS",
+  "PASS.",
+  "**PASS** — clean.",
+  "PASS — no blocking findings",
+  "PASS, but docs lag",
+  "PASS, not blocking",
+  "PASS (no blocking findings)",
+  "PASS at `" + HEAD + "`",
+  "PASS at " + HEAD,
+  "MC: **PASS** at `" + HEAD + "`",
+  "cursor: **PASS** at `" + HEAD + "`",
+  "cursor: PASS at x",
+  "PASS — MC adversarial review of #1522 at head `" + HEAD + "`",
+  "Replit: PASS — reviewed draft #1522 at exact head " + HEAD + ".",
+  "Replit: PASS head " + HEAD,
+];
+
+for (const line of WITHDRAWN_PASS) {
+  test(`a PASS that takes itself back is no PASS: "${line}"`, () => {
+    assert.notEqual(parseVerdictToken(line), "PASS", `"${line}" must not read as PASS`);
+  });
+}
+
+for (const line of STILL_PASS) {
+  test(`a real PASS line still reads as PASS: "${line}"`, () => {
+    assert.equal(parseVerdictToken(line), "PASS");
+  });
+}
+
+test("MC's own PASS-with-a-withdrawal still reads as no verdict, not as PASS", () => {
+  assert.equal(parseVerdictToken("PASS, do not deploy until Joshua says GO"), undefined);
+});
