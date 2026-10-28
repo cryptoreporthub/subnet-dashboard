@@ -142,6 +142,15 @@ test("a delivery that read the gate earlier cannot conclude over a newer deliver
   assert.equal(w.checks.at(-1)?.conclusion, "success", `the last check concluded: ${JSON.stringify(w.checks)}`);
 });
 
+test("the check reports the gate as read under the lock, not the state the delivery was handed", async () => {
+  // Another process posted a newer verdict after this delivery read the gate. The fresh read is the truth.
+  const w = world([HEAD]);
+  const stale = state("await_cursor_ditto", { ditto: "missing" });
+  const fresh = state("mergeable");
+  await postGateCheck({ ...w.deps, state: stale, read: async () => fresh });
+  assert.deepEqual(w.checks.map((c) => c.conclusion), ["success"]);
+});
+
 test("the same PR number and head in another repository is a different PR, so its check is posted", async () => {
   const w = world([HEAD]);
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
