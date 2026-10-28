@@ -66,7 +66,9 @@ test("a PR that changes the suite's own definition is refused before any report 
   assert.equal(outcome.ok, false);
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0, "no artifact is downloaded for a PR that rewrote how the suite runs");
-  assert.equal(f.store.get(suiteKey(REF, HEAD)), undefined, "a refusal records nothing");
+  const recorded = f.store.get(suiteKey(REF, HEAD)) as { runId?: number; invalid?: string } | undefined;
+  assert.equal(recorded?.runId, undefined, "no report was read, so no run is recorded");
+  assert.equal(f.downloads.count, 0);
 });
 
 test("changing pytest.ini or a conftest anywhere in the tree is also refused", async () => {
@@ -100,3 +102,30 @@ test("renaming a suite-definition file away from its path is refused: the old pa
   assert.equal(f.downloads.count, 0);
 });
 
+
+test("a NEEDS-JOSHUA refusal is recorded with its reason and files, so the check can say why", async () => {
+  const f = fixture(["pytest.ini"]);
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const record = f.store.get(suiteKey(REF, HEAD)) as { state?: string; invalid?: string; detail?: string } | undefined;
+  assert.equal(record?.state, "regressed", "not clean, and not left as an unrecorded wait");
+  assert.equal(record?.invalid, "needs-joshua");
+  assert.match(record?.detail ?? "", /pytest\.ini/);
+});
+
+test("a comparison with a base test missing at head records which tests are missing", async () => {
+  const f = fixture([]);
+  const reader: RunnerReader = {
+    ...f.reader,
+    artifactZip: async () => zipOf('<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>'),
+  };
+  const baseXml = '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="a"/><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>';
+  let call = 0;
+  const reader2: RunnerReader = {
+    ...reader,
+    artifactZip: async () => zipOf(++call === 1 ? '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>' : baseXml),
+  };
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: reader2 });
+  const record = f.store.get(suiteKey(REF, HEAD)) as { invalid?: string; missing?: string[] } | undefined;
+  assert.equal(record?.invalid, "baseline-test-missing");
+  assert.deepEqual(record?.missing, ["tests.test_x::a"]);
+});

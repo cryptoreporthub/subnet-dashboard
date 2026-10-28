@@ -42,6 +42,14 @@ export async function recordSuiteComparison(input: {
   const definition = suiteDefinitionFiles(changed);
   if (definition.length > 0) {
     console.warn(JSON.stringify({ level: "warn", event: "needs_joshua", reason: "suite-definition-changed", pr: prKey(input.ref), head: input.headSha, files: definition }));
+    // Persisted, so the head's record says why it is blocked and which files did it. Not clean, and not a wait.
+    await input.kv.put(suiteKey(input.ref, input.headSha), {
+      state: "regressed",
+      invalid: "needs-joshua",
+      detail: definition.join(", "),
+      newFailures: [],
+      at: Date.now(),
+    });
     return { ok: false, step: "head", reason: "needs-joshua", detail: definition.join(", ") };
   }
 
@@ -56,10 +64,14 @@ export async function recordSuiteComparison(input: {
   }
   const flakes = knownFlakes();
   const diff = diffJunit({ baseXml: base.xml, headXml: head.xml, knownFlakes: flakes.ids });
+  // The record keeps the reason and the test IDs behind it: a missing or newly skipped test is a person's call to clear.
   await input.kv.put(suiteKey(input.ref, input.headSha), {
     state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
     newFailures: diff.newFailures,
     runId: head.runId,
+    invalid: diff.invalid ?? null,
+    missing: diff.missing,
+    skipped: diff.skipped,
     at: Date.now(),
   });
   return { ok: true, diff, headRunId: head.runId, baseRunId: base.runId, flakeList: flakes.source };

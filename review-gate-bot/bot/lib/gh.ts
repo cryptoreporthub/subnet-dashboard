@@ -115,6 +115,11 @@ export type RecordedSuite = {
   carriedFrom?: string;
   /** The workflow run the JUnit came from. Absent for a carried result. */
   runId?: number;
+  /** Why the comparison is not trusted, and the test IDs behind it. */
+  invalid?: string | null;
+  missing?: string[];
+  skipped?: string[];
+  detail?: string;
   at?: number;
 };
 
