@@ -2,15 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
-import { commentReviewTurn, commentTurn, failureReleasesLease, logAsk, pullRequestReviewTurn, pullRequestTurn, releaseReviewTurnIfHolder, reviewEventTurn, reviewLeaseFromState, type GateDeps } from "../bot/lib/advance.js";
+import { advanceGate, commentReviewTurn, commentTurn, failureReleasesLease, logAsk, pullRequestReviewTurn, pullRequestTurn, releaseReviewTurnIfHolder, reviewEventTurn, reviewLeaseFromState, type GateDeps } from "../bot/lib/advance.js";
 import { suiteKey } from "../bot/lib/gh.js";
 import { prKey, replitAskKey, replitTagKey, reviewTurnKey } from "../bot/lib/gate.js";
 import { LEASE_MS, leaseToken, releaseLeaseIfHolder } from "../bot/lib/lock.js";
 import { marker } from "../bot/lib/verdicts.js";
+import { JUNIT_ARTIFACT, type RunnerReader } from "../bot/lib/runner.js";
+import { deflateRawSync } from "node:zlib";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
 const OTHER = "1234567890abcdef1234567890abcdef12345678";
 const NEW_HEAD = "d".repeat(40);
+const BASE = "e".repeat(40);
 const ME = "simi-revision[bot]";
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 
@@ -45,7 +48,7 @@ function world(
     paginate: async (fn: unknown) => (fn === listComments ? comments : fn === listReviews ? (options.reviews ?? []) : []),
     rest: {
       pulls: {
-        get: async () => ({ data: { head: { sha: live.head }, draft: options.draft ?? false } }),
+        get: async () => ({ data: { head: { sha: live.head }, base: { sha: BASE }, draft: options.draft ?? false } }),
         listReviews,
       },
       issues: {
@@ -203,6 +206,122 @@ test("the same gate state at the same head posts its check once, not once per we
   assert.equal(w.checks.length, 1);
 });
 
+const CLEAN_JUNIT = '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="a"/></testsuite></testsuites>';
+
+/** A stored (uncompressed) zip with one file, which is all the artifact reader needs. */
+function zipOf(name: string, text: string): Uint8Array {
+  const nameBytes = Buffer.from(name, "utf8");
+  const data = Buffer.from(text, "utf8");
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(0, 8);
+  local.writeUInt32LE(data.length, 18);
+  local.writeUInt32LE(data.length, 22);
+  local.writeUInt16LE(nameBytes.length, 26);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(0, 10);
+  central.writeUInt32LE(data.length, 20);
+  central.writeUInt32LE(data.length, 24);
+  central.writeUInt16LE(nameBytes.length, 28);
+  central.writeUInt32LE(0, 42);
+  const directoryLength = central.length + nameBytes.length;
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(directoryLength, 12);
+  end.writeUInt32LE(local.length + nameBytes.length + data.length, 16);
+  return new Uint8Array(Buffer.concat([local, nameBytes, data, central, nameBytes, end]));
+}
+
+/** An Actions reader that serves one finished run per SHA, and counts the artifact downloads. */
+function suiteReader(options: { runId?: number; junit?: string } = {}) {
+  const downloads = { count: 0 };
+  const reader: RunnerReader = {
+    runsForSha: async () => (options.runId === undefined ? [] : [{ id: options.runId, conclusion: "success" }]),
+    artifactsForRun: async () => [{ id: 5, name: JUNIT_ARTIFACT }],
+    artifactZip: async () => {
+      downloads.count += 1;
+      return zipOf("pytest.xml", options.junit ?? CLEAN_JUNIT);
+    },
+  };
+  return { reader, downloads };
+}
+
+test("the gate runs the suite itself when it is due: it records a clean result and tags Replit in the same delivery", async () => {
+  const w = world({ comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
+  const { reader } = suiteReader({ runId: 77 });
+  await reviewEventTurn({ ...w.deps, reader });
+  const record = w.store.get(suiteKey(REF, HEAD)) as { state?: string; runId?: number } | undefined;
+  assert.equal(record?.state, "clean");
+  assert.equal(record?.runId, 77);
+  assert.ok(w.posted.some((body) => body.includes("@replit review")), "the tag follows the recorded clean suite");
+});
+
+test("a regressed result from the same suite run is not downloaded again on the next delivery", async () => {
+  const w = world({
+    comments: [mcPass],
+    reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
+    seed: { [suiteKey(REF, HEAD)]: { state: "regressed", newFailures: ["x"], runId: 77, at: 1 } },
+  });
+  const { reader, downloads } = suiteReader({ runId: 77 });
+  await reviewEventTurn({ ...w.deps, reader });
+  assert.equal(downloads.count, 0, "the run id already recorded for this head means nothing new to read");
+});
+
+test("no suite artifact yet means waiting: nothing is recorded and Replit is not tagged", async () => {
+  const w = world({ comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
+  const { reader } = suiteReader({});
+  await reviewEventTurn({ ...w.deps, reader });
+  assert.equal(w.store.get(suiteKey(REF, HEAD)), undefined, "a missing run is a wait, never a regressed record");
+  assert.ok(!w.posted.some((body) => body.includes("@replit review")), "no suite result, so no Replit tag");
+});
+
+test("a draft delivery downloads nothing, whatever suite state the PR is in", async () => {
+  const w = world({
+    draft: true,
+    comments: [mcPass],
+    reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
+  });
+  const { reader, downloads } = suiteReader({ runId: 77 });
+  await reviewEventTurn({ ...w.deps, reader });
+  assert.equal(downloads.count, 0);
+  assert.equal(w.store.get(suiteKey(REF, HEAD)), undefined);
+});
+
+test("two deliveries at once for one head download the suite once, not once each", async () => {
+  const w = world({ comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
+  const { reader, downloads } = suiteReader({ runId: 77 });
+  await Promise.all([reviewEventTurn({ ...w.deps, reader }), reviewEventTurn({ ...w.deps, reader })]);
+  assert.equal(downloads.count, 2, "one head zip and one base zip, however many deliveries arrived");
+});
+
+test("an Actions error reading the suite does not lose the Cursor/Ditto tag or the check", async () => {
+  const w = world({ comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
+  const broken = {
+    runsForSha: async () => {
+      throw new Error("github 403: resource not accessible");
+    },
+    artifactsForRun: async () => [],
+    artifactZip: async () => new Uint8Array(),
+  };
+  const result = await advanceGateFor(w, broken);
+  assert.equal(result.suite, "failed:run-suite");
+  assert.ok(w.posted.some((body) => body.includes("@cursor review")), "the tag still went up");
+  assert.equal(w.checks.length, 1, "the check still reports the gate");
+});
+
+test("a corrupt suite artifact is remembered for its run, so the next delivery does not download it again", async () => {
+  const w = world({ comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
+  const { reader, downloads } = suiteReader({ runId: 77, junit: "<not-xml" });
+  await reviewEventTurn({ ...w.deps, reader });
+  const afterFirst = downloads.count;
+  await reviewEventTurn({ ...w.deps, reader });
+  assert.equal(downloads.count, afterFirst, "the refused run is not fetched again while it is still the newest");
+  assert.equal(w.store.get(suiteKey(REF, HEAD)), undefined, "a refusal is never a suite result");
+});
+
 test("a draft gets no check at all", async () => {
   const w = world({ draft: true });
   await reviewEventTurn(w.deps);
@@ -227,6 +346,11 @@ const review = (id: number, login: string, state: string) => ({
 });
 
 /** MC, Cursor and Ditto passed this head and the suite is clean: the gate is at `tag_replit`. */
+/** One delivery's advanceGate, with the suite read from a given reader. */
+function advanceGateFor(w: ReturnType<typeof world>, reader: RunnerReader) {
+  return advanceGate({ ...w.deps, reader });
+}
+
 function readyForReplit(options: { createFails?: boolean; seed?: Record<string, unknown>; comments?: Raw[] } = {}) {
   return world({
     comments: [mcPass, ...(options.comments ?? [])],

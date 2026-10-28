@@ -164,6 +164,8 @@ export type GateActions = {
   tagCursorDitto: boolean;
   tagReplit: boolean;
   askReplit: boolean;
+  /** The gate needs the full-suite comparison recorded before it can go on. */
+  runSuite: boolean;
   needsReviewTurn: boolean;
 };
 
@@ -185,6 +187,7 @@ export function gateActions(state: GateState, draft: boolean): GateActions {
       tagCursorDitto: false,
       tagReplit: false,
       askReplit: false,
+      runSuite: false,
       needsReviewTurn: false,
     };
   }
@@ -193,6 +196,7 @@ export function gateActions(state: GateState, draft: boolean): GateActions {
     tagCursorDitto: state.next !== "blocked",
     tagReplit: state.next === "tag_replit",
     askReplit: state.next === "tag_replit" || state.next === "await_replit",
+    runSuite: state.next === "run_suite",
     needsReviewTurn: needsReviewTurn(state),
   };
 }

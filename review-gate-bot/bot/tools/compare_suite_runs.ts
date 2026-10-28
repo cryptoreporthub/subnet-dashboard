@@ -4,13 +4,10 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr, readSuiteRecord, suiteKey, type PrRef } from "../lib/gh.js";
 import { readPrFixture } from "../lib/fixtures.js";
-import { knownFlakes } from "../lib/flakes.js";
-import { fetchJunit, octokitRunner } from "../lib/runner.js";
-import { carryDecision, diffJunit } from "../lib/suite.js";
+import { recordSuiteComparison } from "../lib/suite-record.js";
+import { carryDecision } from "../lib/suite.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
-
-type Runner = ReturnType<typeof octokitRunner>;
 
 /** GitHub caps a compare's file list. A list at the cap may be cut short, so it proves nothing. */
 const COMPARE_FILE_CAP = 300;
@@ -197,10 +194,6 @@ export default defineTool({
       };
     }
 
-    let baseXml: string;
-    let headXml: string;
-    let runner: { headRunId: number; baseRunId: number } | undefined;
-
     if (isEval) {
       // An eval has no runner and no network. The case's gate.json already
       // pins the suite state, so this path records nothing and claims nothing.
@@ -209,36 +202,29 @@ export default defineTool({
 
     const octokit = await ctx.host.github.getOctokit();
     const repoRef = requirePr(prRef);
-    const reader: Runner = octokitRunner(octokit, { owner: repoRef.owner, repo: repoRef.repo });
-
-    const head = await fetchJunit(reader, input.headSha);
-    if (!head.ok) {
-      return { recorded: false, reason: `head-${head.reason}`, detail: head.detail, carried: false, clean: false };
-    }
-    const base = await fetchJunit(reader, input.baseSha);
-    if (!base.ok) {
-      return { recorded: false, reason: `base-${base.reason}`, detail: base.detail, carried: false, clean: false };
-    }
-    baseXml = base.xml;
-    headXml = head.xml;
-    runner = { headRunId: head.runId, baseRunId: base.runId };
-
-    const flakes = knownFlakes();
-    const diff = diffJunit({ baseXml, headXml, knownFlakes: flakes.ids });
-
-    await ctx.host.kv.put(suiteKey(repoRef, input.headSha), {
-      state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
-      newFailures: diff.newFailures,
-      runId: runner.headRunId,
-      at: Date.now(),
+    const outcome = await recordSuiteComparison({
+      octokit,
+      kv: ctx.host.kv,
+      ref: repoRef,
+      headSha: input.headSha,
+      baseSha: input.baseSha,
     });
+    if (!outcome.ok) {
+      return {
+        recorded: false,
+        reason: `${outcome.step}-${outcome.reason}`,
+        detail: outcome.detail,
+        carried: false,
+        clean: false,
+      };
+    }
 
     return {
       recorded: true,
       carried: false,
-      ...diff,
-      runner,
-      flakeList: flakes.source,
+      ...outcome.diff,
+      runner: { headRunId: outcome.headRunId, baseRunId: outcome.baseRunId },
+      flakeList: outcome.flakeList,
     };
   },
 });

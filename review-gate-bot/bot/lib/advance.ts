@@ -7,6 +7,8 @@ import { gateActions, prKey, reviewTurnKey } from "./gate.js";
 import { leaseToken, releaseLeaseIfHolder } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
 import { tagCursorAndDitto, tagReplit } from "./tag.js";
+import { runSuiteIfDue } from "./suite-record.js";
+import type { RunnerReader } from "./runner.js";
 import { GATE_BOT_LOGIN } from "./verdicts.js";
 
 /** What the gate needs from the host: plain handles, so it can run without the SDK. */
@@ -19,6 +21,8 @@ export type GateDeps = {
   createCheck: CreateCheck;
   /** The clock the review-turn lease reads. Defaults to `Date.now`. */
   now?: () => number;
+  /** Where suite artifacts are read from. Defaults to the GitHub API; tests supply a fake. */
+  reader?: RunnerReader;
 };
 
 /**
@@ -37,13 +41,13 @@ export const REVIEW_ACTIONS = new Set(["opened", "synchronize", "reopened", "rea
  * can fire on a draft, and a draft must never be tagged or reviewed — the
  * reviewer round trip is for a PR that is actually asking for review.
  */
-async function readHead(octokit: Octokit, ref: PrRef): Promise<{ headSha: string; draft: boolean }> {
+async function readHead(octokit: Octokit, ref: PrRef): Promise<{ headSha: string; baseSha?: string; draft: boolean }> {
   const { data } = await octokit.rest.pulls.get({
     owner: ref.owner,
     repo: ref.repo,
     pull_number: ref.number,
   });
-  return { headSha: data.head.sha, draft: data.draft ?? false };
+  return { headSha: data.head.sha, baseSha: data.base?.sha, draft: data.draft ?? false };
 }
 
 export type AdvanceResult = {
@@ -53,6 +57,8 @@ export type AdvanceResult = {
   needsReviewTurn: boolean;
   /** The lease a granted review turn holds, to carry on the turn and release on failure. */
   reviewLease?: ReviewTurnLease;
+  /** What the gate's own suite step did: recorded, waiting, refused, or skipped. */
+  suite: string;
   taggedCursorDitto: string;
   taggedReplit: string;
   replitAsk: string;
@@ -105,8 +111,8 @@ function askLabel(outcome: ReplitAskOutcome): string {
  * `gateActions`, so all three hooks refuse a draft the same way.
  */
 export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
-  const { octokit, kv, mcp, ref, createCheck, now } = deps;
-  const { headSha, draft } = await readHead(octokit, ref);
+  const { octokit, kv, mcp, ref, createCheck, now, reader } = deps;
+  const { headSha, baseSha, draft } = await readHead(octokit, ref);
 
   if (draft) {
     return {
@@ -114,22 +120,12 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
       draft,
       next: "review",
       needsReviewTurn: false,
+      suite: "skipped:draft",
       taggedCursorDitto: "skipped:draft",
       taggedReplit: "skipped:draft",
       replitAsk: "skipped:draft",
       check: "skipped:draft",
     };
-  }
-
-  const state = await readGateState({ octokit, kv, ref, headSha });
-  const actions = gateActions(state, false);
-
-  // Every delivery for this head reads the same missing verdict, so each would
-  // ask for a review turn. Only the one that takes the lease asks.
-  const token = actions.needsReviewTurn ? await leaseToken(kv, reviewTurnKey(ref, headSha), now) : undefined;
-  const reviewLease: ReviewTurnLease | undefined = token === undefined ? undefined : { head: headSha, token };
-  if (actions.needsReviewTurn && reviewLease === undefined) {
-    console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_held", pr: prKey(ref), head: headSha }));
   }
 
   // A failing post must not lose the review turn that follows it, and must not
@@ -151,6 +147,33 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
       return `failed:${step}`;
     }
   };
+
+  let state = await readGateState({ octokit, kv, ref, headSha });
+  let actions = gateActions(state, false);
+
+  // The suite is the gate's own step. When it is due, record it now and read the gate again, so the
+  // lease, tags, ask and check below all see the result. A wait or a refusal leaves the gate as read.
+  let suite = "skipped";
+  if (actions.runSuite) {
+    if (baseSha === undefined) {
+      console.warn(JSON.stringify({ level: "warn", event: "suite_base_missing", pr: prKey(ref), head: headSha }));
+      suite = "skipped:no-base";
+    } else {
+      suite = await attempt("run-suite", () => runSuiteIfDue({ octokit, kv, ref, headSha, baseSha, reader }));
+    }
+    if (suite === "recorded") {
+      state = await readGateState({ octokit, kv, ref, headSha });
+      actions = gateActions(state, false);
+    }
+  }
+
+  // Every delivery for this head reads the same missing verdict, so each would
+  // ask for a review turn. Only the one that takes the lease asks.
+  const token = actions.needsReviewTurn ? await leaseToken(kv, reviewTurnKey(ref, headSha), now) : undefined;
+  const reviewLease: ReviewTurnLease | undefined = token === undefined ? undefined : { head: headSha, token };
+  if (actions.needsReviewTurn && reviewLease === undefined) {
+    console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_held", pr: prKey(ref), head: headSha }));
+  }
 
   // The Cursor/Ditto tag is posted on every head, so the round trip starts
   // immediately and does not wait for MC's verdict to be written down.
@@ -188,6 +211,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     next: state.next,
     needsReviewTurn: reviewLease !== undefined,
     reviewLease,
+    suite,
     taggedCursorDitto,
     taggedReplit,
     replitAsk,

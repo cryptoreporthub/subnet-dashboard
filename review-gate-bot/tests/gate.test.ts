@@ -258,6 +258,18 @@ test("a PR's key tells two repositories' PR 1522 apart and is stable for one PR"
 
 // --- Finding 8: the draft guard, for every delivery ----------------------
 
+test("the suite is run by the gate itself at run_suite, and never for a draft", () => {
+  const due = computeGate(input({ verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")], suite: "missing" }));
+  assert.equal(due.next, "run_suite");
+  assert.equal(gateActions(due, false).runSuite, true);
+  assert.equal(gateActions(due, true).runSuite, false);
+
+  const recorded = computeGate(
+    input({ verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")], suite: "clean" }),
+  );
+  assert.equal(gateActions(recorded, false).runSuite, false, "a recorded suite is not run again");
+});
+
 test("a draft is never tagged, asked about or reviewed, at any gate state", () => {
   const states = [
     input(),
