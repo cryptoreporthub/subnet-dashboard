@@ -107,8 +107,10 @@ async function postSlotOnce(input: {
   slot: TagSlot;
   key: string;
   body: string;
+  /** Re-reads the gate just before the write. The tag's own precondition must still hold, not only the head. */
+  stillReady?: () => Promise<boolean>;
 }): Promise<{ superseded: boolean; result: RanOnceResult; commentId?: number }> {
-  const { octokit, kv, ref, headSha, slot, key, body } = input;
+  const { octokit, kv, ref, headSha, slot, key, body, stillReady } = input;
   let commentId: number | undefined;
   let superseded = false;
   const result = await ranOnce({
@@ -116,7 +118,7 @@ async function postSlotOnce(input: {
     key,
     alreadyDone: () => alreadyPosted(octokit, ref, slot, headSha),
     run: async () => {
-      if (await isStale(octokit, ref, headSha)) {
+      if ((await isStale(octokit, ref, headSha)) || (stillReady !== undefined && !(await stillReady()))) {
         superseded = true;
         return;
       }
@@ -206,6 +208,7 @@ export async function tagReplit(input: {
     slot: "replit",
     key: replitTagKey(ref, headSha),
     body: replitTagBody(headSha),
+    stillReady: async () => (await readGateState({ octokit, kv, ref, headSha })).next === "tag_replit",
   });
   return tagOutcome(posted, state.next);
 }

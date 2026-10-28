@@ -413,3 +413,23 @@ test("a failed verdict post leaves its claim live, and a repo differing only by 
   });
   assert.equal(result.posted, true);
 });
+
+test("a Replit tag is not posted when the gate stopped being ready between the read and the post", async () => {
+  // Cursor passed when the gate was read, then changed its review before the tag went up.
+  const { comments, reviews, kv: store } = passesAtHead();
+  const octokit = fakeOctokit(comments, reviews);
+  const paginate = octokit as unknown as { paginate: (fn: unknown, ...rest: unknown[]) => Promise<unknown> };
+  const listed = paginate.paginate;
+  const changed = reviews.map((review) => ({ ...review, state: "CHANGES_REQUESTED" }));
+  let reviewReads = 0;
+  paginate.paginate = async (fn: unknown, ...rest: unknown[]) => {
+    if (fn === octokit.rest.pulls.listReviews) {
+      reviewReads += 1;
+      return reviewReads === 1 ? reviews : changed;
+    }
+    return listed(fn, ...rest);
+  };
+  const result = await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
+  assert.equal(result.posted, false);
+  assert.equal(octokit.created.length, 0, "no tag goes up for a gate that is no longer ready");
+});
