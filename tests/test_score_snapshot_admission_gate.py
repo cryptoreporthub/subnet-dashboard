@@ -24,3 +24,17 @@ def test_membership_status_that_admission_blocks_is_rejected(status):
     snap = complete_snapshot_payload()
     snap["coverage"]["membership"]["universe_status"] = status
     assert is_complete_snapshot(snap) is False
+
+
+@pytest.mark.parametrize("horizon", ["day", "hour"])
+def test_a_row_outside_the_membership_in_one_horizon_is_rejected(horizon):
+    snap = complete_snapshot_payload()
+    snap[horizon].append({"netuid": 99, "total_score": 1.0, "name": "X"})
+    assert is_complete_snapshot(snap) is False
+
+
+@pytest.mark.parametrize("horizon", ["day", "hour"])
+def test_a_member_missing_from_one_horizon_is_rejected(horizon):
+    snap = complete_snapshot_payload()
+    snap[horizon].pop()
+    assert is_complete_snapshot(snap) is False
