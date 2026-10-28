@@ -250,3 +250,21 @@ test("a dollar-prefixed credential is redacted: only ${VAR} and $VAR references 
 test("an angle-bracketed value with a digit is a credential, not a placeholder word", () => {
   assert.equal(redactSecrets("PASSWORD=<yourhunter2>").text.includes("yourhunter2"), false);
 });
+
+test("a standalone opaque credential with no known prefix is redacted", () => {
+  const token = "Q7mK4pV9xR2nL6sT8wY3aB5cD7eF9gH1";
+  assert.equal(redactSecrets(`session=${token}`).text.includes(token), false, "an assigned value");
+  assert.equal(redactSecrets(`the value was ${token} in the log`).text.includes(token), false, "a bare value in prose");
+});
+
+test("ordinary words and kebab-case identifiers stay readable", () => {
+  const prose = "the verdict-gate-review-bot-deterministic-check is green and the Replit-Ditto-Cursor loop ran";
+  assert.equal(redactSecrets(prose).text, prose);
+});
+
+test("the opaque-credential rule scrubs a megabyte of identifier characters quickly", () => {
+  const run = "A".repeat(1_000_000);
+  const started = performance.now();
+  redactSecrets(run);
+  assert.ok(performance.now() - started < 500, "the rule must not backtrack across a long run");
+});

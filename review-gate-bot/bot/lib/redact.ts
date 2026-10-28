@@ -57,6 +57,11 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   // is the floor for an opaque token, so prose such as "bearer authentication"
   // stays readable.
   /\bbearer\s+[A-Za-z0-9._~+/=-]{16,}/gi,
+
+  // Opaque credentials with no recognised prefix: a whole run of 32+ base64url characters with both cases and a
+  // digit. A run is not matched when it sits after `+ / .` or before `+ / =`, so a piece of a base64 hash (a lockfile's
+  // integrity value, which ends in `==`) is not scrubbed as a fragment of its own.
+  /(?<![A-Za-z0-9_+/.-])(?=[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_+/-]))(?=[A-Za-z0-9_-]*[a-z])(?=[A-Za-z0-9_-]*[A-Z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_+/=-])/g,
 ];
 
 /** Words that make a name a credential name. */
