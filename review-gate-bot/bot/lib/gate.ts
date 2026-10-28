@@ -12,6 +12,8 @@ export type PinnedVerdict = {
   reviewer: Reviewer;
   headSha: string;
   verdict: Verdict;
+  /** When the verdict was last said (ISO time). Needed to order a verdict against the Replit tag. */
+  at?: string;
 };
 
 export type SuiteState = "clean" | "regressed" | "carried" | "missing";
@@ -32,6 +34,8 @@ export type GateInput = {
   suite: SuiteState;
   /** Head SHA the @replit tag was posted for, when it was. */
   replitTaggedForSha?: string;
+  /** When that tag was posted (ISO time). A Replit PASS counts only if said at or after it. */
+  replitTaggedAt?: string;
 };
 
 export type GateState = {
@@ -74,16 +78,32 @@ function anyFail(state: { mc: unknown; cursor: unknown; ditto: unknown; replit: 
 }
 
 /**
+ * Whether a verdict may count toward the gate. Only a Replit PASS is tied to the tag: it answers
+ * the tag, so one said before this head's tag, or with no known time, answers nothing. Replit's
+ * MODIFY and FAIL count whenever they were said, since a block must never be filtered out by time.
+ */
+function replitCounts(v: PinnedVerdict, tagAt: string | undefined): boolean {
+  if (v.reviewer !== "replit" || v.verdict !== "PASS") {
+    return true;
+  }
+  if (tagAt === undefined || v.at === undefined) {
+    return false;
+  }
+  return Date.parse(v.at) >= Date.parse(tagAt);
+}
+
+/**
  * The gate order:
  * MC pass at head -> Cursor pass at head -> Ditto pass at head ->
  * clean full-suite comparison -> @replit tagged -> Replit pass -> mergeable.
  */
 export function computeGate(input: GateInput): GateState {
-  const mc = verdictAt(input.verdicts, "mc", input.headSha);
-  const cursor = verdictAt(input.verdicts, "cursor", input.headSha);
-  const ditto = verdictAt(input.verdicts, "ditto", input.headSha);
-  const replit = verdictAt(input.verdicts, "replit", input.headSha);
   const replitTagged = input.replitTaggedForSha === input.headSha;
+  const verdicts = input.verdicts.filter((v) => replitCounts(v, replitTagged ? input.replitTaggedAt : undefined));
+  const mc = verdictAt(verdicts, "mc", input.headSha);
+  const cursor = verdictAt(verdicts, "cursor", input.headSha);
+  const ditto = verdictAt(verdicts, "ditto", input.headSha);
+  const replit = verdictAt(verdicts, "replit", input.headSha);
 
   const base: GateState = {
     headSha: input.headSha,

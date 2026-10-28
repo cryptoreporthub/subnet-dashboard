@@ -29,6 +29,15 @@ function v(
   return { reviewer, verdict, headSha };
 }
 
+/** When the tag went up, and when a verdict was said, for the tests that order the two. */
+const TAG_AT = "2026-10-28T10:00:00Z";
+const BEFORE_TAG = "2026-10-28T09:00:00Z";
+const AFTER_TAG = "2026-10-28T11:00:00Z";
+
+function said(verdict: PinnedVerdict, at: string): PinnedVerdict {
+  return { ...verdict, at };
+}
+
 test("a head with no MC verdict asks for the review", () => {
   assert.equal(computeGate(input()).next, "review");
 });
@@ -92,17 +101,79 @@ test("after the Replit tag the gate waits for the Replit verdict", () => {
   assert.equal(gate.next, "await_replit");
 });
 
-test("Replit PASS at the same head makes the PR mergeable", () => {
+test("Replit PASS at the same head, said after the tag, makes the PR mergeable", () => {
   const gate = computeGate(
     input({
       verdicts: [
         v("mc", "PASS"),
         v("cursor", "PASS"),
         v("ditto", "PASS"),
-        v("replit", "PASS"),
+        said(v("replit", "PASS"), AFTER_TAG),
       ],
       suite: "clean",
       replitTaggedForSha: HEAD,
+      replitTaggedAt: TAG_AT,
+    }),
+  );
+  assert.equal(gate.next, "mergeable");
+});
+
+test("a Replit PASS said before this head's tag does not count, so the gate still waits for Replit", () => {
+  // Replit could have passed this head before the tag existed. That pass was not an answer to the tag.
+  const gate = computeGate(
+    input({
+      verdicts: [
+        v("mc", "PASS"),
+        v("cursor", "PASS"),
+        v("ditto", "PASS"),
+        said(v("replit", "PASS"), BEFORE_TAG),
+      ],
+      suite: "clean",
+      replitTaggedForSha: HEAD,
+      replitTaggedAt: TAG_AT,
+    }),
+  );
+  assert.equal(gate.next, "await_replit");
+  assert.equal(gate.replit, "missing");
+});
+
+test("a Replit PASS with no recorded time does not count once the head is tagged", () => {
+  const gate = computeGate(
+    input({
+      verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS"), v("replit", "PASS")],
+      suite: "clean",
+      replitTaggedForSha: HEAD,
+      replitTaggedAt: TAG_AT,
+    }),
+  );
+  assert.equal(gate.next, "await_replit");
+});
+
+test("an earlier Replit FAIL still blocks, even though it was said before the tag", () => {
+  const gate = computeGate(
+    input({
+      verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS"), said(v("replit", "FAIL"), BEFORE_TAG)],
+      suite: "clean",
+      replitTaggedForSha: HEAD,
+      replitTaggedAt: TAG_AT,
+    }),
+  );
+  assert.equal(gate.next, "blocked");
+});
+
+test("a Replit PASS said after the tag wins over an earlier MODIFY", () => {
+  const gate = computeGate(
+    input({
+      verdicts: [
+        v("mc", "PASS"),
+        v("cursor", "PASS"),
+        v("ditto", "PASS"),
+        said(v("replit", "MODIFY"), BEFORE_TAG),
+        said(v("replit", "PASS"), AFTER_TAG),
+      ],
+      suite: "clean",
+      replitTaggedForSha: HEAD,
+      replitTaggedAt: TAG_AT,
     }),
   );
   assert.equal(gate.next, "mergeable");

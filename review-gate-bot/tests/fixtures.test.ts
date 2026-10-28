@@ -29,12 +29,21 @@ function prFixture(caseName: string): { headSha: string; files: string[] } {
   };
 }
 
-/** Rebuild the gate inputs a fixture stands for, at its own head. */
+const TAG_AT = "2026-10-26T04:00:00Z";
+const AFTER_TAG = "2026-10-26T05:00:00Z";
+
+/**
+ * Rebuild the gate inputs a fixture stands for, at its own head.
+ *
+ * A fixture records the gate's state, not when each reviewer spoke. A recorded Replit PASS on a
+ * tagged head is taken to have come after the tag, since that is the only order the gate accepts;
+ * the times below are stand-ins that keep that order, not facts about the case.
+ */
 function inputsFrom(fixture: GateFixture): GateInput {
   const verdicts: PinnedVerdict[] = [];
   const add = (reviewer: PinnedVerdict["reviewer"], value: GateState["mc"]) => {
     if (value !== "missing") {
-      verdicts.push({ reviewer, verdict: value, headSha: fixture.headSha });
+      verdicts.push({ reviewer, verdict: value, headSha: fixture.headSha, at: AFTER_TAG });
     }
   };
   add("mc", fixture.mc);
@@ -46,6 +55,7 @@ function inputsFrom(fixture: GateFixture): GateInput {
     verdicts,
     suite: fixture.suite,
     replitTaggedForSha: fixture.replitTagged ? fixture.headSha : undefined,
+    replitTaggedAt: TAG_AT,
   };
 }
 

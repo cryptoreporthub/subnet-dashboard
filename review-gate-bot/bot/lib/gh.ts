@@ -151,6 +151,7 @@ export function gateStateFrom(input: {
   reviews: readonly ReviewLike[];
   suite: SuiteState;
   replitTaggedForSha?: string;
+  replitTaggedAt?: string;
 }): GateState {
   const known = new Set<string>([input.headSha]);
   const resolveSha = (claimed: string): string | undefined => {
@@ -171,6 +172,7 @@ export function gateStateFrom(input: {
     reviewer: p.reviewer,
     headSha: p.headSha,
     verdict: p.verdict,
+    at: p.at,
   }));
 
   return computeGate({
@@ -178,6 +180,7 @@ export function gateStateFrom(input: {
     verdicts,
     suite: input.suite,
     replitTaggedForSha: input.replitTaggedForSha,
+    replitTaggedAt: input.replitTaggedAt,
   });
 }
 
@@ -191,6 +194,12 @@ export function gateStateFrom(input: {
  */
 export function replitTaggedIn(comments: readonly CommentLike[], headSha: string): string | undefined {
   return comments.some((c) => hasOwnMarker(c, "replit", headSha)) ? headSha : undefined;
+}
+
+/** When the tag for this head was posted: the earliest of the bot's own tag comments for it. */
+export function replitTagTimeIn(comments: readonly CommentLike[], headSha: string): string | undefined {
+  const times = comments.filter((c) => hasOwnMarker(c, "replit", headSha)).map((c) => c.createdAt);
+  return times.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
 }
 
 /**
@@ -216,5 +225,6 @@ export async function readGateState(input: {
     reviews,
     suite: await readSuiteState(input.kv, input.ref, input.headSha),
     replitTaggedForSha: replitTaggedIn(comments, input.headSha),
+    replitTaggedAt: replitTagTimeIn(comments, input.headSha),
   });
 }

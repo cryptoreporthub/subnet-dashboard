@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { asComment, asReview, gateStateFrom, replitTaggedIn } from "../bot/lib/gh.js";
+import { asComment, asReview, gateStateFrom, replitTaggedIn, replitTagTimeIn } from "../bot/lib/gh.js";
 import { needsReviewTurn } from "../bot/lib/gate.js";
 import { composeVerdictBody } from "../bot/tools/post_verdict.js";
 import { marker } from "../bot/lib/tag.js";
@@ -123,6 +123,7 @@ function gateFromRaw(input: {
     reviews,
     suite: input.suite,
     replitTaggedForSha: replitTaggedIn(comments, headSha),
+    replitTaggedAt: replitTagTimeIn(comments, headSha),
   });
 }
 
