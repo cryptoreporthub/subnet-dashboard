@@ -346,3 +346,13 @@ test("two verdicts from one reviewer said at the same instant, disagreeing, are 
   assert.notEqual(gate.cursor, "PASS");
   assert.equal(gate.next, "await_cursor_ditto");
 });
+
+test("a suite that needs Joshua stops the gate there: no suite run, no tag, and a waiting check", () => {
+  const state = computeGate(input({ verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")], suite: "needs-joshua", suiteDetail: "pytest.ini" }));
+  assert.equal(state.next, "needs_joshua");
+  assert.equal(state.suiteDetail, "pytest.ini");
+  const actions = gateActions(state, false);
+  assert.equal(actions.runSuite, false, "a refused suite is not run again");
+  assert.equal(actions.tagReplit, false);
+});
+

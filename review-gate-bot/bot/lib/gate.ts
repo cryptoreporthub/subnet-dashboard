@@ -16,7 +16,8 @@ export type PinnedVerdict = {
   at?: string;
 };
 
-export type SuiteState = "clean" | "regressed" | "carried" | "missing";
+/** `needs-joshua` is final: a person has to clear it, so the gate stops asking for a suite run again. */
+export type SuiteState = "clean" | "regressed" | "carried" | "missing" | "needs-joshua";
 
 export type GateNext =
   | "review"
@@ -24,6 +25,7 @@ export type GateNext =
   | "run_suite"
   | "tag_replit"
   | "await_replit"
+  | "needs_joshua"
   | "mergeable"
   | "blocked";
 
@@ -32,6 +34,8 @@ export type GateInput = {
   /** Every formal verdict known for this PR, at any head. */
   verdicts: readonly PinnedVerdict[];
   suite: SuiteState;
+  /** Why the suite needs Joshua: the files or test IDs behind it. Shown in the check. */
+  suiteDetail?: string;
   /** Head SHA the @replit tag was posted for, when it was. */
   replitTaggedForSha?: string;
   /** When that tag was posted (ISO time). A Replit PASS counts only if said at or after it. */
@@ -46,6 +50,8 @@ export type GateState = {
   ditto: Verdict | "missing";
   replit: Verdict | "missing";
   suite: SuiteState;
+  /** Why the suite needs Joshua, when it does. */
+  suiteDetail?: string;
   replitTagged: boolean;
   next: GateNext;
 };
@@ -117,6 +123,7 @@ export function computeGate(input: GateInput): GateState {
     ditto,
     replit,
     suite: input.suite,
+    suiteDetail: input.suiteDetail,
     replitTagged,
     next: "review",
   };
@@ -132,6 +139,11 @@ export function computeGate(input: GateInput): GateState {
 
   if (cursor !== "PASS" || ditto !== "PASS") {
     return { ...base, next: "await_cursor_ditto" };
+  }
+
+  if (input.suite === "needs-joshua") {
+    // Final: a refused suite is not run again, and the check says why, until a person clears it or the head moves.
+    return { ...base, next: "needs_joshua" };
   }
 
   if (input.suite !== "clean" && input.suite !== "carried") {

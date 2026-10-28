@@ -30,6 +30,7 @@ test("only a mergeable gate is green, a FAIL is red, and everything still waitin
     run_suite: "action_required",
     tag_replit: "action_required",
     await_replit: "action_required",
+    needs_joshua: "action_required",
     mergeable: "success",
     blocked: "failure",
   };
@@ -164,3 +165,13 @@ test("a check that failed to open is retried by the next delivery", async () => 
   await assert.rejects(postGateCheck({ ...failing, ...same(state("mergeable")) }), /403/);
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
 });
+
+test("a NEEDS-JOSHUA gate says so in the check, with the reason and the files or test IDs behind it", async () => {
+  const w = world([HEAD]);
+  await postGateCheck({ ...w.deps, ...same(state("needs_joshua", { suite: "needs-joshua", suiteDetail: "pytest.ini" })) });
+  const summary = w.checks[0]?.summary ?? "";
+  assert.match(summary, /NEEDS-JOSHUA/);
+  assert.match(summary, /pytest\.ini/);
+  assert.equal(w.checks[0]?.conclusion, "action_required");
+});
+

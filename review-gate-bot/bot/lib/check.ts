@@ -30,6 +30,7 @@ export function gateConclusion(state: GateState): GateConclusion {
     case "run_suite":
     case "tag_replit":
     case "await_replit":
+    case "needs_joshua":
       return "action_required";
     default: {
       const _exhaustive: never = state.next;
@@ -44,7 +45,7 @@ function summaryOf(state: GateState): string {
     `MC ${state.mc}`,
     `Cursor ${state.cursor}`,
     `Ditto ${state.ditto}`,
-    `suite ${state.suite}`,
+    state.suite === "needs-joshua" ? `suite NEEDS-JOSHUA (${state.suiteDetail ?? "see the head's suite record"})` : `suite ${state.suite}`,
     `Replit ${state.replit}`,
     `next: ${state.next}`,
   ].join(" · ");
@@ -107,7 +108,8 @@ export async function postGateCheck(input: {
       });
       return "stale-head";
     }
-    await check.conclude({ conclusion, output: { title: titleOf(conclusion), summary } });
+    const title = state.next === "needs_joshua" ? "Needs Joshua" : titleOf(conclusion);
+  await check.conclude({ conclusion, output: { title, summary } });
     await kv.put(key, summary);
     return "posted";
   });
