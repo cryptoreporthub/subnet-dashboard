@@ -632,6 +632,9 @@ const WITHDRAWN_PASS = [
   "PASS — nope",
   "PASS, ignore this",
   "PASS — hold",
+  "PASS — don’t merge",
+  "PASS — can’t ship",
+  "PASS — won’t merge",
 ];
 
 const STILL_PASS = [

@@ -230,7 +230,7 @@ const VERDICT_LINE =
  * lag", "however ..."), so which caveats count is the owner's call, not this list's.
  */
 const WITHDRAWN =
-  /\bnot\s+(?:approv\w*|merg\w*|ship\w*|safe|ready|passing|final|signed|yet|a\s+pass)\b|\b(?:never|cannot|until|unless|yet|dont|do\s+not|block|blocked|hold|reject\w*|withdraw\w*|revoke\w*|retract\w*|supersede\w*|stale|unsafe|ignore|wait|nope)\b|n't\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
+  /\bnot\s+(?:approv\w*|merg\w*|ship\w*|safe|ready|passing|final|signed|yet|a\s+pass)\b|\b(?:never|cannot|until|unless|yet|dont|do\s+not|block|blocked|hold|reject\w*|withdraw\w*|revoke\w*|retract\w*|supersede\w*|stale|unsafe|ignore|wait|nope)\b|n['’]t\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
 
 /**
  * The verdict a comment's **first line** opens with, if it opens with one.
