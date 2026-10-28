@@ -26,6 +26,7 @@ const AFFIRMATIVE = [
   "rm -rf data/score_snapshots was executed and the volume was empty.",
   "I got their commands run successfully.",
   "I had their python one-liner executed.",
+  "No commands were run, and I ran rm -rf data.",
 ];
 
 /** Refusals and negations. None claims anything was run. */
