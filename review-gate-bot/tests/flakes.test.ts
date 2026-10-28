@@ -53,6 +53,16 @@ test("a comment still ends a line, but a # inside an id does not", () => {
   assert.deepEqual(list.ids, ["tests.test_x::test_a[#1]"]);
 });
 
+test("a # after a space inside an id's brackets is part of the id, not a comment", () => {
+  const list = parseFlakeList("tests.test_x::test_a[hello #1]\n");
+  assert.deepEqual(list.ids, ["tests.test_x::test_a[hello #1]"]);
+});
+
+test("a comment after an id that holds a spaced # keeps the whole id", () => {
+  const list = parseFlakeList("tests.test_x::test_a[hello #1]  # seen on run 123\n");
+  assert.deepEqual(list.ids, ["tests.test_x::test_a[hello #1]"]);
+});
+
 test("pytest's file-path node id can never match a JUnit classname, so it is refused with a hint", () => {
   assert.throws(() => parseFlakeList("tests/test_x.py::test_a\n"), /classname/i);
 });

@@ -17,6 +17,26 @@ export type FlakeList = {
 };
 
 /**
+ * The line without its comment. A `#` starts a comment only at the start of the line or after
+ * whitespace, and only outside the brackets of a parameter id. So `test_a[#1]` and
+ * `test_a[hello #1]` keep their `#`, and `test_a[x]  # note` drops the note.
+ */
+function stripComment(line: string): string {
+  let depth = 0;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === "[") {
+      depth += 1;
+    } else if (char === "]" && depth > 0) {
+      depth -= 1;
+    } else if (char === "#" && depth === 0 && (i === 0 || /\s/.test(line[i - 1]))) {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
+/**
  * Parse the flake file. A malformed line throws: a typo in this file silently
  * drops a flake, and a silently shorter list is a gate that fails open on the
  * test it was meant to excuse.
@@ -25,9 +45,7 @@ export function parseFlakeList(text: string, source = "known-flakes.txt"): Flake
   const ids: string[] = [];
   const errors: string[] = [];
   text.split(/\r?\n/).forEach((line, index) => {
-    // `#` starts a comment at the start of a line or after whitespace, so a
-    // parameter id such as `test_a[#1]` keeps its `#`.
-    const body = line.replace(/(^|\s)#.*$/, "").trim();
+    const body = stripComment(line).trim();
     if (body === "") {
       return;
     }
