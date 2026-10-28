@@ -47,8 +47,13 @@ import { redactSecrets } from "./redact.js";
 export const REPLIT_CONNECTION = "replit";
 export const REPLIT_TOOL = "ask_question";
 export const REPL_ID = "0be6701e-9662-43b1-becb-5912837e44f7";
-/** The question the gate asks. Short on purpose: it is a nudge, not a brief. */
-export const REPLIT_QUESTION = "X";
+/**
+ * The nudge the gate asks. Joshua's decision (#1513): name the PR and the head, and keep Replit on the free
+ * effort level. A bare question made Replit stall or search for the work, because it asked which effort to use.
+ */
+export function replitQuestion(prNumber: number, headSha: string): string {
+  return `Review PR #${prNumber} at head \`${headSha}\`. Use the free/default effort level — do not ask which effort level to use and do not offer power mode. Post your verdict on the PR.`;
+}
 
 /** Attempts per head before the ask is reported as persistently failing. */
 export const ASK_ATTEMPTS = 3;
@@ -169,7 +174,7 @@ async function askReplit(input: {
   try {
     const result = await input.mcp.callTool(REPLIT_CONNECTION, REPLIT_TOOL, {
       replId: REPL_ID,
-      question: REPLIT_QUESTION,
+      question: replitQuestion(input.ref.number, input.headSha),
     });
 
     if (result.isError === true) {

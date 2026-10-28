@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { ASK_ATTEMPTS, askReplitOnce, REPLIT_QUESTION, REPLIT_TOOL } from "../bot/lib/replit.js";
+import { ASK_ATTEMPTS, askReplitOnce, REPLIT_TOOL, replitQuestion } from "../bot/lib/replit.js";
 import { replitAskKey } from "../bot/lib/gate.js";
 
 const HEAD = "c".repeat(40);
@@ -70,8 +70,15 @@ test("a successful ask is never a review and never touches the gate", async () =
   assert.equal(keys.includes("verdict"), false);
 });
 
-test("the question sent is the literal X", () => {
-  assert.equal(REPLIT_QUESTION, "X");
+test("the question names the PR and the head, and keeps Replit on the free effort level", () => {
+  const head = "65b33e0e3c601f7a4a436b0781d76e33fa37030c";
+  const question = replitQuestion(1522, head);
+  assert.match(question, /PR #1522/);
+  assert.ok(question.includes(head), "the full head SHA is named");
+  assert.match(question, /free\/default effort level/);
+  assert.match(question, /do not ask which effort level/);
+  assert.match(question, /do not offer power mode/);
+  assert.match(question, /Post your verdict on the PR/);
 });
 
 test("a failed ask is retried on the next call instead of being dropped", async () => {
