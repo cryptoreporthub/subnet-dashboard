@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
-import { commentTurn, logAsk, pullRequestTurn, releaseReviewTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
+import { commentTurn, failureReleasesLease, logAsk, pullRequestTurn, releaseReviewTurn, releaseStartedReviewTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
 import { suiteKey } from "../bot/lib/gh.js";
 import { prKey, replitAskKey, replitTagKey } from "../bot/lib/gate.js";
 import { LEASE_MS } from "../bot/lib/lock.js";
@@ -389,4 +389,18 @@ test("releasing a review turn's lease logs the release", async () => {
     console.warn = original;
   }
   assert.ok(lines.some((line) => JSON.parse(line).event === "review_turn_lease_released"));
+});
+
+test("a failed turn frees the head it started for, even after the PR's head has moved", async () => {
+  const w = world({});
+  assert.equal(await reviewEventTurn(w.deps), true, "the turn starts for HEAD");
+  const moved = "d".repeat(40);
+  await releaseStartedReviewTurn(w.deps.kv, REF, moved);
+  assert.equal(await reviewEventTurn(w.deps), true, "HEAD's lease is free, because HEAD is the head that was started");
+});
+
+test("a cancelled turn keeps its lease, because a stop or a preempting follow-up may have a replacement running", () => {
+  assert.equal(failureReleasesLease("cancelled"), false);
+  assert.equal(failureReleasesLease("error"), true);
+  assert.equal(failureReleasesLease(undefined), true);
 });

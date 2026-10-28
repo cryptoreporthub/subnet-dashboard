@@ -125,6 +125,9 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   // Every delivery for this head reads the same missing verdict, so each would
   // ask for a review turn. Only the one that takes the lease asks.
   const reviewTurn = actions.needsReviewTurn && (await lease(kv, reviewTurnKey(ref, headSha), now));
+  if (reviewTurn) {
+    await kv.put(reviewTurnStartKey(ref), { head: headSha, at: Date.now() });
+  }
   if (actions.needsReviewTurn && !reviewTurn) {
     console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_held", pr: prKey(ref), head: headSha }));
   }
@@ -189,6 +192,31 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   };
 }
 
+
+/** The head the most recent granted review turn for a PR started for. */
+function reviewTurnStartKey(ref: PrRef): string {
+  return `review-turn-start:${prKey(ref)}`;
+}
+
+/**
+ * Whether a failed turn gives its lease back. A `cancelled` turn was stopped, or preempted by a
+ * follow-up, and a replacement may already be running for the same head: releasing then starts
+ * a second turn beside it. Only an error frees the lease.
+ */
+export function failureReleasesLease(status: string | undefined): boolean {
+  return status !== "cancelled";
+}
+
+/**
+ * Free the lease of the head the PR's last granted review turn started for, falling back to the
+ * head the caller reads now only when no start was recorded. A push between the start and the
+ * failure must not free the new head's lease.
+ */
+export async function releaseStartedReviewTurn(kv: HostKvApi, ref: PrRef, fallbackHead: string): Promise<void> {
+  const started = (await kv.get(reviewTurnStartKey(ref))) as { head?: unknown } | undefined;
+  const head = typeof started?.head === "string" ? started.head : fallbackHead;
+  await releaseReviewTurn(kv, ref, head);
+}
 
 /**
  * Free the review-turn lease for a head whose model turn failed or was cancelled, so the

@@ -1,6 +1,6 @@
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { defineHook } from "@grok/agent-sdk/hooks";
-import { releaseReviewTurn } from "../lib/advance.js";
+import { failureReleasesLease, releaseStartedReviewTurn } from "../lib/advance.js";
 
 /**
  * A review turn that fails or is cancelled gives its lease back. Without this, a failed
@@ -12,8 +12,8 @@ import { releaseReviewTurn } from "../lib/advance.js";
  */
 export default defineHook({
   events: {
-    async "turn.failed"(_event, ctx) {
-      if (ctx.session.purpose === "eval") {
+    async "turn.failed"(event, ctx) {
+      if (ctx.session.purpose === "eval" || !failureReleasesLease(event.data.status)) {
         return;
       }
       const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
@@ -22,7 +22,7 @@ export default defineHook({
       }
       const octokit = await ctx.host.github.getOctokit();
       const { data } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
-      await releaseReviewTurn(ctx.host.kv, ref, data.head.sha);
+      await releaseStartedReviewTurn(ctx.host.kv, ref, data.head.sha);
     },
   },
 });
