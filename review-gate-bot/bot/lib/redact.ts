@@ -47,7 +47,9 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   // line trimmed from a log) is removed to the end of the text.
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
   // JWT-ish triples.
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
+  // Segments are bounded: unbounded, every `eyJ` in a long run without dots rescans the rest of
+  // the run, which is quadratic. 2048 characters a segment is well past any real JWT.
+  /(?<![A-Za-z0-9_])eyJ[A-Za-z0-9_-]{8,2048}\.[A-Za-z0-9_-]{8,2048}\.[A-Za-z0-9_-]{8,2048}\b/g,
   // A bearer credential with no header name in front of it. Sixteen characters
   // is the floor for an opaque token, so prose such as "bearer authentication"
   // stays readable.

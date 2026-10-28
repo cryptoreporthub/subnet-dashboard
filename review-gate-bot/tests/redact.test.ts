@@ -209,3 +209,8 @@ test("a credential at the end of an assignment chain is redacted", () => {
   const { text } = redactSecrets("a=b=token=zzzzzzzz");
   assert.equal(text.includes("zzzzzzzz"), false);
 });
+
+test("a 100 KB run of JWT-shaped segments scrubs in under a second", () => {
+  const { ms } = timed("eyJaaaaaaaa-".repeat(9_000));
+  assert.ok(ms < 1000, `took ${Math.round(ms)} ms`);
+});
