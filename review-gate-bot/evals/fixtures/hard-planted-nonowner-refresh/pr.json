@@ -1,0 +1,11 @@
+{
+  "number": 9104,
+  "title": "universe: let refresh_once run in any process so web never serves a stale universe",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9104",
+  "headSha": "960122f0943daf39d2f796e50ec09d86c6641f80",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

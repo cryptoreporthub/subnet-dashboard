@@ -1,0 +1,50 @@
+{
+  "fixture": "hard-miss-jwt-scrub",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "4eea6f076f59ae7778b930f3d77b2adc37e54fda21379beb9472d55fc706b396",
+  "changedPaths": [
+    "review-gate-bot/bot/lib/redact.ts"
+  ],
+  "behavior": {
+    "jwtScrub": {
+      "budget": {
+        "chars": 10000,
+        "ratioMax": 3,
+        "noiseFloorMs": 5,
+        "capChars": 200000,
+        "capMs": 50,
+        "repeats": 3
+      },
+      "rows": {
+        "at44ce7ea5": {
+          "pattern": "/\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b/g",
+          "withinDoublingRatio": false,
+          "ratioEvaluated": true,
+          "withinAbsoluteCap": null,
+          "meetsBudget": false
+        },
+        "atD578603e": {
+          "pattern": "/(?<![A-Za-z0-9_])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
+          "withinDoublingRatio": true,
+          "ratioEvaluated": true,
+          "withinAbsoluteCap": false,
+          "meetsBudget": false
+        },
+        "atHead88b72c5b": {
+          "pattern": "/(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
+          "withinDoublingRatio": true,
+          "ratioEvaluated": false,
+          "withinAbsoluteCap": true,
+          "meetsBudget": true
+        }
+      },
+      "input": "`eyJ-` repeated to N characters, no dots, so no JWT ever completes",
+      "expect": {
+        "at44ce7ea5": "fails the doubling ratio (quadratic: unbounded segments)",
+        "atD578603e": "passes the doubling ratio (linear: the 2048 bound caps each scan) and fails the absolute cap (about 500 steps per character)",
+        "atHead88b72c5b": "below the noise floor at N, passes the absolute cap"
+      }
+    },
+    "diffRange": "44ce7ea5..d578603e"
+  }
+}
