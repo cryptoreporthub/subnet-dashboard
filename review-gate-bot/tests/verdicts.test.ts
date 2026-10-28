@@ -701,3 +701,82 @@ test("MODIFY and FAIL first lines parse as before, whatever follows them", () =>
 test("MC's own PASS-with-a-withdrawal still reads as no verdict, not as PASS", () => {
   assert.equal(parseVerdictToken("PASS, do not deploy until Joshua says GO"), undefined);
 });
+
+// --- MC's formal verdict: SimiBot's App, the mc-verdict marker, and the newest wins -------
+
+function simibotMc(body: string, overrides: Partial<CommentLike> = {}): CommentLike {
+  return comment({ body, user: SIMIBOT, performedViaGithubApp: SIMIBOT_APP, ...overrides });
+}
+
+function mcEntries(comments: CommentLike[]): ReturnType<typeof collectPinnedVerdicts> {
+  return collectPinnedVerdicts({ reviews: [], comments }).filter((p) => p.reviewer === "mc");
+}
+
+test("SimiBot's PASS in the mc-verdict form, from its App, pins MC at that head", () => {
+  assert.deepEqual(pinned([simibotMc(`PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`)]), [["mc", "PASS", HEAD]]);
+});
+
+test("the mc-verdict form from a different App ID is refused", () => {
+  const body = `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`;
+  assert.deepEqual(pinned([simibotMc(body, { performedViaGithubApp: { id: 1236702, slug: "simibot" } })]), []);
+});
+
+test("the mc-verdict form from the right App ID under another login is refused", () => {
+  const body = `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`;
+  assert.deepEqual(pinned([simibotMc(body, { user: { login: "someone-else[bot]", type: "Bot" } })]), []);
+});
+
+test("the owner's account posting the mc-verdict form is not MC", () => {
+  const body = `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`;
+  assert.deepEqual(pinned([comment({ body, user: { login: "cryptoreporthub", type: "User" }, performedViaGithubApp: null })]), []);
+});
+
+test("the gate's own login posting the plain mc-verdict form is not MC", () => {
+  const body = `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`;
+  assert.deepEqual(pinned([comment({ body, user: { login: "simi-revision[bot]", type: "Bot" }, performedViaGithubApp: null })]), []);
+});
+
+test("an mc-verdict marker for another head pins to that head, which the gate ignores for this one", () => {
+  assert.deepEqual(pinned([simibotMc(`PASS at ${OTHER}\n<!-- mc-verdict:${OTHER} -->`)]), [["mc", "PASS", OTHER]]);
+});
+
+test("two mc-verdict markers in one SimiBot body count for nothing", () => {
+  const body = `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->\n<!-- mc-verdict:${OTHER} -->`;
+  assert.deepEqual(pinned([simibotMc(body)]), []);
+});
+
+test("a SimiBot PASS the allowlist rejects is logged, not dropped silently", () => {
+  const warnings: string[] = [];
+  const original = console.warn;
+  console.warn = (line: string) => {
+    warnings.push(line);
+  };
+  try {
+    assert.deepEqual(pinned([simibotMc(`PASS — do not merge\n<!-- mc-verdict:${HEAD} -->`)]), []);
+  } finally {
+    console.warn = original;
+  }
+  assert.ok(warnings.some((line) => JSON.parse(line).event === "verdict_line_unparsed"), "the rejected PASS is logged");
+});
+
+test("the newest SimiBot verdict at a head wins: an older PASS then a newer MODIFY is MODIFY", () => {
+  const older = simibotMc(`PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 1, createdAt: "2026-10-26T04:00:00Z" });
+  const newer = simibotMc(`MODIFY at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 2, createdAt: "2026-10-26T05:00:00Z" });
+  assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "MODIFY");
+});
+
+test("the newest SimiBot verdict at a head wins: an older MODIFY then a newer PASS is PASS", () => {
+  const older = simibotMc(`MODIFY at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 1, createdAt: "2026-10-26T04:00:00Z" });
+  const newer = simibotMc(`PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 2, createdAt: "2026-10-26T05:00:00Z" });
+  assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "PASS");
+});
+
+test("an older SimiBot verdict edited after a newer one is the last thing said, so it wins", () => {
+  const older = simibotMc(`PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, {
+    id: 1,
+    createdAt: "2026-10-26T04:00:00Z",
+    updatedAt: "2026-10-26T06:00:00Z",
+  });
+  const newer = simibotMc(`MODIFY at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 2, createdAt: "2026-10-26T05:00:00Z" });
+  assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "PASS");
+});

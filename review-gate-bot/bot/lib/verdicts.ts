@@ -411,6 +411,21 @@ function noteUnparsed(comment: CommentLike): void {
   }
 }
 
+/** MC's `<!-- mc-verdict:<full sha> -->` marker, as SimiBot writes it. */
+const MC_VERDICT_MARKER = /<!--\s*mc-verdict:([0-9a-f]{40})\s*-->/g;
+
+/**
+ * The head a SimiBot comment's MC verdict names: the comment must be SimiBot's login and
+ * App ID, and carry exactly one such marker. Anything else is no MC verdict.
+ */
+function simibotMcHead(comment: CommentLike): string | undefined {
+  if (comment.user?.login !== SIMIBOT_LOGIN || comment.performedViaGithubApp?.id !== SIMIBOT_APP_ID) {
+    return undefined;
+  }
+  const heads = [...comment.body.matchAll(MC_VERDICT_MARKER)].map((match) => match[1]);
+  return heads.length === 1 ? heads[0] : undefined;
+}
+
 /**
  * Formal reviewer verdicts, each pinned to a head SHA.
  *
@@ -452,6 +467,26 @@ export function collectPinnedVerdicts(input: {
   }
 
   for (const comment of input.comments) {
+    // MC's formal verdict from SimiBot: its App, and one `<!-- mc-verdict:<sha> -->` naming the
+    // head. Nobody else's marker counts, and a rejected first line is logged, not dropped.
+    const simibotHead = simibotMcHead(comment);
+    if (simibotHead !== undefined) {
+      const verdict = verdictFromComment(comment);
+      if (verdict === undefined) {
+        noteUnparsed(comment);
+        continue;
+      }
+      out.push({
+        reviewer: "mc",
+        verdict,
+        headSha: simibotHead,
+        sourceId: comment.id,
+        at: lastSaid(comment),
+        source: "comment",
+      });
+      continue;
+    }
+
     const markers = parseMarkers(comment.body);
 
     if (markers.length > 0) {
