@@ -98,7 +98,7 @@ function isPlaceholder(value: string): boolean {
   if (trimmed === "") {
     return true;
   }
-  if (/^(\$\{|\$[A-Z_]|<redacted|<)/.test(trimmed)) {
+  if (/^(\$\{|\$[A-Z_]|<(?:redacted[^>]*|placeholder|example|your[^>]*)>)/i.test(trimmed)) {
     return true;
   }
   if (trimmed.toLowerCase() === "x") {

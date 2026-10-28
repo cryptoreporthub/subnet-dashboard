@@ -236,3 +236,9 @@ test("a JWT glued by a dash or underscore is not matched by the JWT rule, and a 
   assert.equal(redactSecrets(`x_${jwt}`).text.includes(jwt), true, "underscore-glued: the JWT rule does not match");
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false, "space-separated: matched");
 });
+
+test("an angle-bracketed credential is redacted; only generic placeholder words are passed over", () => {
+  const leaked = redactSecrets("PASSWORD=<hunter2>").text;
+  assert.equal(leaked.includes("hunter2"), false, `leaked: ${leaked}`);
+  assert.equal(redactSecrets("PASSWORD=<placeholder>").text.includes("<placeholder>"), true);
+});
