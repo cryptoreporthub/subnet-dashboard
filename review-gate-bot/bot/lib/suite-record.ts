@@ -9,8 +9,8 @@ import { diffJunit, suiteDefinitionFiles, type SuiteDiff } from "./suite.js";
 import { DIFF_FILE_CAP } from "./repo.js";
 
 /**
- * A list of names for a detail string: the count, the first few, and how many more. The full list stays in the
- * record. Each name is cut, so a long test name cannot push the check summary past GitHub's size limit.
+ * A list of names for a detail string: the count, the first few, and how many more. The full list is kept in the
+ * record by the caller. Each name is cut, so a long test name cannot push the check summary past GitHub's size limit.
  */
 function listed(label: string, names: readonly string[]): string {
   const shown = names.slice(0, 5).map((name) => (name.length > 120 ? `${name.slice(0, 120)}…` : name));
@@ -42,7 +42,8 @@ async function readDefinition(input: { octokit: Octokit; ref: PrRef; headSha: st
 
 /**
  * Record a head as NEEDS-JOSHUA: final, with the reason. No run is looked up for it again. A changed suite
- * definition passes the files that did it, and they are named in the detail.
+ * definition passes the files that did it: the detail names the first few, and the record keeps every path.
+ * That list is bounded by the compare itself, since a compare at the file cap is refused before any path is read.
  */
 async function recordRefusal(
   input: { kv: HostKvApi; ref: PrRef; headSha: string },
@@ -53,6 +54,7 @@ async function recordRefusal(
     state: "regressed",
     invalid: "needs-joshua",
     detail: refusal.detail,
+    ...(refusal.files === undefined ? {} : { definitionFiles: refusal.files }),
     newFailures: [],
     at: Date.now(),
   });

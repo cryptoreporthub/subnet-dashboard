@@ -119,6 +119,8 @@ export type RecordedSuite = {
   invalid?: string | null;
   missing?: string[];
   skipped?: string[];
+  /** Every suite-definition path that made this a NEEDS-JOSHUA refusal. `detail` shows only the first few. */
+  definitionFiles?: string[];
   detail?: string;
   at?: number;
 };

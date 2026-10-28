@@ -263,3 +263,41 @@ test("a compare just under the cap that changes no suite file still goes on to t
   const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
   assert.equal(outcome, "recorded");
 });
+
+test("a refusal for more than five suite-definition files keeps every path in the record, and the detail stays short", async () => {
+  const paths = Array.from({ length: 12 }, (_, i) => `service_${i}/conftest.py`);
+  const f = fixture([]);
+  const { octokit } = compareOf({ files: [...paths.map((filename) => ({ filename, status: "modified" })), { filename: "app/x.py", status: "modified" }] });
+  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader({ count: 0 }) });
+  const record = f.store.get(suiteKey(REF, HEAD)) as { invalid?: string; detail?: string; definitionFiles?: string[] } | undefined;
+  assert.equal(record?.invalid, "needs-joshua");
+  assert.deepEqual(record?.definitionFiles, paths, "all twelve paths can be inspected from the stored record");
+  assert.match(record?.detail ?? "", /and 7 more/, "the check summary still shows only the first few");
+});
+
+test("the compare_suite_runs path keeps the full suite-definition list in the record too, with a rename's old path", async () => {
+  const f = fixture([]);
+  const { octokit } = compareOf({
+    files: [
+      { filename: "tests/conftest_new.py", previous_filename: "tests/conftest.py", status: "renamed" },
+      { filename: "pytest.ini", status: "modified" },
+      { filename: "a/conftest.py", status: "modified" },
+      { filename: "b/conftest.py", status: "modified" },
+      { filename: "c/conftest.py", status: "modified" },
+      { filename: "d/conftest.py", status: "modified" },
+    ],
+  });
+  await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const record = f.store.get(suiteKey(REF, HEAD)) as { definitionFiles?: string[] } | undefined;
+  assert.deepEqual(record?.definitionFiles, ["tests/conftest.py", "pytest.ini", "a/conftest.py", "b/conftest.py", "c/conftest.py", "d/conftest.py"]);
+});
+
+test("the widest refusal GitHub's compare allows stays bounded: every path kept, the detail short", async () => {
+  const paths = Array.from({ length: 299 }, (_, i) => `pkg_${i}/${"d".repeat(60)}/conftest.py`);
+  const f = fixture([]);
+  const { octokit } = compareOf({ files: paths.map((filename) => ({ filename, status: "modified" })) });
+  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader({ count: 0 }) });
+  const record = f.store.get(suiteKey(REF, HEAD)) as { detail?: string; definitionFiles?: string[] } | undefined;
+  assert.equal(record?.definitionFiles?.length, 299);
+  assert.ok((record?.detail ?? "").length <= 1000, `detail is ${record?.detail?.length} characters`);
+});
