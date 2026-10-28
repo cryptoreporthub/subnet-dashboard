@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { suiteKey } from "../bot/lib/gh.js";
+import { collectPinnedVerdicts, type CommentLike, type ReviewLike } from "../bot/lib/verdicts.js";
 import {
   computeGate,
   cursorDittoTagKey,
@@ -345,6 +346,42 @@ test("two verdicts from one reviewer said at the same instant, disagreeing, are 
   );
   assert.notEqual(gate.cursor, "PASS");
   assert.equal(gate.next, "await_cursor_ditto");
+});
+
+/**
+ * Cursor's verdict as GitHub hands it over: one MODIFY review and one PASS comment, from the same
+ * bot, with ids from separate counters. Run through the real collector, then the gate.
+ */
+function cursorGate(reviewAt: string, commentAt: string, reviewId: number, commentId: number) {
+  const bot = { login: "cursor[bot]", type: "Bot" };
+  const reviews: ReviewLike[] = [
+    { id: reviewId, body: "needs work", state: "CHANGES_REQUESTED", submittedAt: reviewAt, commitId: HEAD, user: bot },
+  ];
+  const comments: CommentLike[] = [
+    { id: commentId, body: `PASS at \`${HEAD}\``, createdAt: commentAt, user: bot, performedViaGithubApp: null },
+  ];
+  const verdicts = collectPinnedVerdicts({ reviews, comments }).map((p) => ({ reviewer: p.reviewer, headSha: p.headSha, verdict: p.verdict, at: p.at }));
+  return computeGate(input({ verdicts, suite: "clean" }));
+}
+
+test("a review and a comment said in the same second never settle as PASS, whichever id is larger", () => {
+  const at = "2026-10-28T17:00:00Z";
+  assert.notEqual(cursorGate(at, at, 100, 900).cursor, "PASS", "comment id larger");
+  assert.notEqual(cursorGate(at, at, 900, 100).cursor, "PASS", "review id larger");
+});
+
+test("the same instant written two ways is still a tie, so a stale PASS cannot win it", () => {
+  const second = "2026-10-28T17:00:00Z";
+  const offset = "2026-10-28T17:00:00.000+00:00";
+  assert.notEqual(cursorGate(second, offset, 100, 900).cursor, "PASS", "comment id larger");
+  assert.notEqual(cursorGate(second, offset, 900, 100).cursor, "PASS", "review id larger");
+  assert.notEqual(cursorGate(offset, second, 100, 900).cursor, "PASS", "formats swapped, comment id larger");
+  assert.notEqual(cursorGate(offset, second, 900, 100).cursor, "PASS", "formats swapped, review id larger");
+});
+
+test("a MODIFY with an unreadable time is not buried under a later PASS", () => {
+  assert.notEqual(cursorGate("", "2026-10-28T17:00:00Z", 100, 900).cursor, "PASS", "no time at all");
+  assert.notEqual(cursorGate("not a time", "2026-10-28T17:00:00Z", 900, 100).cursor, "PASS", "garbled time");
 });
 
 test("a suite that needs Joshua stops the gate there: no suite run, no tag, and a waiting check", () => {

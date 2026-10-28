@@ -73,8 +73,18 @@ export function verdictAt(
     return "missing";
   }
   // Verdicts said at the same instant have no known order, so if they disagree none of them is the latest.
+  // The instant is compared as a time, not as text: `...:00Z` and `...:00.000+00:00` are one moment.
+  // A verdict whose time cannot be read has no known place in the order either, so it joins the group.
   // A FAIL still blocks; anything else asks for a fresh review rather than passing on an order nobody can see.
-  const simultaneous = last.at === undefined ? [last.verdict] : mine.filter((v) => v.at === last.at).map((v) => v.verdict);
+  const timeOf = (v: PinnedVerdict): number | undefined => (v.at === undefined ? undefined : Date.parse(v.at));
+  const lastTime = timeOf(last);
+  const simultaneous =
+    lastTime === undefined
+      ? [last.verdict]
+      : mine.filter((v) => {
+          const t = timeOf(v);
+          return t !== undefined && (Number.isNaN(t) || Number.isNaN(lastTime) || t === lastTime);
+        }).map((v) => v.verdict);
   if (new Set(simultaneous).size > 1) {
     return simultaneous.includes("FAIL") ? "FAIL" : "MODIFY";
   }

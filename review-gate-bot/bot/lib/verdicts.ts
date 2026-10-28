@@ -572,8 +572,9 @@ export function collectPinnedVerdicts(input: {
   }
 
   // Newest last, so `verdictAt` taking the last match reads "latest wins".
-  // Reviews and issue comments are numbered by separate counters, so ids only
-  // break a tie between two posts in the same second.
+  // Reviews and issue comments are numbered by separate counters, so an id order
+  // between them means nothing. It only makes the output deterministic; `verdictAt`
+  // treats posts at the same instant as unordered and fails closed on a conflict.
   const time = (value: string): number => {
     const parsed = Date.parse(value);
     return Number.isNaN(parsed) ? 0 : parsed;
