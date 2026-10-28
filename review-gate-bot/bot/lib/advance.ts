@@ -4,7 +4,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { postGateCheck, type CreateCheck } from "./check.js";
 import { readGateState, type PrRef } from "./gh.js";
 import { gateActions, prKey, reviewTurnKey } from "./gate.js";
-import { lease } from "./lock.js";
+import { leaseToken, releaseLeaseIfHolder } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
 import { tagCursorAndDitto, tagReplit } from "./tag.js";
 import { GATE_BOT_LOGIN } from "./verdicts.js";
@@ -51,6 +51,8 @@ export type AdvanceResult = {
   draft: boolean;
   next: string;
   needsReviewTurn: boolean;
+  /** The lease a granted review turn holds, to carry on the turn and release on failure. */
+  reviewLease?: ReviewTurnLease;
   taggedCursorDitto: string;
   taggedReplit: string;
   replitAsk: string;
@@ -124,11 +126,9 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
 
   // Every delivery for this head reads the same missing verdict, so each would
   // ask for a review turn. Only the one that takes the lease asks.
-  const reviewTurn = actions.needsReviewTurn && (await lease(kv, reviewTurnKey(ref, headSha), now));
-  if (reviewTurn) {
-    await kv.put(reviewTurnStartKey(ref), { head: headSha, at: Date.now() });
-  }
-  if (actions.needsReviewTurn && !reviewTurn) {
+  const token = actions.needsReviewTurn ? await leaseToken(kv, reviewTurnKey(ref, headSha), now) : undefined;
+  const reviewLease: ReviewTurnLease | undefined = token === undefined ? undefined : { head: headSha, token };
+  if (actions.needsReviewTurn && reviewLease === undefined) {
     console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_held", pr: prKey(ref), head: headSha }));
   }
 
@@ -184,7 +184,8 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     headSha,
     draft,
     next: state.next,
-    needsReviewTurn: reviewTurn,
+    needsReviewTurn: reviewLease !== undefined,
+    reviewLease,
     taggedCursorDitto,
     taggedReplit,
     replitAsk,
@@ -192,11 +193,8 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   };
 }
 
-
-/** The head the most recent granted review turn for a PR started for. */
-function reviewTurnStartKey(ref: PrRef): string {
-  return `review-turn-start:${prKey(ref)}`;
-}
+/** A review turn's lease: the head it is for and the token that proves it is this turn's. */
+export type ReviewTurnLease = { head: string; token: string };
 
 /**
  * Whether a failed turn gives its lease back. A `cancelled` turn was stopped, or preempted by a
@@ -208,28 +206,44 @@ export function failureReleasesLease(status: string | undefined): boolean {
 }
 
 /**
- * Free the lease of the head the PR's last granted review turn started for, falling back to the
- * head the caller reads now only when no start was recorded. A push between the start and the
- * failure must not free the new head's lease.
+ * Give back a granted review turn's lease, but only if it is still this turn's. The lease is
+ * freed when its own token is stored under its key; a later turn's lease, or a lease that
+ * expired and was retaken, has another token and is left alone. A lost lease falls back to
+ * the TTL.
  */
-export async function releaseStartedReviewTurn(kv: HostKvApi, ref: PrRef, fallbackHead: string): Promise<void> {
-  const started = (await kv.get(reviewTurnStartKey(ref))) as { head?: unknown } | undefined;
-  const head = typeof started?.head === "string" ? started.head : fallbackHead;
-  await releaseReviewTurn(kv, ref, head);
+export async function releaseReviewTurnIfHolder(kv: HostKvApi, ref: PrRef, lease: ReviewTurnLease): Promise<boolean> {
+  const released = await releaseLeaseIfHolder(kv, reviewTurnKey(ref, lease.head), lease.token);
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      event: released ? "review_turn_lease_released" : "review_turn_lease_not_held",
+      pr: prKey(ref),
+      head: lease.head,
+    }),
+  );
+  return released;
 }
 
 /**
- * Free the review-turn lease for a head whose model turn failed or was cancelled, so the
- * next delivery for that head may ask again.
- *
- * Limits: a turn dropped by a host restart emits no event, so the lease then runs out on its
- * own TTL. The delete is unconditional, so it can free a lease a newer delivery has just
- * taken; the cost is one extra turn, not a second post. And once released, repeated failures
- * can start a new turn on every later event for that head.
+ * The lease a turn was started with, read from its channel state. Anything not exactly the
+ * shape the bot wrote is no lease, so a missing or garbled state releases nothing.
  */
-export async function releaseReviewTurn(kv: HostKvApi, ref: PrRef, headSha: string): Promise<void> {
-  await kv.delete(reviewTurnKey(ref, headSha));
-  console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_released", pr: prKey(ref), head: headSha }));
+export function reviewLeaseFromState(value: unknown): ReviewTurnLease | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  const lease = (value as { reviewLease?: unknown }).reviewLease;
+  if (typeof lease !== "object" || lease === null) {
+    return undefined;
+  }
+  const { head, token } = lease as { head?: unknown; token?: unknown };
+  if (typeof head !== "string" || !/^[0-9a-f]{40}$/.test(head)) {
+    return undefined;
+  }
+  if (typeof token !== "string" || !/^[A-Za-z0-9-]{1,80}$/.test(token)) {
+    return undefined;
+  }
+  return { head, token };
 }
 
 /**
@@ -239,12 +253,19 @@ export async function releaseReviewTurn(kv: HostKvApi, ref: PrRef, headSha: stri
  * verdict, needs none. The payload's own draft flag only short-circuits the
  * read.
  */
-export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draft: boolean }): Promise<boolean> {
+export async function pullRequestReviewTurn(
+  deps: GateDeps,
+  pr: { action: string; draft: boolean },
+): Promise<ReviewTurnLease | undefined> {
   if (pr.draft || !REVIEW_ACTIONS.has(pr.action)) {
-    return false;
+    return undefined;
   }
   // Tags first, in plain code, so they land even if the model turn fails.
-  return (await advanceGate(deps)).needsReviewTurn;
+  return (await advanceGate(deps)).reviewLease;
+}
+
+export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draft: boolean }): Promise<boolean> {
+  return (await pullRequestReviewTurn(deps, pr)) !== undefined;
 }
 
 /**
@@ -255,14 +276,22 @@ export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draf
  * login alone is the test. The owner account is not: Joshua, MC, Claude, Ditto's
  * relayed comments and the Replit reports all post there.
  */
-export async function commentTurn(deps: GateDeps, author: string | undefined): Promise<boolean> {
+export async function commentReviewTurn(deps: GateDeps, author: string | undefined): Promise<ReviewTurnLease | undefined> {
   if (author === GATE_BOT_LOGIN) {
-    return false;
+    return undefined;
   }
-  return (await advanceGate(deps)).needsReviewTurn;
+  return (await advanceGate(deps)).reviewLease;
+}
+
+export async function commentTurn(deps: GateDeps, author: string | undefined): Promise<boolean> {
+  return (await commentReviewTurn(deps, author)) !== undefined;
 }
 
 /** `pull_request_review` delivery: does it start a model turn? */
+export async function reviewEventReviewTurn(deps: GateDeps): Promise<ReviewTurnLease | undefined> {
+  return (await advanceGate(deps)).reviewLease;
+}
+
 export async function reviewEventTurn(deps: GateDeps): Promise<boolean> {
-  return (await advanceGate(deps)).needsReviewTurn;
+  return (await reviewEventReviewTurn(deps)) !== undefined;
 }

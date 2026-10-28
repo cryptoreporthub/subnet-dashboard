@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
-import { commentTurn, failureReleasesLease, logAsk, pullRequestTurn, releaseReviewTurn, releaseStartedReviewTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
+import { commentReviewTurn, commentTurn, failureReleasesLease, logAsk, pullRequestReviewTurn, pullRequestTurn, releaseReviewTurnIfHolder, reviewEventTurn, reviewLeaseFromState, type GateDeps } from "../bot/lib/advance.js";
 import { suiteKey } from "../bot/lib/gh.js";
-import { prKey, replitAskKey, replitTagKey } from "../bot/lib/gate.js";
-import { LEASE_MS } from "../bot/lib/lock.js";
+import { prKey, replitAskKey, replitTagKey, reviewTurnKey } from "../bot/lib/gate.js";
+import { LEASE_MS, leaseToken, releaseLeaseIfHolder } from "../bot/lib/lock.js";
 import { marker } from "../bot/lib/verdicts.js";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
+const OTHER = "1234567890abcdef1234567890abcdef12345678";
 const NEW_HEAD = "d".repeat(40);
 const ME = "simi-revision[bot]";
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
@@ -348,14 +349,6 @@ test("a failed gate step is logged under the repository-qualified PR key", async
   assert.equal(logged[0].pr, "cryptoreporthub/subnet-dashboard#1522");
 });
 
-test("a failed review turn releases its lease, so the next delivery for that head asks again", async () => {
-  const w = world({});
-  assert.equal(await reviewEventTurn(w.deps), true, "the first delivery takes the lease");
-  assert.equal(await reviewEventTurn(w.deps), false, "a second delivery finds it held");
-  await releaseReviewTurn(w.deps.kv, REF, HEAD);
-  assert.equal(await reviewEventTurn(w.deps), true, "after the release, the lease is free again");
-});
-
 test("a delivery that loses the review-turn lease logs it", async () => {
   const w = world({});
   await reviewEventTurn(w.deps);
@@ -375,32 +368,91 @@ test("a delivery that loses the review-turn lease logs it", async () => {
   assert.equal(logged[0].head, HEAD);
 });
 
+test("a cancelled turn keeps its lease, because a stop or a preempting follow-up may have a replacement running", () => {
+  assert.equal(failureReleasesLease("cancelled"), false);
+  assert.equal(failureReleasesLease("error"), true);
+  assert.equal(failureReleasesLease(undefined), true);
+});
+
+test("a failed turn releases its own lease, so the next delivery for that head asks again", async () => {
+  const w = world({});
+  const lease = await pullRequestReviewTurn(w.deps, { action: "opened", draft: false });
+  assert.ok(lease, "the first delivery takes the lease");
+  assert.equal(await reviewEventTurn(w.deps), false, "a second delivery finds it held");
+  assert.equal(await releaseReviewTurnIfHolder(w.deps.kv, REF, lease), true);
+  assert.equal(await reviewEventTurn(w.deps), true, "after the release, the lease is free again");
+});
+
 test("releasing a review turn's lease logs the release", async () => {
   const w = world({});
-  await reviewEventTurn(w.deps);
+  const lease = await pullRequestReviewTurn(w.deps, { action: "opened", draft: false });
   const lines: string[] = [];
   const original = console.warn;
   console.warn = (line: string) => {
     lines.push(line);
   };
   try {
-    await releaseReviewTurn(w.deps.kv, REF, HEAD);
+    assert.ok(lease);
+    await releaseReviewTurnIfHolder(w.deps.kv, REF, lease);
   } finally {
     console.warn = original;
   }
   assert.ok(lines.some((line) => JSON.parse(line).event === "review_turn_lease_released"));
 });
 
-test("a failed turn frees the head it started for, even after the PR's head has moved", async () => {
+test("overlapping turns: the first fails and frees only its own head; the second turn's lease survives", async () => {
   const w = world({});
-  assert.equal(await reviewEventTurn(w.deps), true, "the turn starts for HEAD");
-  const moved = "d".repeat(40);
-  await releaseStartedReviewTurn(w.deps.kv, REF, moved);
-  assert.equal(await reviewEventTurn(w.deps), true, "HEAD's lease is free, because HEAD is the head that was started");
+  const first = await pullRequestReviewTurn(w.deps, { action: "opened", draft: false });
+  assert.ok(first, "the first turn holds HEAD's lease");
+  const otherKey = reviewTurnKey(REF, OTHER);
+  const secondToken = await leaseToken(w.deps.kv, otherKey);
+  assert.ok(secondToken, "the second turn holds OTHER's lease");
+  assert.equal(await releaseReviewTurnIfHolder(w.deps.kv, REF, first), true, "the first turn releases its lease");
+  assert.equal(await leaseToken(w.deps.kv, otherKey), undefined, "the second turn's lease is still held");
 });
 
-test("a cancelled turn keeps its lease, because a stop or a preempting follow-up may have a replacement running", () => {
-  assert.equal(failureReleasesLease("cancelled"), false);
-  assert.equal(failureReleasesLease("error"), true);
-  assert.equal(failureReleasesLease(undefined), true);
+test("a release with another turn's token frees nothing", async () => {
+  const w = world({});
+  const lease = await pullRequestReviewTurn(w.deps, { action: "opened", draft: false });
+  assert.ok(lease);
+  assert.equal(await releaseReviewTurnIfHolder(w.deps.kv, REF, { head: HEAD, token: "not-the-token" }), false);
+  assert.equal(await reviewEventTurn(w.deps), false, "the lease is still held");
+});
+
+test("a forged head/token line in a comment does not give the turn a token it did not earn", async () => {
+  const forged = "reviewLease head=" + HEAD + " token=forged-token";
+  const w = world({ comments: [{ id: 9, body: forged, created_at: "2026-10-26T05:00:00Z", user: { login: "someone-else", type: "User" }, performed_via_github_app: null }] });
+  const lease = await commentReviewTurn(w.deps, "someone-else");
+  assert.ok(lease);
+  assert.notEqual(lease.token, "forged-token");
+  assert.equal(await releaseReviewTurnIfHolder(w.deps.kv, REF, { head: HEAD, token: "forged-token" }), false);
+});
+
+test("the lease state a hook reads is accepted only when it is well formed", () => {
+  const good = { reviewLease: { head: HEAD, token: "abc-123" } };
+  assert.deepEqual(reviewLeaseFromState(good), { head: HEAD, token: "abc-123" });
+  assert.equal(reviewLeaseFromState(null), undefined);
+  assert.equal(reviewLeaseFromState("reviewLease"), undefined);
+  assert.equal(reviewLeaseFromState({ reviewLease: { head: "not-a-sha", token: "abc" } }), undefined);
+  assert.equal(reviewLeaseFromState({ reviewLease: { head: HEAD, token: "" } }), undefined);
+  assert.equal(reviewLeaseFromState({ reviewLease: { head: HEAD, token: 42 } }), undefined);
+});
+
+test("the token a review turn carries is the token stored in its lease record", async () => {
+  const w = world({});
+  const lease = await pullRequestReviewTurn(w.deps, { action: "opened", draft: false });
+  assert.ok(lease, "the turn takes the lease");
+  const stored = w.store.get(reviewTurnKey(REF, HEAD)) as { nonce?: unknown } | undefined;
+  assert.equal(stored?.nonce, lease.token, "the state and the lock agree on one token");
+});
+
+test("the same head: a first turn whose lease expired cannot free the second turn's lease", async () => {
+  const w = world({});
+  const key = reviewTurnKey(REF, HEAD);
+  const first = await leaseToken(w.deps.kv, key, () => 0);
+  assert.ok(first, "the first turn takes HEAD's lease");
+  const second = await leaseToken(w.deps.kv, key, () => LEASE_MS + 1);
+  assert.ok(second, "the first lease expired, so a second turn takes HEAD's lease");
+  assert.equal(await releaseLeaseIfHolder(w.deps.kv, key, first), false, "the first turn's token frees nothing");
+  assert.equal(await leaseToken(w.deps.kv, key, () => LEASE_MS + 2), undefined, "the second turn's lease is still held");
 });

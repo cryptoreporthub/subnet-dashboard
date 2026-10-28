@@ -3,7 +3,7 @@ import {
   githubChannel,
   type GitHubEventContext,
 } from "@grok/agent-sdk/channels/github";
-import { commentTurn, pullRequestTurn, reviewEventTurn, type GateDeps } from "../lib/advance.js";
+import { commentReviewTurn, pullRequestReviewTurn, reviewEventReviewTurn, type GateDeps, type ReviewTurnLease } from "../lib/advance.js";
 
 async function depsOf(ctx: GitHubEventContext): Promise<GateDeps> {
   return {
@@ -22,6 +22,18 @@ async function depsOf(ctx: GitHubEventContext): Promise<GateDeps> {
  * Joshua with `agent-sdk secret set`. Events arrive as signed webhooks from the
  * App, which the platform verifies against `GITHUB_WEBHOOK_SECRET`.
  */
+/**
+ * The turn a delivery starts: `{ auth }` as before, plus the lease the turn holds in its channel
+ * state. The lease travels with the turn and is read back by the failure hook, so it never goes
+ * into the prompt. No lease means no turn.
+ */
+function turnFor(ctx: Parameters<typeof defaultGitHubAuth>[0], lease: ReviewTurnLease | undefined) {
+  if (lease === undefined) {
+    return null;
+  }
+  return { auth: defaultGitHubAuth(ctx), state: { reviewLease: { head: lease.head, token: lease.token } } };
+}
+
 export default githubChannel({
   botName: "simi-revision",
   credentials: {
@@ -48,8 +60,7 @@ export default githubChannel({
     "pull_request_review",
   ],
 
-  onPullRequest: async (ctx, pr) =>
-    (await pullRequestTurn(await depsOf(ctx), pr)) ? { auth: defaultGitHubAuth(ctx) } : null,
+  onPullRequest: async (ctx, pr) => turnFor(ctx, await pullRequestReviewTurn(await depsOf(ctx), pr)),
 
   /**
    * Review and comment events re-run the gate.
@@ -63,7 +74,7 @@ export default githubChannel({
    * on the webhook.
    */
   onComment: async (ctx, comment) =>
-    (await commentTurn(await depsOf(ctx), comment.author?.login)) ? { auth: defaultGitHubAuth(ctx) } : null,
+    turnFor(ctx, await commentReviewTurn(await depsOf(ctx), comment.author?.login)),
 
   /**
    * `pull_request_review` has no typed hook and never reaches `onComment`, yet
@@ -75,7 +86,5 @@ export default githubChannel({
    * `pull_request_review`, which is in the membership.
    */
   onEvent: async (ctx) =>
-    ctx.eventName === "pull_request_review" && (await reviewEventTurn(await depsOf(ctx)))
-      ? { auth: defaultGitHubAuth(ctx) }
-      : null,
+    ctx.eventName === "pull_request_review" ? turnFor(ctx, await reviewEventReviewTurn(await depsOf(ctx))) : null,
 });

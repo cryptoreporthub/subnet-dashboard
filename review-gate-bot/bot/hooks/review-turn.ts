@@ -1,14 +1,17 @@
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { defineHook } from "@grok/agent-sdk/hooks";
-import { failureReleasesLease, releaseStartedReviewTurn } from "../lib/advance.js";
+import { failureReleasesLease, releaseReviewTurnIfHolder, reviewLeaseFromState } from "../lib/advance.js";
 
 /**
- * A review turn that fails or is cancelled gives its lease back. Without this, a failed
- * turn held `needsReviewTurn: false` for the whole lease TTL, and nothing retried on a timer.
+ * A review turn that fails gives its own lease back, and no other.
  *
- * The PR comes from the session's continuation key, which is routing, not identity: it names
- * only which PR's lease to free, never who may act. A re-keyed session can free the wrong
- * PR's lease, which costs one extra model turn at most.
+ * The turn's lease travels in its channel state (the `state` the channel returned with `{ auth }`),
+ * not in the prompt, so neither the model nor a commenter can read or forge it. `channelState` is
+ * the snapshot taken for this turn, so an overlapping turn cannot overwrite it. The release
+ * compares the stored token with this turn's token, and frees the lease only when they match.
+ *
+ * A `cancelled` turn was stopped or preempted, and a replacement may be running: it keeps its
+ * lease. A missing or malformed state releases nothing, and the lease runs out on its TTL.
  */
 export default defineHook({
   events: {
@@ -16,13 +19,15 @@ export default defineHook({
       if (ctx.session.purpose === "eval" || !failureReleasesLease(event.data.status)) {
         return;
       }
+      const lease = reviewLeaseFromState(ctx.channelState);
+      if (lease === undefined) {
+        return;
+      }
       const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
       if (ref === undefined) {
         return;
       }
-      const octokit = await ctx.host.github.getOctokit();
-      const { data } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
-      await releaseStartedReviewTurn(ctx.host.kv, ref, data.head.sha);
+      await releaseReviewTurnIfHolder(ctx.host.kv, ref, lease);
     },
   },
 });

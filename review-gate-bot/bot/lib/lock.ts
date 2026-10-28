@@ -151,15 +151,41 @@ export async function exclusive<T>(key: string, body: () => Promise<T>): Promise
 }
 
 /**
- * Take a lease on `key`: true for one caller in each `LEASE_MS` window.
+ * Take a lease on `key`. Returns the lease's token when this caller won, so the caller can
+ * later release exactly this lease with `releaseLeaseIfHolder`; `undefined` when it lost.
  *
- * A lease gates a decision, not an effect, so there is nothing to record and
- * nothing to release. A caller that then fails leaves the key held until it
- * expires. Callers in this process queue on `exclusive`, so exactly one wins;
- * across processes it is best effort, as `ranOnce` is.
+ * A lease gates a decision, not an effect. A caller that then fails leaves the key held until
+ * it expires, unless it gives the lease back with its token. Callers in this process queue on
+ * `exclusive`, so exactly one wins; across processes it is best effort, as `ranOnce` is.
  */
-export function lease(kv: HostKvApi, key: string, now: () => number = Date.now): Promise<boolean> {
-  return exclusive(key, () => claim(kv, key, nonce(), now()));
+export async function leaseToken(kv: HostKvApi, key: string, now: () => number = Date.now): Promise<string | undefined> {
+  const token = nonce();
+  const won = await exclusive(key, () => claim(kv, key, token, now()));
+  return won ? token : undefined;
+}
+
+/** Take a lease on `key`: true for one caller in each `LEASE_MS` window. */
+export async function lease(kv: HostKvApi, key: string, now: () => number = Date.now): Promise<boolean> {
+  return (await leaseToken(kv, key, now)) !== undefined;
+}
+
+/**
+ * Give back a lease this caller holds, and only that lease: true when the stored record is
+ * still `claimed` with this token, and it is then removed. A lease that expired and was taken
+ * by someone else, or a token that never held this key, changes nothing and returns false.
+ *
+ * The check and the delete run inside `exclusive(key)`, so a takeover in this process cannot
+ * land between them. Across processes a small window remains, as with every write here.
+ */
+export function releaseLeaseIfHolder(kv: HostKvApi, key: string, token: string): Promise<boolean> {
+  return exclusive(key, async () => {
+    const record = asClaim(await kv.get(key));
+    if (record?.state !== "claimed" || record.nonce !== token) {
+      return false;
+    }
+    await kv.delete(key);
+    return true;
+  });
 }
 
 export function ranOnce(input: RanOnceInput): Promise<RanOnceResult> {
