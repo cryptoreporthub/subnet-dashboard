@@ -158,7 +158,7 @@ test("a comment from the owner's account is never the bot's, even one that carri
 function simibotPass(appId: number): Raw {
   return {
     id: 2,
-    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``,
+    body: `MC: **PASS** at \`${HEAD}\`\n<!-- mc-verdict:${HEAD} -->`,
     created_at: "2026-10-26T05:00:00Z",
     user: { login: "simibot[bot]", type: "Bot" },
     performed_via_github_app: { id: appId, slug: "simibot" },
