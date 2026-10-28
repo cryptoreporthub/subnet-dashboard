@@ -334,3 +334,15 @@ test("a model turn is spent only when MC has no verdict at this head", () => {
     "MC already said MODIFY: post_verdict is at-most-once, so a second review posts nothing",
   );
 });
+
+test("two verdicts from one reviewer said at the same instant, disagreeing, are not trusted as a PASS", () => {
+  // The order of two same-instant verdicts is not known, so neither can be taken as the latest.
+  const gate = computeGate(
+    input({
+      verdicts: [v("mc", "PASS"), said(v("cursor", "MODIFY"), BEFORE_TAG), said(v("cursor", "PASS"), BEFORE_TAG), v("ditto", "PASS")],
+      suite: "clean",
+    }),
+  );
+  assert.notEqual(gate.cursor, "PASS");
+  assert.equal(gate.next, "await_cursor_ditto");
+});

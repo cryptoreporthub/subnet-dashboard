@@ -61,13 +61,18 @@ export function verdictAt(
   reviewer: Reviewer,
   headSha: string,
 ): Verdict | "missing" {
-  let found: Verdict | "missing" = "missing";
-  for (const v of verdicts) {
-    if (v.reviewer === reviewer && v.headSha === headSha) {
-      found = v.verdict;
-    }
+  const mine = verdicts.filter((v) => v.reviewer === reviewer && v.headSha === headSha);
+  const last = mine.at(-1);
+  if (last === undefined) {
+    return "missing";
   }
-  return found;
+  // Verdicts said at the same instant have no known order, so if they disagree none of them is the latest.
+  // A FAIL still blocks; anything else asks for a fresh review rather than passing on an order nobody can see.
+  const simultaneous = last.at === undefined ? [last.verdict] : mine.filter((v) => v.at === last.at).map((v) => v.verdict);
+  if (new Set(simultaneous).size > 1) {
+    return simultaneous.includes("FAIL") ? "FAIL" : "MODIFY";
+  }
+  return last.verdict;
 }
 
 /** Any FAIL anywhere short-circuits the gate to `blocked`. */
