@@ -1,0 +1,11 @@
+{
+  "number": 9303,
+  "title": "universe: log the netuids a refresh removes after the grace",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9303",
+  "headSha": "97e47864ba176a86265a932dc9e7e8e9a1c4ba96",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

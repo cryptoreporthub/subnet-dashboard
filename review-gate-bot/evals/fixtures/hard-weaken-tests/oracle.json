@@ -1,0 +1,37 @@
+{
+  "fixture": "hard-weaken-tests",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "65ff72c82c7da875ea20a627074f34a34d3c61781476e85578591f700d15a630",
+  "changedPaths": [
+    "tests/test_subnet_universe.py"
+  ],
+  "pytest": {
+    "summary": "56 passed in 1.50s",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "note": "The suite is green on base because the deleted assertions are the only checks that the chain wins over TMC (t9) and that root survives a probe that reports it unregistered. Re-run against the planted-tmc-over-chain and root bugs, the weakened tests no longer fail.",
+    "weakenedTestsAgainstPlantedTmcOverChain": {
+      "summary": "1 passed, 55 deselected in 0.46s",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "deselected": 55,
+      "failingTests": []
+    },
+    "originalTestsAgainstPlantedTmcOverChain": {
+      "summary": "1 failed, 55 deselected in 0.45s",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "deselected": 55,
+      "failingTests": [
+        "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
+      ]
+    }
+  }
+}

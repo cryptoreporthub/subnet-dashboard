@@ -1,0 +1,32 @@
+{
+  "fixture": "hard-ci-skipped-tests",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "f800abe529d8bfcfb29329b1cf8b1bc1af3df431188e7ae477e0e517b887a8f0",
+  "changedPaths": [
+    "pytest.ini",
+    "tests/test_subnet_universe.py"
+  ],
+  "pytest": {
+    "summary": "53 passed, 1 skipped, 2 deselected in 1.47s",
+    "passed": 53,
+    "failed": 0,
+    "skipped": 1,
+    "deselected": 2,
+    "failingTests": []
+  },
+  "behavior": {
+    "baseline": "56 passed in 2.91s",
+    "withThePlantedChainBugAndTheSameSkips": {
+      "summary": "2 failed, 51 passed, 1 skipped, 2 deselected in 1.30s",
+      "passed": 51,
+      "failed": 2,
+      "skipped": 1,
+      "deselected": 2,
+      "failingTests": [
+        "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+        "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read"
+      ]
+    },
+    "note": "Three tests stop running; none fails. A full-suite comparison counts a skipped or deselected test as no failure, and a head that keeps at least 90% of base's testcases is not 'suite-shrunk', so the comparison reads clean. The same skips would hide the planted TMC-over-chain bug."
+  }
+}

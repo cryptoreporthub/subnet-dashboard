@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "patch": "@@ -350,7 +350,8 @@\n             tmc_val = netuid in tmc_positive\n         probe_val = probe_map.get(netuid)\n         if not probe_complete and netuid not in probe_map:\n-            probe_val = None\n+            # a netuid the chain read could not report is not registered\n+            probe_val = False\n         if netuid == ROOT_NETUID:\n             probe_val = None\n "
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

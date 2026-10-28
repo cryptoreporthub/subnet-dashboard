@@ -1,0 +1,11 @@
+{
+  "number": 9102,
+  "title": "universe: skip placeholder keys when building the netuid list",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9102",
+  "headSha": "7a804e8d50e2541f3091c00071d4e30f7444bad9",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

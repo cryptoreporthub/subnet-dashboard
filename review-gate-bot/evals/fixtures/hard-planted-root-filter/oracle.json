@@ -1,0 +1,64 @@
+{
+  "fixture": "hard-planted-root-filter",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "f82b8297f8801ed97a5e861504e4610862aca8115bb45eb5893552700155dedb",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "base": {
+      "normalReadNoPrior": {
+        "size": 128,
+        "hasRoot": true,
+        "exactSet0to127": true,
+        "missing": []
+      },
+      "normalReadWithPrior": {
+        "size": 129,
+        "admittedNewSubnet128": true,
+        "status": "ok",
+        "message": ""
+      },
+      "failedReadWithPrior": {
+        "size": 128,
+        "hasRoot": true,
+        "status": "degraded"
+      }
+    },
+    "planted": {
+      "normalReadNoPrior": {
+        "size": 127,
+        "hasRoot": false,
+        "exactSet0to127": false,
+        "missing": [
+          0
+        ]
+      },
+      "normalReadWithPrior": {
+        "size": 128,
+        "admittedNewSubnet128": false,
+        "status": "degraded",
+        "message": "Unsafe shrink blocked \u2014 retained last-known-good universe"
+      },
+      "failedReadWithPrior": {
+        "size": 128,
+        "hasRoot": true,
+        "status": "degraded"
+      }
+    },
+    "note": "planted drops netuid 0 on a normal read (127 members, not the exact 128). With a prior that holds root, the planted build shrinks by root, the shrink guard blocks the publish, and the refresh is stuck on the old snapshot (a new registration is never admitted). On the failed-read recovery path root survives in both, because the prior is held: the bug is hidden there, not absent."
+  },
+  "pytest": {
+    "summary": "4 failed, 52 passed in 1.38s",
+    "passed": 52,
+    "failed": 4,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered",
+      "tests/test_subnet_universe.py::test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete",
+      "tests/test_subnet_universe.py::test_t1_empty_state_emergency_registry",
+      "tests/test_subnet_universe.py::test_t4_no_truncation_above_max_netuids"
+    ]
+  }
+}

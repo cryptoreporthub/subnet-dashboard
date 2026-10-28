@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -677,7 +677,7 @@\n         try:\n             with open(self._persist_file, \"r\") as handle:\n                 payload = json.load(handle)\n-            if not isinstance(payload, dict) or not payload.get(\"netuids\"):\n+            if not isinstance(payload, dict):\n                 return self._snapshot\n             snap = UniverseSnapshot.from_dict(payload)\n         except Exception as exc:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

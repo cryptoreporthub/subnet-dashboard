@@ -1,0 +1,9 @@
+{
+  "fixture": "hard-state-disagree",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "93ce8122cfd8693a4a86f5e5d9fb6cf26f80048f4c08856d5a65a9a5dce12132",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "note": "Same head: MC PASS, Cursor MODIFY, Ditto PASS. The gate needs both Cursor and Ditto at PASS, so it waits (await_cursor_ditto): the newest verdict does not decide, and Ditto's PASS cannot cancel Cursor's MODIFY."
+}

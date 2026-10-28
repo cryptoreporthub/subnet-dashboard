@@ -1,0 +1,11 @@
+{
+  "number": 9103,
+  "title": "universe: treat a TMC/probe disagreement as a dispute, not a removal",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9103",
+  "headSha": "1748ed870dbd1a1e086dc3a611d6528596734001",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

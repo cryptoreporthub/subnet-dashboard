@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "review-gate-bot/bot/lib/tag.ts",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 16,
+      "patch": "@@ -116,10 +116,6 @@\n     key,\n     alreadyDone: () => alreadyPosted(octokit, ref, slot, headSha),\n     run: async () => {\n-      if (await isStale(octokit, ref, headSha)) {\n-        superseded = true;\n-        return;\n-      }\n       commentId = await postComment(octokit, ref, `${marker(slot, headSha)}\\n${body}`);\n     },\n   });\n@@ -250,7 +246,6 @@\n   }\n \n   let commentId: number | undefined;\n-  let lostToRecheck = false;\n   let superseded = false;\n \n   const result = await ranOnce({\n@@ -258,11 +253,6 @@\n     key: `verdict:${prKey(ref)}:${headSha}`,\n     alreadyDone: () => alreadyPosted(octokit, ref, \"mc-verdict\", headSha),\n     run: async () => {\n-      // Guard 3: re-read once more, immediately before the write.\n-      if (await alreadyPosted(octokit, ref, \"mc-verdict\", headSha)) {\n-        lostToRecheck = true;\n-        return;\n-      }\n       if (await isStale(octokit, ref, headSha)) {\n         superseded = true;\n         return;\n@@ -274,12 +264,6 @@\n   if (superseded) {\n     return { posted: false, reason: \"stale-head\" };\n   }\n-  if (lostToRecheck) {\n-    // Another turn posted between the claim and the write. Its comment is the\n-    // verdict; this one is a no-op, and the kv claim it holds is released by the\n-    // next call seeing `alreadyDone`.\n-    return { posted: false, reason: \"already-posted\" };\n-  }\n   if (result.ran) {\n     return { posted: true, reason: \"posted\", commentId };\n   }"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

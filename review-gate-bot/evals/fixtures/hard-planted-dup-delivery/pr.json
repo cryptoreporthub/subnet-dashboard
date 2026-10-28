@@ -1,0 +1,11 @@
+{
+  "number": 9304,
+  "title": "review-gate-bot: drop the two extra GitHub reads before each write",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9304",
+  "headSha": "8696641c233071dab4f6d2976610b82e4d4e76a3",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "review-gate-bot/bot/lib/tag.ts"
+  ]
+}

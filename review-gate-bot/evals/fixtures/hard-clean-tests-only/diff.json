@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 28,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,31 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+NOW = datetime(2026, 10, 27, 12, 0, 0, tzinfo=timezone.utc)\n+\n+\n+def _dropped_since(elapsed: timedelta):\n+    from internal.subnet_universe import DropEvidence\n+\n+    return DropEvidence(tmc=False, probe=False, negative_since=(NOW - elapsed).isoformat())\n+\n+\n+def test_root_is_never_eligible_for_removal_whatever_the_elapsed_time():\n+    from internal.subnet_universe import _eligible_for_removal\n+\n+    assert _eligible_for_removal(0, _dropped_since(timedelta(days=30)), NOW) is False\n+    assert _eligible_for_removal(5, _dropped_since(timedelta(days=30)), NOW) is True\n+\n+\n+def test_the_48h_grace_boundary_before_at_and_after():\n+    from internal.subnet_universe import _eligible_for_removal\n+\n+    just_before = timedelta(seconds=STALE_GRACE_SECONDS - 1)\n+    exactly = timedelta(seconds=STALE_GRACE_SECONDS)\n+    just_after = timedelta(seconds=STALE_GRACE_SECONDS + 1)\n+    assert _eligible_for_removal(5, _dropped_since(just_before), NOW) is False\n+    assert _eligible_for_removal(5, _dropped_since(exactly), NOW) is True\n+    assert _eligible_for_removal(5, _dropped_since(just_after), NOW) is True\n+    assert _eligible_for_removal(5, _dropped_since(timedelta(hours=25)), NOW) is False"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

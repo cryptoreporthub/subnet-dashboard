@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 6,
+      "patch": "@@ -208,12 +208,9 @@\n     if probe_positive is True and \"blockmachine_probe\" not in sources:\n         sources.append(\"blockmachine_probe\")\n \n-    if probe_positive is False and tmc_positive is not False:\n-        # Owner rule: the chain wins. A complete chain read that does not list the netuid\n-        # takes it out of expected now, whatever TaoMarketCap says or fails to say. The row keeps its grace.\n-        if not negative_since:\n-            negative_since = _now_iso()\n-        return \"negative\", sources, tmc_positive is True, negative_since, tmc_positive is None\n+    if tmc_positive is True and probe_positive is False:\n+        # the two sources disagree: keep the subnet and flag the dispute\n+        return \"positive\", sources, True, None, False\n \n     if tmc_positive is False and probe_positive is True:\n         return \"positive\", sources, True, None, False"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

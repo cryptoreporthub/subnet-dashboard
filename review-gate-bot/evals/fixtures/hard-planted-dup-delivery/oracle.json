@@ -1,0 +1,68 @@
+{
+  "fixture": "hard-planted-dup-delivery",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a4c02423a572313ec3aa75c0970647ff150d614b5ef957bf455a25489c4e8944",
+  "changedPaths": [
+    "review-gate-bot/bot/lib/tag.ts"
+  ],
+  "behavior": {
+    "base": {
+      "duplicateVerdict": {
+        "results": [
+          {
+            "posted": true,
+            "reason": "posted"
+          },
+          {
+            "posted": false,
+            "reason": "already-posted"
+          }
+        ],
+        "commentsOnPr": 1,
+        "verdictsInOrder": [
+          "PASS"
+        ],
+        "gateReadsLatest": "PASS"
+      },
+      "headPushDuringTag": {
+        "prHeadAtWrite": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "outcome": {
+          "posted": false,
+          "reason": "gate-not-ready"
+        },
+        "tagCommentsFor": []
+      }
+    },
+    "planted": {
+      "duplicateVerdict": {
+        "results": [
+          {
+            "posted": true,
+            "reason": "posted"
+          },
+          {
+            "posted": true,
+            "reason": "posted"
+          }
+        ],
+        "commentsOnPr": 2,
+        "verdictsInOrder": [
+          "PASS",
+          "MODIFY"
+        ],
+        "gateReadsLatest": "MODIFY"
+      },
+      "headPushDuringTag": {
+        "prHeadAtWrite": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "outcome": {
+          "posted": true,
+          "reason": "posted"
+        },
+        "tagCommentsFor": [
+          "old-head"
+        ]
+      }
+    }
+  },
+  "note": "Two processes (separate module graphs, a get/put kv with no compare-and-swap) are given the same verdict while both are past the claim; and a head push lands while a tag is being decided."
+}

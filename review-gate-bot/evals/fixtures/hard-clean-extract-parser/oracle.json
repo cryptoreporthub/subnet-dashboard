@@ -1,0 +1,87 @@
+{
+  "fixture": "hard-clean-extract-parser",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "88d1e8eba96b864b70c3d53f52fc02eeaf6d4aac3d7a7beefbb0ae05c868ac30",
+  "changedPaths": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ],
+  "behavior": {
+    "parseEquivalence": {
+      "rows": [
+        {
+          "input": "'2026-10-01T00:00:00'",
+          "old": "2026-10-01T00:00:00+00:00",
+          "new": "2026-10-01T00:00:00+00:00",
+          "same": true
+        },
+        {
+          "input": "'2026-10-01T00:00:00+00:00'",
+          "old": "2026-10-01T00:00:00+00:00",
+          "new": "2026-10-01T00:00:00+00:00",
+          "same": true
+        },
+        {
+          "input": "'2026-10-01T05:30:00+05:30'",
+          "old": "2026-10-01T05:30:00+05:30",
+          "new": "2026-10-01T05:30:00+05:30",
+          "same": true
+        },
+        {
+          "input": "'2026-10-01T00:00:00Z'",
+          "old": "2026-10-01T00:00:00+00:00",
+          "new": "2026-10-01T00:00:00+00:00",
+          "same": true
+        },
+        {
+          "input": "'2026-10-01'",
+          "old": "2026-10-01T00:00:00+00:00",
+          "new": "2026-10-01T00:00:00+00:00",
+          "same": true
+        },
+        {
+          "input": "''",
+          "old": null,
+          "new": null,
+          "same": true
+        },
+        {
+          "input": "'not a date'",
+          "old": null,
+          "new": null,
+          "same": true
+        },
+        {
+          "input": "None",
+          "old": null,
+          "new": null,
+          "same": true
+        },
+        {
+          "input": "12345",
+          "old": null,
+          "new": null,
+          "same": true
+        },
+        {
+          "input": "'2026-13-45T00:00:00'",
+          "old": null,
+          "new": null,
+          "same": true
+        }
+      ],
+      "allSame": true
+    },
+    "grace": {
+      "identicalToBase": true
+    }
+  },
+  "pytest": {
+    "summary": "57 passed in 1.37s",
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

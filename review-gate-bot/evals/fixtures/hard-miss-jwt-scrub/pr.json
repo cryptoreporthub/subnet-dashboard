@@ -1,0 +1,11 @@
+{
+  "number": 1522,
+  "title": "review-gate-bot: scrub a JWT-shaped run in bounded time",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1522",
+  "headSha": "3395325122ef0bac8e49f82c08606f706ff48444",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "review-gate-bot/bot/lib/redact.ts"
+  ]
+}

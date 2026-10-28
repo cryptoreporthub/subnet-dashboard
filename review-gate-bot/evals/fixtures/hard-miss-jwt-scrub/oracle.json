@@ -1,0 +1,37 @@
+{
+  "fixture": "hard-miss-jwt-scrub",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "4eea6f076f59ae7778b930f3d77b2adc37e54fda21379beb9472d55fc706b396",
+  "changedPaths": [
+    "review-gate-bot/bot/lib/redact.ts"
+  ],
+  "behavior": {
+    "jwtScrub": {
+      "oldPattern": "/(?<![A-Za-z0-9_])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
+      "fixedPattern": "/(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
+      "rows": [
+        {
+          "input": "\"eyJ-\" x 5000",
+          "chars": 20000,
+          "msAtD578603e": 34.4,
+          "msAtHead88b72c5b": 0
+        },
+        {
+          "input": "\"eyJ-\" x 25000",
+          "chars": 100000,
+          "msAtD578603e": 176.1,
+          "msAtHead88b72c5b": 0.2
+        },
+        {
+          "input": "\"eyJ-\" x 50000",
+          "chars": 200000,
+          "msAtD578603e": 330,
+          "msAtHead88b72c5b": 0.3
+        }
+      ],
+      "measuredWith": "v22.14.0",
+      "note": "ms are one machine's best of three: they show the growth, they are not a budget"
+    },
+    "diffRange": "44ce7ea5..d578603e"
+  }
+}

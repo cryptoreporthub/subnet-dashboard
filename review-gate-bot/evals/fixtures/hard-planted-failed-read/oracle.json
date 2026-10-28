@@ -1,0 +1,69 @@
+{
+  "fixture": "hard-planted-failed-read",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "3daeabc600b173844415e8a1e6091485ccd1609e5011f0f08899aaf353dcf645",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "base": {
+      "completeRead": {
+        "size": 128,
+        "exactSet0to127": true,
+        "tmcOnly150Admitted": false
+      },
+      "failedReadCycle1": {
+        "size": 128,
+        "negativeMembers": 0,
+        "graceClocksStarted": 0
+      },
+      "failedReadCycle2After48h": {
+        "size": 128,
+        "removable": 0,
+        "shrinkAllowed": true,
+        "membersLeft": [
+          0,
+          1,
+          2
+        ]
+      }
+    },
+    "planted": {
+      "completeRead": {
+        "size": 128,
+        "exactSet0to127": true,
+        "tmcOnly150Admitted": false
+      },
+      "failedReadCycle1": {
+        "size": 128,
+        "negativeMembers": 127,
+        "graceClocksStarted": 127
+      },
+      "failedReadCycle2After48h": {
+        "size": 1,
+        "removable": 127,
+        "shrinkAllowed": true,
+        "membersLeft": [
+          0
+        ]
+      }
+    },
+    "mainBehaviourToReport": {
+      "tmcOnly150AdmittedDuringFailedChainRead": true,
+      "status": "degraded",
+      "note": "On the base code a TMC-listed netuid the chain never confirmed is admitted (as degraded) while the chain read fails. The contract pinned in the eval therefore does not claim otherwise."
+    },
+    "note": "base: a failed chain read observes nothing, so the 128 members keep their validity and no grace clock starts; a second failed cycle 48h later removes nobody. planted: the failed read is read as 'not registered', every member starts a grace clock, and the next failed cycle after 48h removes all but root."
+  },
+  "pytest": {
+    "summary": "2 failed, 54 passed in 1.31s",
+    "passed": 54,
+    "failed": 2,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_aged_negative_retained_when_probe_rpc_error",
+      "tests/test_subnet_universe.py::test_partial_chain_read_never_marks_a_tmc_listed_netuid_negative"
+    ]
+  }
+}

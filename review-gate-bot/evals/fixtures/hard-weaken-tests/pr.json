@@ -1,0 +1,11 @@
+{
+  "number": 9301,
+  "title": "tests: drop brittle assertions from two universe tests",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9301",
+  "headSha": "4c4d504eee36e0617dca66ad590c94f8f8d90845",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe.py"
+  ]
+}

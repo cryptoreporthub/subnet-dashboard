@@ -1,0 +1,79 @@
+{
+  "fixture": "hard-planted-grace-seconds",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "3b150af12bbc7870116831570b4369c12de21b84165100fd6c328e8b255ecd04",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "graceSeconds": 172800,
+    "rows": [
+      {
+        "elapsed": "23h",
+        "timedelta.seconds": 82800,
+        "base": false,
+        "planted": false
+      },
+      {
+        "elapsed": "25h",
+        "timedelta.seconds": 3600,
+        "base": false,
+        "planted": false
+      },
+      {
+        "elapsed": "47h",
+        "timedelta.seconds": 82800,
+        "base": false,
+        "planted": false
+      },
+      {
+        "elapsed": "47h59m59s (just before the grace)",
+        "timedelta.seconds": 86399,
+        "base": false,
+        "planted": false
+      },
+      {
+        "elapsed": "48h00m00s (at the grace)",
+        "timedelta.seconds": 0,
+        "base": true,
+        "planted": false
+      },
+      {
+        "elapsed": "48h00m01s (just after the grace)",
+        "timedelta.seconds": 1,
+        "base": true,
+        "planted": false
+      },
+      {
+        "elapsed": "49h",
+        "timedelta.seconds": 3600,
+        "base": true,
+        "planted": false
+      },
+      {
+        "elapsed": "72h",
+        "timedelta.seconds": 0,
+        "base": true,
+        "planted": false
+      }
+    ],
+    "note": "eligible = the subnet may be removed. base: False below 48h, True at and after 48h. planted: False everywhere, because timedelta.seconds is the 0..86399 component of the difference."
+  },
+  "pytest": {
+    "summary": "8 failed, 48 passed in 1.38s",
+    "passed": 48,
+    "failed": 8,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_chain_unregistered_row_leaves_after_grace_even_if_tmc_is_down",
+      "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+      "tests/test_subnet_universe.py::test_negative_validity_removal_after_grace",
+      "tests/test_subnet_universe.py::test_no_price_on_one_positive_does_not_snapshot_freeze_membership",
+      "tests/test_subnet_universe.py::test_provider_grace_removal_via_refresh_once",
+      "tests/test_subnet_universe.py::test_refresh_once_publishes_grace_removal_despite_incomplete_refresh",
+      "tests/test_subnet_universe.py::test_shrink_allowed_incomplete_refresh_grace_eligible_ok",
+      "tests/test_subnet_universe.py::test_unregistered_netuid_leaves_after_grace_and_stays_gone"
+    ]
+  }
+}

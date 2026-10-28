@@ -1,0 +1,12 @@
+{
+  "number": 9201,
+  "title": "universe: extract the ISO timestamp parser from _eligible_for_removal",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9201",
+  "headSha": "598ca721f1154e9e5908e2928d05c00cf0409ba5",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ]
+}

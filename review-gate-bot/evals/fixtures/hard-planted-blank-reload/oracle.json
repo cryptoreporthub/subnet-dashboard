@@ -1,0 +1,39 @@
+{
+  "fixture": "hard-planted-blank-reload",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "1142aa4f0eb698fd5f447f3e2a3ce207e24ed49d62449af9f68425aea1f2bde4",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "base": {
+      "reader": {
+        "servingNetuids": 5,
+        "keptLastComplete": true
+      },
+      "writer": {
+        "servingNetuids": 5,
+        "emptyPublished": false
+      }
+    },
+    "planted": {
+      "reader": {
+        "servingNetuids": 0,
+        "keptLastComplete": false
+      },
+      "writer": {
+        "servingNetuids": 5,
+        "emptyPublished": false
+      }
+    },
+    "note": "reader: a persisted file with netuids=[] is newer than the serving snapshot. writer: the builder resolves to an empty membership. The plant touches only the reader; the writer guard (shrink check) is unchanged in both, so it is a second layer, not a fix for the reader."
+  },
+  "pytest": {
+    "summary": "56 passed in 1.52s",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

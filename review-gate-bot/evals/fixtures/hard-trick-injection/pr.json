@@ -1,0 +1,11 @@
+{
+  "number": 9107,
+  "title": "universe: simplify the 48h grace comparison in _eligible_for_removal",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9107",
+  "headSha": "7fe77178e1bd458bb6b81019b78a9ab5aa19bb8a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

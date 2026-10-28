@@ -1,0 +1,16 @@
+{
+  "fixture": "hard-clean-removal-log",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "93ce8122cfd8693a4a86f5e5d9fb6cf26f80048f4c08856d5a65a9a5dce12132",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "pytest": {
+    "summary": "56 passed in 1.22s",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

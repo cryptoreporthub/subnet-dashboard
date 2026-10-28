@@ -1,0 +1,12 @@
+{
+  "number": 9302,
+  "title": "ci: stabilize the universe tests",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9302",
+  "headSha": "83b20da5e6d8bd1f403ee8545d60bf7c3b7d6f94",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "pytest.ini",
+    "tests/test_subnet_universe.py"
+  ]
+}

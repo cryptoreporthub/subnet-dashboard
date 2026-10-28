@@ -1,0 +1,16 @@
+{
+  "fixture": "hard-clean-tests-only",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "01ab91b71dbccbb601eebf921e5c189f9fabaa7bb3bf23a7ab560be6fabae511",
+  "changedPaths": [
+    "tests/test_subnet_universe.py"
+  ],
+  "pytest": {
+    "summary": "58 passed in 1.32s",
+    "passed": 58,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

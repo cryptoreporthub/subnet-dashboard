@@ -1,0 +1,29 @@
+{
+  "fixture": "hard-planted-env-logged",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "6f082c73ea8efe97f5cc5cc754b8afded32f3ba29bf9a8a49bf417e6a5600ca3",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "base": {
+      "logLines": 1,
+      "secretValueInLog": false,
+      "variableNameInLog": false
+    },
+    "planted": {
+      "logLines": 1,
+      "secretValueInLog": true,
+      "variableNameInLog": true
+    },
+    "note": "TMC_API_KEY is set to a made-up sentinel, the TMC fetch is made to fail, and the captured log is searched for the sentinel value."
+  },
+  "pytest": {
+    "summary": "56 passed in 1.34s",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

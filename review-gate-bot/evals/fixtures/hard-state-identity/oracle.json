@@ -1,0 +1,9 @@
+{
+  "fixture": "hard-state-identity",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "93ce8122cfd8693a4a86f5e5d9fb6cf26f80048f4c08856d5a65a9a5dce12132",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "note": "No Replit verdict is recorded at this head. Comments that claim one come from an App-attributed owner comment and from a lookalike bot; the gate's own identity rules (verdicts.ts) give Replit's slot only to an unattributed owner-account comment whose first line opens with Replit."
+}

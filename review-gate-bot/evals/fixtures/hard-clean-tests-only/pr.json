@@ -1,0 +1,11 @@
+{
+  "number": 9202,
+  "title": "test: pin that root is never removable and the 48h grace boundary (before, at, after)",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9202",
+  "headSha": "b92e65044226dd6fdb9e15113086dcc2bbaafe1e",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe.py"
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "fixture": "hard-planted-tmc-over-chain",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "5fea8c5e15fa161c9ae8a0853f6418600050483fbd678a79a59fd13175d3ced4",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "rows": [
+      {
+        "case": "chain says not registered, TMC lists it",
+        "base": {
+          "validity": "negative",
+          "graceClockStarted": true
+        },
+        "planted": {
+          "validity": "positive",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain says not registered, TMC read failed",
+        "base": {
+          "validity": "negative",
+          "graceClockStarted": true
+        },
+        "planted": {
+          "validity": "unobserved",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain read failed or timed out, TMC lists it",
+        "base": {
+          "validity": "positive",
+          "graceClockStarted": false
+        },
+        "planted": {
+          "validity": "positive",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain read failed or timed out, TMC read failed",
+        "base": {
+          "validity": "unobserved",
+          "graceClockStarted": false
+        },
+        "planted": {
+          "validity": "unobserved",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain and TMC both say no",
+        "base": {
+          "validity": "negative",
+          "graceClockStarted": true
+        },
+        "planted": {
+          "validity": "negative",
+          "graceClockStarted": true
+        }
+      },
+      {
+        "case": "chain says registered, TMC says no",
+        "base": {
+          "validity": "positive",
+          "graceClockStarted": false
+        },
+        "planted": {
+          "validity": "positive",
+          "graceClockStarted": false
+        }
+      }
+    ],
+    "note": "base: a definitive chain negative (probe False) is negative and starts the 48h grace even when TMC lists it; a failed or timed-out read (probe None) is not a negative. planted: the chain negative loses to a TMC listing."
+  },
+  "pytest": {
+    "summary": "4 failed, 52 passed in 1.47s",
+    "passed": 52,
+    "failed": 4,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+      "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read",
+      "tests/test_subnet_universe.py::test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row",
+      "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
+    ]
+  }
+}

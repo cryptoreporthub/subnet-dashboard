@@ -1,0 +1,11 @@
+{
+  "number": 1522,
+  "title": "review-gate-bot: a PASS counts only with a head pointer or signature after it",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1522",
+  "headSha": "2dee2723c015ef610ce36da8c0afdb37aed61c0a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "review-gate-bot/bot/lib/verdicts.ts"
+  ]
+}

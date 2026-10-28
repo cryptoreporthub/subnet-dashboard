@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "patch": "@@ -125,7 +125,8 @@\n             return set(), {}, False\n         return netuids, by_netuid, True\n     except Exception as exc:\n-        logger.warning(\"subnet_universe TMC fetch failed: %s\", exc)\n+        tmc_env = {k: v for k, v in os.environ.items() if k.upper().startswith((\"TMC\", \"TAOMARKETCAP\"))}\n+        logger.warning(\"subnet_universe TMC fetch failed: %s (config: %s)\", exc, tmc_env)\n         return set(), {}, False\n \n "
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}
