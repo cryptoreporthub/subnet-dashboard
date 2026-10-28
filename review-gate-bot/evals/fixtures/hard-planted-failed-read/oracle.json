@@ -15,8 +15,59 @@
       "failedReadCycle1": {
         "size": 128,
         "negativeMembers": 0,
-        "graceClocksStarted": 0
+        "graceClocksStarted": 0,
+        "graceClockStampedAt": []
       },
+      "failedReadCycle2Rows": [
+        {
+          "elapsedSinceCycle1": "47h59m59s (just before the grace)",
+          "clockAt": "2026-10-29T11:59:59+00:00",
+          "size": 128,
+          "removable": 0,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "elapsedSinceCycle1": "48h00m00s (at the grace)",
+          "clockAt": "2026-10-29T12:00:00+00:00",
+          "size": 128,
+          "removable": 0,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "elapsedSinceCycle1": "48h00m01s (just after the grace)",
+          "clockAt": "2026-10-29T12:00:01+00:00",
+          "size": 128,
+          "removable": 0,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "elapsedSinceCycle1": "49h",
+          "clockAt": "2026-10-29T13:00:00+00:00",
+          "size": 128,
+          "removable": 0,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0,
+            1,
+            2
+          ]
+        }
+      ],
       "failedReadCycle2After48h": {
         "size": 128,
         "removable": 0,
@@ -37,8 +88,55 @@
       "failedReadCycle1": {
         "size": 128,
         "negativeMembers": 127,
-        "graceClocksStarted": 127
+        "graceClocksStarted": 127,
+        "graceClockStampedAt": [
+          "2026-10-27T12:00:00+00:00"
+        ]
       },
+      "failedReadCycle2Rows": [
+        {
+          "elapsedSinceCycle1": "47h59m59s (just before the grace)",
+          "clockAt": "2026-10-29T11:59:59+00:00",
+          "size": 128,
+          "removable": 0,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0,
+            1,
+            2
+          ]
+        },
+        {
+          "elapsedSinceCycle1": "48h00m00s (at the grace)",
+          "clockAt": "2026-10-29T12:00:00+00:00",
+          "size": 1,
+          "removable": 127,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0
+          ]
+        },
+        {
+          "elapsedSinceCycle1": "48h00m01s (just after the grace)",
+          "clockAt": "2026-10-29T12:00:01+00:00",
+          "size": 1,
+          "removable": 127,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0
+          ]
+        },
+        {
+          "elapsedSinceCycle1": "49h",
+          "clockAt": "2026-10-29T13:00:00+00:00",
+          "size": 1,
+          "removable": 127,
+          "shrinkAllowed": true,
+          "membersLeft": [
+            0
+          ]
+        }
+      ],
       "failedReadCycle2After48h": {
         "size": 1,
         "removable": 127,
@@ -48,15 +146,39 @@
         ]
       }
     },
+    "clock": {
+      "kind": "injected: the module's `datetime` name is replaced by a subclass whose now() returns a clock set by the oracle (oracles.py FrozenDatetime)",
+      "cycle1At": "2026-10-27T12:00:00+00:00",
+      "cycle2At": [
+        {
+          "after": "47h59m59s (just before the grace)",
+          "at": "2026-10-29T11:59:59+00:00"
+        },
+        {
+          "after": "48h00m00s (at the grace)",
+          "at": "2026-10-29T12:00:00+00:00"
+        },
+        {
+          "after": "48h00m01s (just after the grace)",
+          "at": "2026-10-29T12:00:01+00:00"
+        },
+        {
+          "after": "49h",
+          "at": "2026-10-29T13:00:00+00:00"
+        }
+      ],
+      "graceSeconds": 172800,
+      "wallClockUsed": false
+    },
     "mainBehaviourToReport": {
       "tmcOnly150AdmittedDuringFailedChainRead": true,
       "status": "degraded",
       "note": "On the base code a TMC-listed netuid the chain never confirmed is admitted (as degraded) while the chain read fails. The contract pinned in the eval therefore does not claim otherwise."
     },
-    "note": "base: a failed chain read observes nothing, so the 128 members keep their validity and no grace clock starts; a second failed cycle 48h later removes nobody. planted: the failed read is read as 'not registered', every member starts a grace clock, and the next failed cycle after 48h removes all but root."
+    "note": "base: a failed chain read observes nothing, so the 128 members keep their validity and no grace clock starts; a second failed cycle after 48h removes nobody. planted: the failed read is read as 'not registered', every member but root is stamped with a grace clock at T0, and on the injected clock the second failed cycle removes nobody at 47h59m59s and removes every member but root from 48h00m00s on (the comparison is >=)."
   },
   "pytest": {
-    "summary": "2 failed, 54 passed in 1.31s",
+    "summary": "2 failed, 54 passed",
     "passed": 54,
     "failed": 2,
     "skipped": 0,

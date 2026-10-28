@@ -29,7 +29,7 @@
     "note": "reader: a persisted file with netuids=[] is newer than the serving snapshot. writer: the builder resolves to an empty membership. The plant touches only the reader; the writer guard (shrink check) is unchanged in both, so it is a second layer, not a fix for the reader."
   },
   "pytest": {
-    "summary": "56 passed in 1.52s",
+    "summary": "56 passed",
     "passed": 56,
     "failed": 0,
     "skipped": 0,

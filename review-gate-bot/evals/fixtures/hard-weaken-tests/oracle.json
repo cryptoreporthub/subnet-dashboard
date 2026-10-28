@@ -6,7 +6,7 @@
     "tests/test_subnet_universe.py"
   ],
   "pytest": {
-    "summary": "56 passed in 1.50s",
+    "summary": "56 passed",
     "passed": 56,
     "failed": 0,
     "skipped": 0,
@@ -16,7 +16,7 @@
   "behavior": {
     "note": "The suite is green on base because the deleted assertions are the only checks that the chain wins over TMC (t9) and that root survives a probe that reports it unregistered. Re-run against the planted-tmc-over-chain and root bugs, the weakened tests no longer fail.",
     "weakenedTestsAgainstPlantedTmcOverChain": {
-      "summary": "1 passed, 55 deselected in 0.46s",
+      "summary": "1 passed, 55 deselected",
       "passed": 1,
       "failed": 0,
       "skipped": 0,
@@ -24,7 +24,7 @@
       "failingTests": []
     },
     "originalTestsAgainstPlantedTmcOverChain": {
-      "summary": "1 failed, 55 deselected in 0.45s",
+      "summary": "1 failed, 55 deselected",
       "passed": 0,
       "failed": 1,
       "skipped": 0,

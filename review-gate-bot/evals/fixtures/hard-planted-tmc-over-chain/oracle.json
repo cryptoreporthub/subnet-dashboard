@@ -77,7 +77,7 @@
     "note": "base: a definitive chain negative (probe False) is negative and starts the 48h grace even when TMC lists it; a failed or timed-out read (probe None) is not a negative. planted: the chain negative loses to a TMC listing."
   },
   "pytest": {
-    "summary": "4 failed, 52 passed in 1.47s",
+    "summary": "4 failed, 52 passed",
     "passed": 52,
     "failed": 4,
     "skipped": 0,

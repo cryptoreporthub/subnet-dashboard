@@ -7,7 +7,7 @@
     "tests/test_subnet_universe.py"
   ],
   "pytest": {
-    "summary": "53 passed, 1 skipped, 2 deselected in 1.47s",
+    "summary": "53 passed, 1 skipped, 2 deselected",
     "passed": 53,
     "failed": 0,
     "skipped": 1,
@@ -15,9 +15,9 @@
     "failingTests": []
   },
   "behavior": {
-    "baseline": "56 passed in 2.91s",
+    "baseline": "56 passed",
     "withThePlantedChainBugAndTheSameSkips": {
-      "summary": "2 failed, 51 passed, 1 skipped, 2 deselected in 1.30s",
+      "summary": "2 failed, 51 passed, 1 skipped, 2 deselected",
       "passed": 51,
       "failed": 2,
       "skipped": 1,

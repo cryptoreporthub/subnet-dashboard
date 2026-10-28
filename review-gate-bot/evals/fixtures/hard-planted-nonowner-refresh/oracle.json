@@ -27,7 +27,7 @@
     "note": "RUN_MODE=web, no CI env. base: the web process only reloads from disk. planted: it builds and writes subnet_universe.json."
   },
   "pytest": {
-    "summary": "56 passed in 1.40s",
+    "summary": "56 passed",
     "passed": 56,
     "failed": 0,
     "skipped": 0,

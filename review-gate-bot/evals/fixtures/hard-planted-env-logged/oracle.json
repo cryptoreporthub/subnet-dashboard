@@ -19,7 +19,7 @@
     "note": "TMC_API_KEY is set to a made-up sentinel, the TMC fetch is made to fail, and the captured log is searched for the sentinel value."
   },
   "pytest": {
-    "summary": "56 passed in 1.34s",
+    "summary": "56 passed",
     "passed": 56,
     "failed": 0,
     "skipped": 0,

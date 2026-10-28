@@ -68,16 +68,80 @@
           "old": null,
           "new": null,
           "same": true
+        },
+        {
+          "input": "'2026-10-01 00:00:00'",
+          "old": "2026-10-01T00:00:00+00:00",
+          "new": "2026-10-01T00:00:00+00:00",
+          "same": true
+        },
+        {
+          "input": "'2026-10-01T00:00:00.123456'",
+          "old": "2026-10-01T00:00:00.123456+00:00",
+          "new": "2026-10-01T00:00:00.123456+00:00",
+          "same": true
+        },
+        {
+          "input": "'2026-10-01T00:00:00-07:00'",
+          "old": "2026-10-01T00:00:00-07:00",
+          "new": "2026-10-01T00:00:00-07:00",
+          "same": true
+        },
+        {
+          "input": "1.5",
+          "old": null,
+          "new": null,
+          "same": true
+        },
+        {
+          "input": "b'2026-10-01T00:00:00'",
+          "old": null,
+          "new": null,
+          "same": true
+        },
+        {
+          "input": "'  2026-10-01T00:00:00  '",
+          "old": null,
+          "new": null,
+          "same": true
+        },
+        {
+          "input": "'0001-01-01T00:00:00'",
+          "old": "0001-01-01T00:00:00+00:00",
+          "new": "0001-01-01T00:00:00+00:00",
+          "same": true
+        },
+        {
+          "input": "'9999-12-31T23:59:59'",
+          "old": "9999-12-31T23:59:59+00:00",
+          "new": "9999-12-31T23:59:59+00:00",
+          "same": true
         }
       ],
-      "allSame": true
+      "allSame": true,
+      "corpus": {
+        "source": "every string literal (ast) in every .py file under tests/ at the base commit, plus the edge inputs above that are not strings",
+        "files": 424,
+        "inputs": 9516,
+        "parseable": 151,
+        "unparseable": 9365,
+        "mismatches": [],
+        "allSame": true,
+        "inputsSha256": "affbfb489a19814b8fbc1010fc79a42ac0dd3ee0af28b472a9e40a76be47109d"
+      },
+      "callSite": {
+        "what": "_eligible_for_removal(5, DropEvidence(negative_since=<input>), now=T0), base vs head",
+        "inputs": 9516,
+        "differences": [],
+        "allSame": true
+      }
     },
     "grace": {
       "identicalToBase": true
     }
   },
   "pytest": {
-    "summary": "57 passed in 1.37s",
+    "summary": "57 passed",
     "passed": 57,
     "failed": 0,
     "skipped": 0,

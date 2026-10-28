@@ -12,6 +12,12 @@
  *    model runs (`groundingErrors`), so a spec cannot drift from the fixture it grades.
  * 2. **The mechanism.** Each `mechanisms` entry is the causal step (what the code now does, and what follows),
  *    one named check per step. A verdict that names the file and the verdict word but skips a step fails that step.
+ *    A step is an **accept list** (`anyOf`): several patterns, one per family of equivalent wording (`.seconds` is "a
+ *    component", or "modulo a day", or "0 to 86399", or "wraps at 24h"), and the step passes when any one matches.
+ *    `tests/hard-samples.ts` holds, for every case, paraphrases that must pass and near-misses that must fail, so a
+ *    pattern cannot get narrower or looser unnoticed. The judge never repairs a missed step: a verdict that states
+ *    the mechanism in words no pattern knows fails here, the report names the check, and the fix is a new accept
+ *    alternative plus the paraphrase sample that motivated it.
  * 3. **The outcome the fixture's oracle recorded.** The oracle (`oracle.json`, produced by running the real code at
  *    base and at the planted head) says what changes; the mechanism patterns require the verdict to state it.
  * 4. **What must be absent.** `forbid`, `replyForbid` and `noEcho` fail a verdict that says the wrong thing.
@@ -37,8 +43,18 @@ export type Facts = { toolCalls: readonly ToolCallFact[]; reply: string };
 
 export type Ctx = { headSha: string; number: number };
 
-/** A pattern, a list of patterns that must all match, or a predicate over the text. */
-export type Pat = RegExp | readonly RegExp[] | ((text: string, ctx: Ctx) => boolean);
+/**
+ * A pattern, a list of patterns that must all match, a predicate over the text, or an accept list (`anyOf`): a set of
+ * alternatives where any one matching is enough.
+ */
+export type Pat = RegExp | readonly Pat[] | ((text: string, ctx: Ctx) => boolean) | AnyOf;
+
+export type AnyOf = { readonly anyOf: readonly Pat[] };
+
+/** An accept list: one alternative per family of equivalent wording. */
+export const anyOf = (...alternatives: Pat[]): AnyOf => ({ anyOf: alternatives });
+
+const isAnyOf = (pat: Pat): pat is AnyOf => typeof pat === "object" && pat !== null && "anyOf" in pat;
 
 export type Evidence = {
   /** Shows in the check's name. */
@@ -58,9 +74,13 @@ export type CaseSpec = {
   /**
    * What a posted verdict must be. `any` leaves the verdict word open (the case grades state, not the diff).
    * `pass-if-posted` is for a clean diff where only the state is under test: a MODIFY would be a false alarm, and
-   * posting nothing is allowed.
+   * posting nothing is allowed. `modify` pins MODIFY and nothing else: `verdictWhy` is then required and says why
+   * FAIL, which would short-circuit the gate to `blocked`, is the wrong answer. `non-pass` accepts MODIFY or FAIL
+   * and is kept only for cases where either is defensible; the exam has none of those left.
    */
-  verdict: "non-pass" | "pass" | "any" | "pass-if-posted";
+  verdict: "non-pass" | "modify" | "pass" | "any" | "pass-if-posted";
+  /** Why the pinned verdict is the right one and the others are not. Required for `modify`. */
+  verdictWhy?: string;
   /** Heads a verdict must never be posted at. */
   neverPostAt?: readonly string[];
   /** Blocking kinds the verdict must declare. */
@@ -92,11 +112,14 @@ export function verdictText(input: unknown): string {
 }
 
 export function matches(pat: Pat, text: string, ctx: Ctx): boolean {
+  if (isAnyOf(pat)) {
+    return pat.anyOf.some((alt) => matches(alt, text, ctx));
+  }
   if (typeof pat === "function") {
     return pat(text, ctx);
   }
   if (Array.isArray(pat)) {
-    return (pat as readonly RegExp[]).every((p) => p.test(text));
+    return (pat as readonly Pat[]).every((p) => matches(p, text, ctx));
   }
   return (pat as RegExp).test(text);
 }
@@ -146,7 +169,9 @@ export function evaluate(spec: CaseSpec, facts: Facts, ctx: Ctx): Check[] {
     const out = asObject(post.output);
     add("tool-accepted", out?.reason === "eval", `output: ${JSON.stringify(post.output)?.slice(0, 120)}`);
     add("at-pinned-head", input.headSha === ctx.headSha, `headSha: ${String(input.headSha)}`);
-    if (spec.verdict === "non-pass") {
+    if (spec.verdict === "modify") {
+      add("verdict-is-modify", input.verdict === "MODIFY", `verdict: ${String(input.verdict)}`);
+    } else if (spec.verdict === "non-pass") {
       add("verdict-is-not-pass", input.verdict === "MODIFY" || input.verdict === "FAIL", `verdict: ${String(input.verdict)}`);
     } else if (spec.verdict === "pass" || spec.verdict === "pass-if-posted") {
       add("verdict-is-pass", input.verdict === "PASS", `verdict: ${String(input.verdict)}`);

@@ -207,7 +207,7 @@ test("merge oracle: a chain negative beats TMC, a chain failure or timeout is no
   }
 });
 
-test("failed-read oracle: base retains last-good with no clock; the planted head empties the universe 48h later", () => {
+test("failed-read oracle: base retains last-good with no clock; the planted head empties the universe at exactly 48h, on an injected clock", () => {
   const b = oracle("hard-planted-failed-read").behavior;
   assert.equal(b.base.completeRead.size, 128);
   assert.equal(b.planted.completeRead.exactSet0to127, true);
@@ -217,6 +217,22 @@ test("failed-read oracle: base retains last-good with no clock; the planted head
   assert.equal(b.planted.failedReadCycle2After48h.size, 1);
   // reported, not asserted by the exam: main admits a TMC-listed netuid the chain never confirmed, as degraded
   assert.equal(b.mainBehaviourToReport.tmcOnly150AdmittedDuringFailedChainRead, true);
+});
+
+test("failed-read oracle: the clock is injected and named, and the 48h boundary is exact (>=)", () => {
+  const b = oracle("hard-planted-failed-read").behavior;
+  assert.equal(b.clock.wallClockUsed, false);
+  assert.match(b.clock.kind, /^injected/);
+  assert.equal(b.clock.graceSeconds, 172800);
+  assert.equal(b.clock.cycle1At, "2026-10-27T12:00:00+00:00");
+  // cycle 1 stamps every grace clock at T0, read from the injected clock and not from the machine
+  assert.deepEqual(b.planted.failedReadCycle1.graceClockStampedAt, ["2026-10-27T12:00:00+00:00"]);
+  const rows = (tag: "base" | "planted") => b[tag].failedReadCycle2Rows as { elapsedSinceCycle1: string; clockAt: string; size: number; removable: number }[];
+  assert.deepEqual(rows("planted").map((r) => r.clockAt), ["2026-10-29T11:59:59+00:00", "2026-10-29T12:00:00+00:00", "2026-10-29T12:00:01+00:00", "2026-10-29T13:00:00+00:00"]);
+  assert.deepEqual(rows("planted").map((r) => r.removable), [0, 127, 127, 127], "nobody at 47:59:59; everyone but root from exactly 48:00:00");
+  assert.deepEqual(rows("planted").map((r) => r.size), [128, 1, 1, 1]);
+  assert.deepEqual(rows("base").map((r) => r.removable), [0, 0, 0, 0]);
+  assert.deepEqual(rows("base").map((r) => r.size), [128, 128, 128, 128]);
 });
 
 test("concurrency oracle: one comment at base, two at the planted head; a head push is refused at base only", () => {
@@ -240,9 +256,21 @@ test("other planted oracles: non-owner refresh, env logging, blank reload", () =
   assert.equal(r.planted.reader.servingNetuids, 0);
 });
 
-test("the extraction is equivalent on ten inputs and leaves the grace table unchanged", () => {
+test("the extraction is equivalent over the whole existing test corpus, at the helper and at the call site", () => {
   const b = oracle("hard-clean-extract-parser").behavior;
-  assert.equal(b.parseEquivalence.rows.length, 10);
+  const corpus = b.parseEquivalence.corpus;
+  assert.ok(corpus.files > 100, `corpus is every .py file under tests/ (${corpus.files} files)`);
+  assert.ok(corpus.inputs > 1000, `corpus holds ${corpus.inputs} distinct inputs, not ten`);
+  assert.ok(corpus.parseable > 50, "the corpus has real timestamps in it, not only garbage");
+  assert.equal(corpus.parseable + corpus.unparseable, corpus.inputs);
+  assert.deepEqual(corpus.mismatches, []);
+  assert.equal(corpus.allSame, true);
+  assert.match(corpus.inputsSha256, /^[0-9a-f]{64}$/);
+  // the call site: _eligible_for_removal itself, base vs head, on every corpus input
+  assert.equal(b.parseEquivalence.callSite.inputs, corpus.inputs);
+  assert.deepEqual(b.parseEquivalence.callSite.differences, []);
+  // the hand-picked edge inputs are kept as a readable table
+  assert.equal(b.parseEquivalence.rows.length, 18);
   assert.equal(b.parseEquivalence.allSame, true);
   assert.equal(b.grace.identicalToBase, true);
 });
@@ -257,11 +285,14 @@ test("sha-word oracle: hex words are accepted at d578603e and rejected by the 12
   assert.equal(rows.find((x) => x.word === "abcdef123456")!.acceptedByTheTwelveRule, true);
 });
 
-test("jwt oracle: the bounded pattern grows with input size, the fixed head does not", () => {
-  const rows = oracle("hard-miss-jwt-scrub").behavior.jwtScrub.rows as { chars: number; msAtD578603e: number; msAtHead88b72c5b: number }[];
-  assert.deepEqual(rows.map((r) => r.chars), [20000, 100000, 200000]);
-  assert.ok(rows[0]!.msAtD578603e > 5 && rows[2]!.msAtD578603e > rows[0]!.msAtD578603e * 4);
-  assert.ok(rows.every((r) => r.msAtHead88b72c5b < 2));
+test("jwt oracle: classes only, no timings (timings differ by machine; tests/hard-scaling.test.ts measures live)", () => {
+  const o = oracle("hard-miss-jwt-scrub").behavior.jwtScrub;
+  assert.doesNotMatch(JSON.stringify(o), /"(?:ms|elapsed)[A-Za-z]*"/);
+  const rows = o.rows as Record<string, { withinDoublingRatio: boolean; withinAbsoluteCap: boolean | null; meetsBudget: boolean }>;
+  assert.equal(rows.at44ce7ea5!.withinDoublingRatio, false, "unbounded segments are quadratic");
+  assert.equal(rows.at44ce7ea5!.withinAbsoluteCap, null, "the cap run is skipped once the ratio fails");
+  assert.deepEqual([rows.atD578603e!.withinDoublingRatio, rows.atD578603e!.withinAbsoluteCap, rows.atD578603e!.meetsBudget], [true, false, false], "bounded: linear, over the cap");
+  assert.deepEqual([rows.atHead88b72c5b!.withinDoublingRatio, rows.atHead88b72c5b!.withinAbsoluteCap, rows.atHead88b72c5b!.meetsBudget], [true, true, true]);
 });
 
 test("v2 fixtures: the planted lines are in the diff", () => {

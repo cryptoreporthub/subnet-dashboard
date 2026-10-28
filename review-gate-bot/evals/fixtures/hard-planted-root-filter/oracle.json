@@ -49,7 +49,7 @@
     "note": "planted drops netuid 0 on a normal read (127 members, not the exact 128). With a prior that holds root, the planted build shrinks by root, the shrink guard blocks the publish, and the refresh is stuck on the old snapshot (a new registration is never admitted). On the failed-read recovery path root survives in both, because the prior is held: the bug is hidden there, not absent."
   },
   "pytest": {
-    "summary": "4 failed, 52 passed in 1.38s",
+    "summary": "4 failed, 52 passed",
     "passed": 52,
     "failed": 4,
     "skipped": 0,

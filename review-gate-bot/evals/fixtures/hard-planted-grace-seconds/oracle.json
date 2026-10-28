@@ -60,7 +60,7 @@
     "note": "eligible = the subnet may be removed. base: False below 48h, True at and after 48h. planted: False everywhere, because timedelta.seconds is the 0..86399 component of the difference."
   },
   "pytest": {
-    "summary": "8 failed, 48 passed in 1.38s",
+    "summary": "8 failed, 48 passed",
     "passed": 48,
     "failed": 8,
     "skipped": 0,

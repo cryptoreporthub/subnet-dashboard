@@ -7,30 +7,43 @@
   ],
   "behavior": {
     "jwtScrub": {
-      "oldPattern": "/(?<![A-Za-z0-9_])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
-      "fixedPattern": "/(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
-      "rows": [
-        {
-          "input": "\"eyJ-\" x 5000",
-          "chars": 20000,
-          "msAtD578603e": 34.4,
-          "msAtHead88b72c5b": 0
+      "budget": {
+        "chars": 10000,
+        "ratioMax": 3,
+        "noiseFloorMs": 5,
+        "capChars": 200000,
+        "capMs": 50,
+        "repeats": 3
+      },
+      "rows": {
+        "at44ce7ea5": {
+          "pattern": "/\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b/g",
+          "withinDoublingRatio": false,
+          "ratioEvaluated": true,
+          "withinAbsoluteCap": null,
+          "meetsBudget": false
         },
-        {
-          "input": "\"eyJ-\" x 25000",
-          "chars": 100000,
-          "msAtD578603e": 176.1,
-          "msAtHead88b72c5b": 0.2
+        "atD578603e": {
+          "pattern": "/(?<![A-Za-z0-9_])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
+          "withinDoublingRatio": true,
+          "ratioEvaluated": true,
+          "withinAbsoluteCap": false,
+          "meetsBudget": false
         },
-        {
-          "input": "\"eyJ-\" x 50000",
-          "chars": 200000,
-          "msAtD578603e": 330,
-          "msAtHead88b72c5b": 0.3
+        "atHead88b72c5b": {
+          "pattern": "/(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\b/g",
+          "withinDoublingRatio": true,
+          "ratioEvaluated": false,
+          "withinAbsoluteCap": true,
+          "meetsBudget": true
         }
-      ],
-      "measuredWith": "v22.14.0",
-      "note": "ms are one machine's best of three: they show the growth, they are not a budget"
+      },
+      "input": "`eyJ-` repeated to N characters, no dots, so no JWT ever completes",
+      "expect": {
+        "at44ce7ea5": "fails the doubling ratio (quadratic: unbounded segments)",
+        "atD578603e": "passes the doubling ratio (linear: the 2048 bound caps each scan) and fails the absolute cap (about 500 steps per character)",
+        "atHead88b72c5b": "below the noise floor at N, passes the absolute cap"
+      }
     },
     "diffRange": "44ce7ea5..d578603e"
   }
