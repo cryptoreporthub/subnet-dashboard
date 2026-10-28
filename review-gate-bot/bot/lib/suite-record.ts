@@ -15,7 +15,8 @@ export type SuiteComparison =
 /**
  * Compare the full suite at `baseSha` and `headSha` from their JUnit artifacts, and record the head's
  * result. Shared by the `compare_suite_runs` tool and the gate's own driver, so both record the same
- * thing. Nothing is recorded on a refusal: a missing artifact is a wait, never a regressed result.
+ * thing. A missing artifact is a wait and records nothing, so it is never a regressed result. A guard hit
+ * (NEEDS-JOSHUA) records the head as regressed with its reason and files, so the block is visible.
  */
 export async function recordSuiteComparison(input: {
   octokit: Octokit;

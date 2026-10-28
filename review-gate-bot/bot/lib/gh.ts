@@ -218,7 +218,7 @@ function isReplitTag(comment: CommentLike, headSha: string): boolean {
   );
 }
 
-/** When the tag for this head was posted: the earliest of the bot's own tag comments for it. */
+/** When the latest Replit request for this head was said (an edit counts): a PASS must come after it. */
 export function replitTagTimeIn(comments: readonly CommentLike[], headSha: string): string | undefined {
   // The latest request counts, and an edit is a new request: a PASS must be said after the most recent one.
   const times = comments.filter((c) => isReplitTag(c, headSha)).map(lastRequestTime);
