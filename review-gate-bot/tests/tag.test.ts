@@ -433,3 +433,19 @@ test("a Replit tag is not posted when the gate stopped being ready between the r
   assert.equal(result.posted, false);
   assert.equal(octokit.created.length, 0, "no tag goes up for a gate that is no longer ready");
 });
+
+test("a Replit tag refused once for a gate that was not ready still posts when the gate is ready again", async () => {
+  const { comments, reviews, kv: store } = passesAtHead();
+  const octokit = fakeOctokit(comments, reviews);
+  const paginate = octokit as unknown as { paginate: (fn: unknown, ...rest: unknown[]) => Promise<unknown> };
+  const listed = paginate.paginate;
+  const changed = reviews.map((review) => ({ ...review, state: "CHANGES_REQUESTED" }));
+  let ready = false;
+  paginate.paginate = async (fn: unknown, ...rest: unknown[]) => (fn === octokit.rest.pulls.listReviews ? (ready ? reviews : changed) : listed(fn, ...rest));
+  const refused = await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
+  assert.equal(refused.posted, false);
+  ready = true;
+  const posted = await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
+  assert.equal(posted.posted, true, "a refusal does not burn the tag for the head");
+  assert.equal(octokit.created.length, 1);
+});
