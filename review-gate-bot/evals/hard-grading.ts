@@ -145,6 +145,11 @@ export function groundingErrors(spec: CaseSpec, text: string): string[] {
 
 const NEGATIVE = "never";
 
+/** The tool's own refusal of a PASS that declares a blocking finding: nothing was written, the model may resubmit. */
+function refusedPass(output: unknown): boolean {
+  return asObject(output)?.reason === "pass-with-blocking-finding";
+}
+
 /**
  * The deterministic checks for one case run.
  * Check names are stable: `report-hard.ts` and the unit tests key on them.
@@ -153,7 +158,10 @@ export function evaluate(spec: CaseSpec, facts: Facts, ctx: Ctx): Check[] {
   const checks: Check[] = [];
   const add = (name: string, pass: boolean, detail?: string) => checks.push({ name, pass, ...(detail === undefined ? {} : { detail }) });
 
-  const posts = facts.toolCalls.filter((c) => c.toolName === "post_verdict");
+  // A post is a `post_verdict` call that wrote a verdict. One the schema rejected (`status: "failed"`) or the tool
+  // refused because the PASS contradicted its own blocking finding wrote nothing, so the bot calling again to fix it
+  // is not a second post. Two accepted calls still fail `posted-exactly-once`.
+  const posts = facts.toolCalls.filter((c) => c.toolName === "post_verdict" && c.status !== "failed" && !refusedPass(c.output));
   const post = posts[0];
   const input = (post?.input ?? {}) as VerdictInput;
   const text = post === undefined ? "" : verdictText(post.input);
@@ -231,6 +239,18 @@ export function evaluate(spec: CaseSpec, facts: Facts, ctx: Ctx): Check[] {
   }
 
   return checks;
+}
+
+/**
+ * What the judge reads: the verdict the bot posted, then its final reply. The verdict is the finding; the reply is often
+ * only a note on the post. Judging the reply alone scored a correct verdict as wrong when the reply said little
+ * about the finding (clean-extract-parser/3 of the 50e231f3 run).
+ */
+export function judgedText(facts: Facts): string {
+  const post = facts.toolCalls.find((c) => c.toolName === "post_verdict" && c.status !== "failed" && !refusedPass(c.output));
+  const verdict = post === undefined ? "" : verdictText(post.input).trim();
+  const word = (post?.input as VerdictInput | undefined)?.verdict ?? "";
+  return verdict === "" ? facts.reply : `POSTED VERDICT${word === "" ? "" : ` (${word})`}:\n${verdict}\n\nFINAL REPLY:\n${facts.reply}`;
 }
 
 export function allPass(checks: readonly Check[]): boolean {

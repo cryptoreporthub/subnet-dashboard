@@ -92,7 +92,10 @@ def write(dirname, number, title, files, extra=None, sha=None, gate=None, oracle
         dfiles.append({"path": path, "status": status, "additions": add, "deletions": dele, "patch": p})
     dump(f"{d}/diff.json", {"totalFiles": len(dfiles), "files": dfiles, "truncated": False, "omittedPaths": []})
     repo = {f[0]: f[2] for f in files}; repo.update(extra or {})
-    dump(f"{d}/repo.json", {"files": repo})
+    # `baseFiles` is the base text of every file the diff modifies, so an eval's `read_repo_file at=base` serves the
+    # real base and not the head text under a base label. It is the same text the diff above was computed from.
+    base_files = {f[0]: f[1] for f in files if f[1] is not None}
+    dump(f"{d}/repo.json", {"files": repo, "baseFiles": base_files})
     pin = hashlib.sha256(json.dumps([[f["path"], f["patch"]] for f in dfiles], sort_keys=True).encode()).hexdigest()
     o = {"fixture": dirname, "baseSha": BASE_SHA, "diffSha256": pin, "changedPaths": [f["path"] for f in dfiles]}
     if not SKIP:

@@ -2,7 +2,7 @@ import { defineEval, satisfies, type EvalTestContext } from "@grok/agent-sdk/eva
 import { deriveRunFacts } from "@grok/agent-sdk/evals";
 import { loadJson } from "@grok/agent-sdk/evals/loaders";
 import type { GateState } from "../bot/lib/gate.js";
-import { allPass, evaluate, fixtureText, groundingErrors, type CaseSpec, type Facts } from "./hard-grading.js";
+import { allPass, evaluate, fixtureText, groundingErrors, judgedText, type CaseSpec, type Facts } from "./hard-grading.js";
 import { SPECS } from "./hard-specs.js";
 
 /**
@@ -88,7 +88,7 @@ async function run(t: T, spec: CaseSpec): Promise<void> {
   // The judge is the last gate and only on a run whose deterministic checks all passed.
   if (allPass(checks)) {
     t.metric("judged", 1);
-    t.judge.closedQA(spec.rubric).gate(0.7);
+    t.judge.closedQA(spec.rubric, { on: judgedText(facts) }).gate(0.7);
   } else {
     t.metric("judged", 0);
   }

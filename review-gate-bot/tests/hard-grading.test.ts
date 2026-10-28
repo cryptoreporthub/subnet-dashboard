@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { allPass, evaluate, finalGrade, fixtureText, groundingErrors, type Facts, type ToolCallFact } from "../evals/hard-grading.js";
+import { allPass, evaluate, finalGrade, fixtureText, judgedText, groundingErrors, type Facts, type ToolCallFact } from "../evals/hard-grading.js";
 import { gradeRun, load, render, summarize } from "../evals/report-hard.js";
 import { SPECS } from "../evals/hard-specs.js";
 import { SAMPLES, type Answer } from "./hard-samples.js";
@@ -49,7 +49,7 @@ function facts(specId: string, kind: Kind, index = 0): { facts: Facts; ctx: { he
     calls.push({
       toolName: "post_verdict",
       input: { headSha: fx.pr.headSha, verdict, body, skills: [], blocking },
-      output: JSON.stringify({ posted: false, reason: "eval", verdict }),
+      output: JSON.stringify({ posted: true, reason: "eval", verdict }),
     });
   }
   return { facts: { toolCalls: calls, reply: pick.reply ?? "" }, ctx: { headSha: fx.pr.headSha, number: fx.pr.number } };
@@ -186,6 +186,34 @@ test("a verdict at another head, a second post, or a rejected tool call fails", 
   assert.ok(evaluate(spec, asPass, ctx).some((c) => c.name === "verdict-is-not-pass" && !c.pass));
 });
 
+test("a post_verdict the tool rejected, then one it accepted, is one post: the grade follows the accepted call", () => {
+  // clean-removal-log/1 of the 50e231f3 run: the first call omitted `skills` and was rejected by the schema.
+  const spec = SPECS.find((s) => s.id === "planted-root-filter")!;
+  const { facts: f, ctx } = facts("planted-root-filter", "good");
+  const post = f.toolCalls.find((c) => c.toolName === "post_verdict")!;
+  const rejected = { toolName: "post_verdict", input: { headSha: ctx.headSha, verdict: "MODIFY" }, output: 'Invalid input for tool "post_verdict": skills: expected array', status: "failed" };
+  const retried = { ...f, toolCalls: [rejected, post] };
+  const checks = evaluate(spec, retried, ctx);
+  assert.ok(checks.find((c) => c.name === "posted-exactly-once")!.pass);
+  assert.ok(checks.find((c) => c.name === "tool-accepted")!.pass, "tool-accepted reads the accepted call, not the rejected one");
+  assert.ok(allPass(checks));
+  // still a failure: only a rejected call and nothing accepted
+  const onlyRejected = { ...f, toolCalls: [rejected] };
+  assert.ok(evaluate(spec, onlyRejected, ctx).some((c) => c.name === "posted-exactly-once" && !c.pass));
+  assert.ok(evaluate(spec, onlyRejected, ctx).some((c) => c.name === "tool-accepted" && !c.pass));
+  // still a failure: two calls the tool accepted
+  assert.ok(evaluate(spec, { ...f, toolCalls: [rejected, post, post] }, ctx).some((c) => c.name === "posted-exactly-once" && !c.pass));
+});
+
+test("a PASS the tool refused for its own blocking finding is not a post; the corrected verdict is", () => {
+  const spec = SPECS.find((s) => s.id === "planted-root-filter")!;
+  const { facts: f, ctx } = facts("planted-root-filter", "good");
+  const post = f.toolCalls.find((c) => c.toolName === "post_verdict")!;
+  const refused = { ...post, input: { ...(post.input as object), verdict: "PASS", blocking: ["secret"] }, output: JSON.stringify({ posted: false, reason: "pass-with-blocking-finding" }) };
+  assert.ok(allPass(evaluate(spec, { ...f, toolCalls: [refused, post] }, ctx)));
+  assert.ok(evaluate(spec, { ...f, toolCalls: [refused] }, ctx).some((c) => c.name === "posted-exactly-once" && !c.pass));
+});
+
 test("a clean case fails on a MODIFY and on a PASS that carries a blocking finding", () => {
   const spec = SPECS.find((s) => s.id === "clean-extract-parser")!;
   const { facts: f, ctx } = facts("clean-extract-parser", "good");
@@ -286,4 +314,16 @@ test("a correct answer to one case does not pass another case (the accept lists 
     }
   }
   assert.deepEqual(loose, []);
+});
+
+test("the judge reads the posted verdict and the reply, and the reply alone when nothing was posted", () => {
+  const { facts: f } = facts("planted-root-filter", "good");
+  const post = f.toolCalls.find((c) => c.toolName === "post_verdict")!;
+  const body = (post.input as { body: string }).body;
+  const seen = judgedText({ ...f, reply: "Posted the verdict." });
+  assert.ok(seen.includes(body.trim().slice(0, 40)), "the verdict body is in what the judge reads");
+  assert.ok(seen.includes("Posted the verdict."));
+  assert.equal(judgedText({ toolCalls: [], reply: "no post" }), "no post");
+  const rejected = { ...post, status: "failed", output: "Invalid input" };
+  assert.equal(judgedText({ toolCalls: [rejected], reply: "no post" }), "no post", "a rejected call is not a verdict");
 });

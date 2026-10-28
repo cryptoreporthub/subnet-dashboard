@@ -231,3 +231,44 @@ test("an eval file listing past the cap is cut and flagged, as a live listing is
   assert.equal(listing.paths.length, 2_000);
   assert.equal(listing.truncated, true);
 });
+
+// --- An eval read of the base serves the base, not the head text under a base label ---------------
+
+test("an eval read at base serves the fixture's base text for a file the diff changed, at head the head text", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "repo-eval-base-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({ number: 1522, title: "t", url: "u", headSha: HEAD, baseSha: BASE, draft: false, files: ["a.py"] }),
+  );
+  await writeFile(
+    join(dir, "repo.json"),
+    JSON.stringify({ files: { "a.py": "new\n", "b.py": "same\n" }, baseFiles: { "a.py": "old\n" } }),
+  );
+  const ctx = { session: { purpose: "eval" }, workspaceDir: dir };
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string; sha?: string };
+  assert.equal((await at("base", "a.py")).text, "old\n");
+  assert.equal((await at("base", "a.py")).sha, BASE);
+  assert.equal((await at("head", "a.py")).text, "new\n");
+  assert.equal((await at("base", "b.py")).text, "same\n", "a file the diff did not touch reads the same at base");
+});
+
+// --- An eval suite comparison answers with the suite state the fixture pins ---------------
+
+test("an eval compare_suite_runs returns the clean result a clean fixture gate pins, not a runner failure", async () => {
+  const ctx = await evalContext({ ...FIXTURE_GATE, suite: "clean" });
+  const result = (await run(compareSuiteRuns)({ headSha: HEAD, baseSha: BASE }, ctx)) as Record<string, unknown>;
+  assert.equal(result.clean, true);
+  assert.deepEqual(result.newFailures, []);
+  assert.equal(result.recorded, false, "an eval records nothing");
+  assert.equal(result.source, "fixture");
+});
+
+test("an eval compare_suite_runs stays not-clean when the fixture gate has no clean suite", async () => {
+  for (const suite of ["missing", "failed"]) {
+    const ctx = await evalContext({ ...FIXTURE_GATE, suite });
+    const result = (await run(compareSuiteRuns)({ headSha: HEAD, baseSha: BASE }, ctx)) as Record<string, unknown>;
+    assert.equal(result.clean, false, suite);
+    assert.equal(result.reason, "eval-no-runner", suite);
+  }
+});

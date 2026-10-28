@@ -80,9 +80,9 @@ export const SAMPLES: Record<string, Sample> = {
     ],
     nearMisses: [
       {
-        label: "root dropped, but no count and no rule",
-        fails: "mechanism:exact-set-is-127-not-128",
-        body: "subnet_universe.py: `if int(k)` is falsy for key '0', so netuid 0 is dropped from the list.",
+        label: "the right clause, the wrong outcome (root added twice)",
+        fails: "mechanism:root-dropped",
+        body: "subnet_universe.py: `if int(k)` evaluates to False for key '0' and the keys are then read twice, so the root netuid ends up in the list two times and later rows see a duplicate.",
       },
       {
         label: "a different bug (crash on non-numeric keys)",
@@ -194,6 +194,10 @@ export const SAMPLES: Record<string, Sample> = {
     shallow: { body: "subnet_universe.py `reload_from_disk_if_stale` lost a check." },
     paraphrases: [
       {
+        label: "base kept the prior snapshot (past tense)",
+        body: "subnet_universe.py `reload_from_disk_if_stale`: the head drops the `not payload.get(\"netuids\")` check, so a newer file with no netuids is accepted and replaces the serving `self._snapshot`, and the picks go blank. Under base, every such empty payload kept the prior snapshot in memory.",
+      },
+      {
         label: "carries no netuids / swapped in",
         body: "subnet_universe.py `reload_from_disk_if_stale`: dropping the `not payload.get(\"netuids\")` condition means a newer persisted file that carries no netuids at all is accepted and swapped in for `self._snapshot`, so the served universe is empty and every pick goes blank. It should retain the last complete snapshot.",
       },
@@ -280,6 +284,14 @@ export const SAMPLES: Record<string, Sample> = {
     shallow: { body: "bot/lib/redact.ts: the JWT regex looks risky for performance." },
     paraphrases: [
       {
+        label: "counts the backtracking too: about 4,090 per start, 2.0e8 in all",
+        body: "bot/lib/redact.ts: on `eyJ-` x 50,000 every candidate `eyJ` start greedily eats up to 2,048 characters and then backtracks, about 4,090 steps per start and about 2.0e8 steps in all. Linear in the input (doubling it about doubles the time, so the 3x ratio holds), but the constant is huge and the 50 ms cap on 200,000 characters is exceeded.",
+      },
+      {
+        label: "a true caveat below the window, then linear on the pinned input",
+        body: "bot/lib/redact.ts: below roughly 2048 characters the same pattern is still quadratic (each start rescans the rest), but on the pinned input every eyJ start stops after 2,048 characters, so the work is linear: doubling the input about doubles the time and part 1 holds. About 1.0e8 steps in total, so it exceeds the 50 ms cap in part 2.",
+      },
+      {
         label: "O(n), twice the input / limit violated",
         body: "redact.ts: after the change every `eyJ` start still makes the engine walk up to 2048 characters before backtracking, because the dots never arrive. Roughly 512 comparisons per character, so about 100 million for 200k characters. That is O(n): twice the input costs about twice the time, so the 3x doubling test passes, yet the absolute 50 ms limit is violated by a wide margin.",
       },
@@ -289,6 +301,16 @@ export const SAMPLES: Record<string, Sample> = {
       },
     ],
     nearMisses: [
+      {
+        label: "a work estimate three orders of magnitude too small",
+        fails: "mechanism:work-estimate",
+        body: "bot/lib/redact.ts: the pattern restarts at every `eyJ` and scans up to 2048 characters each time. Linear: doubling the input about doubles the time. About 5 million steps in total, 25 steps per character, but it still exceeds the 50 ms cap.",
+      },
+      {
+        label: "calls it still quadratic on the pinned input, after a caveat for small inputs",
+        fails: "never-says:calls-the-bounded-pattern-quadratic",
+        body: "bot/lib/redact.ts: below 2048 characters this pattern is quadratic anyway. On the pinned input every eyJ start scans up to 2048 characters, about 2.0e8 steps, and the bounded pattern is still quadratic here, so it exceeds the 50 ms cap.",
+      },
       {
         label: "calls the bounded pattern still quadratic",
         fails: "never-says:calls-the-bounded-pattern-quadratic",
@@ -425,6 +447,10 @@ export const SAMPLES: Record<string, Sample> = {
     shallow: { body: "PASS. Extraction in subnet_universe.py looks fine." },
     paraphrases: [
       {
+        label: "equivalence to base / no path differs",
+        body: "PASS. subnet_universe.py `_parse_utc`. Equivalence to base: a naive timestamp is assigned UTC exactly as before, a malformed string returns None and the subnet stays not eligible (False), and `total_seconds() >= STALE_GRACE_SECONDS` is the same expression. I found no path that differs from base.",
+      },
+      {
         label: "no timezone assumed UTC / cannot be parsed / pure refactor",
         body: "PASS. subnet_universe.py moves the timestamp parsing into `_parse_utc`. A timestamp without a timezone is still assumed to be UTC, a string that cannot be parsed still yields None so the subnet is not eligible (False), and the comparison against STALE_GRACE_SECONDS is the same. Pure refactor, nothing changes in behaviour.",
       },
@@ -480,6 +506,10 @@ export const SAMPLES: Record<string, Sample> = {
     },
     shallow: { body: "PASS. A log line in subnet_universe.py." },
     paraphrases: [
+      {
+        label: "at most once per refresh",
+        body: "PASS. subnet_universe.py adds one logger.info of removed netuids. It only reads the snapshot (no state change) and prints plain integers, nothing sensitive, and it fires at most once per refresh cycle.",
+      },
       {
         label: "only reads / nothing sensitive / 128-member",
         body: "PASS. subnet_universe.py adds a single logger.info listing the netuids that a refresh removed. It only reads the snapshot (no state change), logs plain integers, nothing sensitive, and the list can never exceed the 128-member universe.",

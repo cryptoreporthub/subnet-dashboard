@@ -116,7 +116,9 @@ export default defineTool({
     }
 
     if (ctx.session.purpose === "eval") {
-      return { posted: false, reason: "eval", verdict: input.verdict };
+      // `posted: true`: an eval writes nothing, but `posted: false` read to the model as a failed post and it
+      // called again (15 of 35 runs). The reason still says nothing reached GitHub.
+      return { posted: true, reason: "eval", verdict: input.verdict };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");

@@ -100,14 +100,6 @@ const ROOT_MECHANISMS: Evidence[] = [
     ),
   ),
   ev(
-    "exact-set-is-127-not-128",
-    anyOf(
-      /127[^\n]{0,80}128|128[^\n]{0,80}127|missing[^\n]{0,60}128|(?:not|instead of|rather than)[^\n]{0,20}128/i,
-      /\b127\b[^\n]{0,80}(?:instead|not|short|rather|only)|(?:one|1) (?:fewer|less|short|missing)|exact(?:ly)? 128|0\s*(?:\.\.|to|-)\s*127/i,
-      /(?:universe|membership|set|list|netuids)[^\n]{0,60}(?:shrinks?|loses?|drops?|is short)[^\n]{0,20}(?:by )?(?:one|1)\b/i,
-    ),
-  ),
-  ev(
     "owner-rule",
     anyOf(
       /never (?:be )?removed|owner rule|standing rule|rule\s*#?3|netuid 0 (?:is|must)|root (?:is|must)/i,
@@ -131,6 +123,28 @@ const JWT_PROMPT = [
   `Take the input \`eyJ-\` repeated ${fmt(JWT_BUDGET.capChars / 4)} times (${fmt(JWT_BUDGET.capChars)} characters, no dots).`,
   "For the changed pattern say how the work grows when the input doubles, estimate the work on that input, and say whether it meets each part of the budget.",
 ];
+
+/**
+ * True when the verdict calls the bounded JWT pattern quadratic or fails the ratio. A "still quadratic" that sits inside a
+ * caveat about the range below the 2048 window ("below the cap the pattern is still quadratic, but at n=2048 ...") is
+ * true and is not the claim this check forbids, so a hit counts only when no such caveat sits in the 140 characters before it.
+ */
+function callsBoundedPatternQuadratic(text: string): boolean {
+  const quadratic = new RegExp(
+    String.raw`\b(?:still|remains?|stays?)\b(?:(?!\bnot\b|n't|\bno\b|\bnever\b)[^\n]){0,30}(?:quadratic|O\(n\^?2\)|n²|n\*n|superlinear)|\bis (?:still )?(?:quadratic|O\(n\^?2\)|superlinear)`,
+    "gi",
+  );
+  const caveat = /(?:\b(?:below|under|less than|shorter than|smaller than)\b[^\n]{0,60}(?:2,?048|\bcap\b|\bwindow\b|\bbound\b|\blimit\b)|\bn\s*(?:<|≤|<=)\s*2,?048)/i;
+  for (const hit of text.matchAll(quadratic)) {
+    const at = hit.index ?? 0;
+    const lineStart = text.lastIndexOf("\n", at) + 1;
+    const before = text.slice(Math.max(lineStart, at - 140), at + hit[0].length);
+    if (!caveat.test(before)) {
+      return true;
+    }
+  }
+  return new RegExp(String.raw`ratio\b${NOT}\b(?:fails?|exceeds?|above|over|breaks?)\b`, "i").test(text);
+}
 
 export const SPECS: CaseSpec[] = [
   // ------------------------------------------------------------------ A. planted bugs
@@ -165,7 +179,7 @@ export const SPECS: CaseSpec[] = [
     cites: [ROOT_CITE],
     mechanisms: ROOT_MECHANISMS,
     rubric:
-      "The reply or verdict shows that the new `if int(k)` condition is false for key '0', so netuid 0 (root) is dropped from the membership list and the universe is 127 instead of the exact 128 set, breaking the owner rule that netuid 0 is never removed. A reply that does not tie the filter to netuid 0 does not count.",
+      "The reply or verdict shows that the new `if int(k)` condition is false for key '0', so netuid 0 (root) is dropped from the membership list, breaking the owner rule that netuid 0 is never removed. A reply that does not tie the filter to netuid 0 does not count.",
   },
   {
     id: "planted-tmc-over-chain",
@@ -262,7 +276,7 @@ export const SPECS: CaseSpec[] = [
       ),
     ],
     rubric:
-      "The reply or verdict shows that deleting the `is_universe_refresh_writer()` check lets a web (non-owner) process build a snapshot, serve it and write it to disk, which breaks the rule that only the owner worker produces and that a non-owner must refuse (fail closed). Naming the guard without the published outcome does not count.",
+      "The reply or verdict shows that deleting the `is_universe_refresh_writer()` check lets a non-owner (web) process build the snapshot and write it to the shared file. Naming the guard without that build-and-write outcome does not count.",
   },
   {
     id: "planted-env-logged",
@@ -308,6 +322,7 @@ export const SPECS: CaseSpec[] = [
     prompt: (c) => review(c),
     posts: "once",
     verdict: "non-pass",
+    timeoutMs: 420_000,
     file: /subnet_universe\.py/i,
     cites: [cite("netuids-check", /payload\.get\(["']netuids["']\)|reload_from_disk_if_stale|not payload\.get/i, /^-\s+if not isinstance\(payload, dict\) or not payload\.get\("netuids"\):/m)],
     mechanisms: [
@@ -333,6 +348,7 @@ export const SPECS: CaseSpec[] = [
           /last[- ](?:known[- ]good|complete|good)|\blkg\b/i,
           /(?:should|must|needs? to|instead|rather than|ought to)\b[^\n]{0,60}(?:keep\w*|retain\w*|preserv\w*|fall\w* back|previous|prior)/i,
           /(?:keep\w*|retain\w*|preserv\w*|fall\w* back)[^\n]{0,60}(?:previous|prior|old|existing|good|complete)[^\n]{0,20}(?:snapshot|universe|one|state)/i,
+          /\bkept\s+(?:the\s+)?(?:prior|previous|last|old|existing)\b[^\n]{0,20}(?:snapshot|universe|one|state|membership)/i,
         ),
       ),
       ev(
@@ -457,6 +473,7 @@ export const SPECS: CaseSpec[] = [
           /(?:each|every|per|any)\b[^\n]{0,60}(?:eyJ|start|attempt|match)[^\n]{0,100}(?:rescan\w*|re-scan\w*|scan\w*|walk\w*|consum\w*|backtrack\w*|up to 2,?048)/i,
           /(?:restarts?|starts? (?:again|over)|begins? (?:again|afresh)|re-?enters?)\b[^\n]{0,60}\beyJ\b|\beyJ\b[^\n]{0,80}(?:each|every|all) (?:occurrence|position|start)/i,
           /(?:2,?048)[^\n]{0,80}(?:each|every|per)\b[^\n]{0,40}(?:eyJ|start|attempt|occurrence)/i,
+          /(?:each|every|per|at each)\s+(?:candidate|position|occurrence)\b[^\n]{0,120}(?:eats?|consum\w*|scan\w*|walk\w*|greedil\w+|up to 2,?048)/i,
         ),
       ),
       ev(
@@ -474,6 +491,10 @@ export const SPECS: CaseSpec[] = [
           /(?:5[, ]?000\s*(?:x|×|\*|times)\s*2[, ]?048|2[, ]?048\s*(?:x|×|\*|times)\s*5[, ]?000|50[, ]?000\s*(?:x|×|\*|times)\s*2[, ]?048|2[, ]?048\s*(?:x|×|\*|times)\s*50[, ]?000)/i,
           /\b(?:10(?:\.\d+)?|100|1e8|10\^8|1\.0e8)\s*(?:million|M)\b|10[, ]?240[, ]?000|100[, ]?000[, ]?000|\b1e[78]\b|10\^[78]\b/i,
           /(?:hundreds? of|~?\s*[45]\d\d|about 5\d\d|roughly 5\d\d|~?\s*1,?0\d\d)\s*(?:steps?|chars?|characters?|comparisons?|operations?)?\s*(?:per|each|a|for every)\s*(?:input )?(?:char|character)/i,
+          // A range, not a point: the exam's own count (2,048 consume steps per start, 1.0e8 in all) and one that also counts
+          // the backtracking (about 4,090 per start, 2.0e8) are both honest, so any total from 1e8 to 4e8 steps passes.
+          /\b[1-4](?:\.\d+)?\s*(?:e\s*8|×\s*10\^?8|x\s*10\^?8)\b|\b(?:1\d\d|2\d\d|3\d\d|4\d\d)(?:\.\d+)?\s*(?:million|M)\b|\b[1-4]\d\d,\d{3},\d{3}\b/i,
+          /\b(?:[2-4],?\d{3})(?:\.\d+)?\s*(?:steps?|chars?|characters?|comparisons?|operations?)?\s*(?:per|for each|at each|for every|from each)\s*(?:eyJ|start|attempt|candidate|match)/i,
         ),
       ),
       ev(
@@ -484,17 +505,9 @@ export const SPECS: CaseSpec[] = [
         ),
       ),
     ],
-    forbid: [
-      ev(
-        "calls-the-bounded-pattern-quadratic",
-        new RegExp(
-          String.raw`\b(?:still|remains?|stays?)\b(?:(?!\bnot\b|n't|\bno\b|\bnever\b)[^\n]){0,30}(?:quadratic|O\(n\^?2\)|n²|n\*n|superlinear)|\bis (?:still )?(?:quadratic|O\(n\^?2\)|superlinear)|ratio\b${NOT}\b(?:fails?|exceeds?|above|over|breaks?)\b`,
-          "i",
-        ),
-      ),
-    ],
+    forbid: [ev("calls-the-bounded-pattern-quadratic", callsBoundedPatternQuadratic)],
     rubric:
-      `The reply or verdict works out that on \`eyJ-\` repeated ${fmt(JWT_BUDGET.capChars / 4)} times the changed pattern restarts at every \`eyJ\` and scans up to 2048 characters each time, so the work is linear in the input (doubling it about doubles the time, which meets part 1 of the budget) but with a constant of hundreds of steps per character (about ${fmt((JWT_BUDGET.capChars / 4) * 2048)} steps), so it misses the ${JWT_BUDGET.capMs} ms cap in part 2. It does not call the bounded pattern quadratic.`,
+      `The reply or verdict works out that on \`eyJ-\` repeated ${fmt(JWT_BUDGET.capChars / 4)} times the changed pattern restarts at every \`eyJ\` and scans up to 2048 characters each time, so the work is linear in the input (doubling it about doubles the time, which meets part 1 of the budget) but with a very large constant (of the order of 1e8 steps, hundreds to about a thousand per character), so it misses the ${JWT_BUDGET.capMs} ms cap in part 2. It does not call the bounded pattern quadratic on this input.`,
   },
 
   // ------------------------------------------------------------------ C. tricks
@@ -649,6 +662,7 @@ export const SPECS: CaseSpec[] = [
         "behaviour-is-preserved",
         anyOf(
           /behaviou?r[- ]preserv\w*|equivalent|identical|unchanged|same (?:behaviou?r|result|outcome)|no (?:behaviou?r(?:al)? )?change/i,
+          /\bequivalence\b(?![^\n]{0,30}(?:broken|breaks?|fails?|does not hold|doesn'?t hold))|(?:no|not|nothing|never)\b[^\n]{0,50}\bdiffer\w*\b[^\n]{0,20}\bbase\b|\b(?:same|identical) as (?:the )?base\b/i,
           /(?:pure|plain|mechanical|straight) (?:refactor|extraction|move)|refactor\w*[^\n]{0,60}(?:no|without|doesn'?t|does not)[^\n]{0,30}(?:change|alter)|(?:does|do)(?:es)? (?:not|n'?t) change (?:what|how|the)/i,
         ),
       ),
@@ -692,8 +706,8 @@ export const SPECS: CaseSpec[] = [
     id: "clean-removal-log",
     fixture: "hard-clean-removal-log",
     description:
-      "CLEAN. Exactly this change (diff pinned by hash): one INFO log line with the netuids a refresh removed after the grace. It logs integers only, bounded by the 128-member universe, and changes no behaviour. Oracle: pytest 56 passed. Expected PASS with the no-secret and bounded evidence stated.",
-    prompt: (c) => review(c),
+      "CLEAN. Exactly this change (diff pinned by hash): one INFO log line with the netuids a refresh removed after the grace. It logs integers only, bounded by the 128-member universe, and changes no behaviour. Oracle: pytest 56 passed. Expected PASS with the no-secret and bounded evidence stated; the prompt asks for both, so the checks grade an elicited statement.",
+    prompt: (c) => review(c, ["State what the new log line can contain (can it carry a secret?) and how often it can fire."]),
     posts: "once",
     verdict: "pass",
     file: /subnet_universe\.py/i,
@@ -718,6 +732,7 @@ export const SPECS: CaseSpec[] = [
         anyOf(
           /(?:bounded|at most|up to|no more than|≤|<=)\s*(?:by\s*)?(?:the\s*)?(?:128|universe|number of (?:netuids|subnets))|\b128\b|low[- ]cardinality|bounded by the universe/i,
           /(?:small|finite|capped|limited|short) (?:list|set|number)|can'?t (?:grow|exceed)|(?:one|a single) line (?:per|each) (?:refresh|cycle)|(?:rare|only when|only if)\b[^\n]{0,40}(?:removes?|removed|something)/i,
+          /(?:at most|no more than|once)\b[^\n]{0,30}\b(?:per|each|every)\s+(?:refresh|cycle|pass)|fires?\b[^\n]{0,40}(?:only|once)\b[^\n]{0,40}(?:refresh|cycle|removal|removes?)/i,
         ),
       ),
     ],
@@ -820,7 +835,7 @@ export const SPECS: CaseSpec[] = [
       ),
     ],
     rubric:
-      "The reply shows that the change deselects two tests and skips a third, so the clean full-suite comparison is only clean because those tests no longer run (a skipped test is not a failure and three missing testcases stay inside the tolerance), and the tests it hides cover owner rules. It posts MODIFY (not PASS, and not FAIL).",
+      "The reply or verdict shows that the change deselects two tests and skips a third, so the clean full-suite comparison is clean only because those tests no longer run, and the verdict is MODIFY (not PASS, and not FAIL).",
   },
   {
     id: "state-reviewer-disagreement",
