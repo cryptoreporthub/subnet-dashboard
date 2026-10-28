@@ -36,7 +36,7 @@ Whatever it concludes about behaviour is labelled inferred.
 
 | Reviewer | Counts when |
 | --- | --- |
-| MC | this bot's own `mc-verdict` marker comment, author **and** SHA checked |
+| MC | SimiBot's `<!-- mc-verdict:<full sha> -->` comment from `simibot[bot]`, App ID 5501340, at the head, with the first line `PASS` plus at most a head pointer or signature |
 | Cursor | `cursor[bot]` review or first-line token |
 | Ditto | App-attributed comment, or `ditto-code[bot]` review |
 | Replit | owner-account comment naming Replit, with **no** App attribution |
@@ -178,12 +178,15 @@ A marker comment counts as the gate's own only when its author is
 `simi-revision[bot]`. A `[bot]` login cannot be registered by a person, so a
 copied marker from anyone else is ignored.
 
-The Grokbot App posts MC verdicts as `simibot[bot]`. Its MC verdict counts only
-when GitHub attributes the comment to App ID **5501340** (slug `simibot`). A
-comment named `simibot[bot]` with any other App ID, or with no App attribution,
-is ignored, and so is anything simibot posts into the Cursor, Ditto or Replit
-slots. Reviews from simibot never count. The App ID was read from the REST API
-on PR #1522's simibot comments.
+MC posts its formal verdict from `simibot[bot]`. It counts only when GitHub
+attributes the comment to App ID **5501340** (slug `simibot`), the comment carries
+exactly one `<!-- mc-verdict:<full sha> -->` for the head, and the first line opens
+with `PASS` followed by at most a head pointer (`at <sha>`, `head <sha>`, a bare
+SHA) or a `-grokbot`/`-simibot` signature. Anything else after `PASS` takes it
+back. The newest verdict at a head wins. A comment named `simibot[bot]` with any
+other App ID, or with no App attribution, is ignored, and so is anything simibot
+posts into the Cursor, Ditto or Replit slots. Reviews from simibot never count.
+The App ID was read from the REST API on PR #1522's simibot comment.
 
 **Remaining limit.** MC and Claude still post from `cryptoreporthub`, the owner's
 account, so their verdict comments are only as trustworthy as that account.
@@ -195,7 +198,7 @@ For every non-draft head the bot opens a `review-gate` check run on that commit:
 green only when the gate is `mergeable`, red on a FAIL, and `action_required` while
 anything is still pending. GitHub counts `neutral` and `skipped` as passing for a
 required check, so a waiting head never uses either. A head that moves while the
-check is posted is concluded `cancelled` as superseded, never reported green. The
+check is concluded `cancelled` as superseded, never reported green. A waiting or red run on a head that moves is left as it was. The
 check reports and gates nothing by itself; making it a required check is a
 branch-protection decision for Joshua.
 
@@ -287,6 +290,7 @@ does not.
 | `bot/lib/gate.ts` | the gate order and the delivery decision (`gateActions`: draft guard, tag, ask). The only place that decides `next`. |
 | `bot/lib/verdicts.ts` | how each verdict is attributed, and the first-line-only token rule |
 | `bot/lib/repo.ts` | the read-only diff, file and listing helpers behind the read tools |
+| `bot/hooks/review-turn.ts` | a failed or cancelled review turn frees its lease, so the next delivery may ask again |
 | `bot/lib/runner.ts` | JUnit from the runner artifact for an exact SHA |
 | `known-flakes.txt` | the committed flake list `compare_suite_runs` reads |
 | `bot/skills/` | on-demand procedures: adversarial review, owner rules, settled check, outside commenters |
