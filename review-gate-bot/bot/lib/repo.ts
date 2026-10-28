@@ -96,12 +96,16 @@ export async function readDiff(
     }
     if (file.patch === undefined) {
       entry.patchOmitted = "GitHub gave no patch: the file is binary or too large to diff";
-    } else if (file.patch.length > budget) {
-      entry.patchOmitted = `over the remaining size budget (${file.patch.length} chars); read the file at head instead`;
-      omittedPaths.push(file.filename);
     } else {
-      entry.patch = redactSecrets(file.patch).text;
-      budget -= file.patch.length;
+      // The budget is spent on what is returned, so it is charged the redacted text's length, which can be longer.
+      const text = redactSecrets(file.patch).text;
+      if (text.length > budget) {
+        entry.patchOmitted = `over the remaining size budget (${text.length} chars); read the file at head instead`;
+        omittedPaths.push(file.filename);
+      } else {
+        entry.patch = text;
+        budget -= text.length;
+      }
     }
     files.push(entry);
   }

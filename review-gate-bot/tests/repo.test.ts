@@ -303,3 +303,18 @@ test("scrubbing a key block keeps the line numbers of the file", () => {
   assert.equal(window.endLine, 6);
   assert.equal(window.totalLines, 6);
 });
+
+test("a patch whose redacted form is longer than its raw form is charged its redacted size", async () => {
+  const patch = "+password=hunter2\n".repeat(6_000);
+  const { octokit } = fake({
+    files: [
+      { filename: "a.env", status: "modified", additions: 6000, deletions: 0, patch },
+      { filename: "b.env", status: "modified", additions: 6000, deletions: 0, patch },
+    ],
+  });
+  const diff = await diffOf(octokit);
+  const chars = diff.files.reduce((n, f) => n + (f.patch?.length ?? 0), 0);
+  assert.ok(chars <= 130_000, `patch text ${chars}`);
+  assert.ok(diff.truncated, "the second patch is cut once the redacted budget is spent");
+});
+
