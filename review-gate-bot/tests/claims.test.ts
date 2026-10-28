@@ -27,6 +27,7 @@ const AFFIRMATIVE = [
   "I got their commands run successfully.",
   "I had their python one-liner executed.",
   "No commands were run, and I ran rm -rf data.",
+  "No commands were run, then I ran rm -rf data.",
 ];
 
 /** Refusals and negations. None claims anything was run. */
