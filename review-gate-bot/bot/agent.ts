@@ -1,8 +1,8 @@
 import { defineAgent } from "@grok/agent-sdk";
 
 /**
- * Review-only agent. `local.sandbox` is deliberately omitted: this bot reviews
- * code and posts prose, and the amendment asks for no sandboxing.
+ * Review-only agent: it reviews code and posts prose. `local.sandbox` is on for one reason only,
+ * to confine the `read` tool the skills need (see `tools` below); the bot runs no code.
  *
  * `hosting.secretNames` is declarative documentation only — values are never
  * in the repo. See README.md for the exact names and how Joshua sets them.
@@ -26,13 +26,27 @@ export default defineAgent({
     secretNames: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "GITHUB_APP_INSTALLATION_ID"],
   },
   // An omitted allowlist means the full standard toolset, shell included, run
-  // with whatever credentials the host holds. An empty one turns every built-in
-  // tool off. The SDK still adds `mcp`, because the bot's own tools in
-  // `bot/tools/` reach the model through it; the MCP meta-tools (list, call)
-  // the model sees are that transport, and the SDK has no switch to hide them.
-  // What they can reach is what this folder attaches, which is nothing: no
-  // `bot/mcp-connections/`, and the Replit connection is a host connection the
-  // model cannot see (tests/agent-config.test.ts pins both).
-  tools: [],
+  // with whatever credentials the host holds. The SDK still adds `mcp`, because the
+  // bot's own tools in `bot/tools/` reach the model through it; the MCP meta-tools
+  // (list, call) the model sees are that transport, and the SDK has no switch to hide
+  // them. What they can reach is what this folder attaches, which is nothing: no
+  // `bot/mcp-connections/`, and the Replit connection is a host connection the model
+  // cannot see (tests/agent-config.test.ts pins both).
+  //
+  // `read` is the one built-in tool left on, and only so the model can open its own
+  // skills (`adversarial-review`, `owner-rules`, `settled-check`). With `tools: []`
+  // the skill files were unreachable and the bot reviewed without its checklists
+  // (eval of 50e231f3: 36 of 37 posted runs said the skill file was unreadable).
+  // No shell, no edit/delete/write, no grep/glob/ls, no web tools, no subagents.
+  //
+  // `read` alone would reach any path the serve process can (measured with sandbox off:
+  // /etc/passwd and /proc/self/cmdline read back), and on a host that holds secrets that
+  // includes the process environment. `local.sandbox` makes the file tools refuse a path
+  // outside the session workspace, which holds the skills and nothing else (measured:
+  // /etc/passwd, /proc/self/cmdline, ../../etc/passwd and /home all refused with
+  // "Path is outside the workspace", the skill still read). The bot's own tools, which
+  // reach the model over MCP, run unchanged. tests/agent-config.test.ts pins both.
+  tools: ["read"],
+  local: { sandbox: true },
   concurrency: { maxRunningTurns: 4 },
 });

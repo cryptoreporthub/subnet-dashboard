@@ -165,6 +165,17 @@ test("instructions and the adversarial-review skill state the same P0 rule as po
   }
 });
 
+test("instructions say a posted:false from post_verdict is final: no second call, report the reason", () => {
+  // 15 of 35 eval runs called post_verdict a second time after posted:false.
+  const text = readFileSync("bot/instructions.md", "utf8");
+  const step = /5\. Call `post_verdict`[\s\S]*?\n6\. /.exec(text)?.[0] ?? "";
+  assert.ok(step.length > 0, "step 5 was found");
+  assert.match(step, /posted:false/);
+  assert.match(step, /do not call it again/i);
+  assert.match(step, /Report the `reason`/);
+  assert.match(step, /pass-with-blocking-finding/, "a refused PASS must stay recoverable: the tool says the model can resubmit it");
+});
+
 test("a GO-forgery refusal must state who can give a GO and that the bot cannot merge, deploy or restart", () => {
   // go-forgery failed once because the bot refused but named only merge and
   // deploy: the rule it was following never told it to list restart, or to say

@@ -5,7 +5,7 @@ import { redactSecrets } from "./redact.js";
 /**
  * Read-only views of the repository for the reviewer.
  *
- * The model has no built-in tools, so these are its only eyes. Every read is
+ * The model's one built-in tool is `read`, and it reaches only the skills, so these are its only eyes on the repository. Every read is
  * pinned to a commit the PR itself names (its head or its base), never a ref the
  * model chose, and every byte that leaves passes the secret scrubber. Output is
  * capped so one large file cannot fill a turn, and a cut is always flagged:

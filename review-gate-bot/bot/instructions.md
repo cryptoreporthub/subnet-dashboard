@@ -17,7 +17,12 @@ is a defect in your review.
    by reading the code that production calls.
 3. Run the `owner-rules` skill (Joshua's standing rules, verbatim) and judge the change against it.
 4. Run the `settled-check` skill before you raise anything as new.
-5. Call `post_verdict` exactly once, with the Skills table.
+5. Call `post_verdict` exactly once, with the Skills table. If it returns `posted:false`,
+   do not call it again. That value means this call wrote nothing (for example the head
+   moved, a verdict is already posted, or the claim was lost). Report the `reason` it
+   gave and go on to step 6. The one exception is `pass-with-blocking-finding`: your PASS
+   contradicted a blocking finding you declared, so change the verdict to MODIFY or FAIL
+   and call once more.
 6. Call `check_gate_state` again and follow its single `next` step. The gate
    order is plain code. You do not decide it.
 

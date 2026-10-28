@@ -2,10 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import agent from "../bot/agent.js";
 
-test("the model gets no built-in tools, so it cannot shell out, read the host or edit files", () => {
+test("the model's only built-in tool is read, so it can open its skills but cannot shell out, edit, fetch or search", () => {
   const config = agent as unknown as { tools?: unknown };
   assert.ok(Array.isArray(config.tools), "an omitted allowlist means the full standard toolset, shell included");
-  assert.deepEqual(config.tools, []);
+  assert.deepEqual(config.tools, ["read"]);
+});
+
+test("read is confined to the session workspace: the sandbox is on, so it cannot reach the host disk or its secrets", () => {
+  // Without it the SDK's file tools reach any path the serve process can (/etc/passwd, /proc/self/environ).
+  const local = (agent as unknown as { local?: { sandbox?: unknown } }).local;
+  assert.equal(local?.sandbox, true);
+  assert.equal((agent as unknown as { fs?: unknown }).fs, undefined, "an authored fs breaks the eval's workspaceFiles seeding and is not needed");
+});
+
+test("every skill the instructions tell the model to run exists as a skill file", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const skills = (await readdir(new URL("../bot/skills/", import.meta.url))).sort();
+  for (const name of ["adversarial-review", "owner-rules", "settled-check"]) {
+    assert.ok(skills.includes(name), name);
+    const text = await readFile(new URL(`../bot/skills/${name}/SKILL.md`, import.meta.url), "utf8");
+    assert.match(text, /^---\n[\s\S]*description:/, `${name} needs description frontmatter to be advertised`);
+  }
 });
 
 test("egress lists no host beyond GitHub, Replit and the Actions artifact storage", () => {

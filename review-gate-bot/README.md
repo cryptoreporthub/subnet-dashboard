@@ -34,8 +34,10 @@ shadow mode.
 Four read-only tools let the bot see the change it reviews: `check_gate_state`
 (the PR's head, files and gate), `get_pr_diff`, `list_repo_files` and
 `read_repo_file`. Each is pinned to the PR its session is
-bound to, applies secret redaction, and caps its output. The built-in shell and
-file tools stay off (`tools: []`), so the bot reads code and cannot run it.
+bound to, applies secret redaction, and caps its output. The only built-in tool
+left on is `read` (`tools: ["read"]`), so the model can open its own skills, and
+`local.sandbox` confines it to the session workspace (the skills, nothing on the host).
+The shell, edit, search and web tools stay off, so the bot reads code and cannot run it.
 Whatever it concludes about behaviour is labelled inferred.
 
 ### How a verdict is counted
@@ -306,7 +308,7 @@ does not.
 
 | Where | What |
 | --- | --- |
-| `bot/agent.ts` | the pinned `model` (`deepseek-v41-flash-1017`, `effort=max`), `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`, and the Actions artifact storage hosts `*.blob.core.windows.net` and `*.actions.githubusercontent.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`. `local.sandbox` is deliberately absent. |
+| `bot/agent.ts` | the pinned `model` (`deepseek-v41-flash-1017`, `effort=max`), `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`, and the Actions artifact storage hosts `*.blob.core.windows.net` and `*.actions.githubusercontent.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`, `tools: ["read"]` and `local.sandbox: true` (the model can read its skills and nothing outside the session workspace). |
 | `bot/channels/github.ts` | the repo, the trigger actions, `webhookEvents`, and the automatic tagging |
 | `bot/instructions.md` | the adversarial review policy and the hard nevers |
 | `bot/lib/gate.ts` | the gate order and the delivery decision (`gateActions`: draft guard, tag, ask). The only place that decides `next`. |
