@@ -3,7 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GateState, PinnedVerdict, SuiteState } from "./gate.js";
 import { computeGate, prKey } from "./gate.js";
 import type { CommentLike, ReviewLike } from "./verdicts.js";
-import { collectPinnedVerdicts, hasOwnMarker } from "./verdicts.js";
+import { collectPinnedVerdicts, hasOwnMarker, OWNER_LOGIN } from "./verdicts.js";
 
 export type PrRef = { owner: string; repo: string; number: number };
 
@@ -193,12 +193,27 @@ export function gateStateFrom(input: {
  * kv record stands in for one GitHub does not have.
  */
 export function replitTaggedIn(comments: readonly CommentLike[], headSha: string): string | undefined {
-  return comments.some((c) => hasOwnMarker(c, "replit", headSha)) ? headSha : undefined;
+  return comments.some((c) => isReplitTag(c, headSha)) ? headSha : undefined;
+}
+
+/**
+ * A Replit review request for this head: the bot's own tag, or a `@replit review` from Joshua's account that names
+ * the head. Joshua's decision (#1513). Another account's tag, or a tag that names another head, is not one.
+ */
+function isReplitTag(comment: CommentLike, headSha: string): boolean {
+  if (hasOwnMarker(comment, "replit", headSha)) {
+    return true;
+  }
+  return (
+    comment.user?.login === OWNER_LOGIN &&
+    /@replit\s+review\b/i.test(comment.body) &&
+    comment.body.includes(headSha)
+  );
 }
 
 /** When the tag for this head was posted: the earliest of the bot's own tag comments for it. */
 export function replitTagTimeIn(comments: readonly CommentLike[], headSha: string): string | undefined {
-  const times = comments.filter((c) => hasOwnMarker(c, "replit", headSha)).map((c) => c.createdAt);
+  const times = comments.filter((c) => isReplitTag(c, headSha)).map((c) => c.createdAt);
   return times.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
 }
 

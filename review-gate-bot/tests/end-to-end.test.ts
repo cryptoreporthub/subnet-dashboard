@@ -406,3 +406,17 @@ test("the eval fixtures and the raw-JSON path agree on the headline case", () =>
   assert.equal(raw.next, fixture.next, "two of three passes: Replit is never tagged");
   assert.notEqual(raw.next, "tag_replit");
 });
+
+test("a Replit tag posted from Joshua's account on the current head counts; another account's tag does not", () => {
+  const ownerTag = (id: number, login: string): RawComment => ({
+    id,
+    body: `@replit review\n\nHead under review: \`${HEAD}\`.`,
+    created_at: "2026-10-26T04:00:00Z",
+    user: { login, type: "User" },
+    performed_via_github_app: null,
+  });
+  const fromOther = gateFromRaw({ comments: [ownerTag(101, "elev8jax")], reviews: [], suite: "clean" });
+  assert.equal(fromOther.replitTagged, false, "a stranger's tag is not the review request");
+  const fromOwner = gateFromRaw({ comments: [ownerTag(102, "cryptoreporthub")], reviews: [], suite: "clean" });
+  assert.equal(fromOwner.replitTagged, true);
+});
