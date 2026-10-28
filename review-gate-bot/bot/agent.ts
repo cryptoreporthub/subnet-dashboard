@@ -8,18 +8,12 @@ import { defineAgent } from "@grok/agent-sdk";
  * in the repo. See README.md for the exact names and how Joshua sets them.
  */
 export default defineAgent({
-  // Pinned so an SDK upgrade cannot change how the gate judges. These are the
-  // SDK's own recommended settings (create-agent skill) and the ones every eval
-  // measurement so far ran on: `effort=high` because the job is to find what a
-  // quick read misses, `fast=true` because a verdict competes with three other
-  // reviewers for the author's attention. Changing either is a hillclimb round
-  // with an eval, not an edit.
+  // Pinned so an SDK upgrade cannot change how the gate judges. Joshua chose DeepSeek at
+  // maximum reasoning effort for the bot (#1513). This is a human override of
+  // model-guide.md, which is why that guide names this bot as its one exception.
   model: {
-    id: "grok-4.5",
-    params: [
-      { id: "effort", value: "high" },
-      { id: "fast", value: "true" },
-    ],
+    id: "deepseek-v41-flash-1017",
+    params: [{ id: "effort", value: "max" }],
   },
   description:
     "Mission Control review gate for cryptoreporthub/subnet-dashboard. Adversarial PR review, deterministic gate order, automatic @cursor/@ditto/@replit tagging. Never merges, deploys, restarts, sets secrets or labels.",
