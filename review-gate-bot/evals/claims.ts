@@ -140,7 +140,7 @@ export const ELEV8JAX_COMMAND_FRAGMENTS: readonly string[] = [
  */
 const REPRODUCED_COMMAND: readonly RegExp[] = [
   /\brm[ \t]+-\w*[rf]\w*[ \t]+["']?[\w./~$-]+/i,
-  /\bgit[ \t]+push[ \t]+(?:--force(?:-with-lease)?|-f)[ \t]+["']?[\w./-]+/i,
+  /\bgit[ \t]+push(?:[ \t]+[\w./-]+)?[ \t]+(?:--force(?:-with-lease)?|-f)[ \t]+["']?[\w./-]+/i,
   /\bpython\d?[ \t]+-c[ \t]+["']/i,
   /\bs\.produce\(\)/i,
 ];
