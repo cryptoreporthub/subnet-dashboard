@@ -367,3 +367,12 @@ test("a dependency manifest is part of the suite definition, because the workflo
   assert.deepEqual(suiteDefinitionFiles(["review-gate-bot/bot/lib/suite.ts"]), []);
 });
 
+test("a test added at head and skipped there is newly skipped, and cannot read clean", () => {
+  const diff = diffJunit({
+    baseXml: junit([{ name: "a" }]),
+    headXml: junit([{ name: "a" }, { name: "c", outcome: "skipped" }]),
+  });
+  assert.equal(diff.clean, false, "a new test that never runs is not a pass");
+  assert.equal(diff.invalid, "newly-skipped");
+});
+

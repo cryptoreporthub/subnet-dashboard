@@ -164,7 +164,7 @@ export function diffJunit(input: DiffInput): SuiteDiff {
   const baseById = new Map(baseCases.map((c) => [c.id, c]));
   const missing = baseCases.filter((c) => !headById.has(c.id)).map((c) => c.id).sort();
   const skipped = headCases
-    .filter((c) => c.outcome === "skipped" && baseById.has(c.id) && baseById.get(c.id)?.outcome !== "skipped")
+    .filter((c) => c.outcome === "skipped" && baseById.get(c.id)?.outcome !== "skipped")
     .map((c) => c.id)
     .sort();
 
