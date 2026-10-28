@@ -8,6 +8,43 @@ import { fetchJunit, octokitRunner, pickRun, type RunnerReader } from "./runner.
 import { diffJunit, suiteDefinitionFiles, type SuiteDiff } from "./suite.js";
 import { DIFF_FILE_CAP } from "./repo.js";
 
+/**
+ * A list of names for a detail string: the count, the first few, and how many more. The full list stays in the
+ * record. Each name is cut, so a long test name cannot push the check summary past GitHub's size limit.
+ */
+function listed(label: string, names: readonly string[]): string {
+  const shown = names.slice(0, 5).map((name) => (name.length > 120 ? `${name.slice(0, 120)}…` : name));
+  const more = names.length - shown.length;
+  return `${label}: ${names.length} (${shown.join(", ")}${more > 0 ? `, and ${more} more` : ""})`;
+}
+
+/** The suite-definition files a PR changes, read before any run is looked up. A rename counts both paths. */
+async function definitionFiles(input: { octokit: Octokit; ref: PrRef; headSha: string; baseSha: string }): Promise<string[]> {
+  const { data } = await input.octokit.rest.repos.compareCommitsWithBasehead({
+    owner: input.ref.owner,
+    repo: input.ref.repo,
+    basehead: `${input.baseSha}...${input.headSha}`,
+  });
+  const changed = (data.files ?? []).flatMap((file) =>
+    file.previous_filename === undefined ? [file.filename] : [file.filename, file.previous_filename],
+  );
+  return suiteDefinitionFiles(changed);
+}
+
+/** Record a head as NEEDS-JOSHUA: final, with the files that did it. No run is looked up for it again. */
+async function recordDefinitionRefusal(input: { kv: HostKvApi; ref: PrRef; headSha: string }, files: string[]): Promise<string> {
+  const detail = listed("suite definition changed", files);
+  console.warn(JSON.stringify({ level: "warn", event: "needs_joshua", reason: "suite-definition-changed", pr: prKey(input.ref), head: input.headSha, files }));
+  await input.kv.put(suiteKey(input.ref, input.headSha), {
+    state: "regressed",
+    invalid: "needs-joshua",
+    detail,
+    newFailures: [],
+    at: Date.now(),
+  });
+  return detail;
+}
+
 export type SuiteComparison =
   | { ok: true; diff: SuiteDiff; headRunId: number; baseRunId: number; flakeList: string }
   | { ok: false; step: "head" | "base"; reason: string; detail: string };
@@ -33,25 +70,13 @@ export async function recordSuiteComparison(input: {
     repo: input.ref.repo,
     basehead: `${input.baseSha}...${input.headSha}`,
   });
-  // A rename lists the new path and the old one. The old path is the one the PR stops being: both count.
-  const changed = (data.files ?? []).flatMap((file) =>
-    file.previous_filename === undefined ? [file.filename] : [file.filename, file.previous_filename],
-  );
   if ((data.files ?? []).length >= DIFF_FILE_CAP) {
     return { ok: false, step: "head", reason: "diff-incomplete", detail: `the PR changes ${DIFF_FILE_CAP} or more files, so its suite definition cannot be read whole` };
   }
-  const definition = suiteDefinitionFiles(changed);
+  const definition = await definitionFiles(input);
   if (definition.length > 0) {
-    console.warn(JSON.stringify({ level: "warn", event: "needs_joshua", reason: "suite-definition-changed", pr: prKey(input.ref), head: input.headSha, files: definition }));
-    // Persisted, so the head's record says why it is blocked and which files did it. Not clean, and not a wait.
-    await input.kv.put(suiteKey(input.ref, input.headSha), {
-      state: "regressed",
-      invalid: "needs-joshua",
-      detail: definition.join(", "),
-      newFailures: [],
-      at: Date.now(),
-    });
-    return { ok: false, step: "head", reason: "needs-joshua", detail: definition.join(", ") };
+    const detail = await recordDefinitionRefusal(input, definition);
+    return { ok: false, step: "head", reason: "needs-joshua", detail };
   }
 
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
@@ -69,9 +94,9 @@ export async function recordSuiteComparison(input: {
   // A removed or newly skipped test needs a person's decision, so it is recorded with the IDs behind it.
   const detail =
     diff.invalid === "baseline-test-missing"
-      ? `missing at head: ${diff.missing.join(", ")}`
+      ? listed("missing at head", diff.missing)
       : diff.invalid === "newly-skipped"
-        ? `newly skipped at head: ${diff.skipped.join(", ")}`
+        ? listed("newly skipped at head", diff.skipped)
         : undefined;
   await input.kv.put(suiteKey(input.ref, input.headSha), {
     state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
@@ -114,6 +139,16 @@ export async function runSuiteIfDue(input: {
 }): Promise<string> {
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
   return exclusive(`suite-run:${prKey(input.ref)}:${input.headSha}`, async () => {
+    // Final: a head refused as NEEDS-JOSHUA is not looked up again, and the definition is checked before any run is,
+    // so a PR that stops its suite from finishing is still refused.
+    if ((await readSuiteRecord(input.kv, input.ref, input.headSha))?.invalid === "needs-joshua") {
+      return "already-refused";
+    }
+    const definition = await definitionFiles(input);
+    if (definition.length > 0) {
+      await recordDefinitionRefusal(input, definition);
+      return "refused:head-needs-joshua";
+    }
     const latest = pickRun(await reader.runsForSha(input.headSha));
     if (latest === undefined) {
       return "waiting:no-run";

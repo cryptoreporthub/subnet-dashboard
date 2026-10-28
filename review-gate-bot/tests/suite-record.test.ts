@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { recordSuiteComparison } from "../bot/lib/suite-record.js";
+import { recordSuiteComparison, runSuiteIfDue } from "../bot/lib/suite-record.js";
 import { readSuiteState } from "../bot/lib/gh.js";
 import { JUNIT_ARTIFACT, type RunnerReader } from "../bot/lib/runner.js";
 import { suiteKey } from "../bot/lib/gh.js";
@@ -142,3 +142,42 @@ test("a missing baseline test reads as NEEDS-JOSHUA for the gate, not as a retry
   assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
 });
 
+
+test("a suite-definition change is refused even when no run has finished, and later deliveries do not look up runs again", async () => {
+  const f = fixture(["pytest.ini"]);
+  let lookups = 0;
+  const noRunYet: RunnerReader = {
+    runsForSha: async () => {
+      lookups += 1;
+      return [];
+    },
+    artifactsForRun: async () => [],
+    artifactZip: async () => new Uint8Array(),
+  };
+  const first = await runSuiteIfDue({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunYet });
+  assert.equal(first, "refused:head-needs-joshua");
+  const afterFirst = lookups;
+  const second = await runSuiteIfDue({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunYet });
+  assert.equal(second, "already-refused");
+  assert.equal(lookups, afterFirst, "a refused head is not checked against the run list again");
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
+});
+
+test("a long list of missing tests is summarised in the detail, and the full list stays in the record", async () => {
+  const f = fixture([]);
+  const many = (names: string[]) =>
+    `<?xml version="1.0"?><testsuites><testsuite name="pytest">${names
+      .map((n) => `<testcase classname="tests.test_x" name="${n}"/>`)
+      .join("")}</testsuite></testsuites>`;
+  const names = Array.from({ length: 3000 }, (_, i) => `test_${"x".repeat(150)}_${i}`);
+  let call = 0;
+  const reader: RunnerReader = {
+    ...f.reader,
+    artifactZip: async () => zipOf(++call === 1 ? many(["h"]) : many(names)),
+  };
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
+  const record = f.store.get(suiteKey(REF, HEAD)) as { detail?: string; missing?: string[] } | undefined;
+  assert.equal(record?.missing?.length, 3000, "the full list is kept");
+  assert.ok((record?.detail ?? "").length <= 1000, `detail is ${record?.detail?.length} characters`);
+  assert.match(record?.detail ?? "", /3000/);
+});
