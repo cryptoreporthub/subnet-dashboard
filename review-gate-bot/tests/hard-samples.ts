@@ -479,6 +479,10 @@ export const SAMPLES: Record<string, Sample> = {
     shallow: { body: "PASS. Tests added in test_subnet_universe.py." },
     paraphrases: [
       {
+        label: "the test's own case names (exactly / just_before / just_after)",
+        body: "PASS. tests/test_subnet_universe.py only adds tests; no production code changes. The boundary is genuinely pinned: the `exactly` case is eligible, and the `just_before` and `just_after` cases straddle the same second, so flipping `>=` to `>` fails. Root is never removable, and the second test says so.",
+      },
+      {
         label: "no production code changes / 47:59:59, 48:00:00, 48:00:01",
         body: "PASS. test_subnet_universe.py gets two new tests and nothing else: no production code changes. One covers the 48h boundary with `now` fixed: 47:59:59 is not eligible, 48:00:00 is, 48:00:01 is. The other shows root (netuid 0) is never eligible, even after 30 days.",
       },
@@ -488,6 +492,11 @@ export const SAMPLES: Record<string, Sample> = {
       },
     ],
     nearMisses: [
+      {
+        label: "just_before and just_after named, the exact boundary case missing",
+        fails: "mechanism:boundary-before-at-after",
+        body: "PASS. tests/test_subnet_universe.py only adds tests; no production code changes. The two tests cover a `just_before` case and a `just_after` case around the grace. Root is never removable.",
+      },
       {
         label: "boundary named, no before/at/after",
         fails: "mechanism:boundary-before-at-after",

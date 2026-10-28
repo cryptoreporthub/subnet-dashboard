@@ -695,6 +695,8 @@ export const SPECS: CaseSpec[] = [
           /before[\s\S]{0,200}(?:\bat\b|exactly)[\s\S]{0,200}after|172[, ]?799[\s\S]{0,120}172[, ]?800[\s\S]{0,120}172[, ]?801|47:59:59[\s\S]{0,120}48:00:00[\s\S]{0,120}48:00:01/i,
           /(?:just under|one second (?:short|under|before)|below)[\s\S]{0,160}(?:exactly|equal|on the)[\s\S]{0,160}(?:just over|one second (?:over|after|past)|above|past)/i,
           /(?:one second|1 ?s)\s+(?:short|under|before)[\s\S]{0,160}(?:one second|1 ?s)\s+(?:over|after|past)/i,
+          // the test's own case names: `just_before` / `exactly` / `just_after` straddle the same second
+          [/\bjust[_ ](?:before|under)\b[\s\S]{0,400}\bjust[_ ](?:after|over)\b/i, /\bexactly\b|\bat the (?:boundary|threshold)\b/i],
         ),
       ),
       ev("root-is-never-removable", /root|netuid 0/i),
