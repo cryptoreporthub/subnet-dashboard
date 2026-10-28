@@ -420,3 +420,40 @@ test("a Replit tag posted from Joshua's account on the current head counts; anot
   const fromOwner = gateFromRaw({ comments: [ownerTag(102, "cryptoreporthub")], reviews: [], suite: "clean" });
   assert.equal(fromOwner.replitTagged, true);
 });
+
+function ownerReplitRequest(id: number, createdAt: string, extra: Partial<RawComment> = {}): RawComment {
+  return {
+    id,
+    body: `@replit review\n\nHead under review: \`${HEAD}\`.`,
+    created_at: createdAt,
+    user: { login: "cryptoreporthub", type: "User" },
+    performed_via_github_app: null,
+    ...extra,
+  } as RawComment;
+}
+
+test("an owner-account Replit request edited after a PASS is a new request, so that PASS no longer counts", () => {
+  const edited = ownerReplitRequest(201, "2026-10-26T04:00:00Z", { updated_at: "2026-10-26T05:00:00Z" } as Partial<RawComment>);
+  const gate = gateFromRaw({
+    comments: [edited, replitReport(202, "PASS")],
+    reviews: [cursorReview(10, "APPROVED"), dittoReview(20, "APPROVED")],
+    suite: "clean",
+  });
+  assert.equal(gate.replit, "missing", "the PASS at 04:30 answers the request at 04:00, not the edit at 05:00");
+});
+
+test("a second owner request after a PASS makes that PASS stale until Replit answers the new one", () => {
+  const gate = gateFromRaw({
+    comments: [ownerReplitRequest(301, "2026-10-26T04:00:00Z"), replitReport(302, "PASS"), ownerReplitRequest(303, "2026-10-26T05:00:00Z")],
+    reviews: [cursorReview(10, "APPROVED"), dittoReview(20, "APPROVED")],
+    suite: "clean",
+  });
+  assert.equal(gate.replit, "missing", "the PASS at 04:30 predates the latest request");
+});
+
+test("an owner-account comment that a GitHub App posted is not a Replit request", () => {
+  const appPosted = ownerReplitRequest(401, "2026-10-26T04:00:00Z", { performed_via_github_app: { slug: "ditto-code" } } as Partial<RawComment>);
+  const gate = gateFromRaw({ comments: [appPosted], reviews: [], suite: "clean" });
+  assert.equal(gate.replitTagged, false);
+});
+

@@ -204,8 +204,10 @@ function isReplitTag(comment: CommentLike, headSha: string): boolean {
   if (hasOwnMarker(comment, "replit", headSha)) {
     return true;
   }
+  // Joshua's account only: a comment a GitHub App posted under that login is the App's, not his.
   return (
     comment.user?.login === OWNER_LOGIN &&
+    !comment.performedViaGithubApp &&
     /@replit\s+review\b/i.test(comment.body) &&
     comment.body.includes(headSha)
   );
@@ -213,8 +215,14 @@ function isReplitTag(comment: CommentLike, headSha: string): boolean {
 
 /** When the tag for this head was posted: the earliest of the bot's own tag comments for it. */
 export function replitTagTimeIn(comments: readonly CommentLike[], headSha: string): string | undefined {
-  const times = comments.filter((c) => isReplitTag(c, headSha)).map((c) => c.createdAt);
-  return times.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+  // The latest request counts, and an edit is a new request: a PASS must be said after the most recent one.
+  const times = comments.filter((c) => isReplitTag(c, headSha)).map(lastRequestTime);
+  return times.sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+}
+
+function lastRequestTime(comment: CommentLike): string {
+  const edited = comment.updatedAt !== undefined && Date.parse(comment.updatedAt) > Date.parse(comment.createdAt);
+  return edited ? (comment.updatedAt as string) : comment.createdAt;
 }
 
 /**
