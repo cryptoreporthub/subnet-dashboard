@@ -51,6 +51,9 @@ function world(
         get: async () => ({ data: { head: { sha: live.head }, base: { sha: BASE }, draft: options.draft ?? false } }),
         listReviews,
       },
+      repos: {
+        compareCommitsWithBasehead: async () => ({ data: { files: [] } }),
+      },
       issues: {
         listComments,
         createComment: async ({ body }: { body: string }) => {

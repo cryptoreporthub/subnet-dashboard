@@ -5,7 +5,8 @@ import { readSuiteRecord, suiteKey, type PrRef } from "./gh.js";
 import { knownFlakes } from "./flakes.js";
 import { exclusive } from "./lock.js";
 import { fetchJunit, octokitRunner, pickRun, type RunnerReader } from "./runner.js";
-import { diffJunit, type SuiteDiff } from "./suite.js";
+import { diffJunit, suiteDefinitionFiles, type SuiteDiff } from "./suite.js";
+import { DIFF_FILE_CAP } from "./repo.js";
 
 export type SuiteComparison =
   | { ok: true; diff: SuiteDiff; headRunId: number; baseRunId: number; flakeList: string }
@@ -24,6 +25,23 @@ export async function recordSuiteComparison(input: {
   baseSha: string;
   reader?: RunnerReader;
 }): Promise<SuiteComparison> {
+  // The suite's definition comes from the PR. A change to it means the report can no longer be trusted
+  // as this suite's, so nothing is read or recorded. A compare too large to read whole is refused too.
+  const { data } = await input.octokit.rest.repos.compareCommitsWithBasehead({
+    owner: input.ref.owner,
+    repo: input.ref.repo,
+    basehead: `${input.baseSha}...${input.headSha}`,
+  });
+  const changed = (data.files ?? []).map((file) => file.filename);
+  if ((data.files ?? []).length >= DIFF_FILE_CAP) {
+    return { ok: false, step: "head", reason: "diff-incomplete", detail: `the PR changes ${DIFF_FILE_CAP} or more files, so its suite definition cannot be read whole` };
+  }
+  const definition = suiteDefinitionFiles(changed);
+  if (definition.length > 0) {
+    console.warn(JSON.stringify({ level: "warn", event: "suite_definition_changed", pr: prKey(input.ref), head: input.headSha, files: definition }));
+    return { ok: false, step: "head", reason: "suite-definition-changed", detail: definition.join(", ") };
+  }
+
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
   const head = await fetchJunit(reader, input.headSha);
   if (!head.ok) {
