@@ -60,7 +60,8 @@ export type GateState = {
  * The verdict for one reviewer at one head. A head change resets every verdict,
  * so a verdict recorded at another SHA never counts here. When a reviewer has
  * several verdicts at one head, the latest one wins and the caller passes them
- * in that order.
+ * in that order, each with the time it was said. A verdict with no readable time
+ * has no known place in that order (see below), so it never settles a conflict.
  */
 export function verdictAt(
   verdicts: readonly PinnedVerdict[],
@@ -74,17 +75,16 @@ export function verdictAt(
   }
   // Verdicts said at the same instant have no known order, so if they disagree none of them is the latest.
   // The instant is compared as a time, not as text: `...:00Z` and `...:00.000+00:00` are one moment.
-  // A verdict whose time cannot be read has no known place in the order either, so it joins the group.
+  // A verdict whose time cannot be read, or that has none, has no known place in the order either, so it joins the group.
   // A FAIL still blocks; anything else asks for a fresh review rather than passing on an order nobody can see.
-  const timeOf = (v: PinnedVerdict): number | undefined => (v.at === undefined ? undefined : Date.parse(v.at));
+  const timeOf = (v: PinnedVerdict): number => (v.at === undefined ? Number.NaN : Date.parse(v.at));
   const lastTime = timeOf(last);
-  const simultaneous =
-    lastTime === undefined
-      ? [last.verdict]
-      : mine.filter((v) => {
-          const t = timeOf(v);
-          return t !== undefined && (Number.isNaN(t) || Number.isNaN(lastTime) || t === lastTime);
-        }).map((v) => v.verdict);
+  const simultaneous = mine
+    .filter((v) => {
+      const t = timeOf(v);
+      return Number.isNaN(t) || Number.isNaN(lastTime) || t === lastTime;
+    })
+    .map((v) => v.verdict);
   if (new Set(simultaneous).size > 1) {
     return simultaneous.includes("FAIL") ? "FAIL" : "MODIFY";
   }

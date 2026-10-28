@@ -21,7 +21,11 @@ shadow mode.
   reachable. **The ask is not a review.** `ask_question` asks an existing Replit
   app a question; it does not start a review run. So the gate advances only on
   Replit's own posted verdict on the PR, never on a successful ask. A failed ask
-  is retried on later events and reported loudly once it is persistent.
+  is retried on later events and reported loudly once it is persistent. The ask is
+  recorded *before* it is sent: if that record has no recorded outcome later (the
+  process died mid-call, or storage failed after the call), the ask may have gone
+  out, so it is **not** repeated automatically and is reported as `ambiguous`.
+  Clear that head's ask record to allow one more ask.
 - Refuses a second review or a second tag for the same head, including on
   duplicate webhooks and replays.
 

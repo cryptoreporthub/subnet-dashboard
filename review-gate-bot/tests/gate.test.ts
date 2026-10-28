@@ -223,7 +223,10 @@ test("MODIFY from a reviewer holds the gate at the awaiting step, not blocked", 
 });
 
 test("the latest verdict at a head wins", () => {
-  const verdicts = [v("cursor", "MODIFY"), v("cursor", "PASS")];
+  const verdicts = [
+    said(v("cursor", "MODIFY"), "2026-10-28T09:00:00Z"),
+    said(v("cursor", "PASS"), "2026-10-28T09:05:00Z"),
+  ];
   assert.equal(verdictAt(verdicts, "cursor", HEAD), "PASS");
 });
 
@@ -382,6 +385,15 @@ test("the same instant written two ways is still a tie, so a stale PASS cannot w
 test("a MODIFY with an unreadable time is not buried under a later PASS", () => {
   assert.notEqual(cursorGate("", "2026-10-28T17:00:00Z", 100, 900).cursor, "PASS", "no time at all");
   assert.notEqual(cursorGate("not a time", "2026-10-28T17:00:00Z", 900, 100).cursor, "PASS", "garbled time");
+});
+
+test("a verdict with no time at all is treated like an unreadable one: a MODIFY is not buried under a later PASS", () => {
+  const timed = (verdict: "PASS" | "MODIFY", at?: string) => ({ ...v("cursor", verdict), ...(at === undefined ? {} : { at }) });
+  const gate = (verdicts: ReturnType<typeof timed>[]) => computeGate(input({ verdicts: [v("mc", "PASS"), v("ditto", "PASS"), ...verdicts], suite: "clean" }));
+  assert.notEqual(gate([timed("MODIFY"), timed("PASS")]).cursor, "PASS", "neither has a time");
+  assert.notEqual(gate([timed("MODIFY", "2026-10-28T17:00:00Z"), timed("PASS")]).cursor, "PASS", "only the later PASS has no time");
+  assert.notEqual(gate([timed("MODIFY"), timed("PASS", "2026-10-28T17:00:00Z")]).cursor, "PASS", "only the earlier MODIFY has no time");
+  assert.equal(gate([timed("PASS")]).cursor, "PASS", "a lone verdict is unaffected by having no time");
 });
 
 test("a suite that needs Joshua stops the gate there: no suite run, no tag, and a waiting check", () => {
