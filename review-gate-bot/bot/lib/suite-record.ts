@@ -76,7 +76,7 @@ function refusalKey(ref: PrRef, headSha: string): string {
  *
  * - No finished run yet: waiting, nothing recorded.
  * - The newest finished run is already recorded for this head: no download.
- * - The newest run's head artifact was refused as unreadable or missing: that run is remembered
+ * - The newest run's artifact is unreadable or missing: that run is remembered
  *   under a separate key, so the next delivery skips it. The suite record is untouched.
  *
  * `exclusive` queues deliveries for one head in this process only. Two webhooks in one process
@@ -109,6 +109,7 @@ export async function runSuiteIfDue(input: {
     if (outcome.ok) {
       return "recorded";
     }
+    // Only a permanent fact about this run is remembered. A lookup or a download that failed on GitHub is transient.
     if (outcome.step === "head" && (outcome.reason === "unreadable" || outcome.reason === "no-artifact")) {
       await input.kv.put(refusalKey(input.ref, input.headSha), { runId: latest.id, reason: outcome.reason });
     }

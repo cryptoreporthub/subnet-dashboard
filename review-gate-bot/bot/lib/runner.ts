@@ -185,7 +185,7 @@ export function pickRun(runs: readonly { id: number; conclusion: string | null }
 
 export type JunitFetch =
   | { ok: true; xml: string; runId: number; artifact: string }
-  | { ok: false; reason: "no-run" | "no-artifact" | "unreadable"; detail: string };
+  | { ok: false; reason: "no-run" | "no-artifact" | "unreadable" | "lookup-failed" | "download-failed"; detail: string };
 
 export type RunnerReader = {
   /** Workflow runs of the suite workflow for one head SHA. */
@@ -326,11 +326,23 @@ export function octokitRunner(octokit: Octokit, ref: { owner: string; repo: stri
  * happened when the XML came in as a tool argument.
  */
 export async function fetchJunit(reader: RunnerReader, sha: string): Promise<JunitFetch> {
-  const run = pickRun(await reader.runsForSha(sha));
+  // A GitHub error on a lookup is a transient refusal. It must come back as a result, not a thrown error,
+  // and it must not be remembered for the run: the next delivery should ask again.
+  let run: { id: number } | undefined;
+  try {
+    run = pickRun(await reader.runsForSha(sha));
+  } catch (error) {
+    return { ok: false, reason: "lookup-failed", detail: error instanceof Error ? error.message : String(error) };
+  }
   if (run === undefined) {
     return { ok: false, reason: "no-run", detail: `no completed ${SUITE_WORKFLOW} run for ${sha}` };
   }
-  const artifact = pickArtifact(await reader.artifactsForRun(run.id));
+  let artifact: ArtifactRef | undefined;
+  try {
+    artifact = pickArtifact(await reader.artifactsForRun(run.id));
+  } catch (error) {
+    return { ok: false, reason: "lookup-failed", detail: error instanceof Error ? error.message : String(error) };
+  }
   if (artifact === undefined) {
     return {
       ok: false,
@@ -338,14 +350,16 @@ export async function fetchJunit(reader: RunnerReader, sha: string): Promise<Jun
       detail: `run ${run.id} for ${sha} has no "${JUNIT_ARTIFACT}" artifact (expired, or the job did not reach the upload)`,
     };
   }
+  let zip: Uint8Array;
   try {
-    const zip = await reader.artifactZip(artifact.id);
+    zip = await reader.artifactZip(artifact.id);
+  } catch (error) {
+    return { ok: false, reason: "download-failed", detail: error instanceof Error ? error.message : String(error) };
+  }
+  try {
     return { ok: true, xml: junitFromEntries(readZip(zip)), runId: run.id, artifact: artifact.name };
   } catch (error) {
-    return {
-      ok: false,
-      reason: "unreadable",
-      detail: error instanceof Error ? error.message : String(error),
-    };
+    // The bytes arrived and cannot be read as a suite: a permanent fact about this run, so it is safe to remember.
+    return { ok: false, reason: "unreadable", detail: error instanceof Error ? error.message : String(error) };
   }
 }

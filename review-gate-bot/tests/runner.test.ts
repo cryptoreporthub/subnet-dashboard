@@ -4,6 +4,7 @@ import { deflateRawSync } from "node:zlib";
 import type { Octokit } from "@octokit/rest";
 import {
   downloadViaRedirect,
+  JUNIT_ARTIFACT,
   MAX_ARCHIVE_BYTES,
   readCappedBody,
   MAX_ENTRY_BYTES,
@@ -249,14 +250,14 @@ test("a download that is not a zip is an unreadable refusal, not a crash", async
   }
 });
 
-test("a storage host that answers with an error is an unreadable refusal that names the host", async () => {
+test("a storage host that answers with an error is a download refusal that names the host", async () => {
   const result = await withStorage(
     () => new Response("denied", { status: 403 }),
     () => fetchJunit(octokitRunner(octokitServing(), { owner: "o", repo: "r" }), "a".repeat(40)),
   );
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.reason, "unreadable");
+    assert.equal(result.reason, "download-failed");
     assert.match(result.detail, /productionresultssa19\.blob\.core\.windows\.net/);
   }
 });
@@ -387,4 +388,29 @@ test("an artifact within the ceiling is read whole", async () => {
   const body = new Uint8Array([1, 2, 3, 4, 5]);
   const bytes = await readCappedBody(new Response(body), 1024);
   assert.deepEqual([...bytes], [1, 2, 3, 4, 5]);
+});
+
+test("a lookup that fails on GitHub is a refusal with its own reason, not a thrown error", async () => {
+  const reader: RunnerReader = {
+    runsForSha: async () => {
+      throw new Error("github 502");
+    },
+    artifactsForRun: async () => [],
+    artifactZip: async () => new Uint8Array(),
+  };
+  const result = await fetchJunit(reader, "a".repeat(40));
+  assert.equal(result.ok, false);
+  assert.equal(!result.ok && result.reason, "lookup-failed");
+});
+
+test("a download that fails on GitHub is its own refusal, so it is retried rather than remembered as unreadable", async () => {
+  const reader: RunnerReader = {
+    runsForSha: async () => [{ id: 1, conclusion: "success" }],
+    artifactsForRun: async () => [{ id: 5, name: JUNIT_ARTIFACT }],
+    artifactZip: async () => {
+      throw new Error("download reset");
+    },
+  };
+  const result = await fetchJunit(reader, "a".repeat(40));
+  assert.equal(!result.ok && result.reason, "download-failed");
 });
