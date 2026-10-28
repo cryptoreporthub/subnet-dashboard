@@ -308,7 +308,7 @@ function pinned(comments: CommentLike[], reviews: ReviewLike[] = []): string[][]
 }
 
 test("simibot's MC verdict, posted by the simibot App (id 5501340), is the MC verdict", () => {
-  assert.deepEqual(pinned([mcVerdictFrom({ user: SIMIBOT, performedViaGithubApp: SIMIBOT_APP })]), [["mc", "PASS", HEAD]]);
+  assert.deepEqual(pinned([simibotMc(`PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`)]), [["mc", "PASS", HEAD]]);
 });
 
 test("a comment named simibot but attributed to a different App is refused", () => {
@@ -803,4 +803,26 @@ test("English words made of hex letters are not head pointers after a PASS", () 
 
 test("a PASS on a head pointer written with 'on' is no PASS: the allowed forms are at, head and bare", () => {
   assert.notEqual(parseVerdictToken(`PASS on \`${HEAD}\``), "PASS");
+});
+
+// --- Round 5: one MC path for SimiBot, and a review body's PASS names its commit ----------
+
+test("SimiBot's gate-form marker is not MC's verdict: only the mc-verdict form counts for SimiBot", () => {
+  assert.deepEqual(pinned([simibotMc(`PASS at ${HEAD}\n<!-- subnet-review-gate:mc-verdict:${HEAD} -->`)]), []);
+});
+
+test("a SimiBot PASS naming another head is refused on every marker form", () => {
+  assert.deepEqual(pinned([simibotMc(`PASS at ${OLD_HEAD}\n<!-- subnet-review-gate:mc-verdict:${HEAD} -->`)]), []);
+  assert.deepEqual(pinned([simibotMc(`PASS at ${OLD_HEAD}\n<!-- mc-verdict:${HEAD} -->\n<!-- mc-verdict:${OTHER} -->`)]), []);
+});
+
+test("a Cursor review body's PASS that names another head is no PASS for the commit it was submitted on", () => {
+  const body = `cursor: PASS at ${OLD_HEAD}`;
+  const cursorReview = review({ state: "COMMENTED", body, commitId: HEAD, user: { login: "cursor[bot]", type: "Bot" } });
+  assert.deepEqual(collectPinnedVerdicts({ reviews: [cursorReview], comments: [] }), []);
+});
+
+test("a Cursor review body's PASS that names its own commit still counts", () => {
+  const cursorReview = review({ state: "COMMENTED", body: `cursor: PASS at ${HEAD}`, commitId: HEAD, user: { login: "cursor[bot]", type: "Bot" } });
+  assert.equal(collectPinnedVerdicts({ reviews: [cursorReview], comments: [] })[0]?.verdict, "PASS");
 });

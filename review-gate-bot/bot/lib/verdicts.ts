@@ -460,6 +460,11 @@ export function collectPinnedVerdicts(input: {
     if (verdict === undefined) {
       continue;
     }
+    // A PASS in a review body that names another commit is not a verdict on this one.
+    const namedOnBody = review.state === "APPROVED" || review.state === "CHANGES_REQUESTED" ? undefined : namedHeadOnPassLine(review.body);
+    if (namedOnBody !== undefined && review.commitId !== null && !review.commitId.startsWith(namedOnBody)) {
+      continue;
+    }
     let reviewer: ReviewerName | undefined;
     if (isDittoReview(review)) {
       reviewer = "ditto";
@@ -507,7 +512,7 @@ export function collectPinnedVerdicts(input: {
       // A marker means "this came from the gate". Only the gate's own identity
       // or simibot's App may fill a slot, and only the mc-verdict slot is a
       // verdict at all.
-      const mcHead = isMcVerdictAuthor(comment) ? singleMarkerHead(comment, "mc-verdict") : undefined;
+      const mcHead = isOwnComment(comment) ? singleMarkerHead(comment, "mc-verdict") : undefined;
       if (mcHead === undefined) {
         continue;
       }
