@@ -3,26 +3,47 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import { listRepoFiles, readDiff, readRepoFile, validRepoPath, windowText } from "../bot/lib/repo.js";
 
+/** The diff at the pinned head, for the tests that expect one. */
+async function diffOf(octokit: Octokit, paths?: string[]) {
+  const diff = await readDiff(octokit, REF, { head: HEAD, base: BASE, paths });
+  if (!diff.ok) {
+    throw new Error(diff.reason);
+  }
+  return diff;
+}
+
 const REF = { owner: "o", repo: "r", number: 7 };
 const HEAD = "a".repeat(40);
+const BASE = "b".repeat(40);
 
 type FakeFile = { filename: string; status: string; additions: number; deletions: number; patch?: string; previous_filename?: string };
 
 function fake(options: {
+  /** The PR's diff at the pinned head: what `compareCommitsWithBasehead` returns. */
   files?: FakeFile[];
+  /** What `pulls.listFiles` would answer, which is whatever head the PR has now. */
+  listed?: FakeFile[];
   tree?: { path: string; type: string }[];
   truncatedTree?: boolean;
   content?: unknown;
   contentError?: Error;
-}): { octokit: Octokit; calls: { content: Record<string, unknown>[] } } {
-  const calls = { content: [] as Record<string, unknown>[] };
-  const listFiles = async () => ({ data: options.files ?? [] });
+}): { octokit: Octokit; calls: { content: Record<string, unknown>[]; compare: string[]; listed: number } } {
+  const calls = { content: [] as Record<string, unknown>[], compare: [] as string[], listed: 0 };
+  const listFiles = async () => {
+    calls.listed += 1;
+    return { data: options.listed ?? options.files ?? [] };
+  };
+  const compareCommitsWithBasehead = async ({ basehead }: { basehead: string }) => {
+    calls.compare.push(basehead);
+    return { data: { files: options.files ?? [] } };
+  };
   const octokit = {
     paginate: async (fn: (p: unknown) => Promise<{ data: unknown[] }>, params: unknown) => (await fn(params)).data,
     rest: {
       pulls: { listFiles },
       git: { getTree: async () => ({ data: { tree: options.tree ?? [], truncated: options.truncatedTree ?? false } }) },
       repos: {
+        compareCommitsWithBasehead,
         getContent: async (params: Record<string, unknown>) => {
           calls.content.push(params);
           if (options.contentError !== undefined) {
@@ -42,7 +63,7 @@ test("the diff carries each file's path, status, counts and patch", async () => 
   const { octokit } = fake({
     files: [{ filename: "a.py", status: "modified", additions: 2, deletions: 1, patch: "@@ -1 +1,2 @@\n-x\n+y\n+z" }],
   });
-  const diff = await readDiff(octokit, REF, {});
+  const diff = await diffOf(octokit);
   assert.equal(diff.totalFiles, 1);
   assert.deepEqual(diff.files[0], {
     path: "a.py",
@@ -56,7 +77,7 @@ test("the diff carries each file's path, status, counts and patch", async () => 
 
 test("a file GitHub gives no patch for says so, instead of looking empty", async () => {
   const { octokit } = fake({ files: [{ filename: "img.png", status: "added", additions: 0, deletions: 0 }] });
-  const diff = await readDiff(octokit, REF, {});
+  const diff = await diffOf(octokit);
   assert.equal(diff.files[0]?.patch, undefined);
   assert.match(String(diff.files[0]?.patchOmitted), /binary|large/i);
 });
@@ -70,7 +91,7 @@ test("a diff past the size budget is cut and says which files were left out", as
       { filename: "three.py", status: "modified", additions: 1, deletions: 0, patch: big },
     ],
   });
-  const diff = await readDiff(octokit, REF, {});
+  const diff = await diffOf(octokit);
   assert.equal(diff.truncated, true);
   assert.ok(diff.omittedPaths.includes("three.py"));
   const chars = diff.files.reduce((n, f) => n + (f.patch?.length ?? 0), 0);
@@ -84,8 +105,28 @@ test("asking for named files returns only those", async () => {
       { filename: "b.py", status: "modified", additions: 1, deletions: 0, patch: "+b" },
     ],
   });
-  const diff = await readDiff(octokit, REF, { paths: ["b.py"] });
+  const diff = await diffOf(octokit, ["b.py"]);
   assert.deepEqual(diff.files.map((f) => f.path), ["b.py"]);
+});
+
+test("the diff is read by the two SHAs the caller checked, not by the PR number", async () => {
+  // The PR's head moved after the check: the PR number now lists the new head's files.
+  const { octokit, calls } = fake({
+    files: [{ filename: "a.py", status: "modified", additions: 1, deletions: 0, patch: "+checked" }],
+    listed: [{ filename: "a.py", status: "modified", additions: 1, deletions: 0, patch: "+moved" }],
+  });
+  const diff = await diffOf(octokit);
+  assert.equal(diff.files[0]?.patch, "+checked");
+  assert.deepEqual(calls.compare, [`${BASE}...${HEAD}`]);
+  assert.equal(calls.listed, 0, "the PR number is never listed, so a moved head cannot answer for the checked one");
+});
+
+test("a diff at GitHub's 300-file compare cap is refused as incomplete, not read as whole", async () => {
+  const capped = Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}.py`, status: "modified", additions: 1, deletions: 0, patch: "+x" }));
+  const { octokit } = fake({ files: capped });
+  const diff = await readDiff(octokit, REF, { head: HEAD, base: BASE });
+  assert.equal(diff.ok, false);
+  assert.equal(!diff.ok && diff.reason, "diff-incomplete");
 });
 
 test("a secret-shaped value in a patch is scrubbed before it leaves", async () => {
@@ -93,7 +134,7 @@ test("a secret-shaped value in a patch is scrubbed before it leaves", async () =
   const { octokit } = fake({
     files: [{ filename: "x.env", status: "added", additions: 1, deletions: 0, patch: `+GITHUB_TOKEN=${token}` }],
   });
-  const diff = await readDiff(octokit, REF, {});
+  const diff = await diffOf(octokit);
   assert.ok(!JSON.stringify(diff).includes(token));
 });
 

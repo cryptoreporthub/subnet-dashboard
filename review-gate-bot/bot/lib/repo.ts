@@ -47,13 +47,35 @@ export type Diff = {
   omittedPaths: string[];
 };
 
-export async function readDiff(octokit: Octokit, ref: PrRef, options: { paths?: string[] }): Promise<Diff> {
-  const all = await octokit.paginate(octokit.rest.pulls.listFiles, {
+/** GitHub caps a compare's file list. A list at the cap may be cut short, so it cannot be read as whole. */
+export const DIFF_FILE_CAP = 300;
+
+export type DiffRead = ({ ok: true } & Diff) | { ok: false; reason: "diff-incomplete"; detail: string };
+
+/**
+ * The PR's diff between two commits the caller has already checked. The compare is pinned to
+ * `base...head` by SHA, not read by PR number: `pulls.listFiles` answers for whatever head the PR
+ * has at the moment of the call, so a push after the head check would hand back another head's
+ * patches. A diff at the file cap is refused, since a cut list would read as the whole change.
+ */
+export async function readDiff(
+  octokit: Octokit,
+  ref: PrRef,
+  options: { head: string; base: string; paths?: string[] },
+): Promise<DiffRead> {
+  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
     owner: ref.owner,
     repo: ref.repo,
-    pull_number: ref.number,
-    per_page: 100,
+    basehead: `${options.base}...${options.head}`,
   });
+  const all = data.files ?? [];
+  if (all.length >= DIFF_FILE_CAP) {
+    return {
+      ok: false,
+      reason: "diff-incomplete",
+      detail: `the diff has ${DIFF_FILE_CAP} or more files, GitHub's compare limit; read the files you need with read_repo_file at head instead`,
+    };
+  }
   const wanted = options.paths === undefined ? undefined : new Set(options.paths);
   const files: DiffFile[] = [];
   const omittedPaths: string[] = [];
@@ -85,6 +107,7 @@ export async function readDiff(octokit: Octokit, ref: PrRef, options: { paths?: 
   }
 
   return {
+    ok: true,
     totalFiles: wanted === undefined ? all.length : files.length,
     files,
     truncated: omittedPaths.length > 0,

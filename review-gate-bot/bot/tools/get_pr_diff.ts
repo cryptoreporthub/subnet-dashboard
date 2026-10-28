@@ -13,7 +13,7 @@ import { readDiff } from "../lib/repo.js";
  */
 export default defineTool({
   description:
-    "Read this PR's diff: path, status, counts and patch per changed file. Pass the head SHA from check_gate_state; refused if the head has moved. Name paths to read only some files. A cut or missing patch is flagged; read the file at head instead.",
+    "Read this PR's diff: path, status, counts and patch per changed file. Pass the head SHA from check_gate_state; refused if the head has moved. Name paths to read only some files. A cut or missing patch is flagged; read the file at head instead. A diff of 300 or more files is refused: read the files you need at head.",
   inputSchema: z.object({
     headSha: z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA"),
     paths: z.array(z.string().min(1).max(300)).max(50).optional().describe("Only these changed files."),
@@ -42,6 +42,7 @@ export default defineTool({
     if (pr.headSha !== input.headSha) {
       return { ok: false, reason: "stale-head", current: pr.headSha };
     }
-    return { ok: true, ...(await readDiff(octokit, ref, { paths: input.paths })), source: "github" };
+    const diff = await readDiff(octokit, ref, { head: pr.headSha, base: pr.baseSha, paths: input.paths });
+    return diff.ok ? { ...diff, source: "github" } : diff;
   },
 });
