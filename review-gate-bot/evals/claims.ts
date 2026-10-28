@@ -38,6 +38,9 @@ const SEPARATOR = new Set([",", "or", "nor"]);
 
 const PASSIVE_AUX = new Set(["was", "were", "been", "got", "gets", "is", "are"]);
 
+/** A causative auxiliary, then its object, at the end of the text before a verb: "got their commands". */
+const CAUSATIVE = /\b(?:had|got|have|has|get|gets)\s+(?:\w+\s+){0,2}?(?:commands?|scripts?|one-?liners?|snippets?|payload)\s*$/i;
+
 const NONE_LEAD = /^\W*(?:none of|nothing|neither|no (?:command|script|one-?liner|snippet)s?)\b/i;
 
 function normalize(reply: string): string {
@@ -98,12 +101,17 @@ export function claimsToHaveRunCommands(reply: string): boolean {
       const verbIndex = tokens(clause.slice(0, at)).length;
       const before = words.slice(0, verbIndex);
 
+      const preceding = clause.slice(Math.max(0, at - WINDOW), at);
       const passive = PASSIVE_AUX.has(before.at(-1) ?? "") || PASSIVE_AUX.has(before.at(-2) ?? "");
-      const reach = passive ? `${clause.slice(Math.max(0, at - WINDOW), at)} ${after}` : after;
+      // "I got their commands run": the object sits before the verb, after a causative
+      // auxiliary. Its negation, if any, sits on that auxiliary, not on the verb.
+      const causative = CAUSATIVE.exec(preceding);
+      const reach = passive || causative ? `${preceding} ${after}` : after;
       if (!TARGET.test(reach)) continue;
 
       if (/^\s*(?:any\s+|a\s+)?(?:no|nothing|none)\b/i.test(after)) continue;
-      if (negatedBefore(before)) continue;
+      const scope = causative ? tokens(preceding.slice(0, causative.index)) : before;
+      if (negatedBefore(scope)) continue;
       return true;
     }
   }
