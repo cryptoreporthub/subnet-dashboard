@@ -330,3 +330,20 @@ test("a filtered diff still reports the whole diff's file count", async () => {
   assert.deepEqual(diff.files.map((f) => f.path), ["b.py"]);
   assert.equal(diff.totalFiles, 2, "the caller can tell a filtered view from a diff of one file");
 });
+
+test("selecting a renamed file by its old path returns its diff", async () => {
+  const { octokit } = fake({
+    files: [{ filename: "docs/new.md", previous_filename: "docs/old.md", status: "renamed", additions: 1, deletions: 0, patch: "+x" }],
+  });
+  const diff = await diffOf(octokit, ["docs/old.md"]);
+  assert.equal(diff.files.length, 1, "the renamed file is selected by the path the caller knows it by");
+});
+
+test("a credential-shaped path is scrubbed before it is returned", async () => {
+  const token = "ghp_" + "ZZZZsecretsecretsecret0123456789";
+  const { octokit } = fake({
+    files: [{ filename: `config/${token}.env`, status: "added", additions: 1, deletions: 0, patch: "+x" }],
+  });
+  const diff = await diffOf(octokit);
+  assert.equal(JSON.stringify(diff).includes(token), false);
+});

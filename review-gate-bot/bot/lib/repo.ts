@@ -82,17 +82,21 @@ export async function readDiff(
   let budget = LIMITS.diffChars;
 
   for (const file of all) {
-    if (wanted !== undefined && !wanted.has(file.filename)) {
+    // A rename is selected by either of its paths, and its paths are scrubbed before they leave this module:
+    // a PR can name a file with a credential-shaped value, and the result goes to a model and to a public review.
+    const path = redactSecrets(file.filename).text;
+    const previous = file.previous_filename === undefined ? undefined : redactSecrets(file.previous_filename).text;
+    if (wanted !== undefined && !wanted.has(file.filename) && (file.previous_filename === undefined || !wanted.has(file.previous_filename))) {
       continue;
     }
     const entry: DiffFile = {
-      path: file.filename,
+      path,
       status: file.status,
       additions: file.additions,
       deletions: file.deletions,
     };
-    if (file.previous_filename !== undefined) {
-      entry.previousPath = file.previous_filename;
+    if (previous !== undefined) {
+      entry.previousPath = previous;
     }
     if (file.patch === undefined) {
       entry.patchOmitted = "GitHub gave no patch: the file is binary or too large to diff";
@@ -101,7 +105,7 @@ export async function readDiff(
       const text = redactSecrets(file.patch).text;
       if (text.length > budget) {
         entry.patchOmitted = `over the remaining size budget (${text.length} chars); read the file at head instead`;
-        omittedPaths.push(file.filename);
+        omittedPaths.push(path);
       } else {
         entry.patch = text;
         budget -= text.length;
