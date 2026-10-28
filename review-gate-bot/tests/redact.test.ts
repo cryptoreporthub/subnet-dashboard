@@ -226,3 +226,13 @@ test("a 1 MB run of JWT-shaped segments joined by dashes scrubs in under half a 
   const { ms } = timed("eyJaaaaaaaa-".repeat(90_000));
   assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
 });
+
+// A deliberate choice, pinned: a JWT glued to the word before it by a dash or an underscore is
+// not matched by the JWT rule (the lookbehind excludes both, which keeps the scan linear). A JWT
+// after a space, `=` or `:` is matched.
+test("a JWT glued by a dash or underscore is not matched by the JWT rule, and a spaced one is", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9." + "a".repeat(80) + "." + "b".repeat(43);
+  assert.equal(redactSecrets(`x-${jwt}`).text.includes(jwt), true, "dash-glued: the JWT rule does not match");
+  assert.equal(redactSecrets(`x_${jwt}`).text.includes(jwt), true, "underscore-glued: the JWT rule does not match");
+  assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false, "space-separated: matched");
+});
