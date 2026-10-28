@@ -225,12 +225,11 @@ export function diffJunit(input: DiffInput): SuiteDiff {
 /**
  * Paths that do not normally change a pytest outcome: prose and images.
  *
- * "Normally" is measured, not assumed. This repo has tests that read prose and
- * images (`tests/test_subagent_models_rule.py` reads `AGENTS.md` and
- * `model-guide.md`, `test_fly_telegram_worker_config.py` reads `DEPLOY.md`,
- * `test_phase_h_ui.py` reads `favicon.svg`), so a change to one of them can
- * flip a test and still carry a clean result. Narrowing this list is a call for
- * the owner; the cost is a suite run on docs-only heads.
+ * "Normally" is measured, not assumed. Some of this repo's tests read prose and
+ * images, so a change to one of them can flip a test and still carry a clean
+ * result. `READ_BY_TESTS` below names those files. They block by basename,
+ * wherever they sit, and no prose or image rule lets them through. The owner
+ * made that call; the cost is a suite run on those heads.
  *
  * Everything else is code for this purpose. That direction is deliberate — the
  * cost of a false "code" is one suite run, and the cost of a false "prose" is a
@@ -241,9 +240,15 @@ export function diffJunit(input: DiffInput): SuiteDiff {
  */
 const NON_CODE: readonly RegExp[] = [/\.mdx?$/i, /\.(?:png|jpe?g|gif|svg|webp|ico)$/i];
 
+/** Prose and images that a suite test reads. Checked before the allowlist, by basename. */
+const READ_BY_TESTS: ReadonlySet<string> = new Set(["AGENTS.md", "model-guide.md", "DEPLOY.md", "favicon.svg"]);
+
 /** Changed files that block a suite carry-over: every file not proven non-code. */
 export function carryBlockingFiles(changedFiles: readonly string[]): string[] {
-  return changedFiles.filter((file) => !NON_CODE.some((pattern) => pattern.test(file)));
+  return changedFiles.filter((file) => {
+    const name = file.slice(file.lastIndexOf("/") + 1);
+    return READ_BY_TESTS.has(name) || !NON_CODE.some((pattern) => pattern.test(file));
+  });
 }
 
 /**

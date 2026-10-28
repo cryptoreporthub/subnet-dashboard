@@ -241,6 +241,17 @@ test("prose and images do not block a carry-over", () => {
   );
 });
 
+test("a prose or image file that a test reads blocks a carry-over", () => {
+  // The suite's own tests read these, so a change to one can flip a result.
+  const readByTests = [
+    "AGENTS.md",
+    "cursor-agents-communication/model-guide.md",
+    "DEPLOY.md",
+    "static/favicon.svg",
+  ];
+  assert.deepEqual(carryBlockingFiles(readByTests), readByTests);
+});
+
 test("every non-prose file blocks a carry-over, whatever its extension", () => {
   const files = [
     "internal/council/resolver.py",
