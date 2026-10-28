@@ -59,16 +59,15 @@ const CREDENTIAL_WORD =
   /token|secret|password|passwd|passphrase|api[_-]?key|apikey|private[_-]?key|client[_-]?secret|credential|authorization|bearer|access[_-]?key|session[_-]?id|pwd|(?<![a-z])pass(?![a-z])/i;
 
 /**
- * `NAME=value` / `NAME: value` / `"name": "value"` where NAME looks like a
- * credential variable.
- *
- * Case-insensitive on the key, because `{"token": "…"}` and `password:` are as
- * much a credential as `GITHUB_TOKEN=`. The key is captured whole so the reader
- * still sees which one leaked. Kept as one pattern over `NAME<sep>VALUE`, where
- * the value is a quoted string or a bare run up to a delimiter.
+ * `NAME=` / `NAME: ` / `"name": ` in front of a value. Only the name and separator
+ * are matched here; the value is taken only when the name is a credential name.
+ * Otherwise scanning resumes right after the separator, so an assignment nested
+ * inside a value (`msg="login password=…"`, `?access_token=…`) is still examined.
  */
-const NAMED_ASSIGNMENT =
-  /(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+)"?\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+)/gi;
+const ASSIGNMENT_NAME = /(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+)"?\s*[:=]\s*/g;
+
+const ASSIGNED_VALUE =
+  /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+/y;
 
 /** `scheme://user:password@host`: the userinfo goes, the host stays readable. */
 const URL_USERINFO = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi;
@@ -104,17 +103,43 @@ function isPlaceholder(value: string): boolean {
   return /^(\.\.\.|x{3,}|\*{3,}|changeme|placeholder|example|redacted|none|null|true|false)$/i.test(trimmed);
 }
 
+/**
+ * Replace each credential assignment's value, scanning left to right. Credential
+ * names keep their name and lose their value; every other assignment is passed over
+ * at its separator, so one nested inside its value is still reached.
+ */
+function scrubAssignments(input: string, redactedNames: string[]): string {
+  const names = new RegExp(ASSIGNMENT_NAME.source, "g");
+  const values = new RegExp(ASSIGNED_VALUE.source, "iy");
+  let out = "";
+  let copied = 0;
+  let found: RegExpExecArray | null;
+  while ((found = names.exec(input)) !== null) {
+    const written = found[1] ?? "";
+    // A name may start with junk the old pattern left out of the label: `--password=`.
+    const lead = written.match(/^[^A-Za-z0-9]*/)?.[0] ?? "";
+    const label = written.slice(lead.length);
+    if (!CREDENTIAL_WORD.test(label)) {
+      continue;
+    }
+    values.lastIndex = names.lastIndex;
+    const value = values.exec(input);
+    if (value === null || isPlaceholder(value[0])) {
+      continue;
+    }
+    out += input.slice(copied, found.index + lead.length) + `${label}=<redacted:${label}>`;
+    copied = values.lastIndex;
+    redactedNames.push(label);
+    names.lastIndex = copied;
+  }
+  return out + input.slice(copied);
+}
+
 export function redactSecrets(input: string): RedactResult {
   const redactedNames: string[] = [];
   let text = input;
 
-  text = text.replace(NAMED_ASSIGNMENT, (match, name: string, value: string) => {
-    if (!CREDENTIAL_WORD.test(name) || isPlaceholder(value)) {
-      return match;
-    }
-    redactedNames.push(name);
-    return `${name}=<redacted:${name}>`;
-  });
+  text = scrubAssignments(text, redactedNames);
 
   text = text.replace(URL_USERINFO, (_match, scheme: string) => {
     redactedNames.push("url-credentials");

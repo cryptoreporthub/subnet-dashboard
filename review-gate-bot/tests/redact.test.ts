@@ -188,3 +188,24 @@ test("a credential name longer than any fixed bound is still redacted", () => {
   assert.equal(text.includes("plainvalue9Z8Y7X6W"), false);
   assert.equal(redactedNames.length, 1);
 });
+
+// A credential assignment nested inside another value is still a credential.
+test("a password nested inside a JSON string is redacted", () => {
+  const { text } = redactSecrets('{"msg":"login password=hunter2 failed"}');
+  assert.equal(text.includes("hunter2"), false);
+});
+
+test("a password inside a command-line flag is redacted", () => {
+  const { text } = redactSecrets("cmd=--password=hunter2");
+  assert.equal(text.includes("hunter2"), false);
+});
+
+test("an access token in a query string is redacted", () => {
+  const { text } = redactSecrets("redirect=https://h/cb?access_token=abc123xyz789");
+  assert.equal(text.includes("abc123xyz789"), false);
+});
+
+test("a credential at the end of an assignment chain is redacted", () => {
+  const { text } = redactSecrets("a=b=token=zzzzzzzz");
+  assert.equal(text.includes("zzzzzzzz"), false);
+});
