@@ -3,6 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GitHubHandle } from "@grok/agent-sdk/channels/github";
 import { prKey, type GateState } from "./gate.js";
 import type { PrRef } from "./gh.js";
+import { exclusive } from "./lock.js";
 
 /** The merge-box check this bot owns. A branch rule can require it by this name. */
 export const CHECK_NAME = "review-gate";
@@ -72,33 +73,44 @@ export async function postGateCheck(input: {
   octokit: Octokit;
   kv: HostKvApi;
   ref: PrRef;
+  /** The gate this delivery was asked to report. Its head is the check's head. */
   state: GateState;
+  /** The gate as it is now, read by the caller. Read again under the lock, never trusted from above. */
+  read: () => Promise<GateState>;
   createCheck: CreateCheck;
 }): Promise<CheckPost> {
-  const { octokit, kv, ref, state, createCheck } = input;
-  const key = `check:${prKey(ref)}:${state.headSha}`;
-  const summary = summaryOf(state);
+  const { octokit, kv, ref, createCheck, read } = input;
+  // One post at a time per head, and the gate is read inside that turn. Two deliveries that
+  // overlap would otherwise conclude in whatever order their slow reads finish, so an earlier
+  // read could land after a newer one and leave the required check showing a stale verdict.
+  // `exclusive` queues callers in this process only; across processes the summary dedupe in kv
+  // and the next delivery's post remain the backstop.
+  return exclusive(`check:${prKey(ref)}:${input.state.headSha}`, async () => {
+    const state = await read();
+    const key = `check:${prKey(ref)}:${state.headSha}`;
+    const summary = summaryOf(state);
 
-  if ((await kv.get(key)) === summary) {
-    return "unchanged";
-  }
-  if (!(await headIs(octokit, ref, state.headSha))) {
-    return "stale-head";
-  }
+    if ((await kv.get(key)) === summary) {
+      return "unchanged";
+    }
+    if (!(await headIs(octokit, ref, state.headSha))) {
+      return "stale-head";
+    }
 
-  const conclusion = gateConclusion(state);
-  const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
-  const superseded = conclusion === "success" && !(await headIs(octokit, ref, state.headSha));
-  if (superseded) {
-    await check.conclude({
-      conclusion: "cancelled",
-      output: { title: "Superseded", summary: `The PR head moved while this was posted, so it is not reported green. ${summary}` },
-    });
-    return "stale-head";
-  }
-  await check.conclude({ conclusion, output: { title: titleOf(conclusion), summary } });
-  await kv.put(key, summary);
-  return "posted";
+    const conclusion = gateConclusion(state);
+    const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
+    const superseded = conclusion === "success" && !(await headIs(octokit, ref, state.headSha));
+    if (superseded) {
+      await check.conclude({
+        conclusion: "cancelled",
+        output: { title: "Superseded", summary: `The PR head moved while this was posted, so it is not reported green. ${summary}` },
+      });
+      return "stale-head";
+    }
+    await check.conclude({ conclusion, output: { title: titleOf(conclusion), summary } });
+    await kv.put(key, summary);
+    return "posted";
+  });
 }
 
 function titleOf(conclusion: GateConclusion): string {

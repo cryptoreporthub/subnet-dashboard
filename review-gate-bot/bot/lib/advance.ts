@@ -178,7 +178,9 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
 
   // The check reports the gate as read at the top of this delivery; a verdict
   // posted later arrives as its own event and replaces it.
-  const check = await attempt("check", () => postGateCheck({ octokit, kv, ref, state, createCheck }));
+  const check = await attempt("check", () =>
+    postGateCheck({ octokit, kv, ref, state, createCheck, read: () => readGateState({ octokit, kv, ref, headSha }) }),
+  );
 
   return {
     headSha,
