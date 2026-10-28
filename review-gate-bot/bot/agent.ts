@@ -11,9 +11,10 @@ export default defineAgent({
   // Pinned so an SDK upgrade cannot change how the gate judges. Joshua chose DeepSeek at
   // maximum reasoning effort for the bot (#1513). This is a human override of
   // model-guide.md, which is why that guide names this bot as its one exception.
+  // The registry's parameter is `reasoning_effort` (a bare `effort` is rejected); `max` is this model's highest.
   model: {
     id: "deepseek-v41-flash-1017",
-    params: [{ id: "effort", value: "max" }],
+    params: [{ id: "reasoning_effort", value: "max" }],
   },
   description:
     "Mission Control review gate for cryptoreporthub/subnet-dashboard. Adversarial PR review, deterministic gate order, automatic @cursor/@ditto/@replit tagging. Never merges, deploys, restarts, sets secrets or labels.",

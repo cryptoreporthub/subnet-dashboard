@@ -78,10 +78,11 @@ test("every secret the channel names is declared for deploy, and no token is", (
 });
 
 test("the model is pinned, not left to the SDK default", () => {
-  // Joshua's decision (#1513): the bot runs on DeepSeek at maximum reasoning effort.
+  // Joshua's decision (#1513): the bot runs on DeepSeek at maximum reasoning effort. The registry's parameter
+  // is named `reasoning_effort` (`effort` is rejected as an invalid parameter); `max` is the highest value for this model.
   assert.deepEqual((agent as unknown as { model?: unknown }).model, {
     id: "deepseek-v41-flash-1017",
-    params: [{ id: "effort", value: "max" }],
+    params: [{ id: "reasoning_effort", value: "max" }],
   });
 });
 
@@ -89,7 +90,7 @@ test("the eval judge is a different model from the bot, so it never grades its o
   const { default: evals } = await import("../evals/evals.config.js");
   const judge = (evals as unknown as { judge: { model: { id: string; params: { id: string; value: string }[] } } }).judge.model;
   assert.equal(judge.id, "grok-4.7");
-  assert.deepEqual(judge.params, [{ id: "effort", value: "high" }]);
+  assert.deepEqual(judge.params, [{ id: "reasoning_effort", value: "xhigh" }]);
   assert.notEqual(judge.id, (agent as unknown as { model: { id: string } }).model.id);
 });
 

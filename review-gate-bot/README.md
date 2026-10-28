@@ -308,7 +308,7 @@ does not.
 
 | Where | What |
 | --- | --- |
-| `bot/agent.ts` | the pinned `model` (`deepseek-v41-flash-1017`, `effort=max`), `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`, and the Actions artifact storage hosts `*.blob.core.windows.net` and `*.actions.githubusercontent.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`, `tools: ["read"]` and `local.sandbox: true` (the model can read its skills and nothing outside the session workspace). |
+| `bot/agent.ts` | the pinned `model` (`deepseek-v41-flash-1017`, `reasoning_effort=max`, the highest value the model allows), `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`, and the Actions artifact storage hosts `*.blob.core.windows.net` and `*.actions.githubusercontent.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`, `tools: ["read"]` and `local.sandbox: true` (the model can read its skills and nothing outside the session workspace). |
 | `bot/channels/github.ts` | the repo, the trigger actions, `webhookEvents`, and the automatic tagging |
 | `bot/instructions.md` | the adversarial review policy and the hard nevers |
 | `bot/lib/gate.ts` | the gate order and the delivery decision (`gateActions`: draft guard, tag, ask). The only place that decides `next`. |
