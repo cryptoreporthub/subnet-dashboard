@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
-import { commentTurn, logAsk, pullRequestTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
+import { commentTurn, logAsk, pullRequestTurn, releaseReviewTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
 import { suiteKey } from "../bot/lib/gh.js";
 import { prKey, replitAskKey, replitTagKey } from "../bot/lib/gate.js";
 import { LEASE_MS } from "../bot/lib/lock.js";
@@ -346,4 +346,47 @@ test("a failed gate step is logged under the repository-qualified PR key", async
   assert.equal(logged.length, 1);
   assert.equal(logged[0].step, "check");
   assert.equal(logged[0].pr, "cryptoreporthub/subnet-dashboard#1522");
+});
+
+test("a failed review turn releases its lease, so the next delivery for that head asks again", async () => {
+  const w = world({});
+  assert.equal(await reviewEventTurn(w.deps), true, "the first delivery takes the lease");
+  assert.equal(await reviewEventTurn(w.deps), false, "a second delivery finds it held");
+  await releaseReviewTurn(w.deps.kv, REF, HEAD);
+  assert.equal(await reviewEventTurn(w.deps), true, "after the release, the lease is free again");
+});
+
+test("a delivery that loses the review-turn lease logs it", async () => {
+  const w = world({});
+  await reviewEventTurn(w.deps);
+  const lines: string[] = [];
+  const original = console.warn;
+  console.warn = (line: string) => {
+    lines.push(line);
+  };
+  try {
+    await reviewEventTurn(w.deps);
+  } finally {
+    console.warn = original;
+  }
+  const logged = lines.map((line) => JSON.parse(line)).filter((entry) => entry.event === "review_turn_lease_held");
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].pr, "cryptoreporthub/subnet-dashboard#1522");
+  assert.equal(logged[0].head, HEAD);
+});
+
+test("releasing a review turn's lease logs the release", async () => {
+  const w = world({});
+  await reviewEventTurn(w.deps);
+  const lines: string[] = [];
+  const original = console.warn;
+  console.warn = (line: string) => {
+    lines.push(line);
+  };
+  try {
+    await releaseReviewTurn(w.deps.kv, REF, HEAD);
+  } finally {
+    console.warn = original;
+  }
+  assert.ok(lines.some((line) => JSON.parse(line).event === "review_turn_lease_released"));
 });

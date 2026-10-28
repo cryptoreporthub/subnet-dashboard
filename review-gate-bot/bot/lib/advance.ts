@@ -125,6 +125,9 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   // Every delivery for this head reads the same missing verdict, so each would
   // ask for a review turn. Only the one that takes the lease asks.
   const reviewTurn = actions.needsReviewTurn && (await lease(kv, reviewTurnKey(ref, headSha), now));
+  if (actions.needsReviewTurn && !reviewTurn) {
+    console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_held", pr: prKey(ref), head: headSha }));
+  }
 
   // A failing post must not lose the review turn that follows it, and must not
   // stop the next step: each is logged and reported, then the gate moves on.
@@ -186,6 +189,20 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   };
 }
 
+
+/**
+ * Free the review-turn lease for a head whose model turn failed or was cancelled, so the
+ * next delivery for that head may ask again.
+ *
+ * Limits: a turn dropped by a host restart emits no event, so the lease then runs out on its
+ * own TTL. The delete is unconditional, so it can free a lease a newer delivery has just
+ * taken; the cost is one extra turn, not a second post. And once released, repeated failures
+ * can start a new turn on every later event for that head.
+ */
+export async function releaseReviewTurn(kv: HostKvApi, ref: PrRef, headSha: string): Promise<void> {
+  await kv.delete(reviewTurnKey(ref, headSha));
+  console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_released", pr: prKey(ref), head: headSha }));
+}
 
 /**
  * `pull_request` delivery: does it start a model turn?
