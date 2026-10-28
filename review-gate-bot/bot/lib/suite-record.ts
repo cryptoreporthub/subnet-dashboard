@@ -22,7 +22,7 @@ function listed(label: string, names: readonly string[]): string {
  * What the compare says about the suite's definition. A list GitHub cut off at its cap, or one that is missing,
  * is unknown, not empty: a suite-definition change could be among the files left out. Unknown is refused.
  */
-type DefinitionRead = { complete: true; files: string[] } | { complete: false; detail: string };
+export type DefinitionRead = { complete: true; files: string[] } | { complete: false; detail: string };
 
 async function readDefinition(input: { octokit: Octokit; ref: PrRef; headSha: string; baseSha: string }): Promise<DefinitionRead> {
   const { data } = await input.octokit.rest.repos.compareCommitsWithBasehead({
@@ -98,10 +98,12 @@ export async function recordSuiteComparison(input: {
   headSha: string;
   baseSha: string;
   reader?: RunnerReader;
+  /** The definition read the caller already made from this head's compare, so it is not fetched again. */
+  definition?: DefinitionRead;
 }): Promise<SuiteComparison> {
   // The suite's definition comes from the PR. A change to it means the report can no longer be trusted
   // as this suite's, so nothing is read. A compare too large to read whole is refused the same way.
-  const refusal = await refuseUnlessDefinitionClear(input, await readDefinition(input));
+  const refusal = await refuseUnlessDefinitionClear(input, input.definition ?? (await readDefinition(input)));
   if (refusal !== undefined) {
     return { ok: false, step: "head", reason: "needs-joshua", detail: refusal.detail };
   }
@@ -147,6 +149,7 @@ function refusalKey(ref: PrRef, headSha: string): string {
  * The gate's own suite step: record the full-suite comparison for this head when the gate needs it,
  * and do nothing otherwise. Returns a label for the audit line.
  *
+ * - One compare per delivery: the definition check reads it once, and the comparison below reuses it.
  * - A compare cut off at GitHub's file cap, or a changed suite definition: refused as NEEDS-JOSHUA, before any run is looked up.
  * - No finished run yet: waiting, nothing recorded.
  * - The newest finished run is already recorded for this head: no download.
@@ -172,7 +175,8 @@ export async function runSuiteIfDue(input: {
     if ((await readSuiteRecord(input.kv, input.ref, input.headSha))?.invalid === "needs-joshua") {
       return "already-refused";
     }
-    const refusal = await refuseUnlessDefinitionClear(input, await readDefinition(input));
+    const definition = await readDefinition(input);
+    const refusal = await refuseUnlessDefinitionClear(input, definition);
     if (refusal !== undefined) {
       return refusal.reason === "diff-incomplete" ? "refused:head-diff-incomplete" : "refused:head-needs-joshua";
     }
@@ -188,7 +192,7 @@ export async function runSuiteIfDue(input: {
     if (refused?.runId === latest.id) {
       return "already-refused";
     }
-    const outcome = await recordSuiteComparison({ ...input, reader });
+    const outcome = await recordSuiteComparison({ ...input, reader, definition });
     if (outcome.ok) {
       return "recorded";
     }

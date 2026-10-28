@@ -301,3 +301,29 @@ test("the widest refusal GitHub's compare allows stays bounded: every path kept,
   assert.equal(record?.definitionFiles?.length, 299);
   assert.ok((record?.detail ?? "").length <= 1000, `detail is ${record?.detail?.length} characters`);
 });
+
+test("one comparison makes one compare call, whichever path records it", async () => {
+  const f = fixture([]);
+  const direct = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
+  const outcome = await recordSuiteComparison({ octokit: direct.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(outcome.ok, true);
+  assert.equal(direct.calls.count, 1, "compare_suite_runs reads the compare once");
+});
+
+test("a delivery that goes on to record the comparison reuses the compare it already read", async () => {
+  const f = fixture([]);
+  const gate = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
+  const outcome = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(outcome, "recorded");
+  assert.equal(gate.calls.count, 1, "the definition check and the comparison share one compare response");
+  assert.equal((f.store.get(suiteKey(REF, HEAD)) as { state?: string }).state, "clean");
+});
+
+test("a delivery that finds the run already recorded still makes only the one compare", async () => {
+  const f = fixture([]);
+  const gate = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
+  await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const again = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  assert.equal(again, "already-recorded");
+  assert.equal(gate.calls.count, 2, "one compare per delivery, none extra");
+});
