@@ -25,7 +25,7 @@ type Raw = {
   performed_via_github_app: { id?: number; slug: string } | null;
 };
 
-type CheckCall = { name: string; sha: string; conclusion?: string };
+type CheckCall = { name: string; sha: string; conclusion?: string; summary?: string };
 
 /** One PR as GitHub shows it. The bot posts as its own App, `ME`. */
 function world(
@@ -36,6 +36,7 @@ function world(
     seed?: Record<string, unknown>;
     createFails?: boolean;
     checkFails?: boolean;
+    changedFiles?: string[];
   } = {},
 ) {
   const comments = [...(options.comments ?? [])];
@@ -52,7 +53,7 @@ function world(
         listReviews,
       },
       repos: {
-        compareCommitsWithBasehead: async () => ({ data: { files: [] } }),
+        compareCommitsWithBasehead: async () => ({ data: { files: (options.changedFiles ?? []).map((filename) => ({ filename, status: "modified" })) } }),
       },
       issues: {
         listComments,
@@ -105,8 +106,9 @@ function world(
       checks.push(call);
       return {
         update: async () => {},
-        conclude: async ({ conclusion }) => {
+        conclude: async ({ conclusion, output }) => {
           call.conclusion = conclusion;
+          call.summary = output?.summary;
         },
       };
     },
@@ -192,7 +194,7 @@ test("a failing tag post on a pull_request event does not lose the review turn",
 test("a head still waiting on reviewers gets an action_required review-gate check, never a passing one", async () => {
   const w = world();
   await pullRequestTurn(w.deps, { action: "opened", draft: false });
-  assert.deepEqual(w.checks, [{ name: "review-gate", sha: HEAD, conclusion: "action_required" }]);
+  assert.deepEqual(w.checks.map(({ name, sha, conclusion }) => ({ name, sha, conclusion })), [{ name: "review-gate", sha: HEAD, conclusion: "action_required" }]);
 });
 
 test("a FAIL anywhere at the head posts a failing review-gate check", async () => {
@@ -608,3 +610,29 @@ test("the same head: a first turn whose lease expired cannot free the second tur
   assert.equal(await releaseLeaseIfHolder(w.deps.kv, key, first), false, "the first turn's token frees nothing");
   assert.equal(await leaseToken(w.deps.kv, key, () => LEASE_MS + 2), undefined, "the second turn's lease is still held");
 });
+
+test("a suite refused as NEEDS-JOSHUA is not looked up again on later deliveries, and the check keeps the reason", async () => {
+  const w = world({
+    changedFiles: ["pytest.ini"],
+    comments: [mcPass],
+    reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
+  });
+  const { reader } = suiteReader({ runId: 77 });
+  let lookups = 0;
+  const counted: RunnerReader = {
+    runsForSha: async (sha) => {
+      lookups += 1;
+      return reader.runsForSha(sha);
+    },
+    artifactsForRun: reader.artifactsForRun,
+    artifactZip: reader.artifactZip,
+  };
+  await reviewEventTurn({ ...w.deps, reader: counted });
+  const afterFirst = lookups;
+  await reviewEventTurn({ ...w.deps, reader: counted });
+  assert.equal(lookups, afterFirst, "a refused head is not checked against GitHub again");
+  const last = w.checks.at(-1);
+  assert.match(last?.summary ?? "", /NEEDS-JOSHUA/);
+  assert.match(last?.summary ?? "", /pytest\.ini/);
+});
+

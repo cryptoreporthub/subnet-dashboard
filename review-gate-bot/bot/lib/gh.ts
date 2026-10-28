@@ -141,8 +141,19 @@ export async function readSuiteRecord(
   return record;
 }
 
+/** Refusals a person must clear: the gate stops asking for a suite run once one is recorded. */
+const NEEDS_JOSHUA = new Set(["needs-joshua", "baseline-test-missing", "newly-skipped"]);
+
+/** The gate's suite state for a record: NEEDS-JOSHUA is final, anything else is what the record says. */
+function suiteOf(record: RecordedSuite | undefined): SuiteState {
+  if (record === undefined) {
+    return "missing";
+  }
+  return typeof record.invalid === "string" && NEEDS_JOSHUA.has(record.invalid) ? "needs-joshua" : record.state;
+}
+
 export async function readSuiteState(kv: HostKvApi, ref: PrRef, headSha: string): Promise<SuiteState> {
-  return (await readSuiteRecord(kv, ref, headSha))?.state ?? "missing";
+  return suiteOf(await readSuiteRecord(kv, ref, headSha));
 }
 
 /**
@@ -155,6 +166,7 @@ export function gateStateFrom(input: {
   comments: readonly CommentLike[];
   reviews: readonly ReviewLike[];
   suite: SuiteState;
+  suiteDetail?: string;
   replitTaggedForSha?: string;
   replitTaggedAt?: string;
 }): GateState {
@@ -184,6 +196,7 @@ export function gateStateFrom(input: {
     headSha: input.headSha,
     verdicts,
     suite: input.suite,
+    suiteDetail: input.suiteDetail,
     replitTaggedForSha: input.replitTaggedForSha,
     replitTaggedAt: input.replitTaggedAt,
   });
@@ -247,11 +260,13 @@ export async function readGateState(input: {
     readReviews(input.octokit, input.ref),
   ]);
 
+  const record = await readSuiteRecord(input.kv, input.ref, input.headSha);
   return gateStateFrom({
     headSha: input.headSha,
     comments,
     reviews,
-    suite: await readSuiteState(input.kv, input.ref, input.headSha),
+    suite: suiteOf(record),
+    suiteDetail: record?.detail,
     replitTaggedForSha: replitTaggedIn(comments, input.headSha),
     replitTaggedAt: replitTagTimeIn(comments, input.headSha),
   });

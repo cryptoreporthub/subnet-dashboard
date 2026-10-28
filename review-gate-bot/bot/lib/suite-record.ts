@@ -66,6 +66,13 @@ export async function recordSuiteComparison(input: {
   const flakes = knownFlakes();
   const diff = diffJunit({ baseXml: base.xml, headXml: head.xml, knownFlakes: flakes.ids });
   // The record keeps the reason and the test IDs behind it: a missing or newly skipped test is a person's call to clear.
+  // A removed or newly skipped test needs a person's decision, so it is recorded with the IDs behind it.
+  const detail =
+    diff.invalid === "baseline-test-missing"
+      ? `missing at head: ${diff.missing.join(", ")}`
+      : diff.invalid === "newly-skipped"
+        ? `newly skipped at head: ${diff.skipped.join(", ")}`
+        : undefined;
   await input.kv.put(suiteKey(input.ref, input.headSha), {
     state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
     newFailures: diff.newFailures,
@@ -73,6 +80,7 @@ export async function recordSuiteComparison(input: {
     invalid: diff.invalid ?? null,
     missing: diff.missing,
     skipped: diff.skipped,
+    ...(detail === undefined ? {} : { detail }),
     at: Date.now(),
   });
   return { ok: true, diff, headRunId: head.runId, baseRunId: base.runId, flakeList: flakes.source };

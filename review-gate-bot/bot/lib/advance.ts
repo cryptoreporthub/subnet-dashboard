@@ -162,7 +162,8 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     } else {
       suite = await attempt("run-suite", () => runSuiteIfDue({ octokit, kv, ref, headSha, baseSha, reader }));
     }
-    if (suite === "recorded") {
+    // A recorded result, or a refusal that makes the head NEEDS-JOSHUA, changes what the gate says: read it again.
+    if (suite === "recorded" || suite === "refused:head-needs-joshua") {
       state = await readGateState({ octokit, kv, ref, headSha });
       actions = gateActions(state, false);
     }

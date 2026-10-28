@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { recordSuiteComparison } from "../bot/lib/suite-record.js";
+import { readSuiteState } from "../bot/lib/gh.js";
 import { JUNIT_ARTIFACT, type RunnerReader } from "../bot/lib/runner.js";
 import { suiteKey } from "../bot/lib/gh.js";
 
@@ -129,3 +130,15 @@ test("a comparison with a base test missing at head records which tests are miss
   assert.equal(record?.invalid, "baseline-test-missing");
   assert.deepEqual(record?.missing, ["tests.test_x::a"]);
 });
+
+test("a missing baseline test reads as NEEDS-JOSHUA for the gate, not as a retryable regression", async () => {
+  const f = fixture([]);
+  let call = 0;
+  const reader: RunnerReader = {
+    ...f.reader,
+    artifactZip: async () => zipOf(++call === 1 ? '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>' : '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="a"/><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>'),
+  };
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
+  assert.equal(await readSuiteState(f.kv, REF, HEAD), "needs-joshua");
+});
+
