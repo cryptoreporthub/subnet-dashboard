@@ -120,13 +120,20 @@ test("an empty base report is invalid too: a zero-testcase base cannot prove a h
   assert.deepEqual(diff.counts, { base: 0, head: 1 });
 });
 
-test("a report with only skipped tests still has testcases, so it is not invalid", () => {
-  const diff = diffJunit({
+test("a test skipped at head that passed at base is refused, while skipped at both is not", () => {
+  const newly = diffJunit({
     baseXml: junit([{ name: "a" }]),
     headXml: junit([{ name: "a", outcome: "skipped" }]),
   });
-  assert.equal(diff.invalid, undefined);
-  assert.equal(diff.clean, true);
+  assert.equal(newly.invalid, "newly-skipped");
+  assert.equal(newly.clean, false);
+
+  const bothSkipped = diffJunit({
+    baseXml: junit([{ name: "a", outcome: "skipped" }]),
+    headXml: junit([{ name: "a", outcome: "skipped" }]),
+  });
+  assert.equal(bothSkipped.invalid, undefined);
+  assert.equal(bothSkipped.clean, true);
 });
 
 test("a truncated report that lost every testcase cannot pass the gate", () => {
@@ -315,14 +322,34 @@ test("a code change blocks a carry even when the source SHA was clean", () => {
 
 // --- Second review: a report that shrinks, and one built to be slow ---------
 
-test("a head with far fewer tests than base cannot read clean", () => {
+test("a base test missing at head cannot read clean, however few are missing", () => {
   const many = (n: number) => junit(Array.from({ length: n }, (_, i) => ({ name: `t${i}` })));
-  const shrunk = diffJunit({ baseXml: many(100), headXml: many(50) });
-  assert.equal(shrunk.clean, false);
-  assert.equal(shrunk.invalid, "suite-shrunk");
-  assert.deepEqual(shrunk.counts, { base: 100, head: 50 });
-  assert.equal(diffJunit({ baseXml: many(100), headXml: many(95) }).clean, true, "a small trim is not a collapse");
-  assert.equal(diffJunit({ baseXml: many(100), headXml: many(120) }).clean, true);
+  const trimmed = diffJunit({ baseXml: many(100), headXml: many(95) });
+  assert.equal(trimmed.clean, false, "five base tests are gone, and the gate cannot tell a removal from a pass");
+  assert.equal(trimmed.invalid, "baseline-test-missing");
+  assert.equal(trimmed.missing.length, 5);
+  assert.deepEqual(trimmed.counts, { base: 100, head: 95 });
+  assert.equal(diffJunit({ baseXml: many(100), headXml: many(120) }).clean, true, "new tests at head are fine");
+});
+
+test("a base failing test absent at head is not a fixed failure: it cannot read clean", () => {
+  const diff = diffJunit({
+    baseXml: junit([{ name: "a", outcome: "failed" }, { name: "b" }]),
+    headXml: junit([{ name: "b" }]),
+  });
+  assert.equal(diff.clean, false, "a removed failing test looks fixed, and the gate cannot tell the two apart");
+  assert.equal(diff.invalid, "baseline-test-missing");
+  assert.deepEqual(diff.missing, ["tests.test_x::a"]);
+});
+
+test("a test newly skipped at head cannot read clean", () => {
+  const diff = diffJunit({
+    baseXml: junit([{ name: "a" }, { name: "b" }]),
+    headXml: junit([{ name: "a", outcome: "skipped" }, { name: "b" }]),
+  });
+  assert.equal(diff.clean, false);
+  assert.equal(diff.invalid, "newly-skipped");
+  assert.deepEqual(diff.skipped, ["tests.test_x::a"]);
 });
 
 test("a malformed report made of unclosed testcases is rejected quickly", () => {

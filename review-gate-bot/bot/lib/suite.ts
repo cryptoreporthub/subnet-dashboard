@@ -45,7 +45,11 @@ export type SuiteDiff = {
    * Why a comparison cannot be trusted at all. Present means `clean` is false
    * no matter what the failure lists say.
    */
-  invalid?: "zero-testcases" | "malformed-xml" | "suite-shrunk";
+  invalid?: "zero-testcases" | "malformed-xml" | "baseline-test-missing" | "newly-skipped";
+  /** Base testcases with no testcase at head. A removal cannot be told from a pass, so it is not clean. */
+  missing: string[];
+  /** Testcases skipped at head that were not skipped at base. */
+  skipped: string[];
   /** Testcase counts, so a reader can see the report was real. */
   counts: { base: number; head: number };
 };
@@ -133,12 +137,6 @@ export type DiffInput = {
 
 const emptyCase = (): JunitCase => ({ classname: "", name: "", id: "", outcome: "passed" });
 
-/**
- * A head with less than this share of base's testcases is not the same suite.
- * A conftest deselect or a module-level skip drops tests without failing any,
- * and 500 passing tests at base against 1 at head compared clean (measured).
- */
-const MIN_HEAD_SHARE = 0.9;
 
 /** Cases from a report, or the reason it cannot be trusted. */
 function readReport(xml: string): { cases: JunitCase[]; malformed: boolean } {
@@ -162,6 +160,14 @@ export function diffJunit(input: DiffInput): SuiteDiff {
   const headCases = headReport.cases;
   const counts = { base: baseCases.length, head: headCases.length };
 
+  const headById = new Map(headCases.map((c) => [c.id, c]));
+  const baseById = new Map(baseCases.map((c) => [c.id, c]));
+  const missing = baseCases.filter((c) => !headById.has(c.id)).map((c) => c.id).sort();
+  const skipped = headCases
+    .filter((c) => c.outcome === "skipped" && baseById.has(c.id) && baseById.get(c.id)?.outcome !== "skipped")
+    .map((c) => c.id)
+    .sort();
+
   const invalid: SuiteDiff["invalid"] =
     counts.head === 0 || counts.base === 0
       ? // A report with no testcases cannot show a regression, and it cannot show
@@ -171,9 +177,13 @@ export function diffJunit(input: DiffInput): SuiteDiff {
         "zero-testcases"
       : baseReport.malformed || headReport.malformed
         ? "malformed-xml"
-        : counts.head < counts.base * MIN_HEAD_SHARE
-          ? "suite-shrunk"
-          : undefined;
+        : missing.length > 0
+          ? // A base test with no head counterpart is either removed or lost to a truncated run. The gate
+            // cannot tell which, so it is not a pass. An intentional removal is cleared by a person.
+            "baseline-test-missing"
+          : skipped.length > 0
+            ? "newly-skipped"
+            : undefined;
   if (invalid !== undefined) {
     return {
       newFailures: [],
@@ -182,6 +192,8 @@ export function diffJunit(input: DiffInput): SuiteDiff {
       preExisting: [],
       clean: false,
       invalid,
+      missing,
+      skipped,
       counts,
     };
   }
@@ -205,9 +217,10 @@ export function diffJunit(input: DiffInput): SuiteDiff {
     }
   }
 
+  // A failure is fixed when its test is still at head and no longer fails. A test that is gone is in `missing`.
   const fixed: string[] = [];
   for (const id of base.keys()) {
-    if (!head.has(id)) {
+    if (headById.has(id) && !head.has(id)) {
       fixed.push(id);
     }
   }
@@ -218,6 +231,8 @@ export function diffJunit(input: DiffInput): SuiteDiff {
     flakyRetriedOk: flakyRetriedOk.sort(),
     preExisting: preExisting.sort(),
     clean: newFailures.length === 0,
+    missing,
+    skipped,
     counts,
   };
 }
