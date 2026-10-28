@@ -32,3 +32,30 @@ def test_missing_weights_digest_is_not_fresh(tmp_path):
 def test_null_weights_digest_is_not_fresh(tmp_path):
     path = _volume(tmp_path, lambda s: s["provenance"].__setitem__("weights_digest", None))
     assert snaps.volume_has_fresh_complete_snapshot(path=path) is False
+
+
+def _write_soul(path, quant):
+    blob = {"adversarial_state": {"council_weights": {"quant": quant, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}}
+    path.write_text(json.dumps(blob))
+
+
+@pytest.fixture
+def soul_map(tmp_path, monkeypatch):
+    path = tmp_path / "soul_map.json"
+    _write_soul(path, 1.0)
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(path))
+    # The loader keeps a short in-process cache of file reads; an edit on disk must be seen at once here.
+    monkeypatch.setattr("internal.store.soul_map_io._CACHE_TTL", 0)
+    return path
+
+
+def test_fixture_snapshot_is_fresh_only_while_its_digest_matches_the_live_soul_map(tmp_path, soul_map):
+    path = _volume(tmp_path, lambda s: None)
+    assert snaps.volume_has_fresh_complete_snapshot(path=path) is True
+    _write_soul(soul_map, 1.7)
+    assert snaps.volume_has_fresh_complete_snapshot(path=path) is False
+
+
+def test_a_snapshot_stamped_with_a_foreign_weights_digest_is_not_fresh(tmp_path, soul_map):
+    path = _volume(tmp_path, lambda s: s["provenance"].__setitem__("weights_digest", "w" * 64))
+    assert snaps.volume_has_fresh_complete_snapshot(path=path) is False

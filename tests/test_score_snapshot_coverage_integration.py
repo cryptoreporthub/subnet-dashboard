@@ -409,9 +409,9 @@ def test_scrape_reads_previous_publish_from_snapshot_not_soul_map(tmp_path, monk
     def _forbid_soul_map(*_args, **_kwargs):
         raise AssertionError("soul_map read on metrics scrape")
 
-    monkeypatch.setattr("internal.council.weights._load_raw", _forbid_soul_map)
     path = tmp_path / "score_snapshots.json"
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    # The fixture stamps the live weights digest, which reads soul_map: build it before the scrape guard.
     payload = complete_snapshot_payload(
         day_rows=[{"netuid": 1, "total_score": 1.0}],
         written_at=now,
@@ -423,6 +423,7 @@ def test_scrape_reads_previous_publish_from_snapshot_not_soul_map(tmp_path, monk
     path.write_text(json.dumps(payload), encoding="utf-8")
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     cov.reset_phase1_cycle_state_for_tests()
+    monkeypatch.setattr("internal.council.weights._load_raw", _forbid_soul_map)
     refresh_from_state()
     assert SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get() == 0.015
 

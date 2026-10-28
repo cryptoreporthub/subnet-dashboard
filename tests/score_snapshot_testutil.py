@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from internal.chain_read import ChainRead
-from internal.council.scorer_identity import stamp_scorer_fields
+from internal.council.scorer_identity import (
+    compute_input_digest,
+    current_scorer_digest,
+    current_weights_digest,
+    stamp_scorer_fields,
+)
 from internal.council.snapshot_coverage import membership_generation
 
 PINNED_HASH = "0x" + "ef" * 32
@@ -32,15 +37,23 @@ def receipt_provenance(netuids: Any) -> Dict[str, Any]:
     }
 
 
-def snapshot_provenance(netuids: Any, *, resolved_at: str = "2026-10-17T00:00:00Z") -> Dict[str, Any]:
+def snapshot_provenance(
+    netuids: Any,
+    *,
+    resolved_at: str = "2026-10-17T00:00:00Z",
+    rows: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Provenance with the live digests, so a fixture is fresh exactly when a real build would be."""
     chain = chain_read(netuids)
+    generation = membership_generation(chain.netuids)
+    scored_rows = rows if rows is not None else [{"netuid": int(n)} for n in chain.netuids]
     return {
-        "membership_generation": membership_generation(chain.netuids),
+        "membership_generation": generation,
         "membership_block_hash": chain.block_hash,
         "membership_rpc": chain.rpc,
         "membership_resolved_at": resolved_at,
-        "weights_digest": "w" * 64,
-        "input_digest": "i" * 64,
+        "weights_digest": current_weights_digest(),
+        "input_digest": compute_input_digest(generation, current_scorer_digest(), scored_rows, {}),
     }
 
 
@@ -68,7 +81,7 @@ def complete_snapshot_payload(
             "build_started_at": written_at,
             "hour": hour,
             "day": day,
-            "provenance": snapshot_provenance(expected),
+            "provenance": snapshot_provenance(expected, rows=day),
             "coverage": {
                 "complete": True,
                 "published": True,
