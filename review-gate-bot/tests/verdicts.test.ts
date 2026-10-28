@@ -77,7 +77,7 @@ test("an owner review with no app attribution is not Ditto", () => {
 test("review state beats the body text", () => {
   assert.equal(verdictFromReview(review({ state: "APPROVED", body: "anything" })), "PASS");
   assert.equal(verdictFromReview(review({ state: "CHANGES_REQUESTED", body: "anything" })), "MODIFY");
-  assert.equal(verdictFromReview(review({ state: "COMMENTED", body: "cursor: PASS at x" })), "PASS");
+  assert.equal(verdictFromReview(review({ state: "COMMENTED", body: "cursor: PASS at " + HEAD })), "PASS");
 });
 
 test("a review verdict is pinned to its commit_id", () => {
@@ -173,7 +173,7 @@ test("there is no prose PASS fallback: 'approved' and 'no blocking findings' alo
 
 test("a bare 'PASS' first line is still a verdict", () => {
   assert.equal(parseVerdictToken("PASS"), "PASS");
-  assert.equal(parseVerdictToken("**PASS** — clean."), "PASS");
+  assert.notEqual(parseVerdictToken("**PASS** — clean."), "PASS", "a note after PASS takes it back");
   assert.equal(parseVerdictToken("## Verdict: **MODIFY** at `abc`"), "MODIFY");
   assert.equal(parseVerdictToken("Replit: FAIL — two blockers."), "FAIL");
 });
@@ -439,7 +439,7 @@ for (const line of NOT_A_PASS) {
 
 test("the verdict shapes reviewers actually write still read", () => {
   assert.equal(parseVerdictToken("MC: **PASS** at `" + HEAD + "`"), "PASS");
-  assert.equal(parseVerdictToken("PASS — no blocking findings"), "PASS");
+  assert.notEqual(parseVerdictToken("PASS — no blocking findings"), "PASS");
   assert.equal(parseVerdictToken("Cursor: **PASS**"), "PASS");
   assert.equal(parseVerdictToken("## Verdict: **MODIFY** at `abc`"), "MODIFY");
   assert.equal(parseVerdictToken("FAIL — not a PASS"), "FAIL");
@@ -505,7 +505,10 @@ test("a full SHA tied to the head by a keyword, 'at', or backticks is a claim", 
   assert.equal(pinnedFor(`PASS head ${HEAD}`), HEAD);
   assert.equal(pinnedFor(`PASS at ${HEAD}`), HEAD);
   assert.equal(pinnedFor(`PASS on \`${HEAD}\``), HEAD);
-  assert.equal(pinnedFor(`PASS. See commit ${HEAD}`), HEAD);
+  // A bare SHA after PASS parses as PASS, but the claim rule takes a bare 40-character run
+  // as prose, so it pins to nothing and cannot count for a head.
+  assert.equal(pinnedFor(`PASS ${HEAD}`), undefined);
+  assert.equal(pinnedFor(`PASS. See commit ${HEAD}`), undefined, "a note between PASS and the SHA is no PASS");
 });
 
 test("two different heads named in one verdict pin to neither", () => {
@@ -513,8 +516,8 @@ test("two different heads named in one verdict pin to neither", () => {
   assert.equal(pinnedFor(`PASS head ${OTHER}, current head is \`${HEAD}\``), undefined);
 });
 
-test("a short and a full form of the same head are one claim", () => {
-  assert.equal(pinnedFor(`PASS head ${HEAD.slice(0, 12)} (\`${HEAD}\`)`), HEAD);
+test("a short and a full form of one head after a PASS name two SHAs, so no single head is pinned", () => {
+  assert.equal(pinnedFor(`PASS head ${HEAD.slice(0, 12)} (\`${HEAD}\`)`), undefined);
 });
 
 const OWNER = { login: "cryptoreporthub", type: "User" };
@@ -564,10 +567,10 @@ test("verdict lines in the shapes reviewers decorate them with still read", () =
   assert.equal(parseVerdictToken("> PASS"), undefined);
 });
 
-test("a caveat after a PASS is not a withdrawal of it", () => {
-  assert.equal(parseVerdictToken("PASS — not blocking"), "PASS");
-  assert.equal(parseVerdictToken("PASS — no regressions, but docs lag"), "PASS");
-  assert.equal(parseVerdictToken("PASS, however see the note below"), "PASS");
+test("a caveat after a PASS takes it back under the allowlist", () => {
+  assert.notEqual(parseVerdictToken("PASS — not blocking"), "PASS");
+  assert.notEqual(parseVerdictToken("PASS — no regressions, but docs lag"), "PASS");
+  assert.notEqual(parseVerdictToken("PASS, however see the note below"), "PASS");
   assert.equal(parseVerdictToken("PASS — not approved"), undefined);
   assert.equal(parseVerdictToken("PASS until the suite runs"), undefined);
 });
@@ -611,12 +614,14 @@ test("an unedited comment keeps its creation order", () => {
   );
 });
 
-// --- A PASS takes back only the caveats it names -------------------------------------
-// A deny-list of withdrawals misses every phrasing it does not name. The keep list is the
-// corpus the gate must still read as PASS: MC's header shapes, Cursor's line and the caveats
-// that are real. The deny list is what MC reported as parsing as PASS at 44ce7ea.
+// --- A PASS counts only when nothing but a head pointer follows it -----------------------
+// Allowlist, fail closed: after PASS, an optional head SHA (`at <sha>`, `at head <sha>`,
+// `head <sha>`, or a bare SHA, backticked or not), trailing punctuation, and a `-grokbot` or
+// `-simibot` signature. Anything else takes the PASS back. The NOT_PASS rows are the phrasings
+// MC and Cursor named at 44ce7ea, plus the caveats and header shapes that now stop counting.
 
-const WITHDRAWN_PASS = [
+const NOT_PASS = [
+  // Phrasings MC named at 44ce7ea.
   "PASS — do not approve this PR",
   "PASS, do not merge",
   "PASS (do not approve)",
@@ -632,40 +637,66 @@ const WITHDRAWN_PASS = [
   "PASS — nope",
   "PASS, ignore this",
   "PASS — hold",
-  "PASS — don’t merge",
-  "PASS — can’t ship",
-  "PASS — won’t merge",
-];
-
-const STILL_PASS = [
-  "PASS",
-  "PASS.",
+  "PASS — don\u2019t merge",
+  "PASS — can\u2019t ship",
+  "PASS — won\u2019t merge",
+  // Caveats and notes that now stop counting, as the owner set the policy.
   "**PASS** — clean.",
   "PASS — no blocking findings",
   "PASS, but docs lag",
   "PASS, not blocking",
   "PASS (no blocking findings)",
-  "PASS at `" + HEAD + "`",
-  "PASS at " + HEAD,
-  "MC: **PASS** at `" + HEAD + "`",
-  "cursor: **PASS** at `" + HEAD + "`",
-  "cursor: PASS at x",
+  "PASS — no regressions, but docs lag",
+  "PASS, however see the note below",
+  "PASS until the suite runs",
+  "PASS. See commit " + HEAD,
+  "PASS head " + HEAD.slice(0, 12) + " (`" + HEAD + "`)",
+  "PASS at x",
+  // MC's header shape and Replit's natural wording: not PASS under exact-PASS, by policy.
   "PASS — MC adversarial review of #1522 at head `" + HEAD + "`",
   "Replit: PASS — reviewed draft #1522 at exact head " + HEAD + ".",
+];
+
+const CLEAN_PASS = [
+  "PASS",
+  "PASS.",
+  "PASS!",
+  "PASS at " + HEAD,
+  "PASS at `" + HEAD + "`",
+  "PASS at head " + HEAD,
+  "PASS head " + HEAD,
+  "PASS on `" + HEAD + "`",
+  "PASS `" + HEAD + "`",
+  "PASS -grokbot",
+  "PASS at `" + HEAD + "` -grokbot",
+  "PASS at `" + HEAD + "`.",
+  "MC: **PASS** at `" + HEAD + "`",
+  "cursor: **PASS** at `" + HEAD + "`",
   "Replit: PASS head " + HEAD,
 ];
 
-for (const line of WITHDRAWN_PASS) {
-  test(`a PASS that takes itself back is no PASS: "${line}"`, () => {
+for (const line of NOT_PASS) {
+  test(`a PASS with anything else after it is no PASS: "${line}"`, () => {
     assert.notEqual(parseVerdictToken(line), "PASS", `"${line}" must not read as PASS`);
   });
 }
 
-for (const line of STILL_PASS) {
-  test(`a real PASS line still reads as PASS: "${line}"`, () => {
+for (const line of CLEAN_PASS) {
+  test(`a PASS with only a head pointer after it is a PASS: "${line}"`, () => {
     assert.equal(parseVerdictToken(line), "PASS");
   });
 }
+
+test("two SHAs after a PASS is no PASS, because the verdict cannot name one head", () => {
+  assert.notEqual(parseVerdictToken(`PASS at ${HEAD} ${OTHER}`), "PASS");
+});
+
+test("MODIFY and FAIL first lines parse as before, whatever follows them", () => {
+  assert.equal(parseVerdictToken("MODIFY — MC adversarial review of #1522 at head `" + HEAD + "`"), "MODIFY");
+  assert.equal(parseVerdictToken("Replit: MODIFY — reviewed draft #1522 at exact head " + HEAD), "MODIFY");
+  assert.equal(parseVerdictToken("FAIL — tests failing, do not merge"), "FAIL");
+  assert.equal(parseVerdictToken("MODIFY, do not deploy until Joshua says GO"), "MODIFY");
+});
 
 test("MC's own PASS-with-a-withdrawal still reads as no verdict, not as PASS", () => {
   assert.equal(parseVerdictToken("PASS, do not deploy until Joshua says GO"), undefined);

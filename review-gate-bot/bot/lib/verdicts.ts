@@ -218,19 +218,49 @@ export function firstLine(text: string): string {
 const VERDICT_LINE =
   /^(?:#{1,6}\s*)?(?:[*_\s]|\p{Extended_Pictographic}\uFE0F?)*(?:[A-Za-z][A-Za-z ]{0,24}:\s*)?[*_`]*(PASS|MODIFY|FAIL)[*_`]*(?![\w?])(.*)$/u;
 
+/** A commit SHA, full or short. */
+const SHA_WORD = /^[0-9a-f]{7,40}$/i;
+
+/** A reviewer's `-grokbot` or `-simibot` signature. */
+const SIGNATURE_WORD = /^-?(?:grokbot|simibot)$/i;
+
 /**
- * A PASS line that goes on to take the PASS back. A caveat is not a withdrawal:
- * "PASS, but docs lag" and "PASS, not blocking" still pass, so `but`, `however`
- * and a bare `not` are deliberately absent.
+ * What may follow `PASS` on its first line: an allowlist, and fail closed.
  *
- * A deny-list, so it can miss a phrasing it does not name. MC's adversarial review
- * at 44ce7ea found "do not approve", "block", "reject", "stale" and the like parsing
- * as PASS, and this list now names them. An allowlist of tails would close the gap
- * for good, but it would also reject the caveats the gate keeps today ("but docs
- * lag", "however ..."), so which caveats count is the owner's call, not this list's.
+ * Allowed, in this order: an optional head pointer (`at <sha>`, `at head <sha>`,
+ * `head <sha>`, or a bare SHA, backticked or not), then an optional signature, then
+ * trailing punctuation. Nothing else. A withdrawal list missed every phrasing it did
+ * not name, so a PASS followed by a caveat or a note is no PASS: it has to be re-read.
  */
-const WITHDRAWN =
-  /\bnot\s+(?:approv\w*|merg\w*|ship\w*|safe|ready|passing|final|signed|yet|a\s+pass)\b|\b(?:never|cannot|until|unless|yet|dont|do\s+not|block|blocked|hold|reject\w*|withdraw\w*|revoke\w*|retract\w*|supersede\w*|stale|unsafe|ignore|wait|nope)\b|n['’]t\b|\bno\s*[,;:]|\bno\s+(?:approval|pass)\b/i;
+function passTailAllowed(tail: string): boolean {
+  const words = tail
+    .replace(/[*_`]/g, " ")
+    .replace(/[—–,;:]/g, " ")
+    .replace(/[.!]+\s*$/, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== "" && word !== "-");
+  let i = 0;
+  const keyword = words[0]?.toLowerCase();
+  if (keyword === "at" && words[1]?.toLowerCase() === "head") {
+    i = 2;
+  } else if (keyword === "at" || keyword === "head" || keyword === "on") {
+    i = 1;
+  }
+  if (i > 0) {
+    if (!SHA_WORD.test(words[i] ?? "")) {
+      return false;
+    }
+    i += 1;
+  } else if (SHA_WORD.test(words[0] ?? "")) {
+    i = 1;
+  }
+  if (SIGNATURE_WORD.test(words[i] ?? "")) {
+    i += 1;
+  }
+  return i === words.length;
+}
+
 
 /**
  * The verdict a comment's **first line** opens with, if it opens with one.
@@ -245,7 +275,7 @@ export function parseVerdictToken(text: string): Verdict | undefined {
     return undefined;
   }
   const verdict = match[1] as Verdict;
-  if (verdict === "PASS" && WITHDRAWN.test(match[2] ?? "")) {
+  if (verdict === "PASS" && !passTailAllowed(match[2] ?? "")) {
     return undefined;
   }
   return verdict;

@@ -151,7 +151,7 @@ test("an owner-account comment naming Replit is a Replit verdict", () => {
     comments: [
       {
         id: 2,
-        body: `Replit: **PASS** at full head ${PR.headSha}`,
+        body: `Replit: **PASS** at ${PR.headSha}`,
         createdAt: "2026-10-26T04:00:00Z",
         user: { login: "cryptoreporthub", type: "User" },
         performedViaGithubApp: null,

@@ -100,7 +100,7 @@ function dittoReview(id: number, state: string, sha = HEAD): {
 function replitReport(id: number, verdict: string, sha = HEAD): RawComment {
   return {
     id,
-    body: `Replit: ${verdict} — reviewed draft at exact head ${sha}.`,
+    body: `Replit: ${verdict} at ${sha}`,
     created_at: "2026-10-26T04:30:00Z",
     user: { login: "cryptoreporthub", type: "User" },
     performed_via_github_app: null,
