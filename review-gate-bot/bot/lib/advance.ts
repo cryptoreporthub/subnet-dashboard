@@ -84,7 +84,9 @@ export function logAsk(outcome: ReplitAskOutcome, pr: string, headSha: string): 
       attempts: outcome.attempts,
       detail: outcome.detail,
       effect:
-        "Replit was never successfully asked for this head. The gate does not advance on the ask: it still needs Replit's posted verdict, which will arrive only if the @replit tag reaches them.",
+        outcome.reason === "ambiguous"
+          ? "Replit may or may not have been asked for this head: the ask has no recorded outcome, so it is not repeated automatically. The gate does not advance on the ask. To ask again, clear this head's ask record."
+          : "Replit was never successfully asked for this head. The gate does not advance on the ask: it still needs Replit's posted verdict, which will arrive only if the @replit tag reaches them.",
     }),
   );
 }
@@ -95,6 +97,9 @@ function askLabel(outcome: ReplitAskOutcome): string {
   }
   if (outcome.reason === "already-asked") {
     return "already-asked";
+  }
+  if (outcome.reason === "ambiguous") {
+    return "ambiguous";
   }
   return outcome.persistent ? `failed:persistent:${outcome.reason}` : `failed:${outcome.reason}`;
 }

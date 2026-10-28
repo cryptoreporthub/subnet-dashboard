@@ -1,6 +1,6 @@
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { replitAskKey } from "./gate.js";
+import { prKey, replitAskKey } from "./gate.js";
 import { exclusive } from "./lock.js";
 import type { PrRef } from "./gh.js";
 import { redactSecrets } from "./redact.js";
@@ -58,7 +58,12 @@ export function replitQuestion(prNumber: number, headSha: string): string {
 /** Attempts per head before the ask is reported as persistently failing. */
 export const ASK_ATTEMPTS = 3;
 
-export type ReplitAskFailure = "unavailable" | "no-tool" | "error";
+/**
+ * `ambiguous`: the call may have gone out, but nothing confirms the outcome (the record of it could not
+ * be finished, or the process died mid-call). It is never retried automatically, because a retry could
+ * ask Replit twice; clear the head's ask record (`replitAskKey`) to allow one more ask.
+ */
+export type ReplitAskFailure = "unavailable" | "no-tool" | "error" | "ambiguous";
 
 export type ReplitAskOutcome =
   | { asked: true; text: string; attempts: number }
@@ -75,6 +80,11 @@ export type ReplitAskOutcome =
 type AskRecord = {
   /** Successful asks. Present means: do not ask again for this head. */
   askedAt?: number;
+  /**
+   * Written before the call and replaced by `askedAt` or a failure once the outcome is known. Still
+   * present on a later read means the outcome was never confirmed, so the ask is not repeated.
+   */
+  inFlightAt?: number;
   /** Failed attempts, so a retry is bounded and a persistent failure is visible. */
   failedAttempts?: number;
   lastFailure?: string;
@@ -144,6 +154,18 @@ async function askReplit(input: {
   }
 
   const failedAttempts = previous?.failedAttempts ?? 0;
+  if (previous?.inFlightAt !== undefined) {
+    // An earlier delivery wrote this before calling Replit and never recorded how the call ended. It may
+    // have been sent, so asking again could ask twice. That is worse than an ask that never goes out:
+    // the @replit tag is already on the PR, and the gate advances only on Replit's posted verdict.
+    return {
+      asked: false,
+      reason: "ambiguous",
+      detail: "an earlier ask for this head has no recorded outcome; not repeating it automatically",
+      attempts: failedAttempts + 1,
+      persistent: true,
+    };
+  }
   if (failedAttempts >= ASK_ATTEMPTS) {
     return {
       asked: false,
@@ -171,28 +193,49 @@ async function askReplit(input: {
     return fail("unavailable", `no ${REPLIT_TOOL} on the "${REPLIT_CONNECTION}" connection`);
   }
 
+  // Recorded before the call, so storage failing afterwards cannot make the ask look like it never
+  // happened. If this write fails nothing has been sent, so the error propagates and a later delivery
+  // starts over.
+  const startedAt = Date.now();
+  await input.kv.put(key, {
+    at: startedAt,
+    inFlightAt: startedAt,
+    ...(failedAttempts > 0 ? { failedAttempts, lastFailure: previous?.lastFailure } : {}),
+  } satisfies AskRecord);
+
+  let result: Awaited<ReturnType<HostMcpRegistry["callTool"]>>;
   try {
-    const result = await input.mcp.callTool(REPLIT_CONNECTION, REPLIT_TOOL, {
+    result = await input.mcp.callTool(REPLIT_CONNECTION, REPLIT_TOOL, {
       replId: REPL_ID,
       question: replitQuestion(input.ref.number, input.headSha),
     });
-
-    if (result.isError === true) {
-      const detail = result.content
-        .map((part) => (part.type === "text" ? part.text : `<${part.type}>`))
-        .join(" ")
-        .slice(0, 300);
-      return fail("error", detail);
-    }
-
-    await input.kv.put(key, { at: Date.now(), askedAt: Date.now() } satisfies AskRecord);
-
-    const text = result.content
-      .map((part) => (part.type === "text" ? part.text : `<${part.type}>`))
-      .join(" ")
-      .slice(0, 500);
-    return { asked: true, text, attempts: failedAttempts + 1 };
   } catch (error) {
     return fail("error", error instanceof Error ? error.message : String(error));
   }
+
+  const text = result.content
+    .map((part) => (part.type === "text" ? part.text : `<${part.type}>`))
+    .join(" ");
+
+  if (result.isError === true) {
+    return fail("error", text.slice(0, 300));
+  }
+
+  // The call succeeded: Replit was asked. If the record cannot be completed, the in-flight record stays
+  // and blocks a repeat; the outcome is still reported as asked, and the storage fault is logged.
+  try {
+    await input.kv.put(key, { at: Date.now(), askedAt: Date.now() } satisfies AskRecord);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "replit_ask_record_failed",
+        pr: prKey(input.ref),
+        head: input.headSha,
+        error: redactSecrets(error instanceof Error ? error.message : String(error)).text,
+        effect: "Replit was asked, but the record could not be completed. The ask will not be repeated automatically.",
+      }),
+    );
+  }
+  return { asked: true, text: text.slice(0, 500), attempts: failedAttempts + 1 };
 }

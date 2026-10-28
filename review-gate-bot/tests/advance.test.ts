@@ -455,6 +455,24 @@ test("a Replit ask that gives up is logged under the repository-qualified PR key
   assert.equal(w.asks(), 0);
 });
 
+test("an ask with no recorded outcome is not repeated by a later turn, and is reported as ambiguous", async () => {
+  const w = readyForReplit({ seed: { [replitAskKey(REF, HEAD)]: { at: 1, inFlightAt: 1 } } });
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => {
+    lines.push(line);
+  };
+  try {
+    await reviewEventTurn(w.deps);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(w.asks(), 0, "the Replit tool is not called again");
+  const logged = lines.map((line) => JSON.parse(line)).filter((entry) => entry.event === "replit_ask_persistent_failure");
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].reason, "ambiguous");
+});
+
 test("a gate step whose error echoes a credential logs the error without the credential", async () => {
   const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
   const w = world({

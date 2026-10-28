@@ -216,3 +216,93 @@ test("an MCP error that echoes a credential is scrubbed before it is stored or r
   assert.equal(JSON.stringify(outcome).includes(token), false, "the outcome carries no credential");
   assert.equal(JSON.stringify([...store.store.entries()]).includes(token), false, "the stored failure carries no credential");
 });
+
+// --- A call that went out must never be repeated because the record of it was lost -------------
+
+/** A kv whose writes can be made to throw, to model storage failing around the Replit call. */
+function flakyKv(failPut: (value: unknown) => boolean = () => false) {
+  const base = kv();
+  const control = { failPut };
+  const flaky: HostKvApi & { store: Map<string, unknown>; control: typeof control } = {
+    store: base.store,
+    control,
+    get: base.get.bind(base),
+    delete: base.delete.bind(base),
+    async put(key, value) {
+      if (control.failPut(value)) {
+        throw new Error("kv unavailable");
+      }
+      return base.put(key, value);
+    },
+  };
+  return flaky;
+}
+
+const hasAskedAt = (value: unknown) => (value as { askedAt?: number }).askedAt !== undefined;
+
+test("a call that succeeds but whose completion write fails is not asked again on a later delivery", async () => {
+  const store = flakyKv(hasAskedAt);
+  const registry = mcp();
+  const first = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(first.asked, true, "Replit was asked: the storage failure does not undo that");
+  assert.equal(registry.calls, 1);
+
+  const later = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(later.asked, false);
+  assert.equal(registry.calls, 1, "a later delivery must not call the Replit tool again automatically");
+  assert.equal(later.asked === false && later.reason, "ambiguous", "and it says why, so a person can recover it");
+});
+
+test("a call that succeeds while every later write fails still leaves a record that stops a re-ask", async () => {
+  const store = flakyKv();
+  const registry = mcp();
+  // Storage works until the call has gone out, then every write fails (the completion write and any failure record).
+  store.control.failPut = () => registry.calls >= 1;
+  const first = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(first.asked, true);
+  const later = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(registry.calls, 1);
+  assert.equal(later.asked, false);
+});
+
+test("an ask whose in-flight record cannot be written is not sent, and is tried again later", async () => {
+  const store = flakyKv(() => true);
+  const registry = mcp();
+  await assert.rejects(askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD }), /kv unavailable/);
+  assert.equal(registry.calls, 0, "nothing was recorded, so nothing was sent");
+  assert.equal(store.store.size, 0);
+
+  store.control.failPut = () => false;
+  const healed = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(healed.asked, true, "once storage works, the ask goes out");
+  assert.equal(registry.calls, 1);
+});
+
+test("an in-flight record with no confirmed outcome, for instance after a crash mid-call, is not retried", async () => {
+  const store = kv();
+  store.store.set(replitAskKey(REF, HEAD), { at: 1, inFlightAt: 1 });
+  const registry = mcp();
+  const outcome = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(registry.calls, 0);
+  assert.equal(outcome.asked === false && outcome.reason, "ambiguous");
+});
+
+test("a definite failure clears the in-flight record, keeps the attempt count, and stays retryable", async () => {
+  const store = kv();
+  const first = await askReplitOnce({ kv: store, mcp: mcp({ isError: true }), ref: REF, headSha: HEAD });
+  assert.equal(first.asked === false && first.reason, "error");
+  const record = store.store.get(replitAskKey(REF, HEAD)) as { inFlightAt?: number; failedAttempts?: number };
+  assert.equal(record.inFlightAt, undefined);
+  assert.equal(record.failedAttempts, 1);
+
+  const retry = await askReplitOnce({ kv: store, mcp: mcp(), ref: REF, headSha: HEAD });
+  assert.equal(retry.asked, true);
+});
+
+test("a confirmed ask replaces the in-flight record", async () => {
+  const store = kv();
+  await askReplitOnce({ kv: store, mcp: mcp(), ref: REF, headSha: HEAD });
+  const record = store.store.get(replitAskKey(REF, HEAD)) as { inFlightAt?: number; askedAt?: number };
+  assert.equal(record.inFlightAt, undefined);
+  assert.ok(record.askedAt !== undefined);
+});
