@@ -118,7 +118,9 @@ async function postSlotOnce(input: {
     key,
     alreadyDone: () => alreadyPosted(octokit, ref, slot, headSha),
     run: async () => {
-      if ((await isStale(octokit, ref, headSha)) || (stillReady !== undefined && !(await stillReady()))) {
+      // The gate re-read can take several GitHub calls, during which the PR may move. So the head and draft check
+      // comes last: it is the final read before the post.
+      if ((stillReady !== undefined && !(await stillReady())) || (await isStale(octokit, ref, headSha))) {
         superseded = true;
         return;
       }

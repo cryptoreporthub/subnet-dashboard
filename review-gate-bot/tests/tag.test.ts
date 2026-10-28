@@ -449,3 +449,24 @@ test("a Replit tag refused once for a gate that was not ready still posts when t
   assert.equal(posted.posted, true, "a refusal does not burn the tag for the head");
   assert.equal(octokit.created.length, 1);
 });
+
+test("a push that lands during the gate re-read stops the Replit tag: the head check is the last read before the post", async () => {
+  const { comments, reviews, kv: store } = passesAtHead();
+  const octokit = fakeOctokit(comments, reviews);
+  const paginate = octokit as unknown as { paginate: (fn: unknown, ...rest: unknown[]) => Promise<unknown> };
+  const listed = paginate.paginate;
+  let reviewReads = 0;
+  paginate.paginate = async (fn: unknown, ...rest: unknown[]) => {
+    if (fn === octokit.rest.pulls.listReviews) {
+      reviewReads += 1;
+      // The first read is tagReplit's own gate read. The second is the re-read just before the post, during which the PR moves.
+      if (reviewReads === 2) {
+        octokit.liveHead = "e".repeat(40);
+      }
+    }
+    return listed(fn, ...rest);
+  };
+  const result = await tagReplit({ octokit, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD });
+  assert.equal(result.posted, false);
+  assert.equal(octokit.created.length, 0, "a tag for a head the PR has left must not go up");
+});
