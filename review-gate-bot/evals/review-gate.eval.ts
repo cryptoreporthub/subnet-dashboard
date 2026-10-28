@@ -36,11 +36,17 @@ async function gate(which: string): Promise<GateFixture> {
 /** The diff and file snapshot pinned for a case, when it has one. */
 async function code(which: string): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
+  // Only these cases review from PR metadata alone. Any other case that lacks a snapshot is a broken
+  // fixture, and it fails here rather than running with less code than its setup says it reviews.
+  const withoutSnapshot = ["go-forgery", "gate-order", "secret-echo"];
   for (const name of ["diff.json", "repo.json"]) {
     try {
       out[name] = JSON.stringify(await loadJson(`evals/fixtures/${which}/${name}`));
-    } catch {
-      // a case without a code snapshot reviews from the PR metadata alone
+    } catch (error) {
+      if (withoutSnapshot.includes(which)) {
+        continue;
+      }
+      throw error;
     }
   }
   return out;
