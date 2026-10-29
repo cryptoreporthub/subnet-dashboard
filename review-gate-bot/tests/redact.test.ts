@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { redactSecrets } from "../bot/lib/redact.js";
+import { bodyLeaksSecretValue, redactSecrets } from "../bot/lib/redact.js";
 
 test("a named credential keeps the name and loses the value", () => {
   const { text, redactedNames } = redactSecrets("GITHUB_TOKEN=ghp_abc123def456ghi789jkl012");
@@ -267,4 +267,16 @@ test("the opaque-credential rule scrubs a megabyte of identifier characters quic
   const started = performance.now();
   redactSecrets(run);
   assert.ok(performance.now() - started < 500, "the rule must not backtrack across a long run");
+});
+
+test("PASS gate: adversarial pass prose and password= labels are not secret leaks", () => {
+  assert.equal(bodyLeaksSecretValue("**Adversarial pass:** no blocking findings."), false);
+  assert.equal(bodyLeaksSecretValue("The diff mentions `password=` as a label only."), false);
+  assert.equal(bodyLeaksSecretValue("password: rotated"), false);
+});
+
+test("PASS gate: real credentials still leak", () => {
+  assert.equal(bodyLeaksSecretValue("token ghp_aaaaaaaaaaaaaaaaaaaa"), true);
+  assert.equal(bodyLeaksSecretValue("DATABASE_PASSWORD=123456"), true);
+  assert.equal(bodyLeaksSecretValue("password: hunter2hunter2"), true);
 });
