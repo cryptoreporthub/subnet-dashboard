@@ -11,8 +11,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
+from internal.council.scheduler_cycle_state import read_last_cycle
 from internal.council.watchdog import check_resolver_watchdog
-from internal.council.weights import SOUL_MAP_PATH, _load_raw
+from internal.council.weights import SOUL_MAP_PATH
 from internal.learning.predictions_store import PREDICTIONS_PATH, load_predictions
 from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled
 
@@ -141,10 +142,8 @@ def _snapshot_age_seconds(
         pass
     # Cross-process: worker may have written cycle summary before file flush.
     try:
-        soul = _load_raw(soul_path or SOUL_MAP_PATH)
-        sched = soul.get("score_snapshot_scheduler") or {}
-        last = sched.get("last_cycle") if isinstance(sched, dict) else None
-        if isinstance(last, dict) and last.get("run_at"):
+        last = read_last_cycle(soul_path or SOUL_MAP_PATH)
+        if last.get("run_at"):
             tick = _parse_iso(last.get("run_at"))
             if tick is not None:
                 return max(0.0, (_utcnow() - tick).total_seconds())
@@ -167,9 +166,7 @@ def _score_snapshot_meta(
         pass
     last_cycle: Dict[str, Any] = {}
     try:
-        sched = (_load_raw(soul_path or SOUL_MAP_PATH).get("score_snapshot_scheduler") or {})
-        if isinstance(sched, dict):
-            last_cycle = sched.get("last_cycle") or {}
+        last_cycle = read_last_cycle(soul_path or SOUL_MAP_PATH)
     except Exception:
         pass
     try:

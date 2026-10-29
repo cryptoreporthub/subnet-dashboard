@@ -11,6 +11,7 @@ import copy
 import fcntl
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -33,6 +34,7 @@ from internal.council.scorer_identity import (
 
 from internal import build_cost
 from internal.chain_read import ChainRead
+from internal.council.scheduler_cycle_state import liveness_state_path as _liveness_state_path
 from internal.council.snapshot_coverage import env_int, membership_allows_admission, membership_generation
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
@@ -181,6 +183,11 @@ def _row_ids(rows: Any) -> Optional[List[int]]:
             return None
         netuid = row.get("netuid")
         if type(netuid) is not int or netuid <= 0:
+            return None
+        # The producer writes ``total_score = float(score or 0)`` on every row it emits, so a row with no
+        # finite numeric score is not a scored row and must not count towards "every netuid was scored".
+        score = row.get("total_score")
+        if type(score) not in (int, float) or not math.isfinite(score):
             return None
         ids.append(netuid)
     return ids
@@ -1301,6 +1308,8 @@ class ScoreSnapshotScheduler:
             interval_seconds=max(60, self.refresh_minutes * 60),
             staleness_factor=2,
             persist=True,
+            # Its own file: a tick must never create or rewrite the soul_map the weights gate reads.
+            persist_path=_liveness_state_path,
         )
 
     def _is_registered(self) -> bool:
@@ -1346,11 +1355,10 @@ class ScoreSnapshotScheduler:
         if _scoring_write_in_progress() or _TICK_ACTIVE or self._tick_active:
             return True
         try:
-            from internal.council import weights
+            from internal.council.scheduler_cycle_state import read_last_cycle
 
-            sched = weights._load_raw().get("score_snapshot_scheduler") or {}
-            last = sched.get("last_cycle") if isinstance(sched, dict) else {}
-            if not isinstance(last, dict) or last.get("phase") != "scoring":
+            last = read_last_cycle()
+            if last.get("phase") != "scoring":
                 return False
             tick = _parse_iso(last.get("run_at"))
             if tick is None:
@@ -1362,11 +1370,10 @@ class ScoreSnapshotScheduler:
 
     def _clear_stuck_scoring(self) -> None:
         try:
-            from internal.council import weights
+            from internal.council.scheduler_cycle_state import read_last_cycle
 
-            sched = weights._load_raw().get("score_snapshot_scheduler") or {}
-            last = sched.get("last_cycle") if isinstance(sched, dict) else {}
-            if not isinstance(last, dict) or last.get("phase") != "scoring":
+            last = read_last_cycle()
+            if last.get("phase") != "scoring":
                 return
             tick = _parse_iso(last.get("run_at"))
             if tick is None:
@@ -1577,17 +1584,10 @@ class ScoreSnapshotScheduler:
             from internal.council.snapshot_coverage import coverage_counts_summary
 
             summary["coverage"] = coverage_counts_summary(coverage)
-        try:
-            from internal.council import weights
+        # Never the soul_map: a tick must not create or rewrite the file the weights gate reads.
+        from internal.council.scheduler_cycle_state import write_last_cycle
 
-            path = weights.SOUL_MAP_PATH
-            data = weights._load_raw(path)
-            sched = data.setdefault("score_snapshot_scheduler", {})
-            if isinstance(sched, dict):
-                sched["last_cycle"] = summary
-                weights._save_raw(data, path)
-        except Exception as exc:
-            logger.warning("score snapshot cycle summary persist failed: %s", exc)
+        write_last_cycle(summary)
 
 
 def _enabled() -> bool:

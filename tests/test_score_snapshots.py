@@ -151,7 +151,7 @@ def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
     assert state["last_result"]["count"] == 3
 
 
-def test_persist_cycle_summary_writes_soul_map(tmp_path, monkeypatch):
+def test_persist_cycle_summary_writes_its_own_file_not_the_soul_map(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
@@ -165,8 +165,8 @@ def test_persist_cycle_summary_writes_soul_map(tmp_path, monkeypatch):
             "path": "data/score_snapshots.json",
         }
     )
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    last = data["score_snapshot_scheduler"]["last_cycle"]
+    assert json.loads(soul.read_text(encoding="utf-8")) == {}  # the soul_map is not the summary's home
+    last = json.loads((tmp_path / "score_snapshot_scheduler.json").read_text(encoding="utf-8"))["last_cycle"]
     assert last["ok"] is True
     assert last["count"] == 42
 
@@ -179,8 +179,7 @@ def test_skipped_tick_persists_last_cycle(tmp_path, monkeypatch):
     sched._persist_cycle_summary(
         {"run_at": "2026-07-26T12:05:00Z", "ok": True, "skipped": "heavy_job_busy"}
     )
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    last = data["score_snapshot_scheduler"]["last_cycle"]
+    last = json.loads((tmp_path / "score_snapshot_scheduler.json").read_text(encoding="utf-8"))["last_cycle"]
     assert last.get("skipped") == "heavy_job_busy"
 
 
@@ -331,8 +330,10 @@ def _reset_write_occupancy() -> None:
 
 def _wire_scheduler_paths(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
+    from tests.score_snapshot_testutil import _USABLE_SOUL_MAP
+
     soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
+    soul.write_text(json.dumps(_USABLE_SOUL_MAP), encoding="utf-8")
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))

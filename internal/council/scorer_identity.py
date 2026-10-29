@@ -10,6 +10,7 @@ a weight-only deploy must change ``weights.py`` (or another listed file) so
 from __future__ import annotations
 
 import hashlib
+import math
 import json
 import os
 from pathlib import Path
@@ -57,16 +58,30 @@ def _canonical_digest(body: Any) -> str:
 
 
 def _soul_map_usable(path: str) -> bool:
-    """True when ``path`` is a readable JSON object with content.
+    """True when ``path`` is a readable JSON object that holds real council weights.
 
     ``read_soul_map`` answers ``{}`` for a missing, unreadable or corrupt file, which the weight
     loaders turn into the default weights. That fallback is right for scoring and wrong for an
-    identity: a stamp made from defaults would match any later unreadable soul_map.
+    identity: a stamp made from defaults would match any later unreadable soul_map. A file that is
+    valid JSON but carries only unrelated keys (resolver state, tokens) says nothing about the
+    weights either, so it is not usable: at least one council expert must have a finite number.
     """
+    from internal.council import weights
     from internal.store.soul_map_io import read_soul_map
 
     blob = read_soul_map(path, copy_blob=False)
-    return isinstance(blob, dict) and bool(blob)
+    if not isinstance(blob, dict) or not blob:
+        return False
+    slot = weights._council_weight_snapshot(blob)
+    if not isinstance(slot, dict):
+        return False
+    experts = set(weights.DEFAULT_WEIGHTS) | {"contrarian", "darkhorse"}
+    return any(
+        str(name).lower().strip() in experts
+        and type(value) in (int, float)
+        and math.isfinite(value)
+        for name, value in slot.items()
+    )
 
 
 def current_weights_digest(path: Optional[str] = None) -> Optional[str]:

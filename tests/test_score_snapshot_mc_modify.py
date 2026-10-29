@@ -353,8 +353,8 @@ def test_persist_cycle_summary_coverage_is_counts_only(tmp_path, monkeypatch):
             },
         }
     )
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    slim = data["score_snapshot_scheduler"]["last_cycle"]["coverage"]
+    data = json.loads((tmp_path / "score_snapshot_scheduler.json").read_text(encoding="utf-8"))
+    slim = data["last_cycle"]["coverage"]
     assert "expected" not in (slim.get("day") or {})
     assert slim["day"]["succeeded_count"] == 2
     assert slim["day"]["failed_count"] == 1

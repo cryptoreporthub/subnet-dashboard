@@ -15,7 +15,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 try:
     from internal.store.soul_map_io import read_soul_map, write_soul_map
@@ -209,13 +209,19 @@ class LivenessTracker:
         staleness_factor: int = 2,
         persist: bool = True,
         skip_limit: Optional[int] = None,
+        persist_path: Union[str, Callable[[], str], None] = None,
     ) -> None:
+        """``persist_path`` (a path or a callable returning one) keeps this tracker's record in a file
+        of its own instead of the soul_map. A tracker whose owner must never create or rewrite the
+        soul_map (the score-snapshot scheduler: the weights gate reads that file) uses it; a restart
+        still finds the older record under the soul_map's ``liveness`` key until the new file exists."""
         if interval_seconds <= 0:
             raise ValueError("interval_seconds must be > 0")
         self.name = name
         self.interval_seconds = int(interval_seconds)
         self.staleness_factor = max(1, int(staleness_factor))
         self.persist = bool(persist)
+        self._persist_path = persist_path
         self.skip_limit = (
             DEFAULT_SKIP_LIMIT if skip_limit is None else int(skip_limit)
         )
@@ -235,11 +241,13 @@ class LivenessTracker:
         if self.persist and read_soul_map is not None:
             prior = None
             try:
-                blob = read_soul_map() or {}
-                bucket = blob.get(_PERSIST_PREFIX) or {}
-                candidate = bucket.get(self.name)
-                if isinstance(candidate, dict):
-                    prior = candidate
+                own = self._resolved_persist_path()
+                for path in ([own] if own else []) + [None]:
+                    blob = (read_soul_map(path) if path else read_soul_map()) or {}
+                    candidate = (blob.get(_PERSIST_PREFIX) or {}).get(self.name)
+                    if isinstance(candidate, dict):
+                        prior = candidate
+                        break
             except Exception:
                 prior = None
             if prior is not None:
@@ -377,6 +385,10 @@ class LivenessTracker:
 
     # -- persistence ---------------------------------------------------
 
+    def _resolved_persist_path(self) -> Optional[str]:
+        path = self._persist_path
+        return path() if callable(path) else path
+
     def _save(self) -> None:
         if not self.persist or write_soul_map is None:
             return
@@ -396,6 +408,10 @@ class LivenessTracker:
             }
 
         try:
-            write_soul_map(mutator)
+            own = self._resolved_persist_path()
+            if own:
+                write_soul_map(mutator, own)
+            else:
+                write_soul_map(mutator)
         except Exception:
             pass

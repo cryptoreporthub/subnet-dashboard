@@ -24,14 +24,17 @@ def _soul(tmp_path, text=None, name="soul_map.json"):
     return str(path)
 
 
-# A valid soul_map that has no learned weights yet: the digest is the default weights' digest.
-_VALID_NO_LEARNED_WEIGHTS = json.dumps({"last_updated": "2026-10-28T00:00:00Z"})
+# A usable soul_map whose weights are still the neutral defaults.
+_VALID_NO_LEARNED_WEIGHTS = json.dumps(
+    {"adversarial_state": {"council_weights": {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}}
+)
 _UNUSABLE = {
     "missing": None,
     "corrupt": "{not json",
     "truncated": '{"adversarial_state": {"council_weights": {"quant": 1.',
     "empty_file": "",
     "empty_object": "{}",
+    "unrelated_keys_only": '{"prediction_resolver_scheduler": {"last_cycle": {"ok": true}}}',
     "not_an_object": "[1, 2, 3]",
 }
 
@@ -64,7 +67,7 @@ def test_gate_is_true_when_the_soul_map_is_usable_and_the_digest_matches(tmp_pat
     assert snaps.volume_has_fresh_complete_snapshot(str(volume), max_age_seconds=0) is True
 
 
-@pytest.mark.parametrize("kind", ["missing", "corrupt", "truncated", "empty_object"])
+@pytest.mark.parametrize("kind", ["missing", "corrupt", "truncated", "empty_object", "unrelated_keys_only"])
 def test_gate_is_false_when_the_soul_map_is_unusable_even_if_stamped_with_default_weights(tmp_path, monkeypatch, kind):
     soul = _soul(tmp_path, _UNUSABLE[kind], "live.json")
     volume = _volume_with_default_weights_stamp(tmp_path, monkeypatch, soul)
@@ -178,21 +181,6 @@ def test_the_skip_logs_once_per_state_change_and_recovers_when_the_soul_map_retu
             assert snaps.write_full_universe_snapshot()["skipped"] == "weights_unavailable"
         again = _weights_records(caplog)
         assert [r.levelno for r in again] == [logging.WARNING, logging.INFO, logging.WARNING]
-
-
-def test_the_scheduler_tick_itself_creates_a_usable_soul_map(tmp_path, monkeypatch):
-    """Why first boot is cheap in production: a tick records its summary in the soul_map before building."""
-    from internal.store import soul_map_io
-
-    soul = tmp_path / "fresh" / "soul_map.json"
-    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
-    soul_map_io._cache.clear()
-    assert current_weights_digest() is None
-
-    snaps.ScoreSnapshotScheduler()._persist_cycle_summary({"run_at": "2026-10-28T00:00:00Z", "ok": False})
-
-    assert soul.exists()
-    assert isinstance(current_weights_digest(), str)
 
 
 def test_a_failure_while_reading_the_weights_is_a_build_error_not_an_exception(tmp_path, monkeypatch):

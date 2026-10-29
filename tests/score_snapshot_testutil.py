@@ -38,6 +38,12 @@ def receipt_provenance(netuids: Any) -> Dict[str, Any]:
     }
 
 
+# A soul_map the weights gate accepts: real council weights (here, the neutral defaults).
+_USABLE_SOUL_MAP = {
+    "adversarial_state": {"council_weights": {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}
+}
+
+
 def fixture_weights_digest() -> str:
     """The live weights digest, or the default-weights digest while no usable soul_map exists.
 
@@ -54,7 +60,7 @@ def fixture_weights_digest() -> str:
         return live
     with tempfile.TemporaryDirectory() as tmp:
         blank = Path(tmp) / "soul_map.json"
-        blank.write_text(json.dumps({"last_updated": "2026-10-28T00:00:00Z"}))
+        blank.write_text(json.dumps(_USABLE_SOUL_MAP))
         return str(current_weights_digest(str(blank)))
 
 
@@ -129,6 +135,6 @@ def install_soul_map(tmp_path: Any, monkeypatch: Any, name: str = "soul_map.json
     from internal.council import weights
 
     path = tmp_path / name
-    path.write_text(json.dumps({"last_updated": "2026-10-28T00:00:00Z"}))
+    path.write_text(json.dumps(_USABLE_SOUL_MAP))
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(path))
     return str(path)
