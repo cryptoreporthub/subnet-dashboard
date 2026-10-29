@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from internal.chain_read import ChainRead
+from internal.chain_read import UNPINNED_BLOCK_HASH, ChainRead
 
 logger = logging.getLogger(__name__)
 
@@ -573,6 +573,18 @@ class SnapshotBuilder:
         chain: Optional[ChainRead] = None
         if self._probe_fetch is not None:
             probe_map, probe_complete = self._probe_fetch(probe_candidates, deadline)
+            if probe_complete:
+                # An injected probe is a test/diagnostic seam: it has no pinned block. Derive the chain
+                # from the probe's own verdicts, as production derives both from one read, but mark it
+                # unpinned so that admission, completeness and reload (all strict) never accept it.
+                chain = ChainRead.parse(
+                    {
+                        "block_hash": UNPINNED_BLOCK_HASH,
+                        "netuids": sorted(n for n, seen in probe_map.items() if seen is True and 0 < n <= 65535),
+                        "rpc": "probe",
+                    },
+                    pinned=False,
+                )
         else:
             chain = _read_chain(deadline)
             if chain is None:

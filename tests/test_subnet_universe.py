@@ -228,20 +228,11 @@ def test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row(u
     """Owner rule (2026-10-25): SN7 is off chain while TMC lists it. Expected drops to 127; SN7's row keeps its grace."""
     import internal.council.snapshot_coverage as cov
     import internal.subnet_universe as universe
-    from internal.chain_read import ChainRead
 
     netuids = list(range(1, 129))
-    # Production builds one pinned NetworksAdded read and derives both the probe verdicts and the
-    # snapshot's chain from it (SnapshotBuilder.build, default path). The stub feeds that one read:
-    # SN7 is not registered on chain, every other netuid is.
-    registered = tuple(n for n in netuids if n != 7)
-    monkeypatch.setattr(
-        universe,
-        "_read_chain",
-        lambda deadline=None: ChainRead("0x" + "ab" * 32, registered, "finney"),
-    )
     builder = SnapshotBuilder(
         tmc_fetch=lambda: (set(netuids), {n: {"netuid": n} for n in netuids}, True),
+        probe_fetch=lambda ns, deadline: ({n: n in netuids and n != 7 for n in ns}, True),
     )
     built = builder.build(_prior_snapshot(netuids)).snapshot
     assert built.validity_map["7"]["validity"] == "negative"
@@ -886,10 +877,7 @@ def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(univers
     assert provider.get_snapshot().netuids == result.netuids
 
 
-PINNED_HASH = "0x" + "ab" * 32
-
-
-def _patch_registration(monkeypatch, members, *, pin=(PINNED_HASH, "ok"), read="ok"):
+def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok"):
     class _Reader:
         def __init__(self, *args, **kwargs):
             self.provider_served = "fixture"
@@ -1152,55 +1140,3 @@ def test_failed_chain_read_does_not_undo_a_chain_negative(universe_tmp):
     entry = builder.build(prior).snapshot.validity_map["42"]
     assert entry["validity"] == "negative"
     assert entry["negative_since"] == started
-
-
-def test_build_carries_the_chain_read_it_resolved_from(universe_tmp, monkeypatch):
-    from internal.chain_read import ChainRead
-
-    _patch_registration(monkeypatch, [1, 2, 3])
-    builder = SnapshotBuilder(tmc_fetch=lambda: ({1, 2, 3}, {n: {"netuid": n} for n in (1, 2, 3)}, True))
-    built = builder.build(_prior_snapshot([1, 2, 3])).snapshot
-    assert built.chain == ChainRead(PINNED_HASH, (1, 2, 3), "fixture")
-
-
-@pytest.mark.parametrize("kwargs", [{"read": "invalid"}, {"pin": (None, "rpc_error")}])
-def test_build_has_no_chain_when_the_registration_read_fails(universe_tmp, monkeypatch, kwargs):
-    _patch_registration(monkeypatch, [1, 2, 3], **kwargs)
-    builder = SnapshotBuilder(tmc_fetch=lambda: ({1, 2, 3}, {n: {"netuid": n} for n in (1, 2, 3)}, True))
-    assert builder.build(_prior_snapshot([1, 2, 3])).snapshot.chain is None
-
-
-def test_build_with_an_injected_probe_never_mints_a_chain(universe_tmp):
-    builder = SnapshotBuilder(
-        tmc_fetch=lambda: ({1, 2}, {n: {"netuid": n} for n in (1, 2)}, True),
-        probe_fetch=lambda netuids, deadline: ({n: n in (1, 2) for n in netuids}, True),
-    )
-    assert builder.build(_prior_snapshot([1, 2])).snapshot.chain is None
-
-
-def test_chain_is_not_carried_across_a_failed_cycle(universe_tmp, monkeypatch):
-    _patch_registration(monkeypatch, [1, 2, 3])
-    builder = SnapshotBuilder(tmc_fetch=lambda: ({1, 2, 3}, {n: {"netuid": n} for n in (1, 2, 3)}, True))
-    first = builder.build(_prior_snapshot([1, 2, 3])).snapshot
-    assert first.chain is not None
-    _patch_registration(monkeypatch, [1, 2, 3], pin=(None, "rpc_error"))
-    assert builder.build(first).snapshot.chain is None
-
-
-def test_chain_round_trips_through_the_persisted_snapshot(universe_tmp, monkeypatch):
-    _patch_registration(monkeypatch, [1, 2])
-    builder = SnapshotBuilder(tmc_fetch=lambda: ({1, 2}, {n: {"netuid": n} for n in (1, 2)}, True))
-    built = builder.build(_prior_snapshot([1, 2])).snapshot
-    assert UniverseSnapshot.from_dict(built.to_dict()).chain == built.chain
-
-
-@pytest.mark.parametrize(
-    "chain",
-    [None, "x", {"block_hash": "0xabc", "netuids": [1]}, {"block_hash": "0x" + "ab" * 32, "netuids": [2, 1]}],
-)
-def test_a_missing_or_malformed_persisted_chain_loads_as_none(chain):
-    payload = _prior_snapshot([1, 2]).to_dict()
-    payload["chain"] = chain
-    assert UniverseSnapshot.from_dict(payload).chain is None
-    payload.pop("chain")
-    assert UniverseSnapshot.from_dict(payload).chain is None

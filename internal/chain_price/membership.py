@@ -119,7 +119,8 @@ def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]
             "block_hash": str(at_hash).lower(),
             "netuids": members,
             "rpc": getattr(reader, "provider_served", None),
-        }
+        },
+        pinned=False,
     )
     if chain is None:
         return None, "invalid"
