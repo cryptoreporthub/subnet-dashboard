@@ -41,6 +41,8 @@ def _wire_snapshot_paths(tmp_path, monkeypatch):
     monkeypatch.setenv("SCORE_SNAPSHOTS_PATH", str(snap_path))
     monkeypatch.setattr(loop_health, "SCORE_SNAPSHOTS_PATH", str(snap_path))
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    # Fixtures read the weights digest through the soul_map cache; a test that rewrites soul_map must see the file.
+    monkeypatch.setattr("internal.store.soul_map_io._CACHE_TTL", 0)
     return snap_path
 
 
