@@ -123,27 +123,33 @@ function isPlaceholder(value: string): boolean {
  * still redacts these (name it, never print it); the PASS gate must not treat
  * them as secret leaks (`**Adversarial pass:**`, `` `password=` `` in prose).
  */
-function isBenignCredentialProse(label: string, rawValue: string): boolean {
+function isBenignCredentialProse(label: string, rawValue: string, before: string, separator: string): boolean {
   const v = rawValue.replace(/^["']|["']$/g, "").trim();
   const l = label.toLowerCase();
+  // Only markdown or punctuation after the name (`**Secrets:** **No.**`, `` `password=` ``): no value was written.
+  if (/^[*`_~:>|=\s.\u2014\u2013-]*$/.test(v)) {
+    return true;
+  }
+  // A plain denial or status word is an answer to "does it carry a secret?", not a secret (`Secrets: no`, `token: n/a`).
+  const word = v.replace(/^[*_`]+|[*_`.,;:!\u2014\u2013-]+$/g, "").toLowerCase();
+  if (/^(?:no|none|null|n\/a|na|nil|never|absent|clean|safe|redacted|unchanged|omitted)$/.test(word)) {
+    return true;
+  }
   const proseWord =
     /^(?:rotated|changed|optional|required|empty|ok|none|null|example|placeholder|discussed|documented|mention(?:ed|s)?)$/i;
   if (l === "pass") {
-    if (/^[\*`_:>\s]+$/.test(v)) {
-      return true;
-    }
     if (proseWord.test(v)) {
       return true;
     }
-    if (/^[a-z][a-z\s-]{0,15}$/i.test(v) && !/\d/.test(v) && v.length <= 12) {
+    // `Adversarial pass: traced resolver`, `second pass: cap check`: a colon, and a word in front of `pass`.
+    // `pass=hunter` or a line that starts `pass: letmein` is a credential.
+    const prose = separator.includes(":") && !separator.includes("=") && /[A-Za-z][*_`]*\s+[*_`]*$/.test(before);
+    if (prose && /^[a-z][a-z\s-]{0,15}$/i.test(v) && !/\d/.test(v) && v.length <= 12) {
       return true;
     }
     return false;
   }
   if (l === "password" || l === "pwd" || l === "passwd") {
-    if (v === "" || v === "=" || /^[`'=\s]+$/.test(v)) {
-      return true;
-    }
     if (proseWord.test(v)) {
       return true;
     }
@@ -169,6 +175,7 @@ export function bodyLeaksSecretValue(input: string): boolean {
     const written = found[1] ?? "";
     const lead = written.match(/^[^A-Za-z0-9]*/)?.[0] ?? "";
     const label = written.slice(lead.length);
+    const labelStart = found.index + lead.length;
     if (!CREDENTIAL_WORD.test(label)) {
       continue;
     }
@@ -181,7 +188,7 @@ export function bodyLeaksSecretValue(input: string): boolean {
     if (isPlaceholder(raw)) {
       continue;
     }
-    if (isBenignCredentialProse(label, raw)) {
+    if (isBenignCredentialProse(label, raw, input.slice(0, labelStart), input.slice(labelStart + label.length, names.lastIndex))) {
       continue;
     }
     return true;
@@ -205,6 +212,7 @@ function scrubAssignments(input: string, redactedNames: string[]): string {
     // A name may start with junk the old pattern left out of the label: `--password=`.
     const lead = written.match(/^[^A-Za-z0-9]*/)?.[0] ?? "";
     const label = written.slice(lead.length);
+    const labelStart = found.index + lead.length;
     if (!CREDENTIAL_WORD.test(label)) {
       continue;
     }

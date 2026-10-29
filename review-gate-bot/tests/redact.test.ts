@@ -280,3 +280,21 @@ test("PASS gate: real credentials still leak", () => {
   assert.equal(bodyLeaksSecretValue("DATABASE_PASSWORD=123456"), true);
   assert.equal(bodyLeaksSecretValue("password: hunter2hunter2"), true);
 });
+
+test("PASS gate: a secret written under the word pass, or a bare `pass=` value, still leaks", () => {
+  assert.equal(bodyLeaksSecretValue("pass=hunter"), true);
+  assert.equal(bodyLeaksSecretValue("pass: letmein"), true);
+  assert.equal(bodyLeaksSecretValue("DB_PASS=abc"), true);
+  assert.equal(bodyLeaksSecretValue("passphrase: purplemonkey"), true);
+  assert.equal(bodyLeaksSecretValue("AKIAIOSFODNN7EXAMPL1"), true);
+  assert.equal(bodyLeaksSecretValue("see postgres://admin:hunter2@db.internal/x"), true);
+});
+
+test("PASS gate: an answer to 'can it carry a secret?' and markdown after a credential word are not leaks", () => {
+  assert.equal(bodyLeaksSecretValue("**Secrets:** **No.** Only integers are logged."), false);
+  assert.equal(bodyLeaksSecretValue("Secrets: no — only membership integers"), false);
+  assert.equal(bodyLeaksSecretValue("Secrets: **none**"), false);
+  assert.equal(bodyLeaksSecretValue("`password=` and `token=` are redacted labels"), false);
+  assert.equal(bodyLeaksSecretValue("second pass: cap check"), false);
+  assert.equal(bodyLeaksSecretValue("token: bucket"), true);
+});

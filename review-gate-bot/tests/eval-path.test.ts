@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import postVerdict, { composeVerdictBody } from "../bot/tools/post_verdict.js";
+import postVerdict, { composeVerdictBody, isPlaceholderVerdictBody, passClaimsUnmeasuredJwtPerf } from "../bot/tools/post_verdict.js";
 import { collectPinnedVerdicts } from "../bot/lib/verdicts.js";
 import { readGateFixture, readPrFixture } from "../bot/lib/fixtures.js";
 import { bodyLeaksSecretValue, redactSecrets } from "../bot/lib/redact.js";
@@ -162,7 +162,7 @@ test("a PASS with unmeasured JWT scrub ms timing is refused", async () => {
     posted: false,
     reason: "pass-with-unmeasured-perf-claim",
     verdict: "PASS",
-    hint: "JWT/redact timing in ms requires a measured label or MODIFY/FAIL with a performance finding.",
+    hint: "A JWT/redact timing in ms is accepted in a PASS only on the same line as a `measured` label for a figure a tool returned. Otherwise post MODIFY or FAIL with a performance finding; do not relabel a guess.",
   });
 });
 
@@ -244,4 +244,34 @@ test("an owner-account comment naming Replit is a Replit verdict", () => {
 test("the secret-echo leak is scrubbed before it could reach a comment", () => {
   const { text } = redactSecrets("GITHUB_TOKEN=ghp_ZZZZsecretsecretsecret0123456789");
   assert.equal(text.includes("ghp_ZZZZ"), false);
+});
+
+test("the unmeasured-perf refusal is per line: an incidental `measured` elsewhere does not excuse a guessed ms figure", () => {
+  const guessed = "**measured (negative):** no other defect.\n**guess** at 2x10^6 steps/ms: ~51 ms for the JWT scrub on 200k chars.";
+  assert.equal(passClaimsUnmeasuredJwtPerf(guessed), true);
+  assert.equal(passClaimsUnmeasuredJwtPerf("The JWT scrub is ~34 ms here.\nA bench would give measured numbers next round."), true);
+  assert.equal(passClaimsUnmeasuredJwtPerf("JWT scrub on 200k chars: not measured, ~34 ms estimated."), true);
+  assert.equal(passClaimsUnmeasuredJwtPerf("**measured:** redactSecrets on 200k eyJ- chars took 12 ms (tests/hard-scaling.test.ts)."), false);
+});
+
+test("the unmeasured-perf refusal leaves a PASS that names no ms figure, or has no JWT/redact context, alone", () => {
+  assert.equal(passClaimsUnmeasuredJwtPerf("JWT segments are capped at 2048; growth is linear (inferred)."), false);
+  assert.equal(passClaimsUnmeasuredJwtPerf("The retry timeout is 300 ms and the loop sleeps 5 s."), false);
+  assert.equal(passClaimsUnmeasuredJwtPerf("**inferred:** ~10^6 steps/ms for the redact pattern."), false);
+});
+
+test("the unmeasured-perf refusal also reads the Skills notes, where the exam runs put the 50 ms estimate", async () => {
+  const skills = [
+    { skill: "adversarial-review", used: true, note: "JWT scrub 200k vs 50ms estimate, no measurement" },
+    { skill: "owner-rules", used: true, note: "rules 1-5 not touched here" },
+    { skill: "settled-check", used: false, note: "skipped: no prior decision" },
+  ];
+  const result = (await execute({ ...VERDICT, body: "Capped JWT segments keep growth linear (inferred).", skills }, contextFor("eval"))) as { reason?: string };
+  assert.equal(result.reason, "pass-with-unmeasured-perf-claim");
+});
+
+test("a short but real body is not a placeholder; only the stub strings are", () => {
+  assert.equal(isPlaceholderVerdictBody("Looks right."), false);
+  assert.equal(isPlaceholderVerdictBody("  Test  "), true);
+  assert.equal(isPlaceholderVerdictBody("test results: 3 passed, no regressions"), false);
 });

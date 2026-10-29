@@ -41,24 +41,33 @@ function passLeaksCredential(text: string): boolean {
 const PLACEHOLDER_VERDICT_BODY =
   /^(?:test|full body here|logging change only\.?\s*(?:see gate\.?)?|see gate\.?)$/i;
 
-function isPlaceholderVerdictBody(body: string): boolean {
+export function isPlaceholderVerdictBody(body: string): boolean {
   const trimmed = body.trim();
   return PLACEHOLDER_VERDICT_BODY.test(trimmed);
 }
 
-/** PASS must not cite JWT/redact timing in ms without a measured label (no shell here). */
-function passClaimsUnmeasuredJwtPerf(body: string): boolean {
-  const jwtContext = /\b(?:jwt|eyj|redact(?:secrets?)?|scrub(?:ber)?)\b/i.test(body);
-  if (!jwtContext) {
+/**
+ * PASS must not cite JWT/redact timing in ms without a measured label (no shell here).
+ *
+ * Checked per line, not per body: a review that opens `measured (negative): no other defect` or says "so the gate has
+ * measured numbers next round" must not excuse `~10-20 ms` on another line. A line is excused only by an affirmative
+ * `measured` on that same line (`not measured`, `no measured`, `never measured` do not count).
+ */
+export function passClaimsUnmeasuredJwtPerf(body: string): boolean {
+  if (!/\b(?:jwt|eyj|redact(?:secrets?)?|scrub(?:ber)?)\b/i.test(body)) {
     return false;
   }
-  if (!/\b\d+\s*ms\b|\bunder\s+\d+\s*ms\b/i.test(body)) {
-    return false;
-  }
-  return !/\bmeasured\b/i.test(body);
+  const msFigure = /\d\s*(?:ms|milliseconds?)\b/i;
+  const negatedMeasured = /\b(?:not|no|never|nor|cannot|can't|without|un)[\s-]{0,3}(?:\w+\s+){0,2}measured\b/gi;
+  return body.split("\n").some((line) => {
+    if (!msFigure.test(line)) {
+      return false;
+    }
+    return !/\bmeasured\b/i.test(line.replace(negatedMeasured, ""));
+  });
 }
 
-function skillsIncomplete(skills: { skill: string; used: boolean; note: string }[]): string | undefined {
+export function skillsIncomplete(skills: { skill: string; used: boolean; note: string }[]): string | undefined {
   const missing = missingRequiredSkills(skills);
   if (missing.length > 0) {
     return missing.join(", ");
@@ -205,12 +214,12 @@ export default defineTool({
         hint: "Remove secret values from the body (name variables only). Do not retry with placeholder text.",
       };
     }
-    if (input.verdict === "PASS" && passClaimsUnmeasuredJwtPerf(input.body)) {
+    if (input.verdict === "PASS" && passClaimsUnmeasuredJwtPerf(`${input.body}\n${input.skills.map((skill) => skill.note).join("\n")}`)) {
       return {
         posted: false,
         reason: "pass-with-unmeasured-perf-claim",
         verdict: input.verdict,
-        hint: "JWT/redact timing in ms requires a measured label or MODIFY/FAIL with a performance finding.",
+        hint: "A JWT/redact timing in ms is accepted in a PASS only on the same line as a `measured` label for a figure a tool returned. Otherwise post MODIFY or FAIL with a performance finding; do not relabel a guess.",
       };
     }
 
