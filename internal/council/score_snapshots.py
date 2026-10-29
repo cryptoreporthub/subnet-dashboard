@@ -12,6 +12,7 @@ import fcntl
 import json
 import logging
 import os
+import re
 import time
 import threading
 import uuid
@@ -185,6 +186,13 @@ def _row_ids(rows: Any) -> Optional[List[int]]:
     return ids
 
 
+# Both digests are sha256 hexdigests (scorer_identity._canonical_digest). Readers cannot recompute them:
+# weights_digest depends on the live soul_map (the producer gate compares it) and input_digest on the
+# scored feed rows and market weights, which are not persisted. A reader can still refuse anything that
+# is not shaped like the digest the producer writes.
+_SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+
+
 def _provenance_matches(provenance: Any, membership: Dict[str, Any], chain: ChainRead) -> bool:
     """The snapshot's own provenance must agree with its embedded receipt and chain read."""
     if not isinstance(provenance, dict):
@@ -195,7 +203,7 @@ def _provenance_matches(provenance: Any, membership: Dict[str, Any], chain: Chai
     if provenance.get("membership_block_hash") != chain.block_hash or provenance.get("membership_rpc") != chain.rpc:
         return False
     return all(
-        isinstance(provenance.get(key), str) and provenance[key]
+        isinstance(provenance.get(key), str) and _SHA256_HEX.fullmatch(provenance[key])
         for key in ("weights_digest", "input_digest")
     )
 

@@ -57,5 +57,5 @@ def test_fixture_snapshot_is_fresh_only_while_its_digest_matches_the_live_soul_m
 
 
 def test_a_snapshot_stamped_with_a_foreign_weights_digest_is_not_fresh(tmp_path, soul_map):
-    path = _volume(tmp_path, lambda s: s["provenance"].__setitem__("weights_digest", "w" * 64))
+    path = _volume(tmp_path, lambda s: s["provenance"].__setitem__("weights_digest", "0" * 64))
     assert snaps.volume_has_fresh_complete_snapshot(path=path) is False
