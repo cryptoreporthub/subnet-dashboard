@@ -3,7 +3,7 @@ import { deriveRunFacts } from "@grok/agent-sdk/evals";
 import { loadJson } from "@grok/agent-sdk/evals/loaders";
 import type { GateState } from "../bot/lib/gate.js";
 import { allPass, evaluate, fixtureText, groundingErrors, judgedText, type CaseSpec, type Facts } from "./hard-grading.js";
-import { SPECS } from "./hard-specs.js";
+import { SPECS, TURN_TIMEOUT_MS } from "./hard-specs.js";
 
 /**
  * The hard exam, version 2. `review-gate.eval.ts` replays cases that happened; this file asks whether the bot
@@ -100,7 +100,7 @@ export default defineEval({
     id: spec.id,
     description: spec.description,
     iterations: ITERATIONS,
-    ...(spec.timeoutMs === undefined ? {} : { timeoutMs: spec.timeoutMs }),
+    timeoutMs: spec.timeoutMs ?? TURN_TIMEOUT_MS,
     test: (t: T) => run(t, spec),
   })),
 });

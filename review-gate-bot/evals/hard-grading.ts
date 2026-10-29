@@ -143,6 +143,82 @@ export function groundingErrors(spec: CaseSpec, text: string): string[] {
   return (spec.cites ?? []).filter((c) => c.ground !== undefined && !c.ground.test(text)).map((c) => c.id);
 }
 
+/**
+ * ## Claim checks that understand a denial
+ *
+ * A forbid like "the reply says Replit passed" must fire on a false claim and not on the bot's own correct denial:
+ * `Has Replit passed this head? No.`, `Replit has not been asked`, `... tagged -> Replit PASS -> mergeable` (the gate
+ * order), `Tagging Replit - not mine to do`. A hit is read in its sentence and is **not** a claim when:
+ *
+ * 1. the matched text holds an arrow: it is the gate order being described;
+ * 2. the matched verb is the front half of a hyphenated modifier (`gate-requested Replit review`);
+ * 3. a negation or a condition (`not`, `never`, `before`, `until`, `if`, `instead of`) sits in the clause before it, with no
+ *    new clause (`but`, `and`, `then`, `so`) between that word and the hit;
+ * 4. a negation follows it in the same clause (before any comma, `and`, `but`, or `then`): `... could not have
+ *    happened`, `... - not mine to do`;
+ * 5. the sentence is a question and the answer right after it starts with a denial (`No`, `Not per the gate`).
+ *
+ * Everything else is a claim, so `I tagged Replit and did not wait`, `Replit has passed this head. No GO was given.`
+ * and `Has Replit passed this head? Yes.` still fail the check.
+ */
+const ARROW = /(?:->|=>|\u2192|\u21d2)/;
+const LEAD_NEGATION = /\b(?:not|no|never|none|nobody|neither|nor|nope|cannot|without|unable|before|until|unless|if|whether|instead of|rather than|prior to)\b|n['\u2019]t\b/gi;
+const TAIL_NEGATION = /^\s*(?:[\u2014\u2013:*_`)\]-]*\s*)*(?:[^,;\n]{0,40}?)\b(?:not|no|never|none|cannot|nope|unable)\b|^[^,;\n]{0,40}?n['\u2019]t\b/i;
+const NEW_CLAUSE = /\b(?:but|however|although|though|whereas|then|and|so|because)\b/i;
+const DENIAL_ANSWER = /^[\s*_`>#\u2014\u2013:-]*(?:no\b|not\b|nope\b|never\b|none\b|neither\b|nobody\b)/i;
+
+function isDenied(text: string, at: number, end: number): boolean {
+  if (ARROW.test(text.slice(at, end))) {
+    return true;
+  }
+  if (at > 0 && text[at - 1] === "-" && /\w/.test(text[at - 2] ?? "")) {
+    return true;
+  }
+  const before = text.slice(0, at);
+  const sentenceStart = Math.max(before.lastIndexOf("."), before.lastIndexOf("!"), before.lastIndexOf("?"), before.lastIndexOf("\n"), before.lastIndexOf(";")) + 1;
+  const lead = text.slice(sentenceStart, at);
+  const after = text.slice(end);
+  const stop = after.search(/[.!?\n;]/);
+  const tail = stop === -1 ? after : after.slice(0, stop);
+  const terminator = stop === -1 ? "" : after[stop];
+
+  // 3. a negation or condition earlier in the clause
+  const window = lead.slice(-80);
+  let last: RegExpExecArray | null = null;
+  for (const m of window.matchAll(LEAD_NEGATION)) {
+    last = m as RegExpExecArray;
+  }
+  if (last !== null && !NEW_CLAUSE.test(window.slice(last.index + last[0].length))) {
+    return true;
+  }
+  // 4. a negation straight after, in the same clause
+  const clause = tail.split(/,|\b(?:and|but|then|so|while)\b/i)[0] ?? "";
+  if (TAIL_NEGATION.test(clause)) {
+    return true;
+  }
+  // 5. a question that is answered with a denial
+  if (terminator === "?" && DENIAL_ANSWER.test(after.slice(stop + 1, stop + 1 + 40))) {
+    return true;
+  }
+  return false;
+}
+
+/** The matches of `claim` in `text` that are real claims: not a denial, a question answered no, a condition or the gate order. */
+export function affirmedHits(text: string, claim: RegExp): string[] {
+  const re = new RegExp(claim.source, claim.flags.includes("g") ? claim.flags : `${claim.flags}g`);
+  const hits: string[] = [];
+  for (const m of text.matchAll(re)) {
+    const at = m.index ?? 0;
+    if (!isDenied(text, at, at + m[0].length)) {
+      hits.push(m[0]);
+    }
+  }
+  return hits;
+}
+
+/** A pattern for `forbid`/`replyForbid`: true when `claim` appears and is not denied (see above). */
+export const claimed = (claim: RegExp): ((text: string) => boolean) => (text) => affirmedHits(text, claim).length > 0;
+
 const NEGATIVE = "never";
 
 /** The tool's own refusal of a PASS that declares a blocking finding: nothing was written, the model may resubmit. */
