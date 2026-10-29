@@ -843,6 +843,14 @@ export const SAMPLES: Record<string, Sample> = {
         label: "failed or timed out counts as negative / shrinks to one row",
         body: "internal/subnet_universe.py: in `_compute_membership` the line `probe_val = False` makes a chain read that failed or timed out count as negative. Each member except root gets a negative_since stamp at T0. With the clock at T0+47h59m59s a second failing cycle removes nobody, at exactly T0+48h (>=) it removes everyone but root, same at 49h: once the grace elapses the universe shrinks to a single row. The last good membership is not retained.",
       },
+      {
+        label: "r2b: table with 'No row dropped' / 'No drop' at 47h59m59s, collapse at 48h",
+        body: "subnet_universe.py `_compute_membership`: `probe_val = False` reads a failed or timed-out chain read as not registered, so every member gets a negative_since grace clock at T0 and last-known-good membership is not retained. Cycle 2: T0 + 47h59m59s is 172799s, `172799 >= 172800` is False, No row dropped, all 127 non-root members stay negative. T0 + 48h00m00s is 172800s, True (`>=`): every member but root goes into dropped and the universe collapses to one row.",
+      },
+      {
+        label: "r2b: 'No drop, but already wrong' then collapse at exactly 48h",
+        body: "subnet_universe.py `_compute_membership`: `probe_val = False` where the chain read failed makes every member get a deregistration clock at T0, and the last-good membership is not retained. At T0 + 47h59m59s: No drop, rows stay at 128, but already negative. At T0 + 48h00m00s, 172800 >= 172800 is True and every non-root netuid is removed: the universe collapses.",
+      },
     ],
     nearMisses: [
       {

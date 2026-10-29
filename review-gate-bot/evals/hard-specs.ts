@@ -1077,7 +1077,7 @@ export const SPECS: CaseSpec[] = [
         anyOf(
           [
             /47\s*h\s*59|47:59:59|just (?:before|under|short of)\b[^\n]{0,30}(?:48|the grace)|one second (?:short|before|under)/i,
-            /(?:nobody|no one|no (?:member|subnet|netuid)s?|nothing|0 (?:members|subnets|netuids))\b[^\n]{0,60}(?:removed|dropped|eligible)|(?:removes?|drops?|evicts?)\s+(?:nobody|no one|nothing|no (?:member|subnet|netuid)s?)|not (?:yet )?(?:removed|eligible|dropped)|still (?:keeps?|retains?|has|holds?) (?:all )?(?:128|members)|still (?:128|all (?:128|members))/i,
+            /(?:nobody|no one|no (?:member|subnet|netuid)s?|nothing|0 (?:members|subnets|netuids))\b[^\n]{0,60}(?:removed|dropped|eligible)|(?:removes?|drops?|evicts?)\s+(?:nobody|no one|nothing|no (?:member|subnet|netuid)s?)|not (?:yet )?(?:removed|eligible|dropped)|still (?:keeps?|retains?|has|holds?) (?:all )?(?:128|members)|still (?:128|all (?:128|members))|\bno (?:row|rows|member|members|subnet|subnets|netuid|netuids)\s+(?:is |are |was |were )?(?:yet )?(?:dropped|removed)|\bno (?:drop|removal)\b|\b(?:rows?|members?)\s+stays?\s+(?:at\s+)?(?:128|in\b)/i,
             /(?:48\s*h(?:\s*00\s*m(?:\s*00\s*s)?)?|48:00:00|exactly 48|at 48|at the grace|at the boundary)[^\n]{0,160}(?:remov\w*|drop\w*|shrink\w*|127|everyone but root|all but root|eligible)|>=[^\n]{0,60}(?:remov\w*|eligible|true)/i,
           ],
           /(?:before|under|short of) (?:the )?(?:48\s*h|grace)[\s\S]{0,200}(?:no|none|nobody|nothing|kept|retained|128)[\s\S]{0,200}(?:at|from|after)\s+(?:the )?(?:48\s*h|grace|boundary|exactly)[\s\S]{0,160}(?:remov\w*|dropp\w*|shrink\w*|127|all but root)/i,
