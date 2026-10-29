@@ -152,9 +152,14 @@ def _stop_entrypoint(proc: subprocess.Popen) -> None:
 
 
 def _clear_volume(data_dir: Path) -> None:
-    """Remove the volume snapshot, its lock and the producer receipt (the files a cold volume lacks)."""
+    """Remove the volume snapshot and the producer receipt (the state a cold volume lacks).
+
+    The ``.lock`` file stays: it is synchronisation metadata, not volume state. ``_locked_score_snapshot``
+    opens it append-mode and ``flock``s the inode, so unlinking it while a writer still holds the old
+    inode lets a later writer lock a fresh inode that does not contend with it.
+    """
     volume = data_dir / "score_snapshots.json"
-    for path in (volume, volume.with_name(volume.name + ".lock"), data_dir / "score_snapshot_cycle.json"):
+    for path in (volume, data_dir / "score_snapshot_cycle.json"):
         try:
             path.unlink()
         except FileNotFoundError:
@@ -238,6 +243,9 @@ def main() -> int:
             env_z = _fly_env(data_dir, port, seed_path=str(data_dir / "missing_seed.json"))
             _stop_entrypoint(proc)
             proc.wait(timeout=10)
+            # The entrypoint starts the worker supervisor in the background, so stopping the web
+            # process does not stop the inline worker: end it before touching the volume.
+            _kill_worker_sigkill()
             time.sleep(2)
             # Z is the cold start with no volume and no seed: drop what F/W/R/C built, or the
             # volume snapshot would still be served and the case would never run.
