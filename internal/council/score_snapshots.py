@@ -1348,12 +1348,17 @@ class ScoreSnapshotScheduler:
                 # lifecycle unchanged (cancel_job covers that path).
                 self.liveness.start()
                 try:
-                    threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
+                    threading.Thread(
+                        target=lambda: self._tick(gate_on_arm=True),
+                        daemon=True,
+                        name="score-snap-tick",
+                    ).start()
                 except Exception:
                     self.liveness.stop()
                     raise
                 aborted = self._abort_arm_if_stopped()
                 if aborted:
+                    self.liveness.stop()
                     return aborted
             else:
                 schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
@@ -1466,8 +1471,11 @@ class ScoreSnapshotScheduler:
             error=str(result.get("error") or "score_snapshot_unpublished")
         )
 
-    def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
+    def _tick(self, reschedule: bool = True, *, gate_on_arm: bool = False) -> Dict[str, Any]:
         from internal.heavy_job_gate import heavy_job_slot
+
+        if gate_on_arm and not self._arm_still_valid():
+            return {"ok": False, "run_at": _now_iso(), "skipped": "stopped_during_arm"}
 
         if self._scoring_in_progress():
             skipped = {"ok": False, "run_at": _now_iso(), "skipped": "scoring_in_progress"}
@@ -1488,6 +1496,8 @@ class ScoreSnapshotScheduler:
                     schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
                 return skipped
         # ponytail: release gate before ~127×2 scoring — holding it wedged resolver for hours
+        if gate_on_arm and not self._arm_still_valid():
+            return {"ok": False, "run_at": _now_iso(), "skipped": "stopped_during_arm"}
         return self._tick_body(reschedule=reschedule)
 
     def _complete_write_future(self, fut: Any, reschedule: bool) -> None:
