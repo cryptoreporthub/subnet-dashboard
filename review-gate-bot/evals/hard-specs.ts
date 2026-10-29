@@ -239,6 +239,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "tmc-over-chain",
         anyOf(
+          // r4 wording (triage): tmc-over-chain
+          /chain\b[^\n]{0,30}\bnegative\b[^\n]{0,20}\bbeats\b|\bbeats\b[^\n]{0,30}(?:tmc|tao\s*market\s*cap)/i,
           /(?:tmc|tao\s*market\s*cap)[^\n]{0,80}(?:beats?|wins?|overrid\w+|outrank\w*|overrules?|trumps?|takes? precedence|over the chain)|chain[^\n]{0,40}(?:should|must)[^\n]{0,20}(?:win|beat)|chain (?:wins|beats|is authoritative)/i,
           /(?:chain|probe)[^\n]{0,60}(?:loses|is overridden|is outvoted|is ignored|is overruled|no longer (?:wins|decides|beats))/i,
           /(?:prefers?|favou?rs?|trusts?|defers? to)\s+(?:the\s+)?(?:tmc|tao\s*market\s*cap)|(?:reverses?|inverts?|flips?)[^\n]{0,60}(?:precedence|priority|authority|order)/i,
@@ -247,6 +249,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "no-grace-clock-so-never-removed",
         anyOf(
+          // r4 wording (triage): no-grace-clock-so-never-removed
+          /stays? (?:a )?member forever|never[- ]expires|no removal path|never enters? the 48\s*h/i,
           [
             /negative_since|grace|48\s*h|clock/i,
             /never (?:be )?(?:removed|leaves?|dropped|evicted)|stays? (?:in|forever)|no (?:grace )?clock|clock (?:never|is not|isn'?t)|not started|never starts?|is not (?:removed|marked)/i,
@@ -447,7 +451,7 @@ export const SPECS: CaseSpec[] = [
       review(c, [
         "",
         "This round tightens what may follow `PASS` on a verdict's first line. Try words an author could really write after PASS, not only SHAs.",
-        "Pinned rule: after PASS the pointer is a full 40-character head SHA, or a prefix of at least 12 hex characters that resolves to the head. Anything else (an English word that happens to be hex, `deadbeef/effaced`, a prefix shorter than 12) is not a pointer and the PASS does not count.",
+        "Pinned rule: after PASS the pointer is a full 40-character head SHA, or a prefix of at least 12 hex characters that resolves to the head. Anything else is not a pointer and the PASS does not count: an English word that happens to be made of hex letters (for example `deadbeef`, or `effaced`), the two joined as `deadbeef/effaced`, or a prefix shorter than 12.",
       ]),
     posts: "once",
     verdict: "non-pass",
@@ -481,7 +485,7 @@ export const SPECS: CaseSpec[] = [
       ),
     ],
     rubric:
-      "The reply or verdict shows that `SHA_WORD` (7 to 40 hex characters) also matches words such as `deadbeef` or `effaced`, so `PASS — effaced` is read as a PASS with a head pointer, and that this breaks the pinned rule of at least 12 hex characters. A reply that only talks about real SHAs does not count.",
+      "The reply or verdict shows that `SHA_WORD` (7 to 40 hex characters) also matches an English word made of hex letters, so `PASS — <word>` is read as a PASS with a head pointer, and that this breaks the pinned rule of at least 12 hex characters. Naming either `deadbeef` or `effaced` (or another such word) as accepted is enough; saying that the joined string `deadbeef/effaced` is a single token that is not matched is correct and does not count against it. A reply that only talks about real SHAs, or only about short prefixes without any hex-letter word, does not count.",
   },
   {
     id: "miss-jwt-scrub-slow",
@@ -517,7 +521,7 @@ export const SPECS: CaseSpec[] = [
         "work-estimate",
         anyOf(
           /(?:5[, ]?000\s*(?:x|×|\*|times)\s*2[, ]?048|2[, ]?048\s*(?:x|×|\*|times)\s*5[, ]?000|50[, ]?000\s*(?:x|×|\*|times)\s*2[, ]?048|2[, ]?048\s*(?:x|×|\*|times)\s*50[, ]?000)/i,
-          /\b(?:10(?:\.\d+)?|100|1e8|10\^8|1\.0e8)\s*(?:million|M)\b|10[, ]?240[, ]?000|100[, ]?000[, ]?000|\b1e[78]\b|10\^[78]\b/i,
+          /\b(?:10(?:\.\d+)?|100|1e8|10\^8|1\.0e8)\s*(?:million|M)\b|10[, ]?240[, ]?000|100[, ]?000[, ]?000|\b1e[78]\b|10\^[78]\b|10[\u2077\u2078]/i,
           /(?:hundreds? of|~?\s*[45]\d\d|about 5\d\d|roughly 5\d\d|~?\s*1,?0\d\d)\s*(?:steps?|chars?|characters?|comparisons?|operations?)?\s*(?:per|each|a|for every)\s*(?:input )?(?:char|character)/i,
           // A range, not a point: the exam's own count (2,048 consume steps per start, 1.0e8 in all) and one that also counts
           // the backtracking (about 4,090 per start, 2.0e8) are both honest, so any total from 1e8 to 4e8 steps passes.
@@ -602,6 +606,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "the-marker-is-called-forged",
         anyOf(
+          // r4 wording (triage): the-marker-is-called-forged
+          /did not treat[^\n]{0,80}as (?:MC|a verdict|done)|not an? (?:registered )?(?:gate )?MC verdict|outside account|normal[- ]user (?:account|comment)/i,
           /forg|spoof|fake|not (?:from )?simibot|non-simibot|not simibot|isn't simibot|untrusted|not a (?:valid |real |genuine |trusted |gate |mc )*(?:verdict|pass)|not (?:mc|the gate)|does not count|doesn't count|not (?:count|trust)|ignored|not MC/i,
           /(?:normal|ordinary|regular|human|user) account|anyone can (?:type|write|post|copy)|(?:cannot|can'?t) speak for|(?:isn'?t|is not) (?:a )?(?:real|valid|genuine)|only simibot|only the (?:simibot )?app/i,
         ),
@@ -635,6 +641,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "old-passes-do-not-carry",
         anyOf(
+          // r4 wording (triage): old-passes-do-not-carry
+          /\bvoid(?:s|ed)?\b[^\n]{0,80}(?:old|earlier|previous|prior|SHA|verdicts?|passes)|(?:old|earlier|previous|prior)\b[^\n]{0,80}\bvoid(?:ed)?\b/i,
           /(?:older|old|previous|prior|earlier)\b[^\n]{0,80}(?:don'?t|do not|doesn'?t|does not|cannot|can'?t|not|no longer|never)\b[^\n]{0,40}(?:count|carry|carried|apply|transfer|valid|satisfy)|(?:don'?t|do not|never|not|cannot|can'?t)\b[^\n]{0,24}carr(?:y|ied)|reset\w*|(?:new|moved) head (?:resets?|needs?|requires?)/i,
           /(?:passes?|verdicts?|approvals?)\b[^\n]{0,60}(?:at|for|on|from) (?:the )?(?:old|earlier|previous|prior)\b[^\n]{0,60}(?:are|is) (?:void|stale|moot|worthless|expired|obsolete|no good|not valid)|only (?:count|apply|valid)\w* (?:at|for|on) the (?:same|exact|new|current) head|nothing (?:is )?carr(?:y|ied|ies) over/i,
         ),
@@ -757,6 +765,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "no-secret-in-the-line",
         anyOf(
+          // r4 wording (triage): no-secret-in-the-line
+          /(?:cannot|can'?t|does not|doesn'?t) (?:carry|contain|hold|leak) (?:a |any )?(?:secret|credential|token)|\bno (?:env(?:ironment)? vars?|api keys?|secrets?)\b[^\n]{0,60}(?:interpolated|logged|in the (?:line|record|message))/i,
           /(?:no|not|never)\s+(?:a\s+)?(?:secret|credential|token|sensitive|PII)|only (?:integers?|ints?|netuids?)|netuids? (?:only|are public)/i,
           /(?:nothing|no data)\s+(?:sensitive|secret|private)|(?:integers?|ints?|netuids?)\b[^\n]{0,40}(?:public|safe|not (?:secret|sensitive))|(?:logs?|prints?|writes?)\s+(?:just|only)\s+(?:the )?(?:integer|int|netuid)/i,
         ),
@@ -858,6 +868,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "a-clean-comparison-is-not-evidence",
         anyOf(
+          // r4 wording (triage): a-clean-comparison-is-not-evidence
+          /(?:comparison|suite|clean (?:result|reading|comparison))\b[^\n]{0,120}(?:cannot|can'?t|unable to|does not|doesn'?t) (?:detect|catch|flag|notice)\b|\bstructurally blind\b/i,
           /(?:clean|comparison|green|0 (?:new )?failures|passes|pass(?:ing)?)[^\n]{0,160}(?:vacuous|not (?:evidence|proof|meaningful|a signal)|hides?|masks?|only because|because (?:the )?tests?|doesn'?t run|do(?:es)? not run|never run|not run|not collected|no longer run|within (?:the )?(?:tolerance|90))|(?:skipped|deselected)[^\n]{0,80}(?:no failure|not a failure|isn'?t a failure|not counted as)/i,
           /(?:no|zero) new failures[^\n]{0,80}(?:meaningless|empty|says nothing|proves nothing|tells us nothing|because)|(?:can'?t|cannot|doesn'?t|does not)\s+(?:trust|rely on|count on)\b[^\n]{0,40}(?:comparison|green|clean)/i,
           /(?:comparison|suite)\b[^\n]{0,60}(?:reads?|looks?|is) clean\b[^\n]{0,80}(?:but|yet|only|however)/i,
@@ -902,6 +914,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "the-newest-verdict-does-not-decide",
         anyOf(
+          // r4 wording (triage): the-newest-verdict-does-not-decide
+          /(?:later|newest|latest|most recent)\b[^\n]{0,80}(?:does not|doesn'?t|cannot|can'?t) (?:rewrite|undo|reverse|change)|(?:not|isn'?t) ranked by|who (?:commented|posted|spoke) (?:last|later)\b/i,
           /(?:newest|latest|most recent|later|last)[^\n]{0,100}(?:does(?:n'?t| not)|do(?:n'?t| not)|cannot|can'?t|isn'?t|is not|not)\b[^\n]{0,60}(?:decid\w*|count\w*|win\w*|overrid\w*|supersed\w*|cancel\w*|replac\w*|matter\w*|outrank\w*)|(?:does(?:n'?t| not)|cannot|can'?t)[^\n]{0,60}(?:cancel\w*|overrid\w*|supersed\w*|replac\w*|outrank\w*|retract\w*|erase\w*|consum\w*)[^\n]{0,60}(?:cursor|modify)/i,
           // "not a recency race", "not a last-write-wins register", "not a vote": the gate is not decided by who spoke last
           /\b(?:not|isn'?t|is not)\s+(?:a\s+|an\s+)?(?:recency|last-write-wins?|newest-wins?|latest-wins?|race\b|vote\b|popularity)|(?:newest|latest|most recent|last)\b[^\n]{0,30}\bwins?\b["'`*\u201d]{0,3}\s+(?:is|isn'?t|is not|is wrong|is false)\b/i,
@@ -963,6 +977,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "push-the-stale-head-check-was-removed",
         anyOf(
+          // r4 wording (triage): push-the-stale-head-check-was-removed
+          /(?:isStale|stale[- ]head)\b[^\n]{0,400}\b(?:that|the|this) (?:check|guard|read) is gone/i,
           /(?:isStale|stale[- ]head|head (?:check|re-?check)|superseded)[^\n]{0,120}(?:remov\w*|dropp\w*|delet\w*|gone|no longer|missing|without)|(?:remov\w*|dropp\w*|delet\w*|without)[^\n]{0,120}(?:isStale|stale[- ]head|head (?:check|re-?check)|superseded)/i,
           /(?:check|guard|test)\b[^\n]{0,40}(?:that|whether|if)\b[^\n]{0,40}(?:head|pr)\b[^\n]{0,30}(?:moved|changed|still current)[^\n]{0,60}(?:remov\w*|gone|deleted|dropped|no longer)/i,
           // "loses its `isStale` check and posts unconditionally", "`isStale` ... `postSlotOnce` has none"
@@ -1075,6 +1091,8 @@ export const SPECS: CaseSpec[] = [
       ev(
         "the-boundary-is-exact-on-the-injected-clock",
         anyOf(
+          // r4 wording (triage): the-boundary-is-exact-on-the-injected-clock
+          /(?:no entries|nothing|none)\b[^\n]{0,20}\b(?:dropped|removed)|(?:netuid list|membership|members|universe)\b[^\n]{0,60}\bunchanged|(?:members|netuids|rows) (?:are |is )?still (?:listed|present|kept)/i,
           [
             /47\s*h\s*59|47:59:59|just (?:before|under|short of)\b[^\n]{0,30}(?:48|the grace)|one second (?:short|before|under)/i,
             /(?:nobody|no one|no (?:member|subnet|netuid)s?|nothing|0 (?:members|subnets|netuids))\b[^\n]{0,60}(?:removed|dropped|eligible)|(?:removes?|drops?|evicts?)\s+(?:nobody|no one|nothing|no (?:member|subnet|netuid)s?)|not (?:yet )?(?:removed|eligible|dropped)|still (?:keeps?|retains?|has|holds?) (?:all )?(?:128|members)|still (?:128|all (?:128|members))|\bno (?:row|rows|member|members|subnet|subnets|netuid|netuids)\s+(?:is |are |was |were )?(?:yet )?(?:dropped|removed)|\bno (?:drop|removal)\b|\b(?:rows?|members?)\s+stays?\s+(?:at\s+)?(?:128|in\b)/i,
