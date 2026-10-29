@@ -74,6 +74,12 @@ _TICK_ACTIVE = False
 _write_executor: Optional[ThreadPoolExecutor] = None
 _write_future: Optional[Any] = None
 _scheduler: Optional["ScoreSnapshotScheduler"] = None
+# JOB_ID is one process-wide APScheduler slot shared by every scheduler
+# generation. _job_lock makes "check still current + (re)schedule" and
+# "cancel only my own job" atomic; _job_owner is the generation that last
+# scheduled it. Lock order: _job_lock before _lock, never the reverse.
+_job_lock = threading.Lock()
+_job_owner: Optional["ScoreSnapshotScheduler"] = None
 
 
 def _write_future_active() -> bool:
@@ -1321,15 +1327,37 @@ class ScoreSnapshotScheduler:
         with _lock:
             return _scheduler is self and self._armed
 
-    def _abort_arm_if_stopped(self) -> Optional[Dict[str, Any]]:
+    def _stopped_during_arm(self) -> Optional[Dict[str, Any]]:
         """Fence deferred/immediate arm against concurrent stop/unregister."""
         if self._arm_still_valid():
             return None
-        cancel_job(JOB_ID)
-        with _lock:
-            if _scheduler is self:
-                self._armed = False
         return {"started": False, "reason": "stopped_during_arm"}
+
+    def _schedule_tick(self, seconds: float) -> bool:
+        """(Re)schedule JOB_ID for this generation; refuse once it is stopped."""
+        global _job_owner
+        with _job_lock:
+            if not self._arm_still_valid():
+                return False
+            schedule_in_seconds(JOB_ID, self._scheduled_tick, seconds)
+            _job_owner = self
+            return True
+
+    def _cancel_own_job(self) -> None:
+        """Disarm and cancel JOB_ID unless a replacement generation owns it."""
+        global _job_owner
+        try:
+            with _job_lock:
+                if _job_owner is self:
+                    _job_owner = None
+                    cancel_job(JOB_ID)
+        finally:
+            with _lock:
+                self._armed = False
+
+    def _scheduled_tick(self) -> Dict[str, Any]:
+        """Entry point for scheduled and thread-dispatched ticks."""
+        return self._tick(gate_on_arm=True)
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
@@ -1345,37 +1373,27 @@ class ScoreSnapshotScheduler:
                 # A started tick thread cannot be cancelled; a liveness
                 # failure must abort before the thread exists. Deferred mode
                 # stays schedule-first so a failed schedule leaves the
-                # lifecycle unchanged (cancel_job covers that path).
+                # lifecycle unchanged (_cancel_own_job covers that path).
                 self.liveness.start()
                 try:
                     threading.Thread(
-                        target=lambda: self._tick(gate_on_arm=True),
+                        target=self._scheduled_tick,
                         daemon=True,
                         name="score-snap-tick",
                     ).start()
                 except Exception:
                     self.liveness.stop()
                     raise
-                aborted = self._abort_arm_if_stopped()
-                if aborted:
-                    self.liveness.stop()
-                    return aborted
+            elif not self._schedule_tick(SCORE_SNAPSHOT_FIRST_DELAY_SECONDS):
+                return {"started": False, "reason": "stopped_during_arm"}
             else:
-                schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
-                aborted = self._abort_arm_if_stopped()
-                if aborted:
-                    return aborted
                 self.liveness.start()
-                aborted = self._abort_arm_if_stopped()
-                if aborted:
-                    self.liveness.stop()
-                    return aborted
+            aborted = self._stopped_during_arm()
+            if aborted:
+                self.liveness.stop()
+                return aborted
         except Exception:
-            try:
-                cancel_job(JOB_ID)
-            finally:
-                with _lock:
-                    self._armed = False
+            self._cancel_own_job()
             raise
         return {
             "started": True,
@@ -1387,7 +1405,7 @@ class ScoreSnapshotScheduler:
     def stop(self) -> Dict[str, Any]:
         with _lock:
             self._armed = False
-        cancel_job(JOB_ID)
+        self._cancel_own_job()
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -1483,8 +1501,8 @@ class ScoreSnapshotScheduler:
             if not self._tick_active:
                 self._persist_cycle_summary(skipped)
                 self._record_liveness(skipped)
-            if reschedule and self._is_registered():
-                schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
+            if reschedule:
+                self._schedule_tick(min(120, self.refresh_minutes * 60))
             return skipped
 
         with heavy_job_slot("score_snapshot") as acquired:
@@ -1492,13 +1510,11 @@ class ScoreSnapshotScheduler:
                 skipped = {"ok": False, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
                 self._persist_cycle_summary(skipped)
                 self._record_liveness(skipped)
-                if reschedule and self._is_registered():
-                    schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
+                if reschedule:
+                    self._schedule_tick(min(120, self.refresh_minutes * 60))
                 return skipped
         # ponytail: release gate before ~127×2 scoring — holding it wedged resolver for hours
-        if gate_on_arm and not self._arm_still_valid():
-            return {"ok": False, "run_at": _now_iso(), "skipped": "stopped_during_arm"}
-        return self._tick_body(reschedule=reschedule)
+        return self._tick_body(reschedule=reschedule, gate_on_arm=gate_on_arm)
 
     def _complete_write_future(self, fut: Any, reschedule: bool) -> None:
         global _TICK_ACTIVE, _write_future
@@ -1534,8 +1550,7 @@ class ScoreSnapshotScheduler:
                 self._tick_active = False
             # Deferred path: re-arm even when this tick was run_once/revive
             # (reschedule=False). Sync-complete and occupancy-skip keep the gate.
-            if self._is_registered():
-                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+            self._schedule_tick(self.refresh_minutes * 60)
 
     def _register_write_completion_callback(self, reschedule: bool) -> None:
         global _TICK_ACTIVE
@@ -1546,8 +1561,7 @@ class ScoreSnapshotScheduler:
             with _lock:
                 _TICK_ACTIVE = False
                 self._tick_active = False
-            if self._is_registered():
-                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+            self._schedule_tick(self.refresh_minutes * 60)
             return
         if fut.done():
             self._complete_write_future(fut, reschedule)
@@ -1558,23 +1572,29 @@ class ScoreSnapshotScheduler:
 
         fut.add_done_callback(_on_done)
 
-    def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
+    def _tick_body(
+        self, reschedule: bool = True, *, gate_on_arm: bool = False
+    ) -> Dict[str, Any]:
         global _TICK_ACTIVE
         with _lock:
-            if _TICK_ACTIVE or _write_future_active():
-                skipped = {
-                    "ok": False,
-                    "run_at": _now_iso(),
-                    "skipped": "scoring_in_progress",
-                }
-                self._record_liveness(skipped)
-                if reschedule and self._is_registered():
-                    schedule_in_seconds(
-                        JOB_ID, self._tick, min(120, self.refresh_minutes * 60)
-                    )
-                return skipped
-            _TICK_ACTIVE = True
-            self._tick_active = True
+            # Admission and stop() are linearized on _lock: a gated tick either
+            # claims the active slot before stop, or sees the stop and bails.
+            if gate_on_arm and not (_scheduler is self and self._armed):
+                return {"ok": False, "run_at": _now_iso(), "skipped": "stopped_during_arm"}
+            busy = _TICK_ACTIVE or _write_future_active()
+            if not busy:
+                _TICK_ACTIVE = True
+                self._tick_active = True
+        if busy:
+            skipped = {
+                "ok": False,
+                "run_at": _now_iso(),
+                "skipped": "scoring_in_progress",
+            }
+            self._record_liveness(skipped)
+            if reschedule:
+                self._schedule_tick(min(120, self.refresh_minutes * 60))
+            return skipped
         try:
             self._clear_stuck_scoring()
             started_at = _now_iso()
@@ -1621,8 +1641,8 @@ class ScoreSnapshotScheduler:
                 with _lock:
                     _TICK_ACTIVE = False
                     self._tick_active = False
-                if reschedule and self._is_registered():
-                    schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+                if reschedule:
+                    self._schedule_tick(self.refresh_minutes * 60)
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {

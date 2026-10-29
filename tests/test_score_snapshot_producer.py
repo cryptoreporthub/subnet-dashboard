@@ -108,49 +108,166 @@ def test_second_start_in_process_does_not_spawn_a_second_tick(tmp_path, monkeypa
     assert len(scheduled) == 1
 
 
-def test_stop_during_deferred_arm_leaves_no_pending_job(tmp_path, monkeypatch):
-    """stop_score_snapshot_scheduler() during schedule_in_seconds must not leave JOB_ID armed."""
+def _isolated_soul(tmp_path, monkeypatch) -> None:
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+
+def _fake_job_table(monkeypatch) -> dict:
+    """Stand-in for the process-wide APScheduler: one slot per job id, replace on re-add."""
+    jobs: dict = {}
+    monkeypatch.setattr(
+        snaps, "schedule_in_seconds", lambda job_id, fn, seconds: jobs.__setitem__(job_id, fn)
+    )
+    monkeypatch.setattr(snaps, "cancel_job", lambda job_id: jobs.pop(job_id, None))
+    return jobs
+
+
+def _record_snapshot_writes(monkeypatch) -> list:
+    """Replace the scoring body's I/O so a tick that reaches it is observable."""
+    writes: list = []
+
+    def fake_write(progress_cb=None):
+        writes.append(1)
+        return {"ok": True, "published": True, "count": 1, "path": snaps.SCORE_SNAPSHOTS_PATH}
+
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", fake_write)
+    monkeypatch.setattr(snaps.ScoreSnapshotScheduler, "_persist_cycle_summary", lambda self, r: None)
+    monkeypatch.setattr(snaps.ScoreSnapshotScheduler, "_clear_stuck_scoring", lambda self: None)
+    monkeypatch.setattr(snaps.ScoreSnapshotScheduler, "_scoring_in_progress", lambda self: False)
+    return writes
+
+
+def _join_tick_threads() -> None:
+    for t in threading.enumerate():
+        if t.name == "score-snap-tick":
+            t.join(timeout=5)
+            assert not t.is_alive()
+
+
+def test_stop_during_deferred_arm_leaves_no_pending_job(tmp_path, monkeypatch):
+    """stop_score_snapshot_scheduler() during schedule_in_seconds must not leave JOB_ID armed."""
+    _isolated_soul(tmp_path, monkeypatch)
     entered = threading.Event()
     release = threading.Event()
-    scheduled: list = []
-    cancel_calls: list = []
+    jobs: dict = {}
 
     def gate_schedule(job_id, func, seconds):
         entered.set()
         if not release.wait(timeout=5):
             raise AssertionError("schedule gate timed out")
-        scheduled.append((job_id, seconds))
+        jobs[job_id] = func
 
     monkeypatch.setattr(snaps, "schedule_in_seconds", gate_schedule)
-    monkeypatch.setattr(snaps, "cancel_job", lambda job_id: cancel_calls.append(job_id))
+    monkeypatch.setattr(snaps, "cancel_job", lambda job_id: jobs.pop(job_id, None))
     sched = snaps.ScoreSnapshotScheduler()
     with snaps._lock:
         snaps._scheduler = sched
     start_result: dict = {}
-
-    def arm():
-        start_result.update(sched.start(immediate=False))
-
-    arm_thread = threading.Thread(target=arm, name="test-deferred-arm")
+    arm_thread = threading.Thread(
+        target=lambda: start_result.update(sched.start(immediate=False)), name="test-deferred-arm"
+    )
     arm_thread.start()
     assert entered.wait(timeout=5)
-    stop_result = snaps.stop_score_snapshot_scheduler()
-    assert stop_result["stopped"] is True
+    # stop serializes behind the in-flight schedule call, so run it off-thread.
+    stop_result: dict = {}
+    stop_thread = threading.Thread(
+        target=lambda: stop_result.update(snaps.stop_score_snapshot_scheduler()),
+        name="test-stop",
+    )
+    stop_thread.start()
     release.set()
     arm_thread.join(timeout=5)
-    assert not arm_thread.is_alive()
+    stop_thread.join(timeout=5)
+    assert not arm_thread.is_alive() and not stop_thread.is_alive()
+    assert stop_result["stopped"] is True
     assert start_result["started"] is False
     assert start_result["reason"] == "stopped_during_arm"
-    assert scheduled == [(snaps.JOB_ID, snaps.SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)]
-    assert cancel_calls.count(snaps.JOB_ID) >= 1
-    assert cancel_calls[-1] == snaps.JOB_ID
+    assert jobs == {}
     with snaps._lock:
         assert snaps._scheduler is None
     assert sched._armed is False
     assert sched.liveness.snapshot().get("lifecycle") != "started"
+
+
+def test_stale_arm_cannot_cancel_replacement_scheduler_job(tmp_path, monkeypatch):
+    """Replit P2 #1 / Ditto L1328: stop A, start B, resume A -> B's job survives and B ticks."""
+    _isolated_soul(tmp_path, monkeypatch)
+    jobs = _fake_job_table(monkeypatch)
+    writes = _record_snapshot_writes(monkeypatch)
+    old, new = snaps.ScoreSnapshotScheduler(), snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = old
+    paused, resume = threading.Event(), threading.Event()
+    real_snapshot = old.liveness.snapshot
+
+    def paused_snapshot():
+        paused.set()
+        if not resume.wait(timeout=5):
+            raise AssertionError("resume gate timed out")
+        return real_snapshot()
+
+    monkeypatch.setattr(old.liveness, "snapshot", paused_snapshot)
+    old_result: dict = {}
+    old_thread = threading.Thread(target=lambda: old_result.update(old.start(immediate=False)))
+    old_thread.start()
+    assert paused.wait(timeout=5)  # old start is armed-flagged but has not scheduled yet
+
+    snaps.stop_score_snapshot_scheduler()
+    with snaps._lock:
+        snaps._scheduler = new
+    assert new.start(immediate=False)["started"] is True
+    new_job = jobs[snaps.JOB_ID]
+
+    resume.set()
+    old_thread.join(timeout=5)
+    assert not old_thread.is_alive()
+    assert old_result == {"started": False, "reason": "stopped_during_arm"}
+    assert jobs.get(snaps.JOB_ID) == new_job
+    assert new._armed is True
+    assert new.liveness.snapshot().get("lifecycle") == "started"
+    jobs[snaps.JOB_ID]()
+    assert writes == [1]
+
+
+def test_stop_of_unregistered_scheduler_keeps_replacement_job(tmp_path, monkeypatch):
+    """stop_score_snapshot_scheduler() unregisters before it calls stop(); a replacement
+    that arms in that gap owns JOB_ID, and the old stop() must not cancel it."""
+    _isolated_soul(tmp_path, monkeypatch)
+    jobs = _fake_job_table(monkeypatch)
+    old, new = snaps.ScoreSnapshotScheduler(), snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = old
+    assert old.start(immediate=False)["started"] is True
+    with snaps._lock:
+        snaps._scheduler = new  # old is unregistered; its stop() has not run yet
+    assert new.start(immediate=False)["started"] is True
+    new_job = jobs[snaps.JOB_ID]
+
+    old.stop()
+
+    assert jobs.get(snaps.JOB_ID) == new_job
+    assert new._armed is True
+
+
+def test_dispatched_tick_of_stopped_scheduler_neither_publishes_nor_rearms(tmp_path, monkeypatch):
+    """Ditto L1364: a callback already handed to the executor before stop() runs afterwards."""
+    _isolated_soul(tmp_path, monkeypatch)
+    jobs = _fake_job_table(monkeypatch)
+    writes = _record_snapshot_writes(monkeypatch)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    assert sched.start(immediate=False)["started"] is True
+    dispatched = jobs[snaps.JOB_ID]
+    sched.stop()
+    assert jobs == {}
+
+    dispatched()
+
+    assert writes == []
+    assert jobs == {}
 
 
 def test_stop_during_immediate_arm_skips_tick_body(tmp_path, monkeypatch):
@@ -176,7 +293,7 @@ def test_stop_during_immediate_arm_skips_tick_body(tmp_path, monkeypatch):
     monkeypatch.setattr(
         snaps.ScoreSnapshotScheduler,
         "_tick_body",
-        lambda self, reschedule=True: tick_bodies.append(1)
+        lambda self, reschedule=True, **_kw: tick_bodies.append(1)
         or {"ok": False, "skipped": "test"},
     )
     sched = snaps.ScoreSnapshotScheduler()
@@ -201,6 +318,32 @@ def test_stop_during_immediate_arm_skips_tick_body(tmp_path, monkeypatch):
     assert sched.liveness.snapshot().get("lifecycle") != "started"
     with snaps._lock:
         assert snaps._scheduler is None
+
+
+def test_stop_between_immediate_tick_admission_check_and_body_publishes_nothing(tmp_path, monkeypatch):
+    """Replit P2 #2 / Ditto L1500: stop lands after the tick's last validity check but
+    before the body claims the active slot; the aborted start must not publish."""
+    _isolated_soul(tmp_path, monkeypatch)
+    jobs = _fake_job_table(monkeypatch)
+    writes = _record_snapshot_writes(monkeypatch)
+    real_body = snaps.ScoreSnapshotScheduler._tick_body
+
+    def stop_then_enter_body(self, *args, **kwargs):
+        snaps.stop_score_snapshot_scheduler()
+        return real_body(self, *args, **kwargs)
+
+    monkeypatch.setattr(snaps.ScoreSnapshotScheduler, "_tick_body", stop_then_enter_body)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+
+    sched.start(immediate=True)
+    _join_tick_threads()
+
+    assert writes == []
+    assert jobs == {}
+    assert snaps._TICK_ACTIVE is False
+    assert sched._armed is False
 
 
 def test_failed_arm_leaves_scheduler_retryable(tmp_path, monkeypatch):
@@ -232,24 +375,30 @@ def test_failed_arm_rolls_back_even_when_cancel_raises(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     arms = []
     cancels = []
-
-    def flaky_schedule(job_id, func, seconds):
-        arms.append(job_id)
-        if len(arms) == 1:
-            raise RuntimeError("scheduler unavailable")
+    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda job_id, fn, seconds: arms.append(job_id))
 
     def flaky_cancel(job_id):
         cancels.append(job_id)
         if len(cancels) == 1:
             raise RuntimeError("cancel unavailable")
 
-    monkeypatch.setattr(snaps, "schedule_in_seconds", flaky_schedule)
     monkeypatch.setattr(snaps, "cancel_job", flaky_cancel)
     sched = snaps.ScoreSnapshotScheduler()
     with snaps._lock:
         snaps._scheduler = sched
-    with pytest.raises(RuntimeError):
+    real_start = sched.liveness.start
+    liveness_calls = []
+
+    def flaky_liveness_start():
+        liveness_calls.append(1)
+        if len(liveness_calls) == 1:
+            raise RuntimeError("liveness persist unavailable")
+        return real_start()
+
+    monkeypatch.setattr(sched.liveness, "start", flaky_liveness_start)
+    with pytest.raises(RuntimeError, match="cancel unavailable|liveness persist unavailable"):
         sched.start(immediate=False)
+    assert sched._armed is False
     retry = sched.start(immediate=False)
     assert retry["started"] is True
     assert arms == [snaps.JOB_ID, snaps.JOB_ID]
