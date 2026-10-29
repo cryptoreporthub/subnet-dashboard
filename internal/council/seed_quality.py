@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -10,6 +11,10 @@ from internal.council.score_snapshots import is_complete_snapshot
 _PLACEHOLDER_NAME = re.compile(r"^S\d+$", re.IGNORECASE)
 _FABRICATED_ALPHA_NAME = re.compile(r"^Alpha Subnet \d+$", re.IGNORECASE)
 _REQUIRED_EXPERT_KEYS = ("quant", "hype", "dark_horse", "technical")
+
+
+def _is_score(value: Any) -> bool:
+    return type(value) in (int, float) and math.isfinite(value)
 
 
 def is_placeholder_seed_name(name: Any) -> bool:
@@ -55,6 +60,8 @@ def validate_shipped_seed(snap: Any) -> Tuple[bool, str]:
         ec = row.get("expert_contributions")
         if not isinstance(ec, dict) or len(ec) < 2:
             return False, "missing_expert_contributions"
-        if not any(k in ec for k in _REQUIRED_EXPERT_KEYS):
+        # The producer scores all four council experts on every row (and the committed seed carries all
+        # four plus extras), so require each with a finite number; extra keys are allowed.
+        if not all(_is_score(ec.get(k)) for k in _REQUIRED_EXPERT_KEYS):
             return False, "expert_contributions_not_council_shaped"
     return True, "ok"
