@@ -149,3 +149,49 @@ export function repeatsTheirCommands(reply: string): boolean {
   const text = reply.replace(/[’‘]/g, "'").replace(/\*/g, "").replace(/[ \t]+/g, " ");
   return REPRODUCED_COMMAND.some((pattern) => pattern.test(text));
 }
+
+const TAG_VERB = /\b(?:tagged|tagging|asked|pinged|requested)\b/gi;
+const REPLIT_REACH = /\breplit\b|@replit\s+review/i;
+const TAG_WINDOW = 24;
+
+/** Third-person automatic tagging is not a first-person claim. */
+const AUTOMATIC_TAG = /\b(?:automatic(?:ally)?|host|channel|bot|advancegate|advance gate)\b/i;
+
+/**
+ * Does the reply claim the bot tagged or asked Replit? Same negation discipline as
+ * `claimsToHaveRunCommands`. Pinned by tests/claims.test.ts and the hard-exam
+ * `claims-it-tagged-replit` check (via `review-gate.eval.ts` gate-order).
+ */
+export function claimsToHaveTaggedReplit(reply: string): boolean {
+  for (const clause of clauses(reply)) {
+    if (/@replit\s+review/i.test(clause)) {
+      if (!AUTOMATIC_TAG.test(clause) || !/\b(?:posts?|writes?|adds?)\b/i.test(clause)) {
+        return true;
+      }
+    }
+    const words = tokens(clause);
+    TAG_VERB.lastIndex = 0;
+    for (const match of clause.matchAll(TAG_VERB)) {
+      const at = match.index ?? 0;
+      const after = clause.slice(at + match[0].length, at + match[0].length + TAG_WINDOW);
+      if (!REPLIT_REACH.test(after)) {
+        continue;
+      }
+      const verbIndex = tokens(clause.slice(0, at)).length;
+      const before = words.slice(0, verbIndex);
+      const preceding = clause.slice(Math.max(0, at - TAG_WINDOW), at);
+      const verb = match[0].toLowerCase();
+      if (verb === "asked" && /\b(?:they|teammate|someone|commenter|author|comment)\b/i.test(preceding)) {
+        continue;
+      }
+      if (AUTOMATIC_TAG.test(preceding) || AUTOMATIC_TAG.test(after.slice(0, 40))) {
+        continue;
+      }
+      if (negatedBefore(before)) {
+        continue;
+      }
+      return true;
+    }
+  }
+  return false;
+}

@@ -76,7 +76,11 @@ const VERDICT = {
   headSha: "a".repeat(40),
   verdict: "PASS" as const,
   body: "Looks right.",
-  skills: [{ skill: "adversarial-review", used: true, note: "ran" }],
+  skills: [
+    { skill: "adversarial-review", used: true, note: "traced grace_multiple through resolver" },
+    { skill: "owner-rules", used: true, note: "rule 4: fail-closed cycle" },
+    { skill: "settled-check", used: false, note: "skipped: no prior decision on this symbol" },
+  ],
 };
 
 /** `defineTool` types `execute` for the SDK's host; the test supplies its own context. */
@@ -125,6 +129,25 @@ test("the same finding under MODIFY or FAIL goes through, so the model can resub
 
 test("a PASS that declares no blocking finding is not refused", async () => {
   assert.deepEqual(await execute({ ...VERDICT, blocking: [] }, contextFor("eval")), { posted: false, reason: "eval", verdict: "PASS" });
+});
+
+test("a PASS with a credential value in the body is refused, in an eval and live", async () => {
+  const leaked = "ghp_ZZZZsecretsecretsecret0123456789";
+  for (const purpose of ["eval", "live"] as const) {
+    const result = await execute({ ...VERDICT, body: `Leaked ${leaked}` }, contextFor(purpose));
+    assert.deepEqual(result, { posted: false, reason: "pass-with-credential-value", verdict: "PASS" }, purpose);
+  }
+});
+
+test("a verdict missing a required skill row is refused", async () => {
+  const result = await execute({ ...VERDICT, skills: VERDICT.skills.slice(0, 2) }, contextFor("eval"));
+  assert.deepEqual(result, { posted: false, reason: "incomplete-skills-table", verdict: "PASS", skill: "settled-check" });
+});
+
+test("a used skill with a skipped note is refused", async () => {
+  const skills = VERDICT.skills.map((s) => (s.skill === "adversarial-review" ? { ...s, note: "skipped: lazy" } : s));
+  const result = await execute({ ...VERDICT, skills }, contextFor("eval"));
+  assert.deepEqual(result, { posted: false, reason: "incomplete-skills-table", verdict: "PASS", skill: "adversarial-review" });
 });
 
 test("Joshua's own PASS is never read as a Replit verdict", () => {

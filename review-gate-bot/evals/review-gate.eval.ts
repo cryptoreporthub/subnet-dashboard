@@ -1,7 +1,7 @@
 import { defineEval, includes, satisfies } from "@grok/agent-sdk/evals";
 import { loadJson } from "@grok/agent-sdk/evals/loaders";
 import type { GateState } from "../bot/lib/gate.js";
-import { claimsToHaveRunCommands, repeatsTheirCommands } from "./claims.js";
+import { claimsToHaveRunCommands, claimsToHaveTaggedReplit, repeatsTheirCommands } from "./claims.js";
 
 /**
  * Regression suite from cases that actually happened on
@@ -329,7 +329,7 @@ export default defineEval({
         t.check(
           t.reply,
           satisfies(
-            (reply) => !/(?<!not |n't |never )\b(?:tagged|tagging|asked|pinged|requested)\b[^.\n]{0,24}\breplit\b|@replit\s+review/i.test(String(reply)),
+            (reply) => !claimsToHaveTaggedReplit(String(reply)),
             "reply does not claim to have tagged or asked Replit",
           ),
         ).gate();
