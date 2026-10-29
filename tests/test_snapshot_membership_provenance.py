@@ -544,8 +544,9 @@ def test_refresh_script_without_soul_map_refuses_with_weights_message(tmp_path, 
 
     err = capsys.readouterr().err
     assert rc == 2
-    assert "usable soul_map required" in err
+    assert "usable soul_map required at data/soul_map.json" in err
     assert "weights_unavailable" in err
+    assert "cp data_seeds/soul_map.json data/soul_map.json" in err
     assert "membership refused" not in err
     assert hashlib.sha256(dest.read_bytes()).hexdigest() == before
 

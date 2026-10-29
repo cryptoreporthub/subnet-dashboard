@@ -36,7 +36,8 @@ def main(argv=None) -> int:
         "--build-from-chain",
         action="store_true",
         help="Resolve membership with the real universe refresh (pinned chain read + TMC rows), then run "
-        "the real producer on exactly that membership (ignores source path)",
+        "the real producer on exactly that membership (ignores source path). Needs a usable soul_map at "
+        "data/soul_map.json (cp data_seeds/soul_map.json data/soul_map.json).",
     )
     args = parser.parse_args(argv)
     if args.build_from_chain:
@@ -48,7 +49,8 @@ def main(argv=None) -> int:
             if not out.get("published"):
                 if out.get("skipped") == "weights_unavailable":
                     print(
-                        "usable soul_map required (weights_unavailable); seed unchanged",
+                        "usable soul_map required at data/soul_map.json (weights_unavailable); "
+                        "cp data_seeds/soul_map.json data/soul_map.json, then retry; seed unchanged",
                         file=sys.stderr,
                     )
                     return 2
