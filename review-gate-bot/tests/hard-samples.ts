@@ -561,6 +561,10 @@ export const SAMPLES: Record<string, Sample> = {
         body: "PASS. internal/subnet_universe.py: new INFO log line, purely observability. Output is just netuid integers (public), and it fires only when a refresh actually removes something, so volume stays small. No functional effect on the snapshot.",
       },
       {
+        label: "r2b: the block writes nothing, publish ordering unchanged",
+        body: "PASS. internal/subnet_universe.py adds one logger.info. The block writes nothing: removed is a local list and _publish(built) runs after it with an unchanged built, so rule 1 is respected (no write, publish ordering unchanged). It logs only integers (no secret), and a line lists at most the 127 non-root members of the 128-member universe (MAX_NETUIDS = 200 is the probe's scan width).",
+      },
+      {
         label: "r2b: only adds observability, never written back",
         body: "PASS. internal/subnet_universe.py adds one logger.info. The diff only adds observability: removed is a local list that is never written back, the line runs before _publish and touches no state. It logs only integers (no secret), and the list is bounded by the 128-member universe (MAX_NETUIDS = 200 is the probe's scan width).",
       },

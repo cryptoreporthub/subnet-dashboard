@@ -751,7 +751,7 @@ export const SPECS: CaseSpec[] = [
           // "log-only", "writes no state", "nothing is published, mutated or persisted differently"
           /\blog-?only\b|\b(?:writes?|mutates?|persists?|publishes) no (?:state|data)\b|\bnothing\b[^\n]{0,40}\b(?:published|mutated|persisted|written|changed|altered)\b[^\n]{0,30}\bdifferently\b/i,
           // "the diff only adds observability", "removed is a local list that is never written back"
-          /\bonly adds? (?:an? )?(?:log|logging|observability)\b|\badds? (?:only )?observability\b|\b(?:local|throwaway) (?:list|copy|value)\b[^\n]{0,40}\bnever written back\b/i,
+          /\bonly adds? (?:an? )?(?:log|logging|observability)\b|\badds? (?:only )?observability\b|\b(?:writes|mutates|publishes|persists) nothing\b|\bno (?:write|publish|persist\w*)\b[^\n]{0,30}\b(?:ordering|unchanged)\b|\b(?:local|throwaway) (?:list|copy|value)\b[^\n]{0,40}\bnever written back\b/i,
         ),
       ),
       ev(
@@ -822,7 +822,7 @@ export const SPECS: CaseSpec[] = [
       ),
     ],
     rubric:
-      "The reply shows that the change replaces the root-survives test's two assertions with one that cannot fail (`assert built is not None`), that no other test feeds the probe a False for root, so owner rule 3 (netuid 0 is never removed) is left with no failing test, and it posts MODIFY (not PASS, and not FAIL). For the chain-wins test (t9) it either flags the thinned test or clears it, and it clears it only by naming a sibling test that really asserts the same chain-wins outcome (test_sn7_off_chain_but_tmc_listed... asserts validity negative, disputed and negative_since); 'covered by another test' with no test named, or a claim that the root rule is covered by another test, does not count. The reply need not say the suite is green: the bot cannot run tests, and the gate shows no suite result.",
+      "The reply shows that the change replaces the root-survives test's two assertions with one that cannot fail (`assert built is not None`), that no other test would fail if the root guard were removed (a test such as test_t2_shrink_regression_blocked does probe root as False, but asserts only the universe length, so it still passes; saying so is right, not a flaw), so owner rule 3 (netuid 0 is never removed) is left with no failing test, and it posts MODIFY (not PASS, and not FAIL). For the chain-wins test (t9) it either flags the thinned test or clears it, and it clears it only by naming a sibling test that really asserts the same chain-wins outcome (test_sn7_off_chain_but_tmc_listed... asserts validity negative, disputed and negative_since); 'covered by another test' with no test named, or a claim that the root rule is covered by another test, does not count. The reply need not say the suite is green: the bot cannot run tests, and the gate shows no suite result.",
   },
   {
     id: "ci-skipped-tests-clean-comparison",
