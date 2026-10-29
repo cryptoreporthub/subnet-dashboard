@@ -21,6 +21,10 @@ REPO = Path(__file__).resolve().parents[1]
 PIDFILE = os.environ.get("INLINE_WORKER_PIDFILE", "/tmp/inline_worker.pid")
 RUN_TOKEN_VAR = "S7_HARNESS_RUN_TOKEN"
 RUN_TOKEN = uuid.uuid4().hex
+# Sessions this run created (one per entrypoint). A process in one of them is ours even when its
+# environment cannot be read (non-dumpable processes refuse /proc/<pid>/environ).
+_RUN_SESSIONS: set = set()
+STOP_GRACE_SECONDS = 3.0
 
 
 @dataclass
@@ -111,7 +115,7 @@ def _fly_env(data_dir: Path, port: str, *, seed_path: str) -> Dict[str, str]:
 
 
 def _start_entrypoint(env: Dict[str, str]) -> subprocess.Popen:
-    return subprocess.Popen(
+    proc = subprocess.Popen(
         ["sh", str(REPO / "scripts" / "fly_web_entrypoint.sh")],
         cwd=str(REPO),
         env=env,
@@ -121,6 +125,8 @@ def _start_entrypoint(env: Dict[str, str]) -> subprocess.Popen:
         # into share one process group the harness can signal as a unit.
         start_new_session=True,
     )
+    _RUN_SESSIONS.add(proc.pid)
+    return proc
 
 
 def _wait_http(base: str, timeout: float = 120.0) -> bool:
@@ -171,6 +177,11 @@ def _stop_entrypoint(proc: subprocess.Popen) -> None:
         proc.wait(timeout=20)
     except subprocess.TimeoutExpired:
         pass
+    # Web is gone; give the rest of the group (the supervisor subshell) a short grace to exit on the
+    # TERM it already has before the KILL.
+    deadline = time.monotonic() + STOP_GRACE_SECONDS
+    while time.monotonic() < deadline and _group_alive(pgid):
+        time.sleep(0.05)
     _killpg(pgid, signal.SIGKILL)
     try:
         proc.wait(timeout=5)
@@ -178,21 +189,50 @@ def _stop_entrypoint(proc: subprocess.Popen) -> None:
         pass
 
 
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except (ProcessLookupError, PermissionError):
+        return False
+    return True
+
+
+def _run_sessions() -> set:
+    sessions = set(_RUN_SESSIONS)
+    try:
+        sessions.add(int(Path(PIDFILE).read_text(encoding="utf-8").strip()))  # the worker's own session
+    except (OSError, ValueError):
+        pass
+    return sessions
+
+
 def _run_pids(token: str) -> List[int]:
-    """Pids of live (non-zombie) processes carrying this run's token in their environment."""
+    """Pids of live (non-zombie) processes that belong to this run.
+
+    A process belongs to the run when its environment carries the run token, or, when that
+    environment cannot be read (a non-dumpable process refuses ``/proc/<pid>/environ``), when it sits
+    in a session this run created. Unreadable processes outside those sessions cannot be attributed
+    and are ignored: on a shared box other users' (and sandboxed) processes are always unreadable,
+    so treating every one as ours would make the check unsatisfiable.
+    """
     needle = f"{RUN_TOKEN_VAR}={token}".encode()
     me = os.getpid()
+    sessions = _run_sessions()
     found: List[int] = []
     for entry in Path("/proc").iterdir():
         if not entry.name.isdigit() or int(entry.name) == me:
             continue
         try:
-            if needle not in (entry / "environ").read_bytes().split(b"\0"):
-                continue
-            stat = (entry / "stat").read_text()
+            fields = (entry / "stat").read_text().rsplit(")", 1)[-1].split()
         except OSError:
             continue
-        if stat.rsplit(")", 1)[-1].split()[0] != "Z":
+        try:
+            ours = needle in (entry / "environ").read_bytes().split(b"\0")
+        except PermissionError:
+            ours = int(fields[3]) in sessions
+        except OSError:
+            continue
+        if ours and fields[0] != "Z":
             found.append(int(entry.name))
     return found
 
@@ -233,6 +273,16 @@ def _clear_volume(data_dir: Path) -> None:
             pass
 
 
+def _stop_run() -> List[int]:
+    """Stop everything this run started (web, supervisor, worker); return survivors.
+
+    ``_stop_entrypoint`` only covers the web/supervisor group; the worker runs in its own session,
+    so it is killed here and the run token is swept until nothing is left.
+    """
+    _kill_worker_sigkill()
+    return _kill_run_processes(RUN_TOKEN)
+
+
 def main() -> int:
     port = os.environ.get("HARNESS_PORT", "18080")
     base = f"http://127.0.0.1:{port}"
@@ -245,8 +295,9 @@ def main() -> int:
         data_dir = Path(tmp)
         snapshots_path = data_dir / "score_snapshots.json"
         env = _fly_env(data_dir, port, seed_path=seed_default)
-        proc = _start_entrypoint(env)
+        proc = None
         try:
+            proc = _start_entrypoint(env)
             if not _wait_http(base, timeout=120):
                 print("FATAL: HTTP never became ready", file=sys.stderr)
                 return 2
@@ -292,8 +343,14 @@ def main() -> int:
             env_c["FINNEY_RPC_URL"] = "http://127.0.0.1:9"
             env_c["BLOCKMACHINE_RPC_URL"] = "http://127.0.0.1:9"
             env_c["PICK_HANDLER_TIMEOUT_SECONDS"] = "0.001"
+            # C changes the environment (RPC outage), so the worker must be restarted under it: a
+            # worker left running would be reused through the pidfile with the old environment.
             _stop_entrypoint(proc)
             proc.wait(timeout=10)
+            survivors = _stop_run()
+            if survivors:
+                print(f"FATAL: processes still alive before phase C: {survivors}", file=sys.stderr)
+                return 2
             time.sleep(2)
             proc = _start_entrypoint(env_c)
             if not _wait_http(base, timeout=120):
@@ -313,8 +370,7 @@ def main() -> int:
             # _stop_entrypoint ended web and the worker supervisor; the worker (own session) is
             # killed here and every process of this run is confirmed dead before the volume is
             # touched, so nothing can restart and refill it before the cold-start check.
-            _kill_worker_sigkill()
-            survivors = _kill_run_processes(RUN_TOKEN)
+            survivors = _stop_run()
             if survivors:
                 print(f"FATAL: processes still alive before phase Z: {survivors}", file=sys.stderr)
                 return 2
@@ -334,7 +390,12 @@ def main() -> int:
             results.append(z_row)
             phase_states["Z"] = z_states
         finally:
-            _stop_entrypoint(proc)
+            # Success, early return or exception: nothing of this run may outlive the data dir.
+            if proc is not None:
+                _stop_entrypoint(proc)
+            leftover = _stop_run()
+            if leftover:
+                print(f"WARNING: processes still alive after cleanup: {leftover}", file=sys.stderr)
 
     print("| Phase | polls | empty | unreachable | served_states | volume_bytes |")
     print("|---|---:|---:|---:|---|---:|")

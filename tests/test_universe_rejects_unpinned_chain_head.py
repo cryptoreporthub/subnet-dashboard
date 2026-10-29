@@ -175,3 +175,98 @@ def test_provider_reload_from_disk_reports_the_downgrade(tmp_path):
     provider = su.SubnetUniverseProvider(persist_file=str(path))
     assert provider._snapshot.status == "degraded"
     assert provider._snapshot.netuids == (1, 2)
+
+
+# --- provider fallback: a malformed head from one provider must not hide a valid one (#1484 Replit P2) ---
+
+SECOND_HEAD = RECORDED_HEAD
+
+
+class _HeadOnlyClient:
+    """A provider that answers the finalized head with ``head`` and nothing else."""
+
+    def __init__(self, head):
+        self.head = head
+        self.calls = []
+
+    def _call_typed(self, method, params=None):
+        self.calls.append(method)
+        if method == "chain_getFinalizedHead":
+            return self.head
+        raise RuntimeError("provider cannot serve state")
+
+    def query_storage_at(self, keys, at_hash):
+        self.calls.append("state_queryStorageAt")
+        raise RuntimeError("provider cannot serve state")
+
+
+class _RecordingEcho(_EchoingClient):
+    def __init__(self, head):
+        super().__init__(head)
+        self.calls = []
+
+    def _call_typed(self, method, params=None):
+        self.calls.append(method)
+        return super()._call_typed(method, params)
+
+    def query_storage_at(self, keys, at_hash):
+        self.calls.append("state_queryStorageAt")
+        return super().query_storage_at(keys, at_hash)
+
+
+@pytest.mark.parametrize("bad", ["0x1234", "0x" + "a" * 63, "ab" * 32, "0x"])
+def test_malformed_head_from_provider_one_falls_back_to_provider_two(monkeypatch, bad):
+    first, second = _HeadOnlyClient(bad), _RecordingEcho(RECORDED_HEAD)
+    monkeypatch.setattr(chain_cfg, "rpc_provider_clients", lambda: [("finney", first), ("blockmachine", second)])
+
+    chain = su._read_chain()
+
+    assert chain is not None and chain.is_pinned
+    assert chain.block_hash == RECORDED_HEAD
+    assert chain.rpc == "blockmachine"  # the second provider served the pinned membership read
+    assert "state_queryStorageAt" in second.calls
+    assert first.calls.count("chain_getFinalizedHead") >= 1
+
+
+def test_malformed_head_counts_as_a_provider_failure_in_the_reader(monkeypatch):
+    first, second = _HeadOnlyClient("0x1234"), _RecordingEcho(RECORDED_HEAD)
+    reader = ChainReader([("finney", first), ("blockmachine", second)])
+
+    assert reader.pin_finalized_head_strict() == (RECORDED_HEAD, "ok")
+    assert reader.provider_served == "blockmachine"
+    assert reader.fallback_count == 1
+    assert reader.pinned_hash == RECORDED_HEAD
+
+
+def test_both_providers_malformed_refuses_the_pin(monkeypatch):
+    first, second = _HeadOnlyClient("0x1234"), _HeadOnlyClient("0xabcd")
+    monkeypatch.setattr(chain_cfg, "rpc_provider_clients", lambda: [("finney", first), ("blockmachine", second)])
+
+    assert su._read_chain() is None
+    reader = ChainReader([("finney", first), ("blockmachine", second)])
+    assert reader.pin_finalized_head_strict() == (None, "invalid")
+    assert reader.pinned_hash is None
+    assert reader.provider_served is None
+
+
+def test_valid_head_from_provider_one_is_used_without_fallback():
+    first, second = _RecordingEcho(RECORDED_HEAD), _HeadOnlyClient("0x1234")
+    reader = ChainReader([("finney", first), ("blockmachine", second)])
+
+    assert reader.pin_finalized_head_strict() == (RECORDED_HEAD, "ok")
+    assert reader.provider_served == "finney"
+    assert second.calls == []
+
+
+def test_the_lenient_pin_still_accepts_provider_ones_short_head_without_fallback():
+    """The sampler's pin and main's tests ("0x01") must not start falling back."""
+    first, second = _HeadOnlyClient("0x01"), _RecordingEcho(RECORDED_HEAD)
+    reader = ChainReader([("finney", first), ("blockmachine", second)])
+
+    assert reader.pin_finalized_head() == ("0x01", "ok")
+    assert reader.provider_served == "finney"
+    assert second.calls == []
+    # and the strict flag does not leak into later lenient calls
+    reader.pin_finalized_head_strict()
+    assert reader._strict_pin is False
+    assert reader.pin_finalized_head() == ("0x01", "ok")

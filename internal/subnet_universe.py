@@ -496,6 +496,9 @@ class UniverseSnapshot:
         message = str(payload.get("message") or "")
         chain = ChainRead.parse(payload.get("chain"))
         if status == "ok" and chain is None:
+            # Intended fail-closed behaviour (owner decision, #1484): a degraded universe admits no
+            # subnet to scoring, so snapshot publishing pauses until a refresh re-pins the chain, e.g.
+            # through an RPC outage. Served picks do not blank: netuids and rows are kept.
             # "ok" promises a pinned chain read. A persisted snapshot whose chain is missing or not a
             # full pin (an older file, a truncated block hash) cannot back that promise: keep the
             # netuids (never blank) but report it as degraded until the next refresh re-pins.

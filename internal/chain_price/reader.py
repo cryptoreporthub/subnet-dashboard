@@ -20,6 +20,10 @@ from internal.chain_rpc_errors import storage_block_matches
 
 _FULL_BLOCK_HASH = re.compile(r"0x[0-9a-fA-F]{64}")
 
+
+def _is_full_block_hash(value: Any) -> bool:
+    return isinstance(value, str) and bool(_FULL_BLOCK_HASH.fullmatch(value))
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,6 +38,9 @@ class ChainReader:
     ):
         self._providers: List[Tuple[str, ChainClient]] = clients or cfg.rpc_provider_clients()
         self._pinned_hash: Optional[str] = None
+        # Set only while pin_finalized_head_strict runs: ``call`` then treats a finalized head that is
+        # not a full 64-hex hash as an invalid answer, so provider fallback applies to it.
+        self._strict_pin = False
         self.provider_served: Optional[str] = None
         self.fallback_count: int = 0
         self.rate_limit_events: List[Dict[str, Any]] = []
@@ -113,6 +120,13 @@ class ChainReader:
             result, outcome = rpc_call(client, method, params)
             if outcome == "ok" and self._echo_mismatch(method, params, result):
                 outcome = "invalid"
+            if (
+                outcome == "ok"
+                and self._strict_pin
+                and method == "chain_getFinalizedHead"
+                and not _is_full_block_hash(result)
+            ):
+                outcome = "invalid"  # one provider's malformed head: the next provider gets a try
             if outcome == "rate_limited":
                 rl_http = getattr(client, "_last_rate_limit_http_status", None)
                 self._mark_rate_limited(label, client, http_status=rl_http)
@@ -148,13 +162,29 @@ class ChainReader:
 
         Membership is stamped with this block and later admitted only if it is a full pin, so a
         storage layer that echoes a truncated or malformed head (``0x1234``) must be refused here,
-        before any netuid read at that block can enter the universe. Other callers (price sampler)
-        keep the lenient ``pin_finalized_head``.
+        before any netuid read at that block can enter the universe. The check runs inside the
+        provider loop, so a malformed head from one provider falls back to the next provider; only
+        when every provider answers malformed is the pin refused (``invalid``). Other callers (the
+        price sampler) keep the lenient ``pin_finalized_head``.
+
+        Production always takes this path: ``read_chain_membership`` calls it on every real
+        ``ChainReader``, and ``SnapshotBuilder`` builds its own reader. A bare reader double that only
+        has ``pin_finalized_head`` is read loosely on purpose: main's tests/test_subnet_universe.py
+        pins the registration read with the literal block "0xabc" through such a double and must
+        pass unedited. Nothing loose is ever admitted: receipt provenance, completeness and reload
+        all parse the block strictly.
         """
-        block_hash, outcome = self.pin_finalized_head()
-        if outcome == "ok" and block_hash and not _FULL_BLOCK_HASH.fullmatch(block_hash):
-            self._pinned_hash = None
-            return None, "invalid"
+        self._strict_pin = True
+        try:
+            block_hash, outcome = self.pin_finalized_head()
+        finally:
+            self._strict_pin = False
+        # Defence in depth for a replaced/patched pin_finalized_head that bypassed ``call``.
+        if outcome == "ok" and block_hash and not _is_full_block_hash(block_hash):
+            outcome, block_hash = "invalid", None
+        if outcome != "ok" or not block_hash:
+            self._pinned_hash = None  # a refused pin is not left behind from an earlier read
+            return None, outcome if outcome != "ok" else "absent"
         return block_hash, outcome
 
     @property

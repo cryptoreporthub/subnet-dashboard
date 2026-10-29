@@ -208,7 +208,13 @@ def test_phase_z_does_not_clear_the_volume_if_a_process_of_the_run_survives(monk
     monkeypatch.setattr(harness, "_phase", lambda label, *a, **k: (harness.PhaseResult(label, 1, 0, 0, "fresh", 0), ["fresh"]))
     monkeypatch.setattr(harness, "_stop_entrypoint", lambda proc: None)
     monkeypatch.setattr(harness, "_kill_worker_sigkill", lambda: True)
-    monkeypatch.setattr(harness, "_kill_run_processes", lambda token, timeout=15.0: [4242])
+    sweeps = []
+
+    def sweep(token, timeout=15.0):
+        sweeps.append(token)
+        return [4242] if len(sweeps) >= 2 else []  # clean before C, a survivor before Z
+
+    monkeypatch.setattr(harness, "_kill_run_processes", sweep)
     monkeypatch.setattr(harness, "_clear_volume", lambda data_dir: events.append("clear"))
     monkeypatch.setattr(harness.time, "sleep", lambda s: None)
 
@@ -230,3 +236,186 @@ def test_stop_entrypoint_alone_takes_the_supervisor_down_with_web(monkeypatch, t
         assert harness._run_pids(harness.RUN_TOKEN) == []
     finally:
         harness._kill_run_processes(harness.RUN_TOKEN, timeout=5)
+
+
+# --- full main() path with real processes (#1484 Replit P2: cleanup and the C restart) ---
+
+
+def _worker_script(tmp_path):
+    script = tmp_path / "worker.sh"
+    script.write_text("exec sleep 300\n")
+    return script
+
+
+def _environ_of(pid):
+    try:
+        raw = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return {}
+    return dict(item.decode(errors="replace").split("=", 1) for item in raw if b"=" in item)
+
+
+def _setup_real_main(monkeypatch, tmp_path, harness):
+    import os
+    import time
+
+    monkeypatch.setattr(harness, "REPO", _fake_fly_repo(tmp_path))
+    monkeypatch.setattr(harness, "PIDFILE", str(tmp_path / "worker.pid"))
+    monkeypatch.setenv("PATH", f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("INLINE_WORKER_LAUNCH", f"sh {_worker_script(tmp_path)}")
+    monkeypatch.setenv("INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS", "1")
+    monkeypatch.setenv("INLINE_WORKER_PIDFILE", str(tmp_path / "worker.pid"))
+    monkeypatch.delenv("FINNEY_RPC_URL", raising=False)
+    monkeypatch.delenv("BLOCKMACHINE_RPC_URL", raising=False)
+
+    def workers():
+        return [pid for pid in harness._run_pids(harness.RUN_TOKEN) if _environ_of(pid).get("RUN_MODE") == "worker"]
+
+    def wait_for_worker():
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline and not workers():
+            time.sleep(0.1)
+        assert workers(), "worker never started"
+
+    return workers, wait_for_worker
+
+
+def _run_main(monkeypatch, tmp_path, *, fail_wait_on=None, fail_phase=None):
+    harness = _load_harness()
+    workers, wait_for_worker = _setup_real_main(monkeypatch, tmp_path, harness)
+    seen = {}
+    waits = []
+
+    def wait_http(base, timeout=0):
+        waits.append(1)
+        wait_for_worker()
+        return fail_wait_on != len(waits)
+
+    def phase(label, base, seconds, snapshots_path, interval=3.0):
+        wait_for_worker()
+        seen[label] = [_environ_of(pid).get("FINNEY_RPC_URL") for pid in workers()]
+        seen[label + "_pids"] = workers()
+        if label == fail_phase:
+            raise RuntimeError("boom")
+        return harness.PhaseResult(label, 1, 0, 0, "fresh", 0), ["fresh"]
+
+    monkeypatch.setattr(harness, "_wait_http", wait_http)
+    monkeypatch.setattr(harness, "_phase", phase)
+    try:
+        code = harness.main()
+    except RuntimeError:
+        code = "raised"
+    return harness, code, seen
+
+
+def test_main_leaves_no_process_alive_on_success_and_c_workers_see_the_outage(monkeypatch, tmp_path):
+    harness, code, seen = _run_main(monkeypatch, tmp_path)
+
+    assert code in (0, 1)  # the pass/fail verdict is not what is under test
+    assert harness._run_pids(harness.RUN_TOKEN) == []  # nothing outlives the run
+    assert seen["R"] == [None]  # the earlier phases run without an outage
+    assert seen["C"] == ["http://127.0.0.1:9"]  # C's worker carries the outage configuration
+    assert not set(seen["R_pids"]) & set(seen["C_pids"])  # a new worker, not R's reused through the pidfile
+    assert not set(seen["C_pids"]) & set(seen["Z_pids"])
+
+
+def test_main_cleans_up_when_the_c_restart_never_becomes_ready(monkeypatch, tmp_path):
+    harness, code, seen = _run_main(monkeypatch, tmp_path, fail_wait_on=3)  # F, R, then C
+
+    assert code == 2
+    assert "C" not in seen
+    assert harness._run_pids(harness.RUN_TOKEN) == []
+
+
+def test_main_cleans_up_when_the_first_start_never_becomes_ready(monkeypatch, tmp_path):
+    harness, code, seen = _run_main(monkeypatch, tmp_path, fail_wait_on=1)
+
+    assert code == 2
+    assert harness._run_pids(harness.RUN_TOKEN) == []
+
+
+def test_main_cleans_up_when_a_phase_raises(monkeypatch, tmp_path):
+    harness, code, seen = _run_main(monkeypatch, tmp_path, fail_phase="C")
+
+    assert code == "raised"
+    assert harness._run_pids(harness.RUN_TOKEN) == []
+
+
+# --- stop grace and unreadable processes (Claude item 3) ---
+
+
+def test_stop_entrypoint_gives_the_supervisor_a_grace_period_before_kill(tmp_path):
+    import subprocess
+    import time
+
+    harness = _load_harness()
+    marker = tmp_path / "supervisor-exited-cleanly"
+    script = tmp_path / "entry.sh"
+    script.write_text(
+        "( trap 'sleep 1; touch %s; exit 0' TERM; while :; do sleep 0.1; done ) &\n"
+        "exec sh -c 'trap \"exit 0\" TERM; while :; do sleep 0.1; done'\n" % marker
+    )
+    proc = subprocess.Popen(["sh", str(script)], start_new_session=True)
+    time.sleep(0.5)
+    harness._stop_entrypoint(proc)
+
+    assert marker.exists(), "the supervisor was SIGKILLed before it could finish its TERM handler"
+    assert not harness._group_alive(proc.pid)
+
+
+def test_stop_entrypoint_still_kills_a_group_member_that_ignores_term(tmp_path):
+    import subprocess
+    import time
+
+    harness = _load_harness()
+    script = tmp_path / "entry.sh"
+    script.write_text(
+        "( trap '' TERM; while :; do sleep 0.1; done ) &\n"
+        "exec sh -c 'trap \"exit 0\" TERM; while :; do sleep 0.1; done'\n"
+    )
+    proc = subprocess.Popen(["sh", str(script)], start_new_session=True)
+    time.sleep(0.5)
+    harness._stop_entrypoint(proc)
+    time.sleep(0.2)
+
+    assert not harness._group_alive(proc.pid)
+
+
+def _spawn_unreadable(harness, tmp_path):
+    import os
+    import subprocess
+    import time
+
+    code = "import ctypes,time; ctypes.CDLL(None).prctl(4,0,0,0,0); time.sleep(300)"  # PR_SET_DUMPABLE=0
+    proc = subprocess.Popen(
+        [sys.executable, "-c", code],
+        env={**os.environ, harness.RUN_TOKEN_VAR: harness.RUN_TOKEN},
+        start_new_session=True,
+    )
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            Path(f"/proc/{proc.pid}/environ").read_bytes()
+        except PermissionError:
+            return proc
+        except OSError:
+            pass
+        time.sleep(0.05)
+    proc.kill()
+    import pytest
+
+    pytest.skip("cannot make a same-user process with an unreadable environment here")
+
+
+def test_unreadable_process_in_a_run_session_counts_as_a_run_process(tmp_path):
+    harness = _load_harness()
+    proc = _spawn_unreadable(harness, tmp_path)
+    try:
+        assert proc.pid not in harness._run_pids(harness.RUN_TOKEN)  # unattributable until its session is ours
+        harness._RUN_SESSIONS.add(proc.pid)
+        assert proc.pid in harness._run_pids(harness.RUN_TOKEN)
+        assert harness._kill_run_processes(harness.RUN_TOKEN, timeout=10) == []
+        proc.wait(timeout=5)
+    finally:
+        proc.kill()
+        proc.wait()

@@ -108,9 +108,12 @@ def get_member_netuids(
 
 
 def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]:
-    # A real ChainReader refuses a head that is not a full 64-hex hash; a bare reader double that only
-    # has ``pin_finalized_head`` is read as before (the universe layer tolerates unpinned reads, but
-    # admission, completeness and reload never accept them).
+    # Production always reaches the strict pin: every real ChainReader has pin_finalized_head_strict
+    # (full 64-hex head only, with provider fallback), and SnapshotBuilder builds its own reader. Only a
+    # bare reader double that has just ``pin_finalized_head`` falls back to the loose pin, on purpose:
+    # main's tests/test_subnet_universe.py pins "0xabc" through such a double and must stay unedited.
+    # What a loose read yields is never admitted: receipt provenance, completeness and reload all
+    # parse the block strictly.
     pin = getattr(reader, "pin_finalized_head_strict", None) or reader.pin_finalized_head
     at_hash, outcome = pin()
     if outcome != "ok" or not at_hash:
