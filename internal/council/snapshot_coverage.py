@@ -294,11 +294,16 @@ def _has_chain_provenance(receipt: Dict[str, Any]) -> bool:
 
 
 def membership_allows_admission(receipt: Dict[str, Any]) -> bool:
-    """Fail closed — score only from fresh, non-emergency, complete membership."""
+    """Fail closed — score only from fresh, non-emergency, complete membership.
+
+    ``universe_status`` must be exactly "ok". The universe provider only writes "ok", "degraded" or
+    "emergency_registry" (a receipt built after an error says "unknown"), so a stale marker, a missing
+    key or any other spelling is a verdict nobody can vouch for; admitting it would let an unknown
+    state publish a complete snapshot. Real receipts always carry the key.
+    """
     if not receipt.get("fresh"):
         return False
-    status = str(receipt.get("universe_status") or "")
-    if status in ("unknown", "emergency_registry"):
+    if receipt.get("universe_status") != "ok":
         return False
     if receipt.get("degraded"):
         return False
@@ -325,6 +330,8 @@ def membership_admission_block_reason(receipt: Dict[str, Any]) -> Optional[str]:
         return "cap_reached"
     if receipt.get("refresh_incomplete"):
         return "refresh_incomplete"
+    if receipt.get("universe_status") != "ok":
+        return "universe_status_not_ok"
     if not _has_chain_provenance(receipt):
         return "membership_without_chain_provenance"
     return "membership_not_admissible"

@@ -34,6 +34,7 @@ def receipt_provenance(netuids: Any) -> Dict[str, Any]:
         "rpc": chain.rpc,
         "chain": chain.to_dict(),
         "fresh": True,
+        "universe_status": "ok",
     }
 
 
