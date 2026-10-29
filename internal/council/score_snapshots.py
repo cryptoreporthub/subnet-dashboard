@@ -221,7 +221,10 @@ def is_complete_snapshot(snap: Any) -> bool:
     chain = ChainRead.parse(membership.get("chain")) if isinstance(membership, dict) else None
     if chain is None:
         return False
-    # The pinned chain read is the only membership truth: every other list must agree with it.
+    # The pinned chain read is the only membership truth: every other field must agree with it,
+    # including the receipt's own top-level copy of the block and provider.
+    if membership.get("block_hash") != chain.block_hash or membership.get("rpc") != chain.rpc:
+        return False
     expected = list(chain.netuids)
     if declared is not None and sorted(declared) != expected:
         return False
