@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -105,6 +106,51 @@ def test_second_start_in_process_does_not_spawn_a_second_tick(tmp_path, monkeypa
     assert second["started"] is False
     assert second["reason"] == "already_armed"
     assert len(scheduled) == 1
+
+
+def test_stop_during_deferred_arm_leaves_no_pending_job(tmp_path, monkeypatch):
+    """stop_score_snapshot_scheduler() during schedule_in_seconds must not leave JOB_ID armed."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    entered = threading.Event()
+    release = threading.Event()
+    scheduled: list = []
+    cancel_calls: list = []
+
+    def gate_schedule(job_id, func, seconds):
+        entered.set()
+        if not release.wait(timeout=5):
+            raise AssertionError("schedule gate timed out")
+        scheduled.append((job_id, seconds))
+
+    monkeypatch.setattr(snaps, "schedule_in_seconds", gate_schedule)
+    monkeypatch.setattr(snaps, "cancel_job", lambda job_id: cancel_calls.append(job_id))
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    start_result: dict = {}
+
+    def arm():
+        start_result.update(sched.start(immediate=False))
+
+    arm_thread = threading.Thread(target=arm, name="test-deferred-arm")
+    arm_thread.start()
+    assert entered.wait(timeout=5)
+    stop_result = snaps.stop_score_snapshot_scheduler()
+    assert stop_result["stopped"] is True
+    release.set()
+    arm_thread.join(timeout=5)
+    assert not arm_thread.is_alive()
+    assert start_result["started"] is False
+    assert start_result["reason"] == "stopped_during_arm"
+    assert scheduled == [(snaps.JOB_ID, snaps.SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)]
+    assert cancel_calls.count(snaps.JOB_ID) >= 1
+    assert cancel_calls[-1] == snaps.JOB_ID
+    with snaps._lock:
+        assert snaps._scheduler is None
+    assert sched._armed is False
+    assert sched.liveness.snapshot().get("lifecycle") != "started"
 
 
 def test_failed_arm_leaves_scheduler_retryable(tmp_path, monkeypatch):

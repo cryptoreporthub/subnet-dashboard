@@ -1317,6 +1317,20 @@ class ScoreSnapshotScheduler:
         with _lock:
             return _scheduler is self
 
+    def _arm_still_valid(self) -> bool:
+        with _lock:
+            return _scheduler is self and self._armed
+
+    def _abort_arm_if_stopped(self) -> Optional[Dict[str, Any]]:
+        """Fence deferred/immediate arm against concurrent stop/unregister."""
+        if self._arm_still_valid():
+            return None
+        cancel_job(JOB_ID)
+        with _lock:
+            if _scheduler is self:
+                self._armed = False
+        return {"started": False, "reason": "stopped_during_arm"}
+
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
@@ -1338,9 +1352,19 @@ class ScoreSnapshotScheduler:
                 except Exception:
                     self.liveness.stop()
                     raise
+                aborted = self._abort_arm_if_stopped()
+                if aborted:
+                    return aborted
             else:
                 schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
+                aborted = self._abort_arm_if_stopped()
+                if aborted:
+                    return aborted
                 self.liveness.start()
+                aborted = self._abort_arm_if_stopped()
+                if aborted:
+                    self.liveness.stop()
+                    return aborted
         except Exception:
             try:
                 cancel_job(JOB_ID)
