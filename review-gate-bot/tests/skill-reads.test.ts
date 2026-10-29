@@ -115,9 +115,9 @@ const VERDICT = {
   verdict: "MODIFY" as const,
   body: "A finding.",
   skills: [
-    { skill: "adversarial-review", used: true, note: "traced" },
-    { skill: "owner-rules", used: true, note: "rule 3" },
-    { skill: "settled-check", used: true, note: "none" },
+    { skill: "adversarial-review", used: true, note: "traced the real entry point" },
+    { skill: "owner-rules", used: true, note: "checked rule 3, no breach" },
+    { skill: "settled-check", used: true, note: "none found, nothing settled" },
   ],
 };
 

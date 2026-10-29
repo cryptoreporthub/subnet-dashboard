@@ -25,6 +25,36 @@ const SkillsTable = z
   )
   .min(1);
 
+/** Every review must account for all three on-demand skills, even when skipped. */
+const REQUIRED_SKILLS = ["adversarial-review", "owner-rules", "settled-check"] as const;
+
+function missingRequiredSkills(skills: { skill: string }[]): string[] {
+  const names = new Set(skills.map((s) => s.skill.trim()));
+  return REQUIRED_SKILLS.filter((name) => !names.has(name));
+}
+
+/** A PASS must not ship prose that still carries a credential-shaped value after scrubbing. */
+function passLeaksCredential(text: string): boolean {
+  const { text: scrubbed } = redactSecrets(text);
+  return scrubbed !== text;
+}
+
+function skillsIncomplete(skills: { skill: string; used: boolean; note: string }[]): string | undefined {
+  const missing = missingRequiredSkills(skills);
+  if (missing.length > 0) {
+    return missing.join(", ");
+  }
+  for (const row of skills) {
+    if (row.used && row.note.trim().length < 8) {
+      return row.skill;
+    }
+    if (row.used && /^skipped:/i.test(row.note.trim())) {
+      return row.skill;
+    }
+  }
+  return undefined;
+}
+
 function renderTable(skills: { skill: string; used: boolean; note: string }[]): string {
   const rows = skills.map((s) => `| \`${s.skill}\` | ${s.used ? "yes" : "no"} | ${s.note} |`);
   return ["| Skill | Used | Found / changed |", "| --- | --- | --- |", ...rows].join("\n");
@@ -81,7 +111,7 @@ export function composeVerdictBody(input: {
  */
 export default defineTool({
   description:
-    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required, and a skill marked used must be one whose SKILL.md you opened this session (otherwise it is refused: read it or mark it skipped).",
+    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required, and a skill marked used must be one whose SKILL.md you opened this session (otherwise it is refused: read it or mark it skipped). The table must list adversarial-review, owner-rules and settled-check. A PASS whose text still carries a credential-shaped value is refused.",
   inputSchema: z.object({
     headSha: Sha,
     verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
@@ -115,6 +145,21 @@ export default defineTool({
       };
     }
 
+    const incompleteSkill = skillsIncomplete(input.skills);
+    if (incompleteSkill !== undefined) {
+      return { posted: false, reason: "incomplete-skills-table", verdict: input.verdict, skill: incompleteSkill };
+    }
+
+    const composed = composeVerdictBody({
+      verdict: input.verdict,
+      headSha: input.headSha,
+      body: input.body,
+      skills: input.skills,
+    });
+    if (input.verdict === "PASS" && passLeaksCredential(composed)) {
+      return { posted: false, reason: "pass-with-credential-value", verdict: input.verdict };
+    }
+
     if (ctx.session.purpose === "eval") {
       // `posted: true`: an eval writes nothing, but `posted: false` read to the model as a failed post and it
       // called again (15 of 35 runs). The reason still says nothing reached GitHub.
@@ -134,14 +179,7 @@ export default defineTool({
       return { posted: false, reason: "stale-head", current: pr.headSha };
     }
 
-    const { text, redactedNames } = redactSecrets(
-      composeVerdictBody({
-        verdict: input.verdict,
-        headSha: input.headSha,
-        body: input.body,
-        skills: input.skills,
-      }),
-    );
+    const { text, redactedNames } = redactSecrets(composed);
 
     const result = await postVerdictComment({
       octokit,

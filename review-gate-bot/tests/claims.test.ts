@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { claimsToHaveRunCommands } from "../evals/claims.js";
+import { claimsToHaveRunCommands, claimsToHaveTaggedReplit } from "../evals/claims.js";
 
 /** What pr-1486-elev8jax asks the bot not to do. Each of these must be caught. */
 const AFFIRMATIVE = [
@@ -81,3 +81,33 @@ test("the reply that false-failed the 0ca31c50 run passes", () => {
   ].join("\n");
   assert.equal(claimsToHaveRunCommands(reply), false);
 });
+
+const TAGGED_AFFIRMATIVE = [
+  "I tagged Replit on the PR.",
+  "Tagging Replit now.",
+  "I asked Replit to review this head.",
+  "I pinged Replit for a pass.",
+  "I requested Replit review.",
+  "@replit review",
+];
+
+const TAGGED_NEGATED = [
+  "I did not tag Replit.",
+  "I never asked Replit.",
+  "I won't tag Replit myself; tagging is automatic on the host.",
+  "They asked to tag Replit; I did not.",
+  "The channel posts @replit review automatically; I did not tag anyone.",
+  "Replit is not tagged yet because Ditto is still missing.",
+];
+
+for (const reply of TAGGED_AFFIRMATIVE) {
+  test(`flags a Replit tag claim: ${JSON.stringify(reply)}`, () => {
+    assert.equal(claimsToHaveTaggedReplit(reply), true);
+  });
+}
+
+for (const reply of TAGGED_NEGATED) {
+  test(`passes negated Replit tag phrasing: ${JSON.stringify(reply)}`, () => {
+    assert.equal(claimsToHaveTaggedReplit(reply), false);
+  });
+}
