@@ -48,6 +48,12 @@ class ChainReader:
         # made it. Never use it to decide where a read goes on a reader that threads share; the
         # per-thread ``_thread_served`` / ``head_provider`` below are for that.
         self.provider_served: Optional[str] = None
+        # Which thread wrote ``_pinned_hash`` / ``provider_served`` last (a per-thread token, None when
+        # nobody has). A refused strict pin clears those two only when this thread wrote them, so it
+        # cannot erase another thread's accepted pin. ``_owner_lock`` makes value and owner change together.
+        self._owner_lock = threading.Lock()
+        self._pin_owner: Optional[object] = None
+        self._served_owner: Optional[object] = None
         self.fallback_count: int = 0
         self.rate_limit_events: List[Dict[str, Any]] = []
         self._deadline_monotonic = deadline_monotonic
@@ -62,6 +68,14 @@ class ChainReader:
     @_strict_pin.setter
     def _strict_pin(self, value: bool) -> None:
         self._strict_state.on = value
+
+    @property
+    def _thread_token(self) -> object:
+        """An object unique to the calling thread (a thread id can be reused; this cannot)."""
+        token = getattr(self._strict_state, "token", None)
+        if token is None:
+            token = self._strict_state.token = object()
+        return token
 
     @property
     def _thread_served(self) -> Optional[str]:
@@ -170,7 +184,9 @@ class ChainReader:
                 endpoint = getattr(client, "endpoint", None)
                 if endpoint:
                     _clear_rate_limit_step(endpoint)
-                self.provider_served = label
+                with self._owner_lock:
+                    self.provider_served = label
+                    self._served_owner = self._thread_token
                 self._strict_state.served = label
                 return result, outcome
             last_outcome = outcome
@@ -206,7 +222,9 @@ class ChainReader:
     def pin_finalized_head(self) -> Tuple[Optional[str], RpcOutcome]:
         block_hash, outcome = self.call("chain_getFinalizedHead", [])
         if outcome == "ok" and block_hash:
-            self._pinned_hash = str(block_hash)
+            with self._owner_lock:
+                self._pinned_hash = str(block_hash)
+                self._pin_owner = self._thread_token
         return (str(block_hash) if block_hash else None), outcome
 
     def pin_finalized_head_strict(self) -> Tuple[Optional[str], RpcOutcome]:
@@ -237,8 +255,16 @@ class ChainReader:
         if outcome == "ok" and block_hash and not _is_full_block_hash(block_hash):
             outcome, block_hash = "invalid", None
         if outcome != "ok" or not block_hash:
-            self._pinned_hash = None  # a refused pin is not left behind from an earlier read
-            self.provider_served = None  # nor is a provider label for a read that was not accepted
+            # A refused pin does not leave this thread's earlier read behind (a pin, or the provider
+            # label of a read that was not accepted), but it never erases state another thread wrote.
+            with self._owner_lock:
+                me = self._thread_token
+                if self._pin_owner is me:
+                    self._pinned_hash = None
+                    self._pin_owner = None
+                if self._served_owner is me:
+                    self.provider_served = None
+                    self._served_owner = None
             self._strict_state.head_provider = None
             return None, outcome if outcome != "ok" else "absent"
         # This thread's own call served the accepted head: bind to it, whatever other threads do next.
@@ -250,8 +276,11 @@ class ChainReader:
         return self._pinned_hash
 
     def reset_pin(self) -> None:
-        self._pinned_hash = None
-        self.provider_served = None
+        with self._owner_lock:
+            self._pinned_hash = None
+            self._pin_owner = None
+            self.provider_served = None
+            self._served_owner = None
         self._strict_state.head_provider = None
         self._strict_state.served = None
 

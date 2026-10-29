@@ -431,3 +431,56 @@ def test_head_provider_is_per_thread_and_survives_another_threads_call():
     assert seen["other_head"] is None
     reader.reset_pin()
     assert reader.head_provider is None
+
+
+# --- a refused strict pin on one thread never erases another thread's accepted pin (#1484 Ditto r15) ---
+
+
+def test_refused_strict_pin_on_another_thread_keeps_this_threads_accepted_pin():
+    import threading
+
+    good, bad = RECORDED_HEAD, "0x1234"
+    head = {"value": good}
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            return head["value"]
+
+    reader = ChainReader([("finney", _Client())])
+    assert reader.pin_finalized_head_strict() == (good, "ok")  # thread A: accepted
+    assert reader.pinned_hash == good and reader.provider_served == "finney"
+
+    seen = {}
+
+    def thread_b():
+        head["value"] = bad  # B's provider answers a malformed head
+        seen["b"] = reader.pin_finalized_head_strict()
+
+    t = threading.Thread(target=thread_b)
+    t.start()
+    t.join(10)
+
+    assert seen["b"] == (None, "invalid")  # B's own pin is refused
+    assert reader.pinned_hash == good  # but A's pin survives
+    assert reader.provider_served == "finney"
+    assert reader.active_client() is reader._providers[0][1]
+    assert reader.head_provider == "finney"  # and A's capture is untouched
+
+
+def test_a_refused_strict_pin_does_not_clear_state_written_by_a_thread_that_pinned_after_us():
+    """Same-thread clearing stays: only what THIS thread wrote is cleared."""
+    import threading
+
+    reader = ChainReader([("finney", _HeadOnlyClient("0x01"))])
+    assert reader.pin_finalized_head() == ("0x01", "ok")  # main thread writes the pin and the label
+
+    def other():
+        reader.pin_finalized_head()  # another thread now owns both
+
+    t = threading.Thread(target=other)
+    t.start()
+    t.join(10)
+
+    assert reader.pin_finalized_head_strict() == (None, "invalid")  # main thread's strict pin is refused
+    assert reader.pinned_hash == "0x01"  # the other thread's pin is not ours to clear
+    assert reader.provider_served == "finney"

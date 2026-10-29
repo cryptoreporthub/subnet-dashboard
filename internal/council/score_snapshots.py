@@ -143,7 +143,7 @@ def _locked_score_snapshot(snap_path: str, timeout_seconds: float = 5.0) -> Iter
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 acquired = True
                 break
-            except (BlockingIOError, OSError):
+            except BlockingIOError:  # another process holds the lock; any other OSError is a real failure
                 time.sleep(0.01)
         if not acquired:
             raise TimeoutError(

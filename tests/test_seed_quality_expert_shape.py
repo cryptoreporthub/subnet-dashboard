@@ -93,3 +93,13 @@ def test_a_non_finite_build_count_is_rejected_without_raising(seed, key, bad):
     out = copy.deepcopy(seed)
     out["build_provenance"][key] = bad
     assert validate_shipped_seed(out) == (False, "bad_provenance_counts")
+
+
+@pytest.mark.parametrize("bad", [128.9, 128.1, 128.0, True, False, None, "128"], ids=repr)
+@pytest.mark.parametrize("key", ["day_succeeded_count", "day_expected_count"])
+def test_a_non_integer_build_count_is_rejected(seed, key, bad):
+    """int() would truncate 128.9 to 128 and read True as 1, letting a malformed record pass (#1484 Ditto r15)."""
+    out = copy.deepcopy(seed)
+    assert out["build_provenance"][key] == 128  # the committed seed's count is a real int
+    out["build_provenance"][key] = bad
+    assert validate_shipped_seed(out) == (False, "bad_provenance_counts")

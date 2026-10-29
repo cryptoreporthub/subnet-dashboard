@@ -99,7 +99,7 @@ def complete_snapshot_payload(
     hour_rows: Optional[List[Dict[str, Any]]] = None,
     written_at: str = "2026-10-17T00:00:00Z",
 ) -> Dict[str, Any]:
-    day = day_rows or complete_snapshot_rows()
+    day = day_rows if day_rows is not None else complete_snapshot_rows()
     hour = hour_rows if hour_rows is not None else list(day)
     expected = [int(r["netuid"]) for r in day]
     return stamp_scorer_fields(

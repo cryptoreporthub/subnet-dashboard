@@ -42,10 +42,10 @@ def validate_shipped_seed(snap: Any) -> Tuple[bool, str]:
         return False, "missing_build_provenance"
     if prov.get("source") != "write_full_universe_snapshot":
         return False, "bad_provenance_source"
-    try:
-        succeeded = int(prov.get("day_succeeded_count") or 0)
-        expected = int(prov.get("day_expected_count") or 0)
-    except (TypeError, ValueError, OverflowError):  # int(float("inf")) raises OverflowError
+    succeeded = prov.get("day_succeeded_count")
+    expected = prov.get("day_expected_count")
+    # Exact ints only: int() would truncate 128.9 to 128 and accept True as 1.
+    if type(succeeded) is not int or type(expected) is not int:
         return False, "bad_provenance_counts"
     if expected < 1 or succeeded != expected:
         return False, "partial_build"

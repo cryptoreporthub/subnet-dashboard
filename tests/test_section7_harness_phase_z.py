@@ -371,6 +371,7 @@ def test_main_leaves_no_process_alive_on_success_and_c_workers_see_the_outage(mo
     assert not set(seen["C_pids"]) & set(seen["Z_pids"])
 
 
+@requires_real_pidfd
 def test_main_cleans_up_when_the_c_restart_never_becomes_ready(monkeypatch, tmp_path):
     harness, code, seen = _run_main(monkeypatch, tmp_path, fail_wait_on=3)  # F, R, then C
 
@@ -379,6 +380,7 @@ def test_main_cleans_up_when_the_c_restart_never_becomes_ready(monkeypatch, tmp_
     assert harness._run_pids(harness.RUN_TOKEN) == []
 
 
+@requires_real_pidfd
 def test_main_cleans_up_when_the_first_start_never_becomes_ready(monkeypatch, tmp_path):
     harness, code, seen = _run_main(monkeypatch, tmp_path, fail_wait_on=1)
 
