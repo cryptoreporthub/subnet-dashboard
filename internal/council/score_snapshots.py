@@ -959,23 +959,24 @@ def write_full_universe_snapshot(
     prep_meta: Dict[str, Any] = {}
     write_stage_timing: Dict[str, Any] = {}
     receipt: Dict[str, Any] = {}
-    # Taken once, before anything is loaded: a weight edit during the build must show up as "changed",
-    # not be absorbed. None means the soul_map is missing or unusable (weights unknown, not defaults),
-    # so the build is skipped instead of scoring ~128 subnets that could never be published.
-    weights_digest = current_weights_digest()
-    _note_weights_availability(weights_digest is not None)
-    if weights_digest is None:
-        skipped = {"complete": False, "capture_reason": "weights_unavailable"}
-        record_cycle_receipt(skipped, outcome="skipped")
-        return {
-            "ok": False,
-            "published": False,
-            "skipped_older": False,
-            "complete": False,
-            "skipped": "weights_unavailable",
-            "coverage": skipped,
-        }
     try:
+        # Taken once, before anything is loaded: a weight edit during the build must show up as
+        # "changed", not be absorbed. None means the soul_map is missing or unusable (weights unknown,
+        # not defaults), so the build is skipped instead of scoring ~128 subnets that could never be
+        # published. Inside the try so a read failure is a build error, as it was before.
+        weights_digest = current_weights_digest()
+        _note_weights_availability(weights_digest is not None)
+        if weights_digest is None:
+            skipped = {"complete": False, "capture_reason": "weights_unavailable"}
+            record_cycle_receipt(skipped, outcome="skipped")
+            return {
+                "ok": False,
+                "published": False,
+                "skipped_older": False,
+                "complete": False,
+                "skipped": "weights_unavailable",
+                "coverage": skipped,
+            }
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
         from internal.council.snapshot_coverage import (

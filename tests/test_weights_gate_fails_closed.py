@@ -193,3 +193,19 @@ def test_the_scheduler_tick_itself_creates_a_usable_soul_map(tmp_path, monkeypat
 
     assert soul.exists()
     assert isinstance(current_weights_digest(), str)
+
+
+def test_a_failure_while_reading_the_weights_is_a_build_error_not_an_exception(tmp_path, monkeypatch):
+    """Same contract as before the early digest: errors in the load stage come back as ok=False."""
+    volume, _, scored = _producer_env(tmp_path, monkeypatch, _universe([1, 2, 3]))
+
+    def boom():
+        raise RuntimeError("weights read blew up")
+
+    monkeypatch.setattr(snaps, "current_weights_digest", boom)
+
+    out = snaps.write_full_universe_snapshot()
+
+    assert out["ok"] is False
+    assert "weights read blew up" in out["error"]
+    assert scored == [] and not volume.exists()
