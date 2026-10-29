@@ -57,6 +57,20 @@ def _canonical_digest(body: Any) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")).hexdigest()
 
 
+def finite_number(value: Any) -> bool:
+    """True for an exact int or float that is finite; never raises.
+
+    ``math.isfinite`` converts an int to a float first, so a JSON integer such as ``10**400`` makes it
+    raise OverflowError. Such a number is not a usable score or weight: answer False, do not crash.
+    """
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def _soul_map_usable(path: str) -> bool:
     """True when ``path`` is a readable JSON object that holds real council weights.
 
@@ -78,8 +92,7 @@ def _soul_map_usable(path: str) -> bool:
     experts = set(weights.DEFAULT_WEIGHTS) | {"contrarian", "darkhorse"}
     return any(
         str(name).lower().strip() in experts
-        and type(value) in (int, float)
-        and math.isfinite(value)
+        and finite_number(value)
         for name, value in slot.items()
     )
 
@@ -101,9 +114,14 @@ def current_weights_digest(path: Optional[str] = None) -> Optional[str]:
         soul = str(_REPO_ROOT / soul)
     if not _soul_map_usable(soul):
         return None
-    return _canonical_digest(
-        {"council": weights.load_weights(soul), "signal": weights.load_signal_weights(soul)}
-    )
+    try:
+        council = weights.load_weights(soul)
+        signal = weights.load_signal_weights(soul)
+    except OverflowError:
+        # A weight that is a JSON integer too large for a float (the loaders call float() on it) is
+        # corrupt: the weights are unknown, not an error for the caller to handle.
+        return None
+    return _canonical_digest({"council": council, "signal": signal})
 
 
 def compute_input_digest(

@@ -53,3 +53,36 @@ def test_scorer_identity_files_include_scoring_context():
     root = Path(__file__).resolve().parents[1]
     for rel in files:
         assert (root / rel).is_file()
+
+
+def _soul_map_with(tmp_path, council):
+    import json
+
+    path = tmp_path / "soul_map.json"
+    path.write_text(json.dumps({"adversarial_state": {"council_weights": council}}))
+    return str(path)
+
+
+def test_a_valid_soul_map_still_has_a_digest(tmp_path):
+    from internal.council.scorer_identity import current_weights_digest
+
+    path = _soul_map_with(tmp_path, {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0})
+    assert len(current_weights_digest(path) or "") == 64
+
+
+def test_an_oversized_integer_weight_means_weights_unknown_not_a_crash(tmp_path):
+    """float(10**400) raises OverflowError in the loaders; the digest must answer None, never raise (#1484 Ditto r5)."""
+    from internal.council.scorer_identity import current_weights_digest
+
+    only_huge = _soul_map_with(tmp_path, {"quant": 10**400})
+    assert current_weights_digest(only_huge) is None
+    one_good_one_huge = _soul_map_with(tmp_path, {"quant": 1.0, "hype": 10**400})
+    assert current_weights_digest(one_good_one_huge) is None
+
+
+def test_finite_number_never_raises():
+    from internal.council.scorer_identity import finite_number
+
+    assert finite_number(1) and finite_number(0.5) and finite_number(10**300)
+    for bad in (10**400, -(10**400), True, None, "1", float("nan"), float("inf"), [1]):
+        assert finite_number(bad) is False

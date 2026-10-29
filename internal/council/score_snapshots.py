@@ -11,7 +11,6 @@ import copy
 import fcntl
 import json
 import logging
-import math
 import os
 import re
 import time
@@ -28,6 +27,7 @@ from internal.council.scorer_identity import (
     compute_input_digest,
     current_scorer_digest,
     current_weights_digest,
+    finite_number,
     scorer_fields_match,
     stamp_scorer_fields,
 )
@@ -187,7 +187,7 @@ def _row_ids(rows: Any) -> Optional[List[int]]:
         # The producer writes ``total_score = float(score or 0)`` on every row it emits, so a row with no
         # finite numeric score is not a scored row and must not count towards "every netuid was scored".
         score = row.get("total_score")
-        if type(score) not in (int, float) or not math.isfinite(score):
+        if not finite_number(score):
             return None
         ids.append(netuid)
     return ids

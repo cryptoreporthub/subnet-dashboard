@@ -68,3 +68,28 @@ def test_missing_or_tiny_contributions_keep_their_own_reason(seed, contributions
 def test_the_check_applies_to_every_row_not_just_the_first(seed):
     seed["day"][-1]["expert_contributions"] = {"quant": 0.5, "junk": "x"}
     assert validate_shipped_seed(seed)[0] is False
+
+
+@pytest.mark.parametrize("huge", [10**400, -(10**400)], ids=["positive", "negative"])
+def test_an_oversized_integer_score_is_rejected_without_raising(seed, huge):
+    """``math.isfinite(10**400)`` raises OverflowError; the gate must answer with a reason (#1484 Ditto r5)."""
+    out = copy.deepcopy(seed)
+    out["day"][0]["expert_contributions"] = {**{name: 0.5 for name in COUNCIL}, "quant": huge}
+    ok, reason = validate_shipped_seed(out)
+    assert ok is False
+    assert reason == "expert_contributions_not_council_shaped"
+
+
+def test_a_large_but_representable_integer_expert_value_is_a_score(seed):
+    out = copy.deepcopy(seed)
+    out["day"][0]["expert_contributions"] = {**{name: 0.5 for name in COUNCIL}, "quant": 10**300}
+    assert validate_shipped_seed(out) == (True, "ok")
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan"), "x"], ids=["inf", "-inf", "nan", "str"])
+@pytest.mark.parametrize("key", ["day_succeeded_count", "day_expected_count"])
+def test_a_non_finite_build_count_is_rejected_without_raising(seed, key, bad):
+    """int(float("inf")) raises OverflowError, the same crash class as the oversized scores (#1484 Ditto r5)."""
+    out = copy.deepcopy(seed)
+    out["build_provenance"][key] = bad
+    assert validate_shipped_seed(out) == (False, "bad_provenance_counts")

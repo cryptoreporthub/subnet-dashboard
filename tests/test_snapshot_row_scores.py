@@ -57,3 +57,18 @@ def test_a_row_without_a_finite_numeric_score_makes_the_snapshot_incomplete(hori
 @pytest.mark.parametrize("score", [0, 0.0, -1.5, 87])
 def test_a_zero_negative_or_integer_score_is_still_a_score(horizon, score):
     assert snaps.is_complete_snapshot(_with_row(horizon, 0, lambda row: row.update(total_score=score))) is True
+
+
+@pytest.mark.parametrize("horizon", ["day", "hour"])
+@pytest.mark.parametrize("huge", [10**400, -(10**400)], ids=["positive", "negative"])
+def test_an_oversized_integer_score_is_rejected_without_raising(horizon, huge):
+    """``math.isfinite(10**400)`` raises OverflowError; is_complete_snapshot promises it never raises (#1484 Ditto r5)."""
+    snap = _with_row(horizon, 0, lambda row: row.update(total_score=huge))
+
+    assert snaps.is_complete_snapshot(snap) is False
+
+
+def test_a_large_but_representable_integer_score_is_still_a_score():
+    snap = _with_row("day", 0, lambda row: row.update(total_score=10**300))
+
+    assert snaps.is_complete_snapshot(snap) is True
