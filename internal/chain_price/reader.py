@@ -44,6 +44,9 @@ class ChainReader:
         # fallback applies to it. Thread-local, so a shared reader used by another thread at the same
         # time keeps its lenient pin.
         self._strict_state = threading.local()
+        # Diagnostic only, shared by every thread: the provider of the latest successful call, whoever
+        # made it. Never use it to decide where a read goes on a reader that threads share; the
+        # per-thread ``_thread_served`` / ``head_provider`` below are for that.
         self.provider_served: Optional[str] = None
         self.fallback_count: int = 0
         self.rate_limit_events: List[Dict[str, Any]] = []
@@ -59,6 +62,21 @@ class ChainReader:
     @_strict_pin.setter
     def _strict_pin(self, value: bool) -> None:
         self._strict_state.on = value
+
+    @property
+    def _thread_served(self) -> Optional[str]:
+        """Provider of the latest successful call made by THIS thread."""
+        return getattr(self._strict_state, "served", None)
+
+    @property
+    def head_provider(self) -> Optional[str]:
+        """Provider that served the head this thread's last accepted strict pin returned.
+
+        Captured per thread while the strict pin runs, so a successful call on another thread (which
+        rewrites the shared ``provider_served``) cannot change which provider the membership reads of
+        that head are bound to.
+        """
+        return getattr(self._strict_state, "head_provider", None)
 
     def _past_deadline(self) -> bool:
         deadline = self._deadline_monotonic
@@ -153,6 +171,7 @@ class ChainReader:
                 if endpoint:
                     _clear_rate_limit_step(endpoint)
                 self.provider_served = label
+                self._strict_state.served = label
                 return result, outcome
             last_outcome = outcome
             if not self._should_fallback(outcome) or idx == len(providers) - 1:
@@ -177,7 +196,9 @@ class ChainReader:
         block, and ``state_getKeysPaged`` carries no block echo to catch it. A failure here is
         reported as is, not retried elsewhere.
         """
-        served = self.provider_served
+        # The provider captured for this thread's accepted strict head, else this thread's own latest
+        # provider; never the shared ``provider_served``, which another thread may have rewritten.
+        served = self.head_provider or self._thread_served
         if served is None:  # no provider vouched for a head (e.g. a replaced pin): nothing to bind to
             return self.call
         return lambda method, params: self._call(method, params, only_provider=served)
@@ -205,6 +226,8 @@ class ChainReader:
         pass unedited. Nothing loose is ever admitted: receipt provenance, completeness and reload
         all parse the block strictly.
         """
+        self._strict_state.head_provider = None  # a capture from an earlier pin never carries over
+        self._strict_state.served = None
         self._strict_pin = True
         try:
             block_hash, outcome = self.pin_finalized_head()
@@ -216,7 +239,10 @@ class ChainReader:
         if outcome != "ok" or not block_hash:
             self._pinned_hash = None  # a refused pin is not left behind from an earlier read
             self.provider_served = None  # nor is a provider label for a read that was not accepted
+            self._strict_state.head_provider = None
             return None, outcome if outcome != "ok" else "absent"
+        # This thread's own call served the accepted head: bind to it, whatever other threads do next.
+        self._strict_state.head_provider = self._thread_served
         return block_hash, outcome
 
     @property
@@ -226,6 +252,8 @@ class ChainReader:
     def reset_pin(self) -> None:
         self._pinned_hash = None
         self.provider_served = None
+        self._strict_state.head_provider = None
+        self._strict_state.served = None
 
     def active_client(self) -> Optional[ChainClient]:
         if self.provider_served:

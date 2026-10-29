@@ -124,11 +124,14 @@ def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]
     members, outcome = get_member_netuids(pinned_call_fn() if pinned_call_fn else reader.call_fn(), at_hash)
     if outcome != "ok":
         return None, outcome
+    # The receipt names the provider that served the head (per thread on a real reader), not whatever
+    # provider another thread's call left in the shared ``provider_served``.
+    rpc = getattr(reader, "head_provider", None) if strict_pin is not None else None
     chain = ChainRead.parse(
         {
             "block_hash": str(at_hash).lower(),
             "netuids": members,
-            "rpc": getattr(reader, "provider_served", None),
+            "rpc": rpc or getattr(reader, "provider_served", None),
         },
         pinned=False,
     )

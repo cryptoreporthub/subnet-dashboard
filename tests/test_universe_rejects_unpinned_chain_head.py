@@ -362,3 +362,72 @@ def test_refused_strict_pin_clears_a_provider_label_left_by_an_earlier_read():
 
     assert reader.provider_served is None
     assert reader.pinned_hash is None
+
+
+# --- a shared reader never pairs one provider's head with another provider's keys (#1484 Claude r8 / Ditto r8) ---
+
+
+def _shared_reader_with_other_thread_lenient_pin(first, second):
+    """A reader whose strict pin is served by provider two; just before the membership reads bind to
+    a provider, ANOTHER thread's lenient pin succeeds on provider one (rewriting ``provider_served``)."""
+    import threading
+
+    class _Racy(ChainReader):
+        interleaved = False
+
+        def pinned_call_fn(self):
+            def other_thread():
+                assert self.pin_finalized_head()[1] == "ok"  # lenient: provider one's short head is accepted
+
+            t = threading.Thread(target=other_thread)
+            t.start()
+            t.join(10)
+            type(self).interleaved = True
+            assert self.provider_served == "finney"  # the schedule really did overwrite the shared label
+            return super().pinned_call_fn()
+
+    return _Racy([("finney", first), ("blockmachine", second)])
+
+
+def test_shared_reader_membership_reads_stay_on_the_provider_that_served_the_head():
+    from internal.chain_price.membership import read_chain_membership
+
+    first, second = _DecoyClient("0x1234"), _RecordingEcho(RECORDED_HEAD)
+    reader = _shared_reader_with_other_thread_lenient_pin(first, second)
+
+    chain, outcome = read_chain_membership(reader)
+
+    assert type(reader).interleaved
+    assert outcome == "ok" and chain is not None
+    assert chain.rpc == "blockmachine"  # the receipt names the provider that served the accepted head
+    assert chain.block_hash == RECORDED_HEAD
+    assert set(first.calls) == {"chain_getFinalizedHead"}  # provider one (malformed head) served no keys or values
+    assert {"state_getKeysPaged", "state_queryStorageAt"} <= set(second.calls)
+    assert len(chain.netuids) > 1  # not the decoy key list
+
+
+def test_head_provider_is_per_thread_and_survives_another_threads_call():
+    import threading
+
+    first, second = _RecordingEcho(RECORDED_HEAD), _RecordingEcho(RECORDED_HEAD)
+    reader = ChainReader([("finney", first), ("blockmachine", second)])
+    reader._providers = reader._providers[::-1]  # blockmachine first: it serves the strict head
+    assert reader.pin_finalized_head_strict() == (RECORDED_HEAD, "ok")
+    assert reader.head_provider == "blockmachine"
+
+    seen = {}
+
+    def other():
+        reader._providers = reader._providers[::-1]  # finney first for the other caller
+        reader.pin_finalized_head()
+        seen["other_head"] = reader.head_provider  # a thread that never strict-pinned has no capture
+
+    t = threading.Thread(target=other)
+    t.start()
+    t.join(10)
+
+    assert reader.provider_served == "finney"  # the shared diagnostic label moved
+    assert reader.head_provider == "blockmachine"  # this thread's head did not
+    assert seen["other_head"] is None
+    reader.reset_pin()
+    assert reader.head_provider is None
