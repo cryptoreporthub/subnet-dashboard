@@ -17,6 +17,14 @@ snapshot instead.
 Check: what happens when the producer is mid-write, or has never run on a fresh
 volume? Blank is a regression, not an empty state.
 
+Check the reader's own acceptance test, not only the writer. A persisted snapshot
+with no members (empty or zero `netuids`) is not a complete snapshot, so a reader
+that loads one and replaces the serving snapshot has turned a good snapshot into a
+blank one. "The worker never publishes an empty snapshot" is a second layer, not a
+reason to let the reader trust the file: a file can be truncated, hand-edited or left
+by an older build. A fallback on one accessor (for example an emergency list) does
+not excuse the other accessors that serve the snapshot as it is.
+
 ## 2. The chain wins over TaoMarketCap
 
 Chain membership is authoritative. A subnet the chain no longer lists leaves

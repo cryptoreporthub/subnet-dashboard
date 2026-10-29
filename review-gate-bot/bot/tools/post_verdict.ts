@@ -3,6 +3,7 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { redactSecrets } from "../lib/redact.js";
+import { unreadSkills } from "../lib/skill-reads.js";
 import { postVerdictComment } from "../lib/tag.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
@@ -72,14 +73,15 @@ export function composeVerdictBody(input: {
 /**
  * Post MC's formal verdict for one head. At most once per head, best effort.
  *
- * Refuses a PASS that declares a blocking finding, refuses a stale head, stays
+ * Refuses a PASS that declares a blocking finding, refuses a Skills table that claims a skill the session never opened,
+ * refuses a stale head, stays
  * silent in an eval session, and redacts before anything leaves the process. The signature is fixed here rather than taken
  * from the model, so a post always says who posted it.
  *
  */
 export default defineTool({
   description:
-    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required.",
+    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required, and a skill marked used must be one whose SKILL.md you opened this session (otherwise it is refused: read it or mark it skipped).",
   inputSchema: z.object({
     headSha: Sha,
     verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
@@ -98,6 +100,19 @@ export default defineTool({
     const blocking = input.blocking ?? [];
     if (input.verdict === "PASS" && blocking.length > 0) {
       return { posted: false, reason: "pass-with-blocking-finding", verdict: input.verdict, blocking };
+    }
+
+    // The Skills table is a claim about what the review did. A skill marked `used` whose SKILL.md this session
+    // never opened is refused before anything is written, so the model reads it or says `skipped`.
+    const unread = await unreadSkills(ctx.host.kv, ctx.session.id, input.skills);
+    if (unread.length > 0) {
+      return {
+        posted: false,
+        reason: "skill-not-read",
+        verdict: input.verdict,
+        unread,
+        next: "Open each listed skill's SKILL.md with read, or mark it `used: false` with `skipped: <reason>`, then call post_verdict once more.",
+      };
     }
 
     if (ctx.session.purpose === "eval") {

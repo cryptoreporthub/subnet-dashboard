@@ -45,6 +45,26 @@ Find the consumer of the overflowed value and name it: that decides whether the
 row is permanently unreachable or the cycle aborts, and it is what the author
 needs to fix. The overflow itself is a P0 either way (see the P0 rule below).
 
+## 3b. Estimating cost you cannot time
+
+You cannot run code, so a time or work budget is an estimate, and an estimate that
+skips the arithmetic is the usual way it goes wrong. A bound is a ceiling per start,
+not a free pass: a quantifier capped at `K` still costs up to `K` steps each time it is
+entered, so the total is `starts x K`, and the starts can be as dense as every few
+characters of the input. Write the multiplication out with the numbers from the task
+(for example `starts = length / spacing`, then `steps = starts x K`) before you say
+anything about speed.
+
+Then convert steps to time with a stated rate, and say the rate is a guess: a
+backtracking regex engine does very roughly `1e5` to `1e6` simple steps per
+millisecond, so `1e8` steps is on the order of 100 ms to 1 s, not "single-digit
+milliseconds". Compare the result with the limit you were given. Linear growth
+(doubling the input doubles the time) and a budget miss are separate questions: a
+pattern can scale linearly and still blow an absolute cap because the constant is
+large, and you must answer both. If the estimate lands within a factor of ten of the
+limit, say it is inconclusive and ask the author for a measurement (MODIFY) rather than
+rounding it in their favour; a PASS needs the estimate to clear the limit with room.
+
 ## 4. Can it abort a cycle, or poison a later row?
 
 Two different severities:
