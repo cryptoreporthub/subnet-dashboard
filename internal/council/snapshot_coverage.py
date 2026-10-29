@@ -80,6 +80,10 @@ def load_membership_receipt() -> Dict[str, Any]:
         # Owner rule: expected is exactly the pinned chain read, so a chain-unregistered netuid is
         # out at once even while its row stays in ``snap.netuids`` for the 48h grace.
         chain = snap.chain
+        # Rows still held in the universe (48h grace) that the chain read no longer lists. Derived, for
+        # display and proof only: nothing gates on it.
+        on_chain = set(chain.netuids) if chain else set()
+        inactive = [int(n) for n in snap.netuids if int(n) > 0 and int(n) not in on_chain] if chain else []
         return {
             "source": feed.get("source"),
             "sources": list(feed.get("sources") or []),
@@ -89,6 +93,7 @@ def load_membership_receipt() -> Dict[str, Any]:
             "cap_reached": bool(snap.cap_reached),
             "refresh_incomplete": bool(snap.refresh_incomplete),
             "expected_netuids": list(chain.netuids) if chain else [],
+            "inactive_netuids": inactive,
             "generation": membership_generation(chain.netuids if chain else []),
             "block_hash": chain.block_hash if chain else None,
             "rpc": chain.rpc if chain else None,
@@ -107,6 +112,7 @@ def load_membership_receipt() -> Dict[str, Any]:
             "cap_reached": False,
             "refresh_incomplete": True,
             "expected_netuids": [],
+            "inactive_netuids": [],
             "generation": membership_generation([]),
             "block_hash": None,
             "rpc": None,

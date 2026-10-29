@@ -78,6 +78,33 @@ def test_membership_block_and_rpc_survive_builder_and_persist(recorded_providers
     assert (reloaded.chain.block_hash, reloaded.chain.rpc) == (RECORDED_HEAD, "blockmachine")
 
 
+def test_production_shaped_build_yields_a_non_empty_expected_set(recorded_providers, monkeypatch):
+    """Real ChainReader over a recorded read (only the transport is injected), default SnapshotBuilder,
+    receipt from that snapshot: expected is the chain read, never empty."""
+    chain = su._read_chain()
+    assert chain is not None
+
+    def tmc():
+        members = set(chain.netuids)
+        return members, {n: {"netuid": n, "name": f"N{n}"} for n in members}, True
+
+    built = su.SnapshotBuilder(tmc_fetch=tmc).build(None).snapshot
+    receipt = _receipt_for(monkeypatch, built)
+
+    assert receipt["expected_netuids"]
+    assert receipt["expected_netuids"] == list(built.chain.netuids)
+    assert receipt["generation"] == cov.membership_generation(built.chain.netuids)
+    assert receipt["block_hash"] == RECORDED_HEAD
+    assert receipt["inactive_netuids"] == []
+    assert cov.membership_allows_admission(receipt) is True
+
+
+def test_inactive_netuids_are_the_held_rows_the_chain_no_longer_lists(monkeypatch):
+    receipt = _receipt_for(monkeypatch, _universe([1, 2, 78], universe_netuids=[1, 2, 77, 78]))
+    assert receipt["inactive_netuids"] == [77]
+    assert receipt["expected_netuids"] == [1, 2, 78]
+
+
 def test_rpc_is_a_provider_label_never_a_url():
     raw = {"block_hash": RECORDED_HEAD, "netuids": [1, 2]}
     assert ChainRead.parse({**raw, "rpc": "finney"}).rpc == "finney"

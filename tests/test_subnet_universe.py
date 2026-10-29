@@ -228,11 +228,20 @@ def test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row(u
     """Owner rule (2026-10-25): SN7 is off chain while TMC lists it. Expected drops to 127; SN7's row keeps its grace."""
     import internal.council.snapshot_coverage as cov
     import internal.subnet_universe as universe
+    from internal.chain_read import ChainRead
 
     netuids = list(range(1, 129))
+    # Production builds one pinned NetworksAdded read and derives both the probe verdicts and the
+    # snapshot's chain from it (SnapshotBuilder.build, default path). The stub feeds that one read:
+    # SN7 is not registered on chain, every other netuid is.
+    registered = tuple(n for n in netuids if n != 7)
+    monkeypatch.setattr(
+        universe,
+        "_read_chain",
+        lambda deadline=None: ChainRead("0x" + "ab" * 32, registered, "finney"),
+    )
     builder = SnapshotBuilder(
         tmc_fetch=lambda: (set(netuids), {n: {"netuid": n} for n in netuids}, True),
-        probe_fetch=lambda ns, deadline: ({n: n in netuids and n != 7 for n in ns}, True),
     )
     built = builder.build(_prior_snapshot(netuids)).snapshot
     assert built.validity_map["7"]["validity"] == "negative"
