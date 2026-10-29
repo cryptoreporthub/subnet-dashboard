@@ -280,6 +280,9 @@ def test_corrupt_persisted_epoch_does_not_make_start_raise(tmp_path, monkeypatch
     live = sched.state()["liveness"]
     assert live["last_success_at"] is None
     assert live["last_event_at"] is None
+    assert live["status"] == "no_success_yet"
+    assert live["success_age_seconds"] is None
+    assert live["event_age_seconds"] is None
     persisted = json.loads(liveness_file.read_text(encoding="utf-8"))
     assert persisted["liveness"]["score_snapshot"]["lifecycle"] == "started"
 

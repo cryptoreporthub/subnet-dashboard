@@ -47,6 +47,13 @@ def _iso_or_none(epoch: Optional[float]) -> Optional[str]:
         return None
 
 
+def _usable_epoch(epoch: Optional[float]) -> bool:
+    """True when an epoch can drive status/age (finite and convertible to time)."""
+    if epoch is None or not math.isfinite(epoch):
+        return False
+    return _iso_or_none(epoch) is not None
+
+
 def get_tracker(name: str) -> Optional["LivenessTracker"]:
     return _REGISTRY.get(name)
 
@@ -353,7 +360,7 @@ class LivenessTracker:
 
     def _status_locked(self, now: float):
         stale_window = self.interval_seconds * self.staleness_factor
-        if self._last_success_epoch is None or not math.isfinite(self._last_success_epoch):
+        if not _usable_epoch(self._last_success_epoch):
             return "no_success_yet", "no recorded success yet"
         success_age = max(0.0, now - self._last_success_epoch)
         if self._consecutive_skips >= self.skip_limit and success_age > stale_window:
@@ -369,12 +376,12 @@ class LivenessTracker:
         with self._lock:
             status, reason = self._status_locked(now)
             age = None
-            if self._last_success_epoch is not None and math.isfinite(self._last_success_epoch):
+            if _usable_epoch(self._last_success_epoch):
                 age = round(max(0.0, now - self._last_success_epoch), 3)
             lsa = _iso_or_none(self._last_success_epoch)
             lea = _iso_or_none(self._last_event_epoch)
             ea = None
-            if self._last_event_epoch is not None and math.isfinite(self._last_event_epoch):
+            if _usable_epoch(self._last_event_epoch):
                 ea = round(max(0.0, now - self._last_event_epoch), 3)
             return {
                 "name": self.name,

@@ -15,12 +15,11 @@ worker crash-loops until the volume freshens some other way. Deploy #1484 + #148
 
 ## Why
 
-#1484 serves only **complete** snapshots and falls back to the **image seed** when the volume file is missing or not servable. Without #1486 the essential worker still boots the disk-keyed `score-snapshot-ensure` path, which does not arm the periodic producer. On an empty volume:
+On **main @ `affd0c6a` (PR-B #1484 merged)**, #1484 serves only **complete** snapshots and falls back to the **image seed** when the volume file is missing or not servable. The essential worker still registers **`score-snapshot-ensure`**, which calls `ensure_complete_snapshot()` → `revive_score_snapshot_scheduler()` when the volume is missing or not fresh-complete. That path **can arm the scheduler and run a cycle** (including on a stale volume file), but it is a **boot-time ensure/revive hook**, not the periodic owner producer #1486 adds.
 
-- Readers serve the **seed** (`seed` state), never a blank response.
-- No process writes a fresh volume snapshot, so the volume stays empty and prod relies on the seed alone.
+Without **#1486**, production still lacks a dedicated **`score_snapshot_producer_enabled()`** gate and the deferred **`score-snapshots`** boot job that keeps the essential worker owning periodic publishes. On a **wiped or empty volume**, readers stay on the **seed** (never blank), but nothing guarantees the **essential worker** keeps refreshing the volume after boot unless ensure/revive fires again.
 
-#1486 wires `score_snapshot_producer_enabled()` to `_start_score_snapshot_scheduler()` and deletes the ensure boot path.
+**#1486** wires the essential worker to `_start_score_snapshot_scheduler()` when `score_snapshot_producer_enabled()` is true, gates `start_score_snapshot_scheduler` / `revive_score_snapshot_scheduler` with **`not_owner`** on non-producer workers, and **removes** the `score-snapshot-ensure` boot path so production relies on the owner producer instead of the one-shot ensure job.
 
 ## Merge and deploy order
 
