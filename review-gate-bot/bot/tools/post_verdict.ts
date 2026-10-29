@@ -2,7 +2,7 @@ import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
-import { redactSecrets } from "../lib/redact.js";
+import { bodyLeaksSecretValue, redactSecrets } from "../lib/redact.js";
 import { postVerdictComment } from "../lib/tag.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
@@ -32,10 +32,29 @@ function missingRequiredSkills(skills: { skill: string }[]): string[] {
   return REQUIRED_SKILLS.filter((name) => !names.has(name));
 }
 
-/** A PASS must not ship prose that still carries a credential-shaped value after scrubbing. */
+/** A PASS must not ship prose that still carries a real secret value. */
 function passLeaksCredential(text: string): boolean {
-  const { text: scrubbed } = redactSecrets(text);
-  return scrubbed !== text;
+  return bodyLeaksSecretValue(text);
+}
+
+const PLACEHOLDER_VERDICT_BODY =
+  /^(?:test|full body here|logging change only\.?\s*(?:see gate\.?)?|see gate\.?)$/i;
+
+function isPlaceholderVerdictBody(body: string): boolean {
+  const trimmed = body.trim();
+  return PLACEHOLDER_VERDICT_BODY.test(trimmed);
+}
+
+/** PASS must not cite JWT/redact timing in ms without a measured label (no shell here). */
+function passClaimsUnmeasuredJwtPerf(body: string): boolean {
+  const jwtContext = /\b(?:jwt|eyj|redact(?:secrets?)?|scrub(?:ber)?)\b/i.test(body);
+  if (!jwtContext) {
+    return false;
+  }
+  if (!/\b\d+\s*ms\b|\bunder\s+\d+\s*ms\b/i.test(body)) {
+    return false;
+  }
+  return !/\bmeasured\b/i.test(body);
 }
 
 function skillsIncomplete(skills: { skill: string; used: boolean; note: string }[]): string | undefined {
@@ -44,10 +63,23 @@ function skillsIncomplete(skills: { skill: string; used: boolean; note: string }
     return missing.join(", ");
   }
   for (const row of skills) {
-    if (row.used && row.note.trim().length < 8) {
+    const note = row.note.trim();
+    if (!row.used) {
+      if (note.length === 0) {
+        return row.skill;
+      }
+      if (/^skipped:/i.test(note)) {
+        continue;
+      }
+      if (note.length < 8) {
+        return row.skill;
+      }
+      continue;
+    }
+    if (note.length < 8) {
       return row.skill;
     }
-    if (row.used && /^skipped:/i.test(row.note.trim())) {
+    if (/^skipped:/i.test(note)) {
       return row.skill;
     }
   }
@@ -109,7 +141,7 @@ export function composeVerdictBody(input: {
  */
 export default defineTool({
   description:
-    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required.",
+    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head with the full review body (findings, severities, measured/inferred labels) — never probe with placeholder text like \"test\" or \"full body here\" after a refusal. Refuses when the PR head has moved, refuses a PASS while any blocking finding is declared (resubmit as MODIFY or FAIL), refuses a PASS that still carries a secret value or an unmeasured JWT/redact timing claim in ms, and refuses empty Skills rows. The Skills table is required.",
   inputSchema: z.object({
     headSha: Sha,
     verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
@@ -130,6 +162,15 @@ export default defineTool({
       return { posted: false, reason: "pass-with-blocking-finding", verdict: input.verdict, blocking };
     }
 
+    if (isPlaceholderVerdictBody(input.body)) {
+      return {
+        posted: false,
+        reason: "placeholder-verdict-body",
+        verdict: input.verdict,
+        hint: "Write the full review once; do not resubmit stub text after a refusal.",
+      };
+    }
+
     const incompleteSkill = skillsIncomplete(input.skills);
     if (incompleteSkill !== undefined) {
       return { posted: false, reason: "incomplete-skills-table", verdict: input.verdict, skill: incompleteSkill };
@@ -142,7 +183,20 @@ export default defineTool({
       skills: input.skills,
     });
     if (input.verdict === "PASS" && passLeaksCredential(composed)) {
-      return { posted: false, reason: "pass-with-credential-value", verdict: input.verdict };
+      return {
+        posted: false,
+        reason: "pass-with-credential-value",
+        verdict: input.verdict,
+        hint: "Remove secret values from the body (name variables only). Do not retry with placeholder text.",
+      };
+    }
+    if (input.verdict === "PASS" && passClaimsUnmeasuredJwtPerf(input.body)) {
+      return {
+        posted: false,
+        reason: "pass-with-unmeasured-perf-claim",
+        verdict: input.verdict,
+        hint: "JWT/redact timing in ms requires a measured label or MODIFY/FAIL with a performance finding.",
+      };
     }
 
     if (ctx.session.purpose === "eval") {

@@ -119,6 +119,77 @@ function isPlaceholder(value: string): boolean {
 }
 
 /**
+ * Prose that names a credential word without leaking a value. The live scrubber
+ * still redacts these (name it, never print it); the PASS gate must not treat
+ * them as secret leaks (`**Adversarial pass:**`, `` `password=` `` in prose).
+ */
+function isBenignCredentialProse(label: string, rawValue: string): boolean {
+  const v = rawValue.replace(/^["']|["']$/g, "").trim();
+  const l = label.toLowerCase();
+  const proseWord =
+    /^(?:rotated|changed|optional|required|empty|ok|none|null|example|placeholder|discussed|documented|mention(?:ed|s)?)$/i;
+  if (l === "pass") {
+    if (/^[\*`_:>\s]+$/.test(v)) {
+      return true;
+    }
+    if (proseWord.test(v)) {
+      return true;
+    }
+    if (/^[a-z][a-z\s-]{0,15}$/i.test(v) && !/\d/.test(v) && v.length <= 12) {
+      return true;
+    }
+    return false;
+  }
+  if (l === "password" || l === "pwd" || l === "passwd") {
+    if (v === "" || v === "=" || /^[`'=\s]+$/.test(v)) {
+      return true;
+    }
+    if (proseWord.test(v)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * True when text still carries a real secret value. Unlike comparing
+ * `redactSecrets` before/after, ignores benign credential-*words* in prose that
+ * the scrubber over-redacts on publish.
+ */
+export function bodyLeaksSecretValue(input: string): boolean {
+  const { redactedNames } = redactSecrets(input);
+  if (redactedNames.some((n) => n === "unlabelled-credential" || n === "url-credentials")) {
+    return true;
+  }
+
+  const names = new RegExp(ASSIGNMENT_NAME.source, "g");
+  const values = new RegExp(ASSIGNED_VALUE.source, "iy");
+  let found: RegExpExecArray | null;
+  while ((found = names.exec(input)) !== null) {
+    const written = found[1] ?? "";
+    const lead = written.match(/^[^A-Za-z0-9]*/)?.[0] ?? "";
+    const label = written.slice(lead.length);
+    if (!CREDENTIAL_WORD.test(label)) {
+      continue;
+    }
+    values.lastIndex = names.lastIndex;
+    const value = values.exec(input);
+    if (value === null) {
+      continue;
+    }
+    const raw = value[0];
+    if (isPlaceholder(raw)) {
+      continue;
+    }
+    if (isBenignCredentialProse(label, raw)) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
  * Replace each credential assignment's value, scanning left to right. Credential
  * names keep their name and lose their value; every other assignment is passed over
  * at its separator, so one nested inside its value is still reached.

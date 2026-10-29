@@ -3,10 +3,10 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import postVerdict from "../bot/tools/post_verdict.js";
+import postVerdict, { composeVerdictBody } from "../bot/tools/post_verdict.js";
 import { collectPinnedVerdicts } from "../bot/lib/verdicts.js";
 import { readGateFixture, readPrFixture } from "../bot/lib/fixtures.js";
-import { redactSecrets } from "../bot/lib/redact.js";
+import { bodyLeaksSecretValue, redactSecrets } from "../bot/lib/redact.js";
 
 /**
  * The eval session path, without a model.
@@ -135,8 +135,62 @@ test("a PASS with a credential value in the body is refused, in an eval and live
   const leaked = "ghp_ZZZZsecretsecretsecret0123456789";
   for (const purpose of ["eval", "live"] as const) {
     const result = await execute({ ...VERDICT, body: `Leaked ${leaked}` }, contextFor(purpose));
-    assert.deepEqual(result, { posted: false, reason: "pass-with-credential-value", verdict: "PASS" }, purpose);
+    assert.deepEqual(
+      result,
+      {
+        posted: false,
+        reason: "pass-with-credential-value",
+        verdict: "PASS",
+        hint: "Remove secret values from the body (name variables only). Do not retry with placeholder text.",
+      },
+      purpose,
+    );
   }
+});
+
+test("a PASS with adversarial pass prose is not refused as a credential leak", async () => {
+  const body = "**Adversarial pass:** traced resolver; no blocking findings.";
+  const result = await execute({ ...VERDICT, body }, contextFor("eval"));
+  assert.deepEqual(result, { posted: false, reason: "eval", verdict: "PASS" });
+});
+
+test("a PASS with unmeasured JWT scrub ms timing is refused", async () => {
+  const body = "**inferred:** JWT scrub on 200k eyJ- run completes under 40 ms.";
+  const result = await execute({ ...VERDICT, body }, contextFor("eval"));
+  assert.deepEqual(result, {
+    posted: false,
+    reason: "pass-with-unmeasured-perf-claim",
+    verdict: "PASS",
+    hint: "JWT/redact timing in ms requires a measured label or MODIFY/FAIL with a performance finding.",
+  });
+});
+
+test("a PASS with measured JWT timing is not refused for perf guard", async () => {
+  const body = "**measured:** redactSecrets on 200k eyJ- segments finished in 12 ms.";
+  const result = await execute({ ...VERDICT, body }, contextFor("eval"));
+  assert.deepEqual(result, { posted: false, reason: "eval", verdict: "PASS" });
+});
+
+test("placeholder verdict bodies are refused", async () => {
+  for (const body of ["test", "full body here", "Logging change only. See gate."]) {
+    const result = await execute({ ...VERDICT, body }, contextFor("eval"));
+    assert.equal((result as { reason?: string }).reason, "placeholder-verdict-body", body);
+  }
+});
+
+test("used:false with skipped note is accepted on the skills table", async () => {
+  const result = await execute({ ...VERDICT, skills: VERDICT.skills }, contextFor("eval"));
+  assert.deepEqual(result, { posted: false, reason: "eval", verdict: "PASS" });
+});
+
+test("composed verdict with benign pass prose is not a PASS-gate credential leak", () => {
+  const composed = composeVerdictBody({
+    verdict: "PASS",
+    headSha: VERDICT.headSha,
+    body: "**Adversarial pass:** no leaks.",
+    skills: VERDICT.skills,
+  });
+  assert.equal(bodyLeaksSecretValue(composed), false);
 });
 
 test("a verdict missing a required skill row is refused", async () => {
