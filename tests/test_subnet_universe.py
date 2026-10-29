@@ -224,6 +224,29 @@ def test_t9_chain_unregistered_beats_tmc_listing(universe_tmp):
   assert entry["negative_since"]
 
 
+def test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row(universe_tmp, monkeypatch):
+    """Owner rule (2026-10-25): SN7 is off chain while TMC lists it. Expected drops to 127; SN7's row keeps its grace."""
+    import internal.council.snapshot_coverage as cov
+    import internal.subnet_universe as universe
+
+    netuids = list(range(1, 129))
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(netuids), {n: {"netuid": n} for n in netuids}, True),
+        probe_fetch=lambda ns, deadline: ({n: n in netuids and n != 7 for n in ns}, True),
+    )
+    built = builder.build(_prior_snapshot(netuids)).snapshot
+    assert built.validity_map["7"]["validity"] == "negative"
+    assert built.validity_map["7"]["disputed"] is True
+    assert built.validity_map["7"]["negative_since"]
+    assert 7 in built.netuids
+
+    monkeypatch.setattr(universe, "get_snapshot", lambda: built)
+    receipt = cov.load_membership_receipt()
+    assert len(receipt["expected_netuids"]) == 127
+    assert 7 not in receipt["expected_netuids"]
+    assert receipt["inactive_netuids"] == [7]
+
+
 def test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone(universe_tmp):
     old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
     prior = _prior_snapshot([42, 43])
