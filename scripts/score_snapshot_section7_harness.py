@@ -151,6 +151,16 @@ def _stop_entrypoint(proc: subprocess.Popen) -> None:
             proc.wait(timeout=5)
 
 
+def _clear_volume(data_dir: Path) -> None:
+    """Remove the volume snapshot, its lock and the producer receipt (the files a cold volume lacks)."""
+    volume = data_dir / "score_snapshots.json"
+    for path in (volume, volume.with_name(volume.name + ".lock"), data_dir / "score_snapshot_cycle.json"):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def main() -> int:
     port = os.environ.get("HARNESS_PORT", "18080")
     base = f"http://127.0.0.1:{port}"
@@ -229,6 +239,9 @@ def main() -> int:
             _stop_entrypoint(proc)
             proc.wait(timeout=10)
             time.sleep(2)
+            # Z is the cold start with no volume and no seed: drop what F/W/R/C built, or the
+            # volume snapshot would still be served and the case would never run.
+            _clear_volume(data_dir)
             proc = _start_entrypoint(env_z)
             if not _wait_http(base, timeout=90):
                 return 2
