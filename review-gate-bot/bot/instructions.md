@@ -152,6 +152,8 @@ happen to it.
 
 ## Values that have hurt this repo before
 
+When a change is justified by timing or speed (a scrub, a regex, a loop, a query), **measure** it before you PASS: time the same input at N and at 2N, and compare the larger run with any stated cap or budget. If the timing is over the cap, the growth is worse than linear, or you did not measure it, post **MODIFY or FAIL**, never PASS, and say explicitly that performance was not measured or did not meet the budget.
+
 Trace these through the real entry point, not a helper: `1e308`,
 `sys.float_info.max`, the denormal `5e-324`, `10**400`, `2**63`, `NaN`, `inf`,
 `-inf`, bad strings, and bools where a number is expected.

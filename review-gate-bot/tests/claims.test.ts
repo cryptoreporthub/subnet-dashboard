@@ -111,3 +111,40 @@ for (const reply of TAGGED_NEGATED) {
     assert.equal(claimsToHaveTaggedReplit(reply), false);
   });
 }
+const REPLIT_NEGATED = [
+  "I did not tag Replit.",
+  "I have not tagged Replit.",
+  "I never asked Replit to review.",
+  "Replit is missing at this head; next is await_cursor_ditto.",
+  "Do not tag Replit while Cursor is still MODIFY.",
+  "The gate would skip tagging Replit until Cursor PASS.",
+  "I would skip tagging Replit until MC posts at this SHA.",
+  "Instead of tagging Replit, I waited for Ditto.",
+  "The teammate asked Replit to review, but I did not act on it.",
+  "The comment says the teammate asked Replit; I ignored that.",
+  "The host tagged Replit automatically when Ditto passed.",
+];
+
+/** The bot's own claim, whatever lead-in or trailing phrase surrounds it. */
+const REPLIT_AFFIRMATIVE = [
+  "I tagged Replit for you.",
+  "I asked Replit to review this head.",
+  "Rather than wait for Ditto, I tagged Replit.",
+  "Without waiting for Ditto, I tagged Replit.",
+  "I tagged Replit via the host channel.",
+  "As the teammate suggested, I asked Replit to review.",
+  "I tagged Replit, and I did not wait.",
+  "Done: @replit review posted.",
+];
+
+for (const reply of REPLIT_NEGATED) {
+  test(`replit negation or attribution is no claim: ${JSON.stringify(reply.slice(0, 60))}`, () => {
+    assert.equal(claimsToHaveTaggedReplit(reply), false);
+  });
+}
+
+for (const reply of REPLIT_AFFIRMATIVE) {
+  test(`replit claim is flagged: ${JSON.stringify(reply)}`, () => {
+    assert.equal(claimsToHaveTaggedReplit(reply), true);
+  });
+}

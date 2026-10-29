@@ -6,6 +6,6 @@ import { installReasoningCoalescing } from "./coalesce-reasoning.js";
 await installReasoningCoalescing();
 
 export default defineEvalConfig({
-  maxConcurrency: 6,
+  maxConcurrency: 1,
   judge: { model: { id: "grok-4.7", params: [{ id: "reasoning_effort", value: "xhigh" }] } },
 });
