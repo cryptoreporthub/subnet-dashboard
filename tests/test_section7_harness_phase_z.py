@@ -901,6 +901,81 @@ def test_without_pidfd_nothing_is_signalled_and_main_refuses_to_start(monkeypatc
         _cleanup_procs(owned, foreign)
 
 
+def _assert_main_refuses_when_probe_fails(harness, monkeypatch, capsys):
+    monkeypatch.setattr(harness, "_PIDFD_SUPPORTED", None)  # force a fresh probe; restored after the test
+    started = []
+    monkeypatch.setattr(harness, "_start_entrypoint", lambda env: started.append(1))
+    assert harness._pidfd_supported() is False
+    assert harness.main() == 2
+    assert started == []
+    assert "pidfd is unavailable" in capsys.readouterr().err
+
+
+def test_pidfd_probe_fails_closed_when_pidfd_open_is_blocked(monkeypatch, capsys):
+    import errno
+
+    harness = _load_harness()
+
+    def blocked(pid, flags=0):
+        raise OSError(errno.ENOSYS, "Function not implemented")
+
+    monkeypatch.setattr(harness.os, "pidfd_open", blocked)
+    _assert_main_refuses_when_probe_fails(harness, monkeypatch, capsys)
+
+
+def test_pidfd_probe_fails_closed_when_pidfd_send_signal_is_blocked(monkeypatch, capsys):
+    import errno
+
+    harness = _load_harness()
+
+    def blocked(fd, sig, *a, **k):
+        raise OSError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(harness.signal, "pidfd_send_signal", blocked)
+    _assert_main_refuses_when_probe_fails(harness, monkeypatch, capsys)
+
+
+def _spy_pidfd_fds(harness, monkeypatch):
+    opened, closed = [], []
+    real_open, real_close = harness.os.pidfd_open, harness.os.close
+
+    def spy_open(pid, flags=0):
+        fd = real_open(pid, flags)
+        opened.append(fd)
+        return fd
+
+    def spy_close(fd):
+        closed.append(fd)
+        return real_close(fd)
+
+    monkeypatch.setattr(harness.os, "pidfd_open", spy_open)
+    monkeypatch.setattr(harness.os, "close", spy_close)
+    return opened, closed
+
+
+def test_pidfd_probe_succeeds_on_this_box_and_closes_its_fd(monkeypatch):
+    harness = _load_harness()
+    monkeypatch.setattr(harness, "_PIDFD_SUPPORTED", None)
+    opened, closed = _spy_pidfd_fds(harness, monkeypatch)
+    assert harness._pidfd_supported() is True
+    assert opened and closed == opened  # the probe fd is always closed
+
+
+def test_pidfd_probe_closes_its_fd_when_the_signal_is_blocked(monkeypatch):
+    import errno
+
+    harness = _load_harness()
+    monkeypatch.setattr(harness, "_PIDFD_SUPPORTED", None)
+    opened, closed = _spy_pidfd_fds(harness, monkeypatch)
+
+    def blocked(fd, sig, *a, **k):
+        raise OSError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(harness.signal, "pidfd_send_signal", blocked)
+    assert harness._pidfd_supported() is False
+    assert opened and closed == opened
+
+
 def test_main_exits_2_on_a_keyboard_interrupt_that_leaves_a_process_behind(monkeypatch, capsys):
     harness = _load_harness()
     monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())

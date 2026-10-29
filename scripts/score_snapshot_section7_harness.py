@@ -172,15 +172,27 @@ _PIDFD_SUPPORTED: Optional[bool] = None
 
 
 def _pidfd_supported() -> bool:
-    """True when this kernel and Python can open a pidfd and signal through it (Linux 5.3+, Python 3.9+)."""
+    """True only when a pidfd can really be opened and signalled here (Linux 5.3+, Python 3.9+).
+
+    The calls are made, not just looked up: a blocked syscall (seccomp, ENOSYS, EPERM) must read as
+    unsupported, or cleanup would silently signal nothing and leave processes running. The probe opens a
+    pidfd on this process and sends it signal 0 (an existence check that delivers nothing).
+    """
     global _PIDFD_SUPPORTED
     if _PIDFD_SUPPORTED is None:
+        fd: Optional[int] = None
         try:
             fd = os.pidfd_open(os.getpid())
-            os.close(fd)
-            _PIDFD_SUPPORTED = hasattr(signal, "pidfd_send_signal")
-        except (AttributeError, OSError):
+            signal.pidfd_send_signal(fd, 0)
+            _PIDFD_SUPPORTED = True
+        except (AttributeError, OSError, ValueError, NotImplementedError):
             _PIDFD_SUPPORTED = False
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
     return _PIDFD_SUPPORTED
 
 
