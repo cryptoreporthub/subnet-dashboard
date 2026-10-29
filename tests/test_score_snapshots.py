@@ -470,6 +470,7 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
     )
     sched = snaps.ScoreSnapshotScheduler()
     snaps._scheduler = sched
+    sched._armed = True
     snaps._TICK_ACTIVE = True
     sched._tick_active = True
     with snaps._lock:
@@ -484,8 +485,27 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
         snaps._scheduler = None
 
 
-def test_timeout_deferred_completion_rearms_when_registered(monkeypatch, tmp_path):
-    """Timed-out run_once must still DateTrigger-rearm when the late write finishes."""
+def test_completion_of_stopped_scheduler_does_not_rearm(tmp_path, monkeypatch):
+    """An in-flight write that finishes after stop() must not schedule another tick."""
+    _wire_scheduler_paths(tmp_path, monkeypatch)
+    _reset_write_occupancy()
+    scheduled = []
+    monkeypatch.setattr(
+        snaps,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    sched = snaps.ScoreSnapshotScheduler()
+    snaps._scheduler = sched
+    try:
+        sched._register_write_completion_callback(reschedule=False)
+        assert scheduled == []
+    finally:
+        snaps._scheduler = None
+
+
+def test_timeout_deferred_completion_rearms_when_armed(monkeypatch, tmp_path):
+    """Timed-out run_once must still DateTrigger-rearm an armed scheduler when the late write finishes."""
     path = _wire_scheduler_paths(tmp_path, monkeypatch)
     scheduled = []
     monkeypatch.setattr(
@@ -506,6 +526,7 @@ def test_timeout_deferred_completion_rearms_when_registered(monkeypatch, tmp_pat
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
     snaps._scheduler = sched
+    sched._armed = True
     sched._scoring_in_progress = lambda: False
     try:
         timed_out = sched.run_once()
