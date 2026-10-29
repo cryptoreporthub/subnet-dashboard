@@ -34,6 +34,31 @@ test("one reasoning block of 60 KB written as 20-char chunks stays linear, with 
   assert.equal(events.at(-1)!.type, "reasoning.completed", "completion still follows the last text");
 });
 
+test("the usage updates the model stream interleaves with every chunk do not flush (r2 fix-hex1: first version coalesced nothing)", async () => {
+  const Sub = await realMapper();
+  const events: Ev[] = [];
+  const m = new Sub((e) => events.push(e));
+  const chunk = "reasoning chunk text";
+  for (let i = 0; i < 3000; i++) {
+    m.handleUpdate({ type: "thinking-delta", text: chunk });
+    m.handleUpdate({ type: "token-delta", tokens: 5 });
+  }
+  m.handleUpdate({ type: "thinking-completed", thinkingDurationMs: 5 });
+  const appended = events.filter((e) => e.type === "reasoning.appended");
+  assert.ok(appended.length <= Math.ceil((3000 * chunk.length) / FLUSH_CHARS) + 1, `events: ${appended.length}`);
+  assert.equal(appended.map((e) => e.data.delta).join(""), chunk.repeat(3000));
+});
+
+test("a text delta or tool call after pending reasoning flushes it first, in order", async () => {
+  const Sub = await realMapper();
+  const events: Ev[] = [];
+  const m = new Sub((e) => events.push(e));
+  m.handleUpdate({ type: "thinking-delta", text: "thinking" });
+  m.handleUpdate({ type: "token-delta", tokens: 1 });
+  m.handleUpdate({ type: "text-delta", text: "answer" });
+  assert.deepEqual(events.map((e) => e.type), ["reasoning.appended", "message.appended"]);
+});
+
 test("pending reasoning is flushed before a tool call or completion, never after", async () => {
   const Sub = await realMapper();
   const events: Ev[] = [];
