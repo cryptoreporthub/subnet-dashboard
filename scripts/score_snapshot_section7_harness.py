@@ -11,11 +11,12 @@ import sys
 import tempfile
 import uuid
 import time
+import traceback
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO = Path(__file__).resolve().parents[1]
 # The worker pid file of THIS run. ``main`` points it into the run's temporary data directory; it must
@@ -24,8 +25,10 @@ REPO = Path(__file__).resolve().parents[1]
 PIDFILE = os.environ.get("INLINE_WORKER_PIDFILE", "/tmp/inline_worker.pid")
 RUN_TOKEN_VAR = "S7_HARNESS_RUN_TOKEN"
 RUN_TOKEN = uuid.uuid4().hex
-# Sessions this run created (one per entrypoint). A process in one of them is ours even when its
-# environment cannot be read (non-dumpable processes refuse /proc/<pid>/environ).
+# Sessions this run created (one per entrypoint). They are used to REPORT a live process whose
+# environment cannot be read (non-dumpable processes refuse /proc/<pid>/environ); such a process is
+# never signalled, because a dead entrypoint's pid can be recycled by an unrelated session leader and
+# membership of a recorded session id is then not proof of ownership.
 _RUN_SESSIONS: set = set()
 # Pids still alive after the final cleanup of ``_run``: the run cannot be called a success then.
 _CLEANUP_SURVIVORS: List[int] = []
@@ -195,7 +198,12 @@ def _stop_entrypoint(proc: subprocess.Popen) -> None:
     group and is stopped separately (``_kill_worker_sigkill`` / ``_kill_run_processes``).
     """
     pgid = proc.pid
-    _killpg(pgid, signal.SIGTERM)
+    if proc.poll() is None:
+        _killpg(pgid, signal.SIGTERM)  # the leader is not reaped yet, so the group id is still ours
+    else:
+        # Already reaped: the pid may have been recycled since, so signal only members that carry
+        # this run's token.
+        _signal_group_members(pgid, signal.SIGTERM)
     try:
         proc.wait(timeout=20)
     except subprocess.TimeoutExpired:
@@ -205,11 +213,42 @@ def _stop_entrypoint(proc: subprocess.Popen) -> None:
     deadline = time.monotonic() + STOP_GRACE_SECONDS
     while time.monotonic() < deadline and _group_alive(pgid):
         time.sleep(0.05)
-    _killpg(pgid, signal.SIGKILL)
+    if proc.poll() is None:
+        _killpg(pgid, signal.SIGKILL)
+    else:
+        # The leader is gone, so ``pgid`` may by now name an unrelated group: SIGKILL only the members
+        # that provably carry this run's token. Anything unreadable is left alone (and reported by
+        # ``_kill_run_processes``).
+        _signal_group_members(pgid, signal.SIGKILL)
     try:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         pass
+
+
+def _group_members(pgid: int) -> List[int]:
+    members: List[int] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            fields = (entry / "stat").read_text().rsplit(")", 1)[-1].split()
+        except OSError:
+            continue
+        if int(fields[2]) == pgid and fields[0] != "Z":
+            members.append(int(entry.name))
+    return members
+
+
+def _signal_group_members(pgid: int, sig: int) -> None:
+    """Signal each live member of group ``pgid`` that provably carries this run's token."""
+    me = os.getpid()
+    for pid in _group_members(pgid):
+        if pid != me and _carries_run_token(pid):
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                pass
 
 
 def _group_alive(pgid: int) -> bool:
@@ -239,19 +278,22 @@ def _run_sessions() -> set:
     return sessions
 
 
-def _run_pids(token: str) -> List[int]:
-    """Pids of live (non-zombie) processes that belong to this run.
+def _scan_run_processes(token: str) -> Tuple[List[int], List[int]]:
+    """Live (non-zombie) processes of this run: ``(proven, unattributable)``.
 
-    A process belongs to the run when its environment carries the run token, or, when that
-    environment cannot be read (a non-dumpable process refuses ``/proc/<pid>/environ``), when it sits
-    in a session this run created. Unreadable processes outside those sessions cannot be attributed
-    and are ignored: on a shared box other users' (and sandboxed) processes are always unreadable,
-    so treating every one as ours would make the check unsatisfiable.
+    ``proven``: the environment carries the run token. Only these are ever signalled.
+    ``unattributable``: the environment cannot be read (a non-dumpable process refuses
+    ``/proc/<pid>/environ``) but the process sits in a session this run created. It is never signalled,
+    since the session id of a dead entrypoint can be recycled by an unrelated process and "in a session
+    we once created" is then not proof; it is only reported, so a cleanup that leaves one behind fails
+    loudly instead of killing something that may not be ours. Unreadable processes outside those
+    sessions are not reported: on a shared box other users' (and sandboxed) processes are unreadable.
     """
     needle = f"{RUN_TOKEN_VAR}={token}".encode()
     me = os.getpid()
     sessions = _run_sessions()
-    found: List[int] = []
+    proven: List[int] = []
+    unattributable: List[int] = []
     for entry in Path("/proc").iterdir():
         if not entry.name.isdigit() or int(entry.name) == me:
             continue
@@ -259,19 +301,34 @@ def _run_pids(token: str) -> List[int]:
             fields = (entry / "stat").read_text().rsplit(")", 1)[-1].split()
         except OSError:
             continue
+        if fields[0] == "Z":
+            continue
         try:
-            ours = needle in (entry / "environ").read_bytes().split(b"\0")
+            if needle in (entry / "environ").read_bytes().split(b"\0"):
+                proven.append(int(entry.name))
         except PermissionError:
-            ours = int(fields[3]) in sessions
+            if int(fields[3]) in sessions:
+                unattributable.append(int(entry.name))
         except OSError:
             continue
-        if ours and fields[0] != "Z":
-            found.append(int(entry.name))
-    return found
+    return proven, unattributable
+
+
+def _run_pids(token: str) -> List[int]:
+    """Pids of live processes that provably belong to this run (they carry its token)."""
+    return _scan_run_processes(token)[0]
+
+
+def _unattributable_run_pids(token: str) -> List[int]:
+    """Live processes in this run's sessions whose environment cannot be read: reported, never killed."""
+    return _scan_run_processes(token)[1]
 
 
 def _kill_run_processes(token: str, timeout: float = 15.0) -> List[int]:
-    """SIGKILL every process this run started and wait for them to go; return any survivors.
+    """SIGKILL every process that provably carries this run's token and wait for them to go.
+
+    Returns the survivors: token-bearing processes that would not die, plus live processes of this
+    run's sessions whose environment is unreadable (those are never signalled, only reported).
 
     The supervisor may have launched a worker whose pid was not yet in the pidfile when the
     supervisor died, so the pidfile alone cannot be trusted to find every worker.
@@ -280,14 +337,14 @@ def _kill_run_processes(token: str, timeout: float = 15.0) -> List[int]:
     while True:
         pids = _run_pids(token)
         if not pids:
-            return []
+            return _unattributable_run_pids(token)
         for pid in pids:
             try:
                 os.kill(pid, signal.SIGKILL)
             except OSError:
                 pass
         if time.monotonic() >= deadline:
-            return _run_pids(token)
+            return _run_pids(token) + _unattributable_run_pids(token)
         time.sleep(0.1)
 
 
@@ -319,7 +376,15 @@ def _stop_run() -> List[int]:
 def main() -> int:
     """Run the lifecycle; exit 2 when a process of the run survives the final cleanup."""
     _CLEANUP_SURVIVORS.clear()
-    code = _run()
+    try:
+        code = _run()
+    except Exception:
+        # A phase raised. If the cleanup in ``_run``'s ``finally`` also left a process behind, that is
+        # the verdict (exit 2, with the traceback shown); otherwise the exception propagates unchanged.
+        if not _CLEANUP_SURVIVORS:
+            raise
+        traceback.print_exc()
+        code = 2
     if _CLEANUP_SURVIVORS:
         print(f"FATAL: processes still alive after cleanup: {sorted(set(_CLEANUP_SURVIVORS))}", file=sys.stderr)
         return 2

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+
+import pytest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -290,7 +292,7 @@ def _setup_real_main(monkeypatch, tmp_path, harness):
     return workers, wait_for_worker
 
 
-def _run_main(monkeypatch, tmp_path, *, fail_wait_on=None, fail_phase=None):
+def _run_main(monkeypatch, tmp_path, *, fail_wait_on=None, fail_phase=None, on_phase=None):
     harness = _load_harness()
     workers, wait_for_worker = _setup_real_main(monkeypatch, tmp_path, harness)
     seen = {}
@@ -305,6 +307,8 @@ def _run_main(monkeypatch, tmp_path, *, fail_wait_on=None, fail_phase=None):
         wait_for_worker()
         seen[label] = [_environ_of(pid).get("FINNEY_RPC_URL") for pid in workers()]
         seen[label + "_pids"] = workers()
+        if on_phase is not None:
+            on_phase(harness, label)
         if label == fail_phase:
             raise RuntimeError("boom")
         return harness.PhaseResult(label, 1, 0, 0, "fresh", 0), ["fresh"]
@@ -365,7 +369,7 @@ def test_stop_entrypoint_gives_the_supervisor_a_grace_period_before_kill(tmp_pat
         "( trap 'sleep 1; touch %s; exit 0' TERM; while :; do sleep 0.1; done ) &\n"
         "exec sh -c 'trap \"exit 0\" TERM; while :; do sleep 0.1; done'\n" % marker
     )
-    proc = subprocess.Popen(["sh", str(script)], start_new_session=True)
+    proc = subprocess.Popen(["sh", str(script)], env=_token_env(harness), start_new_session=True)
     time.sleep(0.5)
     harness._stop_entrypoint(proc)
 
@@ -383,12 +387,71 @@ def test_stop_entrypoint_still_kills_a_group_member_that_ignores_term(tmp_path):
         "( trap '' TERM; while :; do sleep 0.1; done ) &\n"
         "exec sh -c 'trap \"exit 0\" TERM; while :; do sleep 0.1; done'\n"
     )
-    proc = subprocess.Popen(["sh", str(script)], start_new_session=True)
+    proc = subprocess.Popen(["sh", str(script)], env=_token_env(harness), start_new_session=True)
     time.sleep(0.5)
     harness._stop_entrypoint(proc)
     time.sleep(0.2)
 
     assert not harness._group_alive(proc.pid)
+
+
+def _token_env(harness, with_token=True):
+    import os
+
+    env = {k: v for k, v in os.environ.items() if k != harness.RUN_TOKEN_VAR}
+    if with_token:
+        env[harness.RUN_TOKEN_VAR] = harness.RUN_TOKEN
+    return env
+
+
+def _orphan_group(harness, tmp_path, *, with_token):
+    """A group whose leader has already exited (and is reaped), leaving one member that ignores TERM."""
+    import subprocess
+    import time
+
+    script = tmp_path / ("entry-token.sh" if with_token else "entry-foreign.sh")
+    script.write_text("( trap '' TERM; while :; do sleep 0.1; done ) &\nexit 0\n")
+    proc = subprocess.Popen(["sh", str(script)], env=_token_env(harness, with_token), start_new_session=True)
+    proc.wait(timeout=5)  # the leader is gone and reaped; its group lives on through the member
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not harness._group_alive(proc.pid):
+        time.sleep(0.05)
+    assert harness._group_alive(proc.pid)
+    return proc
+
+
+def test_stop_entrypoint_kills_a_leaderless_group_member_that_carries_the_run_token(tmp_path):
+    import time
+
+    harness = _load_harness()
+    proc = _orphan_group(harness, tmp_path, with_token=True)
+    try:
+        harness._stop_entrypoint(proc)
+        deadline = time.monotonic() + 3  # the member's last ``sleep 0.1`` child may still be finishing
+        while time.monotonic() < deadline and harness._group_alive(proc.pid):
+            time.sleep(0.05)
+        assert not harness._group_alive(proc.pid)
+    finally:
+        harness._signal_group_members(proc.pid, 9)
+
+
+def test_stop_entrypoint_never_kills_a_leaderless_group_member_it_cannot_prove_is_the_runs(tmp_path):
+    """Once the leader is reaped the group id may name someone else's group: no token, no signal."""
+    import os
+    import signal
+
+    harness = _load_harness()
+    proc = _orphan_group(harness, tmp_path, with_token=False)
+    members = harness._group_members(proc.pid)
+    try:
+        harness._stop_entrypoint(proc)
+        assert harness._group_alive(proc.pid), "a group member without the run token was signalled"
+    finally:
+        for pid in members:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
 
 
 def _spawn_unreadable(harness, tmp_path):
@@ -417,15 +480,26 @@ def _spawn_unreadable(harness, tmp_path):
     pytest.skip("cannot make a same-user process with an unreadable environment here")
 
 
-def test_unreadable_process_in_a_run_session_counts_as_a_run_process(tmp_path):
+def test_unreadable_process_in_a_run_session_is_reported_but_never_signalled(tmp_path):
+    """A process whose environment cannot be read is not provably the run's: it is never SIGKILLed.
+
+    It sits in a session this run created, so a cleanup that leaves it behind reports it as a survivor
+    (the run then exits 2) instead of killing a process that, after pid recycling, may not be ours.
+    """
     harness = _load_harness()
     proc = _spawn_unreadable(harness, tmp_path)
     try:
         assert proc.pid not in harness._run_pids(harness.RUN_TOKEN)  # unattributable until its session is ours
+        assert harness._unattributable_run_pids(harness.RUN_TOKEN) == []
         harness._RUN_SESSIONS.add(proc.pid)
-        assert proc.pid in harness._run_pids(harness.RUN_TOKEN)
-        assert harness._kill_run_processes(harness.RUN_TOKEN, timeout=10) == []
-        proc.wait(timeout=5)
+        try:
+            assert proc.pid not in harness._run_pids(harness.RUN_TOKEN)  # still not proof: never a kill target
+            assert harness._unattributable_run_pids(harness.RUN_TOKEN) == [proc.pid]
+            assert harness._kill_run_processes(harness.RUN_TOKEN, timeout=2) == [proc.pid]  # reported
+            harness._stop_run()
+            assert proc.poll() is None, "an unreadable-environment process was SIGKILLed"
+        finally:
+            harness._RUN_SESSIONS.discard(proc.pid)
     finally:
         proc.kill()
         proc.wait()
@@ -506,6 +580,33 @@ def test_main_neither_reuses_nor_kills_a_foreign_worker_from_the_shared_pid_file
         foreign.wait()
 
 
+def test_main_never_kills_a_foreign_pid_that_lands_in_the_runs_own_pid_file(monkeypatch, tmp_path):
+    """The token check itself, through the real ``main()`` path (#1484 Claude r8).
+
+    The run's pid file is private, so a foreign pid can only get into it by accident (a stale file, pid
+    reuse). Here it is planted during the last phase, so the final cleanup's ``_kill_worker_sigkill``
+    reads it. Without the token check that SIGKILLs the foreign process.
+    """
+    foreign = _spawn_foreign_worker()
+    planted = []
+
+    def plant(harness, label):
+        if label == "Z":
+            Path(harness.PIDFILE).write_text(str(foreign.pid))
+            planted.append(Path(harness.PIDFILE).read_text())
+
+    try:
+        harness, code, seen = _run_main(monkeypatch, tmp_path, on_phase=plant)
+
+        assert planted == [str(foreign.pid)]  # the pid file really named the foreign process at cleanup time
+        assert code in (0, 1)
+        assert foreign.poll() is None, "the harness SIGKILLed a pid from its pid file that lacks the run token"
+        assert harness._run_pids(harness.RUN_TOKEN) == []  # the run's own processes are all gone
+    finally:
+        foreign.kill()
+        foreign.wait()
+
+
 # --- zombies, and the exit code when cleanup leaves a process behind (#1484 Claude) ---
 
 
@@ -562,3 +663,46 @@ def test_main_exits_2_when_the_final_cleanup_leaves_a_process_behind(monkeypatch
 
     assert harness.main() == 2
     assert len(sweeps) == 3  # all phases ran; only the cleanup failed
+
+
+def test_main_exits_2_when_a_phase_raises_and_the_final_cleanup_leaves_a_process_behind(monkeypatch, capsys):
+    """The exception path: a survivor still decides the exit code (#1484 Ditto r8 / Claude r8)."""
+    harness = _load_harness()
+    monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
+    monkeypatch.setattr(harness, "_wait_http", lambda *a, **k: True)
+
+    def phase(label, *a, **k):
+        if label == "R":
+            raise RuntimeError("boom")
+        return harness.PhaseResult(label, 1, 0, 0, "fresh", 0), ["fresh"]
+
+    monkeypatch.setattr(harness, "_phase", phase)
+    monkeypatch.setattr(harness, "_stop_entrypoint", lambda proc: None)
+    monkeypatch.setattr(harness, "_kill_worker_sigkill", lambda: True)
+    monkeypatch.setattr(harness, "_kill_run_processes", lambda token, timeout=15.0: [4242])  # the cleanup leaves one
+    monkeypatch.setattr(harness, "_clear_volume", lambda data_dir: None)
+    monkeypatch.setattr(harness.time, "sleep", lambda s: None)
+
+    assert harness.main() == 2
+    err = capsys.readouterr().err
+    assert "processes still alive after cleanup: [4242]" in err
+    assert "RuntimeError: boom" in err  # the original failure is still shown
+
+
+def test_main_still_raises_the_phase_exception_when_the_cleanup_is_clean(monkeypatch):
+    harness = _load_harness()
+    monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
+    monkeypatch.setattr(harness, "_wait_http", lambda *a, **k: True)
+
+    def phase(label, *a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(harness, "_phase", phase)
+    monkeypatch.setattr(harness, "_stop_entrypoint", lambda proc: None)
+    monkeypatch.setattr(harness, "_kill_worker_sigkill", lambda: True)
+    monkeypatch.setattr(harness, "_kill_run_processes", lambda token, timeout=15.0: [])
+    monkeypatch.setattr(harness, "_clear_volume", lambda data_dir: None)
+    monkeypatch.setattr(harness.time, "sleep", lambda s: None)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        harness.main()
