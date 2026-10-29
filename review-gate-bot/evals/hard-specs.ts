@@ -750,6 +750,8 @@ export const SPECS: CaseSpec[] = [
           /(?:purely|just|only) (?:a )?(?:log|logging|observability)|(?:state|snapshot|result)\b[^\n]{0,40}(?:is |are )?(?:untouched|unchanged|not (?:modified|mutated|affected))/i,
           // "log-only", "writes no state", "nothing is published, mutated or persisted differently"
           /\blog-?only\b|\b(?:writes?|mutates?|persists?|publishes) no (?:state|data)\b|\bnothing\b[^\n]{0,40}\b(?:published|mutated|persisted|written|changed|altered)\b[^\n]{0,30}\bdifferently\b/i,
+          // "the diff only adds observability", "removed is a local list that is never written back"
+          /\bonly adds? (?:an? )?(?:log|logging|observability)\b|\badds? (?:only )?observability\b|\b(?:local|throwaway) (?:list|copy|value)\b[^\n]{0,40}\bnever written back\b/i,
         ),
       ),
       ev(
