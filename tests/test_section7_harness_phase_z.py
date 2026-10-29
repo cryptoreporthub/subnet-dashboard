@@ -178,7 +178,11 @@ def test_phase_z_stop_really_kills_web_supervisor_and_worker(monkeypatch, tmp_pa
 
 
 def test_stopping_only_the_web_pid_leaves_a_supervisor_that_restarts_the_worker(monkeypatch, tmp_path):
-    """Control for the test above: the pre-fix stop (SIGTERM to web only) does let the worker come back."""
+    """Control for the test above: the pre-fix stop (SIGTERM to web only) does let the worker come back.
+
+    The restart itself is asserted: after the worker is killed, the pid file must name a NEW pid, that
+    pid must be alive and carry the run token, and it is not the worker that was killed.
+    """
     import os
     import signal
     import time
@@ -186,11 +190,19 @@ def test_stopping_only_the_web_pid_leaves_a_supervisor_that_restarts_the_worker(
     harness = _load_harness()
     proc = _start_real_entrypoint(harness, monkeypatch, tmp_path)
     try:
-        os.kill(proc.pid, signal.SIGTERM)
+        old_worker = harness._worker_pid_from_pidfile()
+        assert old_worker is not None and old_worker in harness._run_pids(harness.RUN_TOKEN)
+        os.kill(proc.pid, signal.SIGTERM)  # web only, as before the fix
         proc.wait(timeout=10)
-        harness._kill_worker_sigkill()
-        time.sleep(3)
-        assert harness._run_pids(harness.RUN_TOKEN), "supervisor should have survived and restarted the worker"
+        assert harness._kill_worker_sigkill() is True
+        deadline = time.monotonic() + 10
+        new_worker = old_worker
+        while time.monotonic() < deadline and new_worker == old_worker:
+            time.sleep(0.2)
+            new_worker = harness._worker_pid_from_pidfile()
+        assert new_worker is not None and new_worker != old_worker, "the supervisor never restarted the worker"
+        assert new_worker in harness._run_pids(harness.RUN_TOKEN)
+        assert old_worker not in harness._run_pids(harness.RUN_TOKEN)
     finally:
         harness._kill_run_processes(harness.RUN_TOKEN, timeout=5)
 
@@ -260,11 +272,9 @@ def _setup_real_main(monkeypatch, tmp_path, harness):
     import time
 
     monkeypatch.setattr(harness, "REPO", _fake_fly_repo(tmp_path))
-    monkeypatch.setattr(harness, "PIDFILE", str(tmp_path / "worker.pid"))
     monkeypatch.setenv("PATH", f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setenv("INLINE_WORKER_LAUNCH", f"sh {_worker_script(tmp_path)}")
     monkeypatch.setenv("INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS", "1")
-    monkeypatch.setenv("INLINE_WORKER_PIDFILE", str(tmp_path / "worker.pid"))
     monkeypatch.delenv("FINNEY_RPC_URL", raising=False)
     monkeypatch.delenv("BLOCKMACHINE_RPC_URL", raising=False)
 
@@ -419,3 +429,78 @@ def test_unreadable_process_in_a_run_session_counts_as_a_run_process(tmp_path):
     finally:
         proc.kill()
         proc.wait()
+
+
+# --- the worker pid file is this run's own; a foreign pid in a shared one is never signalled (#1484 Replit P2) ---
+
+
+def _spawn_foreign_worker():
+    """A live process in its own session with no run token, like another app's or entrypoint's worker."""
+    import os
+    import subprocess
+
+    env = {k: v for k, v in os.environ.items() if k != "S7_HARNESS_RUN_TOKEN"}
+    return subprocess.Popen(["sleep", "300"], env=env, start_new_session=True)
+
+
+def test_kill_worker_refuses_a_pid_that_does_not_carry_the_run_token(monkeypatch, tmp_path):
+    harness = _load_harness()
+    foreign = _spawn_foreign_worker()
+    pidfile = tmp_path / "shared.pid"
+    pidfile.write_text(str(foreign.pid))
+    monkeypatch.setattr(harness, "PIDFILE", str(pidfile))
+    try:
+        assert harness._kill_worker_sigkill() is False
+        assert foreign.poll() is None, "a foreign process listed in the pid file was killed"
+        assert foreign.pid not in harness._run_sessions()
+    finally:
+        foreign.kill()
+        foreign.wait()
+
+
+def test_kill_worker_still_kills_a_worker_that_carries_the_run_token(monkeypatch, tmp_path):
+    import os
+    import subprocess
+
+    harness = _load_harness()
+    mine = subprocess.Popen(
+        ["sleep", "300"], env={**os.environ, harness.RUN_TOKEN_VAR: harness.RUN_TOKEN}, start_new_session=True
+    )
+    pidfile = tmp_path / "run.pid"
+    pidfile.write_text(str(mine.pid))
+    monkeypatch.setattr(harness, "PIDFILE", str(pidfile))
+    try:
+        assert harness._kill_worker_sigkill() is True
+        mine.wait(timeout=5)
+    finally:
+        mine.kill()
+        mine.wait()
+
+
+def test_fly_env_uses_a_pid_file_inside_the_run_directory_not_the_shared_one(monkeypatch, tmp_path):
+    monkeypatch.setenv("INLINE_WORKER_PIDFILE", "/tmp/inline_worker.pid")
+    harness = _load_harness()  # its module default is the inherited/shared path
+    assert harness.PIDFILE == "/tmp/inline_worker.pid"
+
+    env = harness._fly_env(tmp_path, "0", seed_path=str(tmp_path / "seed.json"))
+
+    assert env["INLINE_WORKER_PIDFILE"] == str(tmp_path / "inline_worker.pid")
+
+
+def test_main_neither_reuses_nor_kills_a_foreign_worker_from_the_shared_pid_file(monkeypatch, tmp_path):
+    foreign = _spawn_foreign_worker()
+    shared = tmp_path / "shared-inline-worker.pid"
+    shared.write_text(str(foreign.pid))
+    monkeypatch.setenv("INLINE_WORKER_PIDFILE", str(shared))  # what the module defaults to, as in production
+    try:
+        harness, code, seen = _run_main(monkeypatch, tmp_path)
+
+        assert code in (0, 1)
+        assert foreign.poll() is None, "the harness killed a worker it did not start"
+        assert shared.read_text() == str(foreign.pid)  # the shared pid file was never touched
+        started = set(seen["R_pids"]) | set(seen["C_pids"]) | set(seen["Z_pids"])
+        assert foreign.pid not in started  # and never adopted as the run's worker
+        assert harness._run_pids(harness.RUN_TOKEN) == []  # only what this run started is gone
+    finally:
+        foreign.kill()
+        foreign.wait()

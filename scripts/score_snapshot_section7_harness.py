@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 REPO = Path(__file__).resolve().parents[1]
+# The worker pid file of THIS run. ``main`` points it into the run's temporary data directory; it must
+# never be the shared /tmp/inline_worker.pid (or an inherited INLINE_WORKER_PIDFILE), which may belong to
+# another entrypoint whose live worker the new entrypoint would adopt and the harness would then kill.
 PIDFILE = os.environ.get("INLINE_WORKER_PIDFILE", "/tmp/inline_worker.pid")
 RUN_TOKEN_VAR = "S7_HARNESS_RUN_TOKEN"
 RUN_TOKEN = uuid.uuid4().hex
@@ -106,7 +109,7 @@ def _fly_env(data_dir: Path, port: str, *, seed_path: str) -> Dict[str, str]:
         "SCORE_SNAPSHOTS_PATH": str(data_dir / "score_snapshots.json"),
         "SCORE_SNAPSHOT_SEED_PATH": seed_path,
         "SCORE_SNAPSHOT_CYCLE_PATH": str(data_dir / "score_snapshot_cycle.json"),
-        "INLINE_WORKER_PIDFILE": PIDFILE,
+        "INLINE_WORKER_PIDFILE": str(data_dir / "inline_worker.pid"),
         "PYTHONPATH": str(REPO),
         # Every process this run starts (web, worker supervisor, worker) inherits this, so the
         # harness can find them all again by environment, however many sessions they moved to.
@@ -138,19 +141,37 @@ def _wait_http(base: str, timeout: float = 120.0) -> bool:
     return False
 
 
-def _kill_worker_sigkill() -> bool:
+def _worker_pid_from_pidfile() -> Optional[int]:
     try:
-        pgid = Path(PIDFILE).read_text(encoding="utf-8").strip()
+        return int(Path(PIDFILE).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _carries_run_token(pid: int) -> bool:
+    """True only when ``pid`` provably belongs to this run: its environment carries the run token.
+
+    An unreadable environment is not proof, so it is not signalled from the pid file (the session sweep
+    in ``_run_pids`` still covers unreadable processes inside sessions this run created).
+    """
+    needle = f"{RUN_TOKEN_VAR}={RUN_TOKEN}".encode()
+    try:
+        return needle in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
     except OSError:
         return False
-    if not pgid:
+
+
+def _kill_worker_sigkill() -> bool:
+    """SIGKILL the worker named in this run's pid file, but only if it carries this run's token."""
+    pid = _worker_pid_from_pidfile()
+    if pid is None or pid <= 1 or not _carries_run_token(pid):
         return False
     try:
-        os.kill(int(pgid), signal.SIGKILL)
+        os.killpg(pid, signal.SIGKILL)  # the worker is its own session/group leader (setsid)
         return True
     except OSError:
         try:
-            os.killpg(int(pgid), signal.SIGKILL)
+            os.kill(pid, signal.SIGKILL)
             return True
         except OSError:
             return False
@@ -199,10 +220,9 @@ def _group_alive(pgid: int) -> bool:
 
 def _run_sessions() -> set:
     sessions = set(_RUN_SESSIONS)
-    try:
-        sessions.add(int(Path(PIDFILE).read_text(encoding="utf-8").strip()))  # the worker's own session
-    except (OSError, ValueError):
-        pass
+    worker = _worker_pid_from_pidfile()
+    if worker is not None and _carries_run_token(worker):
+        sessions.add(worker)  # the worker's own session (only a verified worker: never a foreign pid)
     return sessions
 
 
@@ -284,6 +304,7 @@ def _stop_run() -> List[int]:
 
 
 def main() -> int:
+    global PIDFILE
     port = os.environ.get("HARNESS_PORT", "18080")
     base = f"http://127.0.0.1:{port}"
     seed_default = str(REPO / "data_seeds" / "score_snapshots.json")
@@ -293,6 +314,7 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="s7-") as tmp:
         data_dir = Path(tmp)
+        PIDFILE = str(data_dir / "inline_worker.pid")
         snapshots_path = data_dir / "score_snapshots.json"
         env = _fly_env(data_dir, port, seed_path=seed_default)
         proc = None

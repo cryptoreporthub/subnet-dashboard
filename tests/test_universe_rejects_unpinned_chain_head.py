@@ -270,3 +270,40 @@ def test_the_lenient_pin_still_accepts_provider_ones_short_head_without_fallback
     reader.pin_finalized_head_strict()
     assert reader._strict_pin is False
     assert reader.pin_finalized_head() == ("0x01", "ok")
+
+
+# --- the strict flag is per thread: a shared reader's other callers keep the lenient pin (#1484 Replit) ---
+
+
+def test_strict_pin_does_not_leak_into_a_concurrent_lenient_pin_on_a_shared_reader():
+    import threading
+
+    in_strict_call = threading.Event()
+    release = threading.Event()
+    strict_thread = {}
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            if method == "chain_getFinalizedHead" and threading.current_thread() is strict_thread["t"]:
+                in_strict_call.set()
+                assert release.wait(10)
+            return "0x01"
+
+    reader = ChainReader([("finney", _Client())])
+    results = {}
+
+    def strict():
+        results["strict"] = reader.pin_finalized_head_strict()
+
+    strict_thread["t"] = threading.Thread(target=strict)
+    strict_thread["t"].start()
+    assert in_strict_call.wait(10)
+    try:
+        results["lenient"] = reader.pin_finalized_head()  # runs while the strict call is in flight
+    finally:
+        release.set()
+        strict_thread["t"].join(10)
+
+    assert results["lenient"] == ("0x01", "ok")  # not rejected by the other thread's strict mode
+    assert results["strict"] == (None, "invalid")  # the strict caller still is
+    assert reader._strict_pin is False

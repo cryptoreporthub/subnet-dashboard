@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -38,9 +39,11 @@ class ChainReader:
     ):
         self._providers: List[Tuple[str, ChainClient]] = clients or cfg.rpc_provider_clients()
         self._pinned_hash: Optional[str] = None
-        # Set only while pin_finalized_head_strict runs: ``call`` then treats a finalized head that is
-        # not a full 64-hex hash as an invalid answer, so provider fallback applies to it.
-        self._strict_pin = False
+        # Per thread, and set only while pin_finalized_head_strict runs on that thread: ``call`` then
+        # treats a finalized head that is not a full 64-hex hash as an invalid answer, so provider
+        # fallback applies to it. Thread-local, so a shared reader used by another thread at the same
+        # time keeps its lenient pin.
+        self._strict_state = threading.local()
         self.provider_served: Optional[str] = None
         self.fallback_count: int = 0
         self.rate_limit_events: List[Dict[str, Any]] = []
@@ -48,6 +51,14 @@ class ChainReader:
         if deadline_monotonic is not None:
             for _, client in self._providers:
                 client._rpc_deadline_monotonic = deadline_monotonic
+
+    @property
+    def _strict_pin(self) -> bool:
+        return getattr(self._strict_state, "on", False)
+
+    @_strict_pin.setter
+    def _strict_pin(self, value: bool) -> None:
+        self._strict_state.on = value
 
     def _past_deadline(self) -> bool:
         deadline = self._deadline_monotonic
