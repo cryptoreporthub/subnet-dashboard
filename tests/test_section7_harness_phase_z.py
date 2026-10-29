@@ -12,6 +12,34 @@ import sys
 import pytest
 from pathlib import Path
 
+
+def _host_pidfd_unavailable_reason():
+    """None when this host can really open and signal a pidfd; otherwise why not.
+
+    The harness refuses to run without working pidfds (``main()`` exits 2), so tests that drive real
+    cleanup or ``main()`` can only run where the real calls work; elsewhere they skip, not fail.
+    """
+    import os
+    import signal
+
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        return "pidfd is not available on this host"
+    try:
+        fd = os.pidfd_open(os.getpid())
+    except OSError as exc:
+        return f"pidfd_open is blocked on this host: {exc}"
+    try:
+        signal.pidfd_send_signal(fd, 0)
+    except OSError as exc:
+        return f"pidfd_send_signal is blocked on this host: {exc}"
+    finally:
+        os.close(fd)
+    return None
+
+
+_PIDFD_UNAVAILABLE = _host_pidfd_unavailable_reason()
+requires_real_pidfd = pytest.mark.skipif(_PIDFD_UNAVAILABLE is not None, reason=_PIDFD_UNAVAILABLE or "")
+
 REPO = Path(__file__).resolve().parents[1]
 
 
@@ -80,6 +108,7 @@ def _run_with_fakes(monkeypatch, *, write_volume_on_launch, events=None):
     return launches
 
 
+@requires_real_pidfd
 def test_phase_z_starts_with_no_volume_file_even_though_earlier_phases_built_one(monkeypatch):
     launches = _run_with_fakes(monkeypatch, write_volume_on_launch=True)
 
@@ -88,6 +117,7 @@ def test_phase_z_starts_with_no_volume_file_even_though_earlier_phases_built_one
     assert z["volume_present"] is False
 
 
+@requires_real_pidfd
 def test_the_earlier_phases_still_see_the_volume_they_built(monkeypatch):
     launches = _run_with_fakes(monkeypatch, write_volume_on_launch=True)
 
@@ -95,6 +125,7 @@ def test_the_earlier_phases_still_see_the_volume_they_built(monkeypatch):
     assert [launch["volume_present"] for launch in launches[:-1]] == [False, True, True]
 
 
+@requires_real_pidfd
 def test_phase_z_also_clears_the_producer_receipt_of_the_earlier_phases(monkeypatch):
     launches = _run_with_fakes(monkeypatch, write_volume_on_launch=True)
 
@@ -104,6 +135,7 @@ def test_phase_z_also_clears_the_producer_receipt_of_the_earlier_phases(monkeypa
     assert launches[-1]["leftovers"] == ["score_snapshots.json.lock"]
 
 
+@requires_real_pidfd
 def test_phase_z_keeps_the_snapshot_lock_inode_stable(monkeypatch):
     """Unlinking the lock would let a surviving writer keep the old inode while a new one locks a new inode (#1484 Ditto r5)."""
     launches = _run_with_fakes(monkeypatch, write_volume_on_launch=True)
@@ -113,6 +145,7 @@ def test_phase_z_keeps_the_snapshot_lock_inode_stable(monkeypatch):
     assert len(set(inodes)) == 1
 
 
+@requires_real_pidfd
 def test_phase_z_stops_the_inline_worker_before_clearing_the_volume(monkeypatch):
     events = []
     _run_with_fakes(monkeypatch, write_volume_on_launch=True, events=events)
@@ -161,6 +194,7 @@ def _start_real_entrypoint(harness, monkeypatch, tmp_path):
     return proc
 
 
+@requires_real_pidfd
 def test_phase_z_stop_really_kills_web_supervisor_and_worker(monkeypatch, tmp_path):
     """Behavioural: nothing from the entrypoint is alive afterwards, and nothing comes back (#1484 Ditto r6).
 
@@ -179,6 +213,7 @@ def test_phase_z_stop_really_kills_web_supervisor_and_worker(monkeypatch, tmp_pa
         harness._kill_run_processes(harness.RUN_TOKEN, timeout=5)
 
 
+@requires_real_pidfd
 def test_stopping_only_the_web_pid_leaves_a_supervisor_that_restarts_the_worker(monkeypatch, tmp_path):
     """Control for the test above: the pre-fix stop (SIGTERM to web only) does let the worker come back.
 
@@ -209,6 +244,7 @@ def test_stopping_only_the_web_pid_leaves_a_supervisor_that_restarts_the_worker(
         harness._kill_run_processes(harness.RUN_TOKEN, timeout=5)
 
 
+@requires_real_pidfd
 def test_phase_z_does_not_clear_the_volume_if_a_process_of_the_run_survives(monkeypatch):
     events = []
     harness = _load_harness()
@@ -237,6 +273,7 @@ def test_phase_z_does_not_clear_the_volume_if_a_process_of_the_run_survives(monk
     assert events.count("start") == 3  # F, W-restart, C-restart; Z never launched
 
 
+@requires_real_pidfd
 def test_stop_entrypoint_alone_takes_the_supervisor_down_with_web(monkeypatch, tmp_path):
     """Without the final sweep: stop + worker kill must already leave nothing to revive the worker."""
     import time
@@ -322,6 +359,7 @@ def _run_main(monkeypatch, tmp_path, *, fail_wait_on=None, fail_phase=None, on_p
     return harness, code, seen
 
 
+@requires_real_pidfd
 def test_main_leaves_no_process_alive_on_success_and_c_workers_see_the_outage(monkeypatch, tmp_path):
     harness, code, seen = _run_main(monkeypatch, tmp_path)
 
@@ -348,6 +386,7 @@ def test_main_cleans_up_when_the_first_start_never_becomes_ready(monkeypatch, tm
     assert harness._run_pids(harness.RUN_TOKEN) == []
 
 
+@requires_real_pidfd
 def test_main_cleans_up_when_a_phase_raises(monkeypatch, tmp_path):
     harness, code, seen = _run_main(monkeypatch, tmp_path, fail_phase="C")
 
@@ -377,6 +416,7 @@ def test_stop_entrypoint_gives_the_supervisor_a_grace_period_before_kill(tmp_pat
     assert not harness._group_alive(proc.pid)
 
 
+@requires_real_pidfd
 def test_stop_entrypoint_still_kills_a_group_member_that_ignores_term(tmp_path):
     import subprocess
     import time
@@ -420,6 +460,7 @@ def _orphan_group(harness, tmp_path, *, with_token):
     return proc
 
 
+@requires_real_pidfd
 def test_stop_entrypoint_kills_a_leaderless_group_member_that_carries_the_run_token(tmp_path):
     import time
 
@@ -532,6 +573,7 @@ def test_kill_worker_refuses_a_pid_that_does_not_carry_the_run_token(monkeypatch
         foreign.wait()
 
 
+@requires_real_pidfd
 def test_kill_worker_still_kills_a_worker_that_carries_the_run_token(monkeypatch, tmp_path):
     import os
     import subprocess
@@ -561,6 +603,7 @@ def test_fly_env_uses_a_pid_file_inside_the_run_directory_not_the_shared_one(mon
     assert env["INLINE_WORKER_PIDFILE"] == str(tmp_path / "inline_worker.pid")
 
 
+@requires_real_pidfd
 def test_main_neither_reuses_nor_kills_a_foreign_worker_from_the_shared_pid_file(monkeypatch, tmp_path):
     foreign = _spawn_foreign_worker()
     shared = tmp_path / "shared-inline-worker.pid"
@@ -580,6 +623,7 @@ def test_main_neither_reuses_nor_kills_a_foreign_worker_from_the_shared_pid_file
         foreign.wait()
 
 
+@requires_real_pidfd
 def test_main_never_kills_a_foreign_pid_that_lands_in_the_runs_own_pid_file(monkeypatch, tmp_path):
     """The token check itself, through the real ``main()`` path (#1484 Claude r8).
 
@@ -642,6 +686,7 @@ def test_group_alive_ignores_an_unreaped_zombie():
         parent.wait()
 
 
+@requires_real_pidfd
 def test_main_exits_2_when_the_final_cleanup_leaves_a_process_behind(monkeypatch):
     harness = _load_harness()
     monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
@@ -665,6 +710,7 @@ def test_main_exits_2_when_the_final_cleanup_leaves_a_process_behind(monkeypatch
     assert len(sweeps) == 3  # all phases ran; only the cleanup failed
 
 
+@requires_real_pidfd
 def test_main_exits_2_when_a_phase_raises_and_the_final_cleanup_leaves_a_process_behind(monkeypatch, capsys):
     """The exception path: a survivor still decides the exit code (#1484 Ditto r8 / Claude r8)."""
     harness = _load_harness()
@@ -689,6 +735,7 @@ def test_main_exits_2_when_a_phase_raises_and_the_final_cleanup_leaves_a_process
     assert "RuntimeError: boom" in err  # the original failure is still shown
 
 
+@requires_real_pidfd
 def test_main_still_raises_the_phase_exception_when_the_cleanup_is_clean(monkeypatch):
     harness = _load_harness()
     monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
@@ -777,6 +824,7 @@ def _swap_after_the_ownership_check(monkeypatch, harness, reuse):
     monkeypatch.setattr(harness, "_carries_run_token", check)
 
 
+@requires_real_pidfd
 def test_worker_kill_never_signals_a_pid_reused_between_the_check_and_the_signal(monkeypatch, tmp_path):
     harness = _load_harness()
     owned, foreign = _owned_and_foreign(harness)
@@ -793,6 +841,7 @@ def test_worker_kill_never_signals_a_pid_reused_between_the_check_and_the_signal
         _cleanup_procs(owned, foreign)
 
 
+@requires_real_pidfd
 def test_group_signal_never_signals_a_pid_reused_between_the_check_and_the_signal(monkeypatch):
     import signal
 
@@ -808,6 +857,7 @@ def test_group_signal_never_signals_a_pid_reused_between_the_check_and_the_signa
         _cleanup_procs(owned, foreign)
 
 
+@requires_real_pidfd
 def test_run_sweep_never_signals_a_pid_reused_between_the_scan_and_the_kill(monkeypatch):
     harness = _load_harness()
     owned, foreign = _owned_and_foreign(harness)
@@ -829,6 +879,7 @@ def test_run_sweep_never_signals_a_pid_reused_between_the_scan_and_the_kill(monk
         _cleanup_procs(owned, foreign)
 
 
+@requires_real_pidfd
 def test_signal_dispatch_after_a_verified_pidfd_cannot_reach_a_reused_pid(monkeypatch):
     """The pidfd, not the pid, names the target: the owned process ends right before the signal is sent."""
     import signal
@@ -851,6 +902,7 @@ def test_signal_dispatch_after_a_verified_pidfd_cannot_reach_a_reused_pid(monkey
         _cleanup_procs(owned, foreign)
 
 
+@requires_real_pidfd
 def test_a_process_that_exits_while_its_environment_is_read_is_not_verified(monkeypatch):
     """The environ read is only trusted when the pidfd shows the process was alive throughout."""
     harness = _load_harness()
@@ -899,6 +951,7 @@ def _fd_is_open(fd):
         return False
 
 
+@requires_real_pidfd
 def test_a_pidfd_on_a_high_fd_is_verified_and_signalled(monkeypatch):
     """select.select raises ValueError for fd >= 1024; the liveness check must not depend on it."""
     import os
@@ -923,6 +976,7 @@ def test_a_pidfd_on_a_high_fd_is_verified_and_signalled(monkeypatch):
         resource.setrlimit(resource.RLIMIT_NOFILE, limits)
 
 
+@requires_real_pidfd
 def test_a_high_fd_pidfd_is_closed_and_not_returned_when_the_check_fails(monkeypatch):
     """Fail closed without leaking: an unexpected error in the liveness check closes the fd and returns None."""
     import os
@@ -1013,34 +1067,38 @@ def test_pidfd_probe_fails_closed_when_pidfd_send_signal_is_blocked(monkeypatch,
 
     harness = _load_harness()
 
+    import os
+
+    # pidfd_open is stubbed to succeed so the probe really reaches the signal call on any host,
+    # including one without pidfd_open, instead of failing earlier at the open.
+    opened, closed, signalled = [], [], []
+    real_close = os.close
+
+    def fake_open(pid, flags=0):
+        fd = os.open(os.devnull, os.O_RDONLY)
+        opened.append(fd)
+        return fd
+
+    def spy_close(fd):
+        closed.append(fd)
+        return real_close(fd)
+
     def blocked(fd, sig, *a, **k):
+        signalled.append((fd, sig))
         raise OSError(errno.EPERM, "Operation not permitted")
 
+    monkeypatch.setattr(harness.os, "pidfd_open", fake_open, raising=False)
+    monkeypatch.setattr(harness.os, "close", spy_close)
     monkeypatch.setattr(harness.signal, "pidfd_send_signal", blocked, raising=False)
     _assert_main_refuses_when_probe_fails(harness, monkeypatch, capsys)
+    assert signalled and signalled[0][1] == 0  # the failure came from the signal-0 probe itself
+    assert opened and set(opened) <= set(closed)  # and the probe fd was still closed
 
 
 def _require_real_pidfd():
-    """Skip (not fail) on hosts where pidfd is missing or blocked.
-
-    Probes with the real os/signal calls before any spy is installed, so the
-    spy helper never touches an attribute the host does not have.
-    """
-    import os
-    import signal
-
-    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
-        pytest.skip("pidfd is not available on this host")
-    try:
-        fd = os.pidfd_open(os.getpid())
-    except OSError as exc:
-        pytest.skip(f"pidfd_open is blocked on this host: {exc}")
-    try:
-        signal.pidfd_send_signal(fd, 0)
-    except OSError as exc:
-        pytest.skip(f"pidfd_send_signal is blocked on this host: {exc}")
-    finally:
-        os.close(fd)
+    """Skip (not fail) before installing a spy on hosts where pidfd is missing or blocked."""
+    if _PIDFD_UNAVAILABLE is not None:
+        pytest.skip(_PIDFD_UNAVAILABLE)
 
 
 def _spy_pidfd_fds(harness, monkeypatch):
@@ -1086,6 +1144,7 @@ def test_pidfd_probe_closes_its_fd_when_the_signal_is_blocked(monkeypatch):
     assert opened and closed == opened
 
 
+@requires_real_pidfd
 def test_main_exits_2_on_a_keyboard_interrupt_that_leaves_a_process_behind(monkeypatch, capsys):
     harness = _load_harness()
     monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
@@ -1105,6 +1164,7 @@ def test_main_exits_2_on_a_keyboard_interrupt_that_leaves_a_process_behind(monke
     assert "processes still alive after cleanup: [4242]" in capsys.readouterr().err
 
 
+@requires_real_pidfd
 def test_main_still_propagates_a_keyboard_interrupt_when_the_cleanup_is_clean(monkeypatch):
     harness = _load_harness()
     monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
