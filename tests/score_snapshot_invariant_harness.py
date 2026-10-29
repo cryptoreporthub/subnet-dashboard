@@ -130,10 +130,15 @@ class InvariantWorld:
             self._wire_day_scorer(lambda sn, _ctx: {"total_score": 1.0})
             snaps.write_full_universe_snapshot()
         elif event == "capture_timeout":
+            # Save the real check before stubbing it: reading the attribute after the stub is in place
+            # would "restore" the stub.
+            real_deadline = cov.coverage_capture_deadline_seconds
             self.monkeypatch.setattr(cov, "coverage_capture_deadline_seconds", lambda _s: False)
-            self._wire_day_scorer(lambda sn, _ctx: {"total_score": float(sn["netuid"])})
-            snaps.write_full_universe_snapshot()
-            self.monkeypatch.setattr(cov, "coverage_capture_deadline_seconds", cov.coverage_capture_deadline_seconds)
+            try:
+                self._wire_day_scorer(lambda sn, _ctx: {"total_score": float(sn["netuid"])})
+                snaps.write_full_universe_snapshot()
+            finally:
+                self.monkeypatch.setattr(cov, "coverage_capture_deadline_seconds", real_deadline)
         elif event == "gated_cycle":
             self.monkeypatch.setattr(
                 "internal.subnet_universe.get_snapshot",
