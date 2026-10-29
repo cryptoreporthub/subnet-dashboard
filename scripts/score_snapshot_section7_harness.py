@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import signal
 import subprocess
 import sys
@@ -153,36 +154,95 @@ def _worker_pid_from_pidfile() -> Optional[int]:
         return None
 
 
-def _carries_run_token(pid: int) -> bool:
-    """True only when ``pid`` provably belongs to this run: its environment carries the run token.
+def _carries_run_token(pid: int, token: Optional[str] = None) -> bool:
+    """True only when ``pid``'s environment carries the run token (a READ, not a licence to signal).
 
-    An unreadable environment is not proof, so it is not signalled from the pid file (the session sweep
-    in ``_run_pids`` still covers unreadable processes inside sessions this run created).
+    An unreadable environment is not proof. Never signal a pid on the strength of this alone: between
+    this read and a ``kill`` the process can exit and its pid be reused. Signal through
+    ``_signal_run_process`` instead, which holds a pidfd across the check and the signal.
     """
-    needle = f"{RUN_TOKEN_VAR}={RUN_TOKEN}".encode()
+    needle = f"{RUN_TOKEN_VAR}={RUN_TOKEN if token is None else token}".encode()
     try:
         return needle in Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
     except OSError:
         return False
 
 
-def _kill_worker_sigkill() -> bool:
-    """SIGKILL the worker named in this run's pid file, but only if it carries this run's token."""
-    pid = _worker_pid_from_pidfile()
-    if pid is None or pid <= 1 or not _carries_run_token(pid):
+_PIDFD_SUPPORTED: Optional[bool] = None
+
+
+def _pidfd_supported() -> bool:
+    """True when this kernel and Python can open a pidfd and signal through it (Linux 5.3+, Python 3.9+)."""
+    global _PIDFD_SUPPORTED
+    if _PIDFD_SUPPORTED is None:
+        try:
+            fd = os.pidfd_open(os.getpid())
+            os.close(fd)
+            _PIDFD_SUPPORTED = hasattr(signal, "pidfd_send_signal")
+        except (AttributeError, OSError):
+            _PIDFD_SUPPORTED = False
+    return _PIDFD_SUPPORTED
+
+
+def _open_run_pidfd(pid: int, token: Optional[str] = None) -> Optional[int]:
+    """A pidfd for ``pid`` if, while holding it, the process provably carries this run's token.
+
+    The pidfd names one process for as long as it is open, even if that process exits and its pid is
+    reused. The token is read from ``/proc/<pid>`` after the pidfd is open, and the pidfd must still be
+    alive afterwards (a pidfd turns readable when its process exits): a pid cannot be recycled while its
+    process exists, so the environment that was read is that process's. The caller closes the fd.
+    Returns None (and signals nothing) when the process is not provably the run's or pidfd is
+    unavailable.
+    """
+    if not _pidfd_supported() or pid <= 1 or pid == os.getpid():
+        return None
+    try:
+        fd = os.pidfd_open(pid)
+    except OSError:
+        return None
+    try:
+        if _carries_run_token(pid, token) and not select.select([fd], [], [], 0)[0]:
+            return fd
+    except OSError:
+        pass
+    os.close(fd)
+    return None
+
+
+def _signal_run_process(pid: int, sig: int, token: Optional[str] = None) -> bool:
+    """Signal ``pid`` only if it provably belongs to this run, with no check-then-signal window.
+
+    Check and signal use the same pidfd, so a process that exits and has its pid reused in between
+    cannot receive the signal. Never signals by raw pid; without pidfd support it signals nothing.
+    """
+    fd = _open_run_pidfd(pid, token)
+    if fd is None:
         return False
     try:
-        os.killpg(pid, signal.SIGKILL)  # the worker is its own session/group leader (setsid)
+        signal.pidfd_send_signal(fd, sig)
         return True
     except OSError:
-        try:
-            os.kill(pid, signal.SIGKILL)
-            return True
-        except OSError:
-            return False
+        return False
+    finally:
+        os.close(fd)
+
+
+def _kill_worker_sigkill() -> bool:
+    """SIGKILL the worker named in this run's pid file, but only if it carries this run's token.
+
+    Only the worker itself is signalled (through a pidfd); anything else it started carries the token
+    too and is stopped by the run-token sweep in ``_kill_run_processes``.
+    """
+    pid = _worker_pid_from_pidfile()
+    if pid is None:
+        return False
+    return _signal_run_process(pid, signal.SIGKILL)
 
 
 def _killpg(pgid: int, sig: int) -> None:
+    """Signal a process group by id. Only for the group of an entrypoint leader that this run has not
+    reaped yet (``Popen.poll()`` is None): an unreaped leader, even a zombie, keeps its pid, so the group
+    id cannot name anyone else. Everything else goes through ``_signal_run_process``."""
     try:
         os.killpg(pgid, sig)
     except (ProcessLookupError, PermissionError):
@@ -241,14 +301,11 @@ def _group_members(pgid: int) -> List[int]:
 
 
 def _signal_group_members(pgid: int, sig: int) -> None:
-    """Signal each live member of group ``pgid`` that provably carries this run's token."""
+    """Signal each live member of group ``pgid`` that provably carries this run's token (via pidfd)."""
     me = os.getpid()
     for pid in _group_members(pgid):
-        if pid != me and _carries_run_token(pid):
-            try:
-                os.kill(pid, sig)
-            except OSError:
-                pass
+        if pid != me:
+            _signal_run_process(pid, sig)
 
 
 def _group_alive(pgid: int) -> bool:
@@ -339,10 +396,7 @@ def _kill_run_processes(token: str, timeout: float = 15.0) -> List[int]:
         if not pids:
             return _unattributable_run_pids(token)
         for pid in pids:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except OSError:
-                pass
+            _signal_run_process(pid, signal.SIGKILL, token)
         if time.monotonic() >= deadline:
             return _run_pids(token) + _unattributable_run_pids(token)
         time.sleep(0.1)
@@ -376,6 +430,11 @@ def _stop_run() -> List[int]:
 def main() -> int:
     """Run the lifecycle; exit 2 when a process of the run survives the final cleanup."""
     _CLEANUP_SURVIVORS.clear()
+    if not _pidfd_supported():
+        # Every cleanup signal goes through a pidfd (no check-then-signal pid reuse window). Without
+        # one the harness could not stop its processes safely, so it refuses to start any.
+        print("FATAL: pidfd is unavailable (needs Linux 5.3+ and Python 3.9+); not starting anything", file=sys.stderr)
+        return 2
     try:
         code = _run()
     except Exception:

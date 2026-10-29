@@ -497,7 +497,7 @@ def test_unreadable_process_in_a_run_session_is_reported_but_never_signalled(tmp
             assert harness._unattributable_run_pids(harness.RUN_TOKEN) == [proc.pid]
             assert harness._kill_run_processes(harness.RUN_TOKEN, timeout=2) == [proc.pid]  # reported
             harness._stop_run()
-            assert proc.poll() is None, "an unreadable-environment process was SIGKILLed"
+            assert _still_alive(proc), "an unreadable-environment process was SIGKILLed"
         finally:
             harness._RUN_SESSIONS.discard(proc.pid)
     finally:
@@ -525,7 +525,7 @@ def test_kill_worker_refuses_a_pid_that_does_not_carry_the_run_token(monkeypatch
     monkeypatch.setattr(harness, "PIDFILE", str(pidfile))
     try:
         assert harness._kill_worker_sigkill() is False
-        assert foreign.poll() is None, "a foreign process listed in the pid file was killed"
+        assert _still_alive(foreign), "a foreign process listed in the pid file was killed"
         assert foreign.pid not in harness._run_sessions()
     finally:
         foreign.kill()
@@ -570,7 +570,7 @@ def test_main_neither_reuses_nor_kills_a_foreign_worker_from_the_shared_pid_file
         harness, code, seen = _run_main(monkeypatch, tmp_path)
 
         assert code in (0, 1)
-        assert foreign.poll() is None, "the harness killed a worker it did not start"
+        assert _still_alive(foreign), "the harness killed a worker it did not start"
         assert shared.read_text() == str(foreign.pid)  # the shared pid file was never touched
         started = set(seen["R_pids"]) | set(seen["C_pids"]) | set(seen["Z_pids"])
         assert foreign.pid not in started  # and never adopted as the run's worker
@@ -600,7 +600,7 @@ def test_main_never_kills_a_foreign_pid_that_lands_in_the_runs_own_pid_file(monk
 
         assert planted == [str(foreign.pid)]  # the pid file really named the foreign process at cleanup time
         assert code in (0, 1)
-        assert foreign.poll() is None, "the harness SIGKILLed a pid from its pid file that lacks the run token"
+        assert _still_alive(foreign), "the harness SIGKILLed a pid from its pid file that lacks the run token"
         assert harness._run_pids(harness.RUN_TOKEN) == []  # the run's own processes are all gone
     finally:
         foreign.kill()
@@ -706,3 +706,196 @@ def test_main_still_raises_the_phase_exception_when_the_cleanup_is_clean(monkeyp
 
     with pytest.raises(RuntimeError, match="boom"):
         harness.main()
+
+
+# --- ownership check and signal share one pidfd: a reused pid is never signalled (#1484 Replit r9 P2) ---
+
+
+class _Reuse:
+    """Models pid reuse: ``swap()`` ends the owned process, after which every raw-pid signal or pidfd
+    open aimed at its pid reaches the foreign process instead, as the kernel would after recycling."""
+
+    def __init__(self, monkeypatch, harness, owned, foreign):
+        import os
+
+        self.owned, self.foreign, self.swapped = owned, foreign, False
+        real_kill, real_killpg, real_open = os.kill, os.killpg, os.pidfd_open
+
+        def retarget(pid):
+            return self.foreign.pid if self.swapped and pid == self.owned.pid else pid
+
+        monkeypatch.setattr(harness.os, "kill", lambda pid, sig: real_kill(retarget(pid), sig))
+        monkeypatch.setattr(harness.os, "killpg", lambda pid, sig: real_killpg(retarget(pid), sig))
+        monkeypatch.setattr(harness.os, "pidfd_open", lambda pid, *a: real_open(retarget(pid), *a))
+
+    def swap(self):
+        if not self.swapped:
+            self.owned.kill()
+            self.owned.wait(timeout=5)
+            self.swapped = True
+
+
+def _owned_and_foreign(harness):
+    import os
+    import subprocess
+
+    owned = subprocess.Popen(
+        ["sleep", "300"], env={**os.environ, harness.RUN_TOKEN_VAR: harness.RUN_TOKEN}, start_new_session=True
+    )
+    foreign = _spawn_foreign_worker()
+    return owned, foreign
+
+
+def _still_alive(proc, grace=0.5):
+    """True if ``proc`` is still running after ``grace`` s (a SIGKILL is delivered asynchronously, so
+    an immediate ``poll()`` can miss a kill that is already on its way)."""
+    import subprocess
+
+    try:
+        proc.wait(timeout=grace)
+        return False
+    except subprocess.TimeoutExpired:
+        return True
+
+
+def _cleanup_procs(*procs):
+    for proc in procs:
+        proc.kill()
+        proc.wait()
+
+
+def _swap_after_the_ownership_check(monkeypatch, harness, reuse):
+    """The pid changes hands right after the token check, before the signal is sent."""
+    real = harness._carries_run_token
+
+    def check(pid, *args):
+        verdict = real(pid, *args)
+        if pid == reuse.owned.pid:
+            reuse.swap()
+        return verdict  # still True: the check itself passed before the swap
+
+    monkeypatch.setattr(harness, "_carries_run_token", check)
+
+
+def test_worker_kill_never_signals_a_pid_reused_between_the_check_and_the_signal(monkeypatch, tmp_path):
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    pidfile = tmp_path / "run.pid"
+    pidfile.write_text(str(owned.pid))
+    monkeypatch.setattr(harness, "PIDFILE", str(pidfile))
+    reuse = _Reuse(monkeypatch, harness, owned, foreign)
+    _swap_after_the_ownership_check(monkeypatch, harness, reuse)
+    try:
+        harness._kill_worker_sigkill()
+        assert reuse.swapped
+        assert _still_alive(foreign), "a process that reused the worker's pid was SIGKILLed"
+    finally:
+        _cleanup_procs(owned, foreign)
+
+
+def test_group_signal_never_signals_a_pid_reused_between_the_check_and_the_signal(monkeypatch):
+    import signal
+
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    reuse = _Reuse(monkeypatch, harness, owned, foreign)
+    _swap_after_the_ownership_check(monkeypatch, harness, reuse)
+    try:
+        harness._signal_group_members(owned.pid, signal.SIGKILL)
+        assert reuse.swapped
+        assert _still_alive(foreign), "a process that reused a group member's pid was signalled"
+    finally:
+        _cleanup_procs(owned, foreign)
+
+
+def test_run_sweep_never_signals_a_pid_reused_between_the_scan_and_the_kill(monkeypatch):
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    reuse = _Reuse(monkeypatch, harness, owned, foreign)
+    real_scan = harness._run_pids
+
+    def scan(token):
+        pids = real_scan(token)
+        if owned.pid in pids:
+            reuse.swap()  # the scan saw the run's process; by the time it is signalled the pid is someone else's
+        return pids
+
+    monkeypatch.setattr(harness, "_run_pids", scan)
+    try:
+        harness._kill_run_processes(harness.RUN_TOKEN, timeout=3)
+        assert reuse.swapped
+        assert _still_alive(foreign), "the sweep SIGKILLed a process that reused a run pid"
+    finally:
+        _cleanup_procs(owned, foreign)
+
+
+def test_signal_dispatch_after_a_verified_pidfd_cannot_reach_a_reused_pid(monkeypatch):
+    """The pidfd, not the pid, names the target: the owned process ends right before the signal is sent."""
+    import signal
+
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    reuse = _Reuse(monkeypatch, harness, owned, foreign)
+    real_send = signal.pidfd_send_signal
+
+    def send(fd, sig, *args):
+        reuse.swap()
+        return real_send(fd, sig, *args)
+
+    monkeypatch.setattr(harness.signal, "pidfd_send_signal", send)
+    try:
+        assert harness._signal_run_process(owned.pid, signal.SIGKILL) is False  # the owned process was already gone
+        assert reuse.swapped
+        assert _still_alive(foreign)
+    finally:
+        _cleanup_procs(owned, foreign)
+
+
+def test_a_process_that_exits_while_its_environment_is_read_is_not_verified(monkeypatch):
+    """The environ read is only trusted when the pidfd shows the process was alive throughout."""
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    reuse = _Reuse(monkeypatch, harness, owned, foreign)
+    _swap_after_the_ownership_check(monkeypatch, harness, reuse)
+    try:
+        assert harness._open_run_pidfd(owned.pid) is None
+    finally:
+        _cleanup_procs(owned, foreign)
+
+
+def test_cleanup_paths_never_signal_by_raw_pid():
+    """No cleanup path calls os.kill / os.killpg; only the unreaped-leader group helper may use killpg."""
+    import ast
+
+    source = (REPO / "scripts" / "score_snapshot_section7_harness.py").read_text()
+    tree = ast.parse(source)
+    offenders = []
+    for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]:
+        for call in [n for n in ast.walk(fn) if isinstance(n, ast.Call)]:
+            f = call.func
+            if isinstance(f, ast.Attribute) and f.attr in {"kill", "killpg"} and getattr(f.value, "id", "") == "os":
+                if fn.name != "_killpg":
+                    offenders.append((fn.name, f.attr))
+    assert offenders == []
+
+
+def test_without_pidfd_nothing_is_signalled_and_main_refuses_to_start(monkeypatch, tmp_path, capsys):
+    import signal
+
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    pidfile = tmp_path / "run.pid"
+    pidfile.write_text(str(owned.pid))
+    monkeypatch.setattr(harness, "PIDFILE", str(pidfile))
+    monkeypatch.setattr(harness, "_PIDFD_SUPPORTED", False)
+    started = []
+    monkeypatch.setattr(harness, "_start_entrypoint", lambda env: started.append(1))
+    try:
+        assert harness._kill_worker_sigkill() is False
+        assert harness._signal_run_process(owned.pid, signal.SIGKILL) is False
+        assert _still_alive(owned)  # the run's own process is left alone rather than signalled unsafely
+        assert harness.main() == 2
+        assert started == []
+        assert "pidfd is unavailable" in capsys.readouterr().err
+    finally:
+        _cleanup_procs(owned, foreign)
