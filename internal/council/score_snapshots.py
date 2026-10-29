@@ -932,6 +932,25 @@ def _log_build_receipt(build_id: str, timing: Dict[str, Any], **outcome: Any) ->
         logger.warning("score snapshot build receipt could not be logged", exc_info=True)
 
 
+# Last observed soul_map state (None until the first build). Logging happens on change only, so a
+# soul_map that stays missing costs one line, not one per cycle.
+_weights_available: Optional[bool] = None
+_weights_state_lock = threading.Lock()
+
+
+def _note_weights_availability(available: bool) -> None:
+    global _weights_available
+    with _weights_state_lock:
+        previous, _weights_available = _weights_available, available
+    if available and previous is False:
+        logger.info("score snapshot build: weights available again, resuming builds")
+    elif not available and previous is not False:
+        logger.warning(
+            "score snapshot build skipped: weights_unavailable (soul_map missing or unusable); "
+            "the shipped seed is served until it is readable"
+        )
+
+
 def write_full_universe_snapshot(
     progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
@@ -940,6 +959,22 @@ def write_full_universe_snapshot(
     prep_meta: Dict[str, Any] = {}
     write_stage_timing: Dict[str, Any] = {}
     receipt: Dict[str, Any] = {}
+    # Taken once, before anything is loaded: a weight edit during the build must show up as "changed",
+    # not be absorbed. None means the soul_map is missing or unusable (weights unknown, not defaults),
+    # so the build is skipped instead of scoring ~128 subnets that could never be published.
+    weights_digest = current_weights_digest()
+    _note_weights_availability(weights_digest is not None)
+    if weights_digest is None:
+        skipped = {"complete": False, "capture_reason": "weights_unavailable"}
+        record_cycle_receipt(skipped, outcome="skipped")
+        return {
+            "ok": False,
+            "published": False,
+            "skipped_older": False,
+            "complete": False,
+            "skipped": "weights_unavailable",
+            "coverage": skipped,
+        }
     try:
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
@@ -983,8 +1018,6 @@ def write_full_universe_snapshot(
         )
 
         selection_policy = str(prep_meta.get("selection_basis") or "full")
-        # Taken once here: a weight edit during the build must show up as "changed", not be absorbed.
-        weights_digest = current_weights_digest()
         ctx_started = time.monotonic()
         from internal.council.scoring_context import enrich_scoring_market_context
 
@@ -1087,12 +1120,6 @@ def write_full_universe_snapshot(
         if capture_timed_out:
             coverage["complete"] = False
             coverage["capture_reason"] = "capture_timeout"
-        if weights_digest is None and coverage.get("complete"):
-            # The scorer ran on fallback weights it cannot name; a snapshot stamped from them would
-            # look fresh against any later unreadable soul_map. Only blamed when nothing else
-            # already made the build incomplete.
-            coverage["complete"] = False
-            coverage["capture_reason"] = "weights_unavailable"
         # MC: previous_publish_wall_seconds is embedded here — one locked os.replace only.
         disk_timing = coverage_timing_for_disk(timing)
         coverage["timing"] = disk_timing

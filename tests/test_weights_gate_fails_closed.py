@@ -101,18 +101,95 @@ def test_first_boot_without_a_soul_map_still_serves_the_committed_seed(tmp_path,
     assert served.origin == "seed"
 
 
-def test_weights_unavailable_is_not_blamed_when_the_build_was_already_incomplete(tmp_path, monkeypatch):
-    from tests.test_snapshot_membership_provenance import _with_chain
+def _count_hydrates(monkeypatch):
+    calls = []
+    original = __import__("server")._get_subnets_hydrate
 
-    unprovenanced = _with_chain(_universe([1, 2]), None)  # gated: no chain read
-    volume, soul, _ = _producer_env(tmp_path, monkeypatch, unprovenanced)
-    Path(soul).unlink()
-    from internal.store import soul_map_io
+    def counting():
+        calls.append(1)
+        return original()
 
-    soul_map_io._cache.clear()
+    monkeypatch.setattr("server._get_subnets_hydrate", counting)
+    return calls
+
+
+@pytest.mark.parametrize("kind", ["missing", "corrupt"])
+def test_an_unusable_soul_map_skips_the_build_before_any_loading_or_scoring(tmp_path, monkeypatch, kind):
+    volume, soul, scored = _producer_env(tmp_path, monkeypatch, _universe([1, 2, 3]))
+    hydrates = _count_hydrates(monkeypatch)
+    monkeypatch.setattr(snaps, "_weights_available", None, raising=False)
+    _break_soul_map(soul, kind)
 
     out = snaps.write_full_universe_snapshot()
 
     assert out["published"] is False
-    assert out["coverage"]["membership_admission_gate_reason"] == "membership_without_chain_provenance"
-    assert out["coverage"].get("capture_reason") != "weights_unavailable"
+    assert out["skipped"] == "weights_unavailable"
+    assert out["coverage"]["capture_reason"] == "weights_unavailable"
+    assert scored == []  # nothing was scored
+    assert hydrates == []  # not even the subnet feed was loaded
+    assert not volume.exists()
+    cycle = json.loads((tmp_path / "cycle.json").read_text())
+    assert cycle["capture_reason"] == "weights_unavailable"
+
+
+def _break_soul_map(soul, kind):
+    from internal.store import soul_map_io
+
+    if kind == "missing":
+        Path(soul).unlink()
+    else:
+        Path(soul).write_text("{not json")
+    soul_map_io._cache.clear()
+
+
+def _weights_records(caplog):
+    return [r for r in caplog.records if "weights_unavailable" in r.getMessage() or "weights available again" in r.getMessage()]
+
+
+def test_the_skip_logs_once_per_state_change_and_recovers_when_the_soul_map_returns(tmp_path, monkeypatch, caplog):
+    import logging
+
+    volume, soul, scored = _producer_env(tmp_path, monkeypatch, _universe([1, 2, 3]))
+    monkeypatch.setattr(snaps, "_weights_available", None, raising=False)
+    good_blob = Path(soul).read_text()
+    _break_soul_map(soul, "missing")
+
+    with caplog.at_level(logging.INFO, logger=snaps.logger.name):
+        for _ in range(3):
+            assert snaps.write_full_universe_snapshot()["skipped"] == "weights_unavailable"
+        down = _weights_records(caplog)
+        assert [r.levelno for r in down] == [logging.WARNING]  # one line for three skipped cycles
+
+        # The soul_map comes back: the next cycle builds and publishes, and says so once.
+        Path(soul).write_text(good_blob)
+        from internal.store import soul_map_io
+
+        soul_map_io._cache.clear()
+        out = snaps.write_full_universe_snapshot()
+        assert out["published"] is True
+        assert scored  # it really scored
+        assert snaps.write_full_universe_snapshot()["published"] is True
+        up = _weights_records(caplog)
+        assert [r.levelno for r in up] == [logging.WARNING, logging.INFO]
+
+        # Lost again: a new state change logs again, once.
+        _break_soul_map(soul, "corrupt")
+        for _ in range(2):
+            assert snaps.write_full_universe_snapshot()["skipped"] == "weights_unavailable"
+        again = _weights_records(caplog)
+        assert [r.levelno for r in again] == [logging.WARNING, logging.INFO, logging.WARNING]
+
+
+def test_the_scheduler_tick_itself_creates_a_usable_soul_map(tmp_path, monkeypatch):
+    """Why first boot is cheap in production: a tick records its summary in the soul_map before building."""
+    from internal.store import soul_map_io
+
+    soul = tmp_path / "fresh" / "soul_map.json"
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    soul_map_io._cache.clear()
+    assert current_weights_digest() is None
+
+    snaps.ScoreSnapshotScheduler()._persist_cycle_summary({"run_at": "2026-10-28T00:00:00Z", "ok": False})
+
+    assert soul.exists()
+    assert isinstance(current_weights_digest(), str)
