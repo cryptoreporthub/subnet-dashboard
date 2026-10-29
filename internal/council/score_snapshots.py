@@ -486,6 +486,7 @@ def volume_has_fresh_complete_snapshot(
         return False
     provenance = snap.get("provenance")
     built_with = provenance.get("weights_digest") if isinstance(provenance, dict) else None
+    # An unreadable soul_map gives None (unknown weights, not default weights): never equal to a stamp.
     return isinstance(built_with, str) and built_with == current_weights_digest()
 
 
@@ -1081,6 +1082,11 @@ def write_full_universe_snapshot(
         if capture_timed_out:
             coverage["complete"] = False
             coverage["capture_reason"] = "capture_timeout"
+        if weights_digest is None:
+            # The scorer ran on fallback weights it cannot name; a snapshot stamped from them would
+            # look fresh against any later unreadable soul_map.
+            coverage["complete"] = False
+            coverage["capture_reason"] = "weights_unavailable"
         # MC: previous_publish_wall_seconds is embedded here — one locked os.replace only.
         disk_timing = coverage_timing_for_disk(timing)
         coverage["timing"] = disk_timing

@@ -56,8 +56,25 @@ def _canonical_digest(body: Any) -> str:
     return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")).hexdigest()
 
 
-def current_weights_digest(path: Optional[str] = None) -> str:
-    """Digest of the runtime soul_map council + signal weights.
+def _soul_map_usable(path: str) -> bool:
+    """True when ``path`` is a readable JSON object with content.
+
+    ``read_soul_map`` answers ``{}`` for a missing, unreadable or corrupt file, which the weight
+    loaders turn into the default weights. That fallback is right for scoring and wrong for an
+    identity: a stamp made from defaults would match any later unreadable soul_map.
+    """
+    from internal.store.soul_map_io import read_soul_map
+
+    blob = read_soul_map(path, copy_blob=False)
+    return isinstance(blob, dict) and bool(blob)
+
+
+def current_weights_digest(path: Optional[str] = None) -> Optional[str]:
+    """Digest of the runtime soul_map council + signal weights, or None when it cannot be read.
+
+    None means "unknown", never "defaults": a missing, empty or corrupt soul_map must not produce
+    a digest, because that digest would equal the one stamped on any snapshot built while the
+    file was equally unreadable. Callers treat None as not fresh and not publishable.
 
     ``weights.SOUL_MAP_PATH`` is cwd-relative; anchoring it to the repo root keeps the identity
     the same from any cwd (production cwd /app, volume mounted at /app/data).
@@ -67,6 +84,8 @@ def current_weights_digest(path: Optional[str] = None) -> str:
     soul = path or weights.SOUL_MAP_PATH
     if not os.path.isabs(soul):
         soul = str(_REPO_ROOT / soul)
+    if not _soul_map_usable(soul):
+        return None
     return _canonical_digest(
         {"council": weights.load_weights(soul), "signal": weights.load_signal_weights(soul)}
     )

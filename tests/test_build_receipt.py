@@ -6,13 +6,14 @@ import logging
 import pytest
 
 from internal import build_cost
-from tests.score_snapshot_testutil import receipt_provenance
+from tests.score_snapshot_testutil import install_soul_map, receipt_provenance
 
 
 @pytest.fixture
 def isolated_build(tmp_path, monkeypatch):
     from internal.council import score_snapshots as snaps
 
+    install_soul_map(tmp_path, monkeypatch)
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "score_snapshots.json"))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: ([{"netuid": 1, "name": "A"}], "test"))

@@ -96,3 +96,18 @@ def complete_snapshot_payload(
             },
         }
     )
+
+
+def install_soul_map(tmp_path: Any, monkeypatch: Any, name: str = "soul_map.json") -> str:
+    """A usable (non-empty, valid) soul_map for tests that run the real producer.
+
+    A missing or corrupt soul_map is "weights unknown", so a build cannot publish without one.
+    """
+    import json
+
+    from internal.council import weights
+
+    path = tmp_path / name
+    path.write_text(json.dumps({"last_updated": "2026-10-28T00:00:00Z"}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(path))
+    return str(path)
