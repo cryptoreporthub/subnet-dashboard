@@ -207,10 +207,13 @@ def _row_c_owner_topology() -> Row:
 def _boot_producer_starts(env: dict[str, str], monkeypatch_hooks: Callable[[], None] | None = None) -> tuple[bool, str]:
     _reset_scheduler()
     _apply_env(env)
-    os.environ.setdefault("DATA_DIR", tempfile.mkdtemp(prefix="pr-a-live-"))
-    os.environ.setdefault("SCORE_SNAPSHOT_BOOT_IMMEDIATE", "off")
-    soul = Path(os.environ["DATA_DIR"]) / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
+    # Never reuse the caller's DATA_DIR: this harness writes soul_map.json, which
+    # would truncate a real volume's file. Always seed a fresh temp dir instead.
+    prev_data_dir = os.environ.get("DATA_DIR")
+    data_dir = tempfile.mkdtemp(prefix="pr-a-live-")
+    os.environ["DATA_DIR"] = data_dir
+    os.environ["SCORE_SNAPSHOT_BOOT_IMMEDIATE"] = "off"
+    (Path(data_dir) / "soul_map.json").write_text("{}", encoding="utf-8")
 
     import internal.background_boot as boot
 
@@ -219,7 +222,11 @@ def _boot_producer_starts(env: dict[str, str], monkeypatch_hooks: Callable[[], N
 
     def _defer(name, fn, delay=0):
         if name == "score-snapshots":
+            # The real defer sleeps >= 90s on a daemon thread; run the arm callback
+            # now so the check below observes the armed scheduler.
             scheduled.append(name)
+            fn()
+            return None
         return orig_defer(name, fn, delay)
 
     boot.defer_boot = _defer
@@ -250,6 +257,11 @@ def _boot_producer_starts(env: dict[str, str], monkeypatch_hooks: Callable[[], N
     finally:
         boot.defer_boot = orig_defer
         _reset_scheduler()
+        if prev_data_dir is None:
+            os.environ.pop("DATA_DIR", None)
+        else:
+            os.environ["DATA_DIR"] = prev_data_dir
+        shutil.rmtree(data_dir, ignore_errors=True)
 
 
 def _clear_run_mode_env() -> None:
