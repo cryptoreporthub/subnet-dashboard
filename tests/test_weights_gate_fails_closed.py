@@ -99,3 +99,20 @@ def test_first_boot_without_a_soul_map_still_serves_the_committed_seed(tmp_path,
     )
     assert served.servable is True
     assert served.origin == "seed"
+
+
+def test_weights_unavailable_is_not_blamed_when_the_build_was_already_incomplete(tmp_path, monkeypatch):
+    from tests.test_snapshot_membership_provenance import _with_chain
+
+    unprovenanced = _with_chain(_universe([1, 2]), None)  # gated: no chain read
+    volume, soul, _ = _producer_env(tmp_path, monkeypatch, unprovenanced)
+    Path(soul).unlink()
+    from internal.store import soul_map_io
+
+    soul_map_io._cache.clear()
+
+    out = snaps.write_full_universe_snapshot()
+
+    assert out["published"] is False
+    assert out["coverage"]["membership_admission_gate_reason"] == "membership_without_chain_provenance"
+    assert out["coverage"].get("capture_reason") != "weights_unavailable"

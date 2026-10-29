@@ -1087,9 +1087,10 @@ def write_full_universe_snapshot(
         if capture_timed_out:
             coverage["complete"] = False
             coverage["capture_reason"] = "capture_timeout"
-        if weights_digest is None:
+        if weights_digest is None and coverage.get("complete"):
             # The scorer ran on fallback weights it cannot name; a snapshot stamped from them would
-            # look fresh against any later unreadable soul_map.
+            # look fresh against any later unreadable soul_map. Only blamed when nothing else
+            # already made the build incomplete.
             coverage["complete"] = False
             coverage["capture_reason"] = "weights_unavailable"
         # MC: previous_publish_wall_seconds is embedded here — one locked os.replace only.
