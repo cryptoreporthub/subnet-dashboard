@@ -46,6 +46,12 @@ def main(argv=None) -> int:
             cycle = os.path.join(tmp, "cycle.json")
             out = build_image_seed_snapshot(membership=membership, volume_path=volume, cycle_path=cycle)
             if not out.get("published"):
+                if out.get("skipped") == "weights_unavailable":
+                    print(
+                        "usable soul_map required (weights_unavailable); seed unchanged",
+                        file=sys.stderr,
+                    )
+                    return 2
                 print(f"membership refused, seed unchanged: {out.get('refused') or out}", file=sys.stderr)
                 return 2
             with open(volume, "r", encoding="utf-8") as handle:

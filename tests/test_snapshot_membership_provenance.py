@@ -530,6 +530,26 @@ def test_refresh_script_with_the_rpcs_down_exits_nonzero_and_leaves_the_seed(tmp
     assert hashlib.sha256(dest.read_bytes()).hexdigest() == before
 
 
+def test_refresh_script_without_soul_map_refuses_with_weights_message(tmp_path, monkeypatch, recorded_providers, capsys):
+    """Clean checkout: no soul_map means fail closed with a clear message, not 'membership refused'."""
+    missing = tmp_path / "absent" / "soul_map.json"
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(missing))
+    chain = su._read_chain()
+    monkeypatch.setattr(su, "_default_tmc_fetch", _tmc_for(chain.netuids))
+    dest = tmp_path / "seed.json"
+    dest.write_text('{"keep": "me"}')
+    before = hashlib.sha256(dest.read_bytes()).hexdigest()
+
+    rc = _load_refresh_script().main(["--build-from-chain", "--dest", str(dest)])
+
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "usable soul_map required" in err
+    assert "weights_unavailable" in err
+    assert "membership refused" not in err
+    assert hashlib.sha256(dest.read_bytes()).hexdigest() == before
+
+
 def _edit(path, value):
     """Return a mutator that sets the dotted ``path`` (``None`` value deletes the key)."""
 
