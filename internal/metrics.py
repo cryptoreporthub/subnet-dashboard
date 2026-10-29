@@ -98,10 +98,19 @@ SCORE_SNAPSHOT_HORIZON_COPIED = Gauge(
 )
 SCORE_SNAPSHOT_AGE_SECONDS = Gauge(
     "subnet_score_snapshot_age_seconds",
-    "Age of score_snapshots.json on disk in seconds (-1 when file missing)",
+    "Age of the served score snapshot (volume or seed) in seconds (-1 when none)",
 )
 # ponytail: sentinel for missing/unreadable snapshot file (always set gauge; never skip).
 SCORE_SNAPSHOT_AGE_UNAVAILABLE = -1.0
+SCORE_SNAPSHOT_SERVED_STATE = Gauge(
+    "subnet_score_snapshot_served_state",
+    "One-hot label for the snapshot state pick readers serve",
+    ["state"],
+)
+SCORE_SNAPSHOT_LAST_CYCLE_COMPLETE = Gauge(
+    "subnet_score_snapshot_last_cycle_complete",
+    "1 if the last producer cycle receipt reported complete coverage",
+)
 
 READINESS_REPORT_AGE_SECONDS = Gauge(
     "readiness_report_age_seconds",
@@ -283,10 +292,12 @@ def _set_score_snapshot_age_gauge(age: Optional[float]) -> None:
 
 def _refresh_score_snapshot_gauges() -> None:
     """Recompute snapshot coverage gauges from disk each scrape (no sticky greens)."""
+    import json
+
     from internal.council.score_snapshots import (
         SCORE_SNAPSHOT_MAX_AGE_SECONDS,
-        load_score_snapshot,
-        snapshot_age_seconds,
+        _score_snapshot_cycle_path,
+        read_served_snapshot,
     )
     from internal.council.snapshot_coverage import (
         clear_last_coverage_snapshot,
@@ -294,14 +305,33 @@ def _refresh_score_snapshot_gauges() -> None:
         reset_score_snapshot_gauges,
     )
 
-    age = snapshot_age_seconds()
+    served = read_served_snapshot()
+    # The gauge's documented meaning is the age of what is served (volume or seed, -1 when none).
+    age = served.age_seconds if served.servable else None
     _set_score_snapshot_age_gauge(age)
-    disk_fresh = age is not None and age <= SCORE_SNAPSHOT_MAX_AGE_SECONDS
+    for state in ("fresh", "aged", "seed", "none"):
+        SCORE_SNAPSHOT_SERVED_STATE.labels(state=state).set(
+            1.0 if served.state.value == state else 0.0
+        )
+    cycle_complete = 0.0
+    try:
+        with open(_score_snapshot_cycle_path(), "r", encoding="utf-8") as handle:
+            cycle = json.load(handle)
+        if isinstance(cycle, dict) and cycle.get("complete") is True:
+            cycle_complete = 1.0
+    except Exception:
+        cycle_complete = 0.0
+    SCORE_SNAPSHOT_LAST_CYCLE_COMPLETE.set(cycle_complete)
+
+    # Coverage gauges describe the last producer build on this volume. A seed is a shipped artifact,
+    # not a build of this deployment, so its coverage block is never published as live coverage
+    # (``subnet_score_snapshot_served_state{state="seed"}`` already says the seed is being served).
+    disk_fresh = served.origin == "volume" and age is not None and age <= SCORE_SNAPSHOT_MAX_AGE_SECONDS
     if not disk_fresh:
         reset_score_snapshot_gauges()
         clear_last_coverage_snapshot()
         return
-    snap = load_score_snapshot()
+    snap = served.snapshot if served.servable else None
     disk_cov = snap.get("coverage") if isinstance(snap, dict) else None
     if not isinstance(disk_cov, dict) or not disk_cov:
         reset_score_snapshot_gauges()

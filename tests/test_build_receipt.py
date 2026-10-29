@@ -6,18 +6,30 @@ import logging
 import pytest
 
 from internal import build_cost
+from tests.score_snapshot_testutil import install_soul_map, receipt_provenance
 
 
 @pytest.fixture
 def isolated_build(tmp_path, monkeypatch):
     from internal.council import score_snapshots as snaps
 
+    install_soul_map(tmp_path, monkeypatch)
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "score_snapshots.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: ([{"netuid": 1, "name": "A"}], "test"))
     monkeypatch.setattr(
         "server._get_subnets_with_source", lambda timeout=4.0: ([{"netuid": 1, "name": "A"}], "test")
     )
     monkeypatch.setattr("server._market_context_with_weights", lambda subnets: {})
+    monkeypatch.setattr(
+        "internal.council.snapshot_coverage.load_membership_receipt",
+        lambda: {
+            **receipt_provenance([1]),
+            "degraded": False,
+            "cap_reached": False,
+            "refresh_incomplete": False,
+        },
+    )
     build_cost.end()
     yield snaps
     build_cost.end()

@@ -14,10 +14,20 @@ from internal import loop_stall_guard
 from internal.council import score_snapshots as snaps
 from internal.learning import loop_health
 from internal.loop_stall_guard import MAX_SNAPSHOT_AGE_SECONDS, _try_revive
+from tests.score_snapshot_testutil import complete_snapshot_payload
 
 
 def _make_stale_snapshot(path, *, age_seconds: float = 100_000) -> None:
-    path.write_text('{"day":[],"hour":[]}', encoding="utf-8")
+    old_iso = "2020-01-01T00:00:00Z"
+    path.write_text(
+        json.dumps(
+            complete_snapshot_payload(
+                day_rows=[{"netuid": 1, "total_score": 1.0}],
+                written_at=old_iso,
+            )
+        ),
+        encoding="utf-8",
+    )
     old = time.time() - age_seconds
     os.utime(path, (old, old))
 
@@ -27,9 +37,12 @@ def _wire_snapshot_paths(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(snap_path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setenv("SCORE_SNAPSHOTS_PATH", str(snap_path))
     monkeypatch.setattr(loop_health, "SCORE_SNAPSHOTS_PATH", str(snap_path))
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    # Fixtures read the weights digest through the soul_map cache; a test that rewrites soul_map must see the file.
+    monkeypatch.setattr("internal.store.soul_map_io._CACHE_TTL", 0)
     return snap_path
 
 
@@ -82,12 +95,11 @@ def _fake_write_that_saves(snap_path):
     def _fake_write(progress_cb=None):
         if progress_cb:
             progress_cb(1, 1)
-        snaps.save_score_snapshot(
-            {
-                "day": [{"netuid": 1, "total_score": 1.0}],
-                "hour": [],
-                "written_at": "2026-08-21T00:00:00Z",
-            },
+        snaps.publish_complete_snapshot(
+            complete_snapshot_payload(
+                day_rows=[{"netuid": 1, "total_score": 1.0}],
+                written_at=snaps._now_iso(),
+            ),
             str(snap_path),
         )
         return {
@@ -239,7 +251,7 @@ def test_revive_honest_when_tick_in_progress(tmp_path, monkeypatch):
 
 
 def test_revive_false_when_file_already_young_and_no_write(tmp_path, monkeypatch):
-    """Young mtime + ok tick without save_score_snapshot must not claim revived."""
+    """Young mtime + ok tick without publish_complete_snapshot must not claim revived."""
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     snap_path.write_text('{"day":[],"hour":[]}', encoding="utf-8")
     age_before = loop_health._snapshot_age_seconds(str(snap_path))
@@ -287,7 +299,7 @@ def test_revive_false_on_skip_or_ok_without_file_write(tmp_path, monkeypatch):
 
 
 def test_revive_false_on_ok_without_moving_mtime(tmp_path, monkeypatch):
-    """ok:True without save_score_snapshot must not count as revived."""
+    """ok:True without publish_complete_snapshot must not count as revived."""
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     _make_stale_snapshot(snap_path, age_seconds=snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS + 100)
 

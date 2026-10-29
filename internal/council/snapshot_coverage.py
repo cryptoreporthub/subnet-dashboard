@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from internal.chain_read import ChainRead
 from internal.subnets.tradable import subnet_netuid
 
 
@@ -61,21 +64,26 @@ def membership_fresh(
     return age >= 0 and age <= limit
 
 
+def membership_generation(expected_netuids: Any) -> str:
+    """Content id of the scored set. Block and rpc stay out: every refresh pins a new block."""
+    body = {"v": 1, "expected_netuids": membership_scoring_expected(list(expected_netuids))}
+    digest = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    return "mg1:" + digest.hexdigest()[:16]
+
+
 def load_membership_receipt() -> Dict[str, Any]:
     try:
         from internal.subnet_universe import get_snapshot, universe_snapshot_feed_meta
 
         snap = get_snapshot()
         feed = universe_snapshot_feed_meta(snap)
-        netuids = tuple(int(n) for n in snap.netuids if int(n) > 0)
-        negative = {
-            int(key)
-            for key, entry in (snap.validity_map or {}).items()
-            if str(key).isdigit() and isinstance(entry, dict) and entry.get("validity") == "negative"
-        }
-        # Owner rule: a netuid the chain reports unregistered leaves expected at once, even while its
-        # row stays in ``snap.netuids`` for the 48h grace. Do not require an empty-slot row here.
-        inactive = [n for n in netuids if n in negative]
+        # Owner rule: expected is exactly the pinned chain read, so a chain-unregistered netuid is
+        # out at once even while its row stays in ``snap.netuids`` for the 48h grace.
+        chain = snap.chain
+        # Rows still held in the universe (48h grace) that the chain read no longer lists. Derived, for
+        # display and proof only: nothing gates on it.
+        on_chain = set(chain.netuids) if chain else set()
+        inactive = [int(n) for n in snap.netuids if int(n) > 0 and int(n) not in on_chain] if chain else []
         return {
             "source": feed.get("source"),
             "sources": list(feed.get("sources") or []),
@@ -84,8 +92,12 @@ def load_membership_receipt() -> Dict[str, Any]:
             "degraded": bool(snap.degraded),
             "cap_reached": bool(snap.cap_reached),
             "refresh_incomplete": bool(snap.refresh_incomplete),
-            "expected_netuids": [n for n in netuids if n not in inactive],
+            "expected_netuids": list(chain.netuids) if chain else [],
             "inactive_netuids": inactive,
+            "generation": membership_generation(chain.netuids if chain else []),
+            "block_hash": chain.block_hash if chain else None,
+            "rpc": chain.rpc if chain else None,
+            "chain": chain.to_dict() if chain else None,
             "fresh": membership_fresh(snap.resolved_at),
             "root_netuid_in_membership": 0 in snap.netuids,
             "message": snap.message,
@@ -100,6 +112,11 @@ def load_membership_receipt() -> Dict[str, Any]:
             "cap_reached": False,
             "refresh_incomplete": True,
             "expected_netuids": [],
+            "inactive_netuids": [],
+            "generation": membership_generation([]),
+            "block_hash": None,
+            "rpc": None,
+            "chain": None,
             "fresh": False,
             "root_netuid_in_membership": False,
             "message": str(exc),
@@ -277,12 +294,22 @@ def _horizon_block(
     }
 
 
+def _has_chain_provenance(receipt: Dict[str, Any]) -> bool:
+    chain = ChainRead.parse(receipt.get("chain"))
+    return chain is not None and chain.rpc is not None
+
+
 def membership_allows_admission(receipt: Dict[str, Any]) -> bool:
-    """Fail closed — score only from fresh, non-emergency, complete membership."""
+    """Fail closed — score only from fresh, non-emergency, complete membership.
+
+    ``universe_status`` must be exactly "ok". The universe provider only writes "ok", "degraded" or
+    "emergency_registry" (a receipt built after an error says "unknown"), so a stale marker, a missing
+    key or any other spelling is a verdict nobody can vouch for; admitting it would let an unknown
+    state publish a complete snapshot. Real receipts always carry the key.
+    """
     if not receipt.get("fresh"):
         return False
-    status = str(receipt.get("universe_status") or "")
-    if status in ("unknown", "emergency_registry"):
+    if receipt.get("universe_status") != "ok":
         return False
     if receipt.get("degraded"):
         return False
@@ -290,7 +317,7 @@ def membership_allows_admission(receipt: Dict[str, Any]) -> bool:
         return False
     if receipt.get("refresh_incomplete"):
         return False
-    return True
+    return _has_chain_provenance(receipt)
 
 
 def membership_admission_block_reason(receipt: Dict[str, Any]) -> Optional[str]:
@@ -309,6 +336,10 @@ def membership_admission_block_reason(receipt: Dict[str, Any]) -> Optional[str]:
         return "cap_reached"
     if receipt.get("refresh_incomplete"):
         return "refresh_incomplete"
+    if receipt.get("universe_status") != "ok":
+        return "universe_status_not_ok"
+    if not _has_chain_provenance(receipt):
+        return "membership_without_chain_provenance"
     return "membership_not_admissible"
 
 

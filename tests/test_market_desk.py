@@ -279,7 +279,7 @@ def test_analyze_is_read_only_and_approval_not_required():
     ), patch(
         "internal.learning.predictions_store.save_predictions", _record_write
     ), patch(
-        "internal.council.score_snapshots.save_score_snapshot", _record_write
+        "internal.council.score_snapshots.publish_complete_snapshot", _record_write
     ):
         result = analyze("SN65", now=NOW, snapshots=snapshots)
         disk = analyze("SN65", now=NOW)

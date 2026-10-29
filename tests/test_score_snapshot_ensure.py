@@ -3,23 +3,26 @@ import json
 import pytest
 
 from internal.council import score_snapshots as snaps
+from tests.score_snapshot_testutil import complete_snapshot_payload
+
+pytestmark = pytest.mark.usefixtures("usable_soul_map")
 
 
-def _seed(tmp_path, monkeypatch, *, complete):
+def _seed_volume(tmp_path, monkeypatch, *, complete: bool):
     path = tmp_path / "score_snapshots.json"
     rows = [{"netuid": n, "total_score": 50.0 + n} for n in range(1, 4)]
-    path.write_text(
-        json.dumps(
-            {
-                "written_at": snaps._now_iso(),
-                "coverage": {"complete": complete},
-                "hour": rows,
-                "day": rows,
-            }
-        ),
-        encoding="utf-8",
-    )
+    if complete:
+        payload = complete_snapshot_payload(day_rows=rows, hour_rows=rows)
+    else:
+        payload = {
+            "written_at": snaps._now_iso(),
+            "coverage": {"complete": False},
+            "hour": rows,
+            "day": rows,
+        }
+    path.write_text(json.dumps(payload), encoding="utf-8")
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_MAX_AGE_SECONDS", 7200)
 
 
@@ -36,7 +39,7 @@ def builds(monkeypatch):
 
 
 def test_ensure_builds_when_the_snapshot_on_disk_is_incomplete(tmp_path, monkeypatch, builds):
-    _seed(tmp_path, monkeypatch, complete=False)
+    _seed_volume(tmp_path, monkeypatch, complete=False)
     out = snaps.ensure_complete_snapshot()
     assert builds == [1]
     assert out["ensured"] is True
@@ -44,12 +47,49 @@ def test_ensure_builds_when_the_snapshot_on_disk_is_incomplete(tmp_path, monkeyp
 
 def test_ensure_builds_when_there_is_no_snapshot(tmp_path, monkeypatch, builds):
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "absent.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     snaps.ensure_complete_snapshot()
     assert builds == [1]
 
 
 def test_ensure_leaves_a_complete_snapshot_alone(tmp_path, monkeypatch, builds):
-    _seed(tmp_path, monkeypatch, complete=True)
+    path = tmp_path / "score_snapshots.json"
+    rows = [{"netuid": n, "total_score": 50.0 + n} for n in range(1, 4)]
+    payload = complete_snapshot_payload(
+        day_rows=rows,
+        hour_rows=rows,
+        written_at=snaps._now_iso(),
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_MAX_AGE_SECONDS", 7200)
     out = snaps.ensure_complete_snapshot()
     assert builds == []
     assert out["ensured"] is False
+
+
+def test_ensure_starts_producer_when_only_image_seed_is_servable(tmp_path, monkeypatch, builds):
+    seed = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 1.0}])
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text(json.dumps(seed), encoding="utf-8")
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "absent.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(seed_path))
+    out = snaps.ensure_complete_snapshot()
+    assert builds == [1]
+    assert out["ensured"] is True
+
+
+def test_ensure_revives_when_volume_snapshot_is_aged(tmp_path, monkeypatch, builds):
+    old = complete_snapshot_payload(
+        day_rows=[{"netuid": 1, "total_score": 1.0}],
+        written_at="2018-01-01T00:00:00Z",
+    )
+    path = tmp_path / "score_snapshots.json"
+    path.write_text(json.dumps(old), encoding="utf-8")
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_MAX_AGE_SECONDS", 60)
+    out = snaps.ensure_complete_snapshot()
+    assert builds == [1]
+    assert out["ensured"] is True

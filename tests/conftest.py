@@ -71,3 +71,15 @@ def _clear_message_intel_load_cache():
         clear_message_intel_load_cache()
     except ImportError:
         pass
+
+
+@pytest.fixture
+def usable_soul_map(tmp_path, monkeypatch):
+    """A valid soul_map for tests that run the real snapshot producer.
+
+    A missing or corrupt soul_map means "weights unknown", so a build cannot publish without one,
+    and a clean checkout has none. Use via ``pytestmark = pytest.mark.usefixtures("usable_soul_map")``.
+    """
+    from tests.score_snapshot_testutil import install_soul_map
+
+    return install_soul_map(tmp_path, monkeypatch)

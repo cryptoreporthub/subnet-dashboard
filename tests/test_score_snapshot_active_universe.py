@@ -5,11 +5,15 @@ from datetime import datetime, timezone
 import pytest
 
 from internal.council import score_snapshots as snaps
+from internal.chain_read import ChainRead
 from internal.council import snapshot_coverage as cov
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
 
+pytestmark = pytest.mark.usefixtures("usable_soul_map")
+
 ACTIVE = tuple(range(1, 129))
 PLACEHOLDERS = tuple(range(129, 166))
+PINNED_HASH = "0x" + "cd" * 32
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +46,7 @@ def _membership(active=ACTIVE, placeholders=PLACEHOLDERS, placeholder_validity=_
         status="ok",
         degraded=False,
         validity_map=validity,
+        chain=ChainRead(PINNED_HASH, tuple(sorted(active)), "finney") if active else None,
     )
 
 
@@ -93,19 +98,6 @@ def test_membership_with_no_active_subnet_is_not_complete(tmp_path, monkeypatch)
     assert out["coverage"]["complete"] is False
 
 
-def test_receipt_expects_the_subnets_that_have_data():
-    import internal.subnet_universe as universe
-
-    original = universe.get_snapshot
-    universe.get_snapshot = lambda: _membership()
-    try:
-        receipt = cov.load_membership_receipt()
-    finally:
-        universe.get_snapshot = original
-    assert receipt["expected_netuids"] == list(ACTIVE)
-    assert receipt["inactive_netuids"] == list(PLACEHOLDERS)
-
-
 def _receipt_for(membership):
     import internal.subnet_universe as universe
 
@@ -115,6 +107,80 @@ def _receipt_for(membership):
         return cov.load_membership_receipt()
     finally:
         universe.get_snapshot = original
+
+
+def test_receipt_expects_exactly_the_chain_read():
+    receipt = _receipt_for(_membership())
+    assert receipt["expected_netuids"] == list(ACTIVE)
+    assert receipt["chain"] == {"block_hash": PINNED_HASH, "netuids": list(ACTIVE), "rpc": "finney"}
+
+
+@pytest.mark.parametrize(
+    "validity",
+    [
+        lambda: _validity_entry(validity="positive", sources=["blockmachine_probe"], disputed=True),
+        lambda: _validity_entry(validity="positive", sources=["taomarketcap"], refresh_incomplete=True),
+        lambda: _validity_entry(validity="unobserved", refresh_incomplete=True),
+        lambda: _deregistered(),
+    ],
+    ids=["probe_positive", "retained_positive", "unobserved", "deregistered"],
+)
+def test_universe_members_outside_the_chain_read_are_never_expected(validity):
+    receipt = _receipt_for(_membership(placeholders=PLACEHOLDERS, placeholder_validity=validity))
+    assert receipt["expected_netuids"] == list(ACTIVE)
+
+
+def test_a_chain_member_the_universe_flags_negative_is_still_expected():
+    membership = _membership(placeholders=())
+    stale = ACTIVE[:3]
+    validity = dict(membership.validity_map)
+    validity.update({str(n): _deregistered() for n in stale})
+    flagged = UniverseSnapshot(
+        netuids=membership.netuids,
+        rows=membership.rows,
+        resolved_at=membership.resolved_at,
+        status="ok",
+        degraded=False,
+        validity_map=validity,
+        chain=membership.chain,
+    )
+    assert _receipt_for(flagged)["expected_netuids"] == list(ACTIVE)
+
+
+def test_a_universe_without_a_chain_read_expects_nothing_and_blocks_admission():
+    membership = _membership()
+    unread = UniverseSnapshot(
+        netuids=membership.netuids,
+        rows=membership.rows,
+        resolved_at=membership.resolved_at,
+        status="ok",
+        degraded=False,
+        validity_map=membership.validity_map,
+    )
+    receipt = _receipt_for(unread)
+    assert receipt["expected_netuids"] == []
+    assert receipt["chain"] is None
+    assert cov.membership_allows_admission(receipt) is False
+    assert cov.membership_admission_block_reason(receipt) == "membership_without_chain_provenance"
+    assert cov.membership_allows_admission(_receipt_for(membership)) is True
+
+
+def _with_chain(membership, chain_netuids, validity_map=None):
+    """The same universe, with the pinned chain read set to ``chain_netuids``."""
+    return UniverseSnapshot(
+        netuids=membership.netuids,
+        rows=membership.rows,
+        resolved_at=membership.resolved_at,
+        status="ok",
+        degraded=False,
+        validity_map=membership.validity_map if validity_map is None else validity_map,
+        chain=ChainRead(PINNED_HASH, tuple(sorted(chain_netuids)), "finney"),
+    )
+
+
+def test_receipt_expects_the_subnets_that_have_data():
+    receipt = _receipt_for(_with_chain(_membership(), ACTIVE))
+    assert receipt["expected_netuids"] == list(ACTIVE)
 
 
 @pytest.mark.parametrize(
@@ -127,22 +193,13 @@ def _receipt_for(membership):
     ids=["probe_positive", "retained_positive", "unobserved"],
 )
 def test_a_member_without_row_data_stays_expected_unless_established_inactive(validity):
-    receipt = _receipt_for(_membership(placeholders=PLACEHOLDERS, placeholder_validity=validity))
+    membership = _membership(placeholders=PLACEHOLDERS, placeholder_validity=validity)
+    receipt = _receipt_for(_with_chain(membership, ACTIVE + PLACEHOLDERS))
     assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
-    assert receipt["inactive_netuids"] == []
 
 
 def test_a_member_with_no_validity_entry_stays_expected():
-    membership = _membership()
-    membership = UniverseSnapshot(
-        netuids=membership.netuids,
-        rows=membership.rows,
-        resolved_at=membership.resolved_at,
-        status="ok",
-        degraded=False,
-        validity_map={},
-    )
-    receipt = _receipt_for(membership)
+    receipt = _receipt_for(_with_chain(_membership(), ACTIVE + PLACEHOLDERS, validity_map={}))
     assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
 
 
@@ -152,15 +209,5 @@ def test_a_negative_member_that_still_has_row_data_leaves_expected_immediately()
     stale = tuple(ACTIVE[:3])
     validity = dict(membership.validity_map)
     validity.update({str(n): _deregistered() for n in stale})
-    receipt = _receipt_for(
-        UniverseSnapshot(
-            netuids=membership.netuids,
-            rows=membership.rows,
-            resolved_at=membership.resolved_at,
-            status="ok",
-            degraded=False,
-            validity_map=validity,
-        )
-    )
+    receipt = _receipt_for(_with_chain(membership, set(ACTIVE) - set(stale), validity_map=validity))
     assert receipt["expected_netuids"] == sorted(set(ACTIVE) - set(stale))
-    assert receipt["inactive_netuids"] == sorted(stale)

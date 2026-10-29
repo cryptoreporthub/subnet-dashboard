@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from internal.chain_price.outcomes import RpcOutcome
@@ -11,6 +13,7 @@ from internal.chain_price.storage_keys import (
     total_networks_key_hex,
 )
 
+from internal.chain_read import ChainRead
 from internal.chain_rpc_errors import storage_block_matches
 
 
@@ -102,3 +105,36 @@ def get_member_netuids(
     if total_networks != member_count_incl_root:
         return [], "invalid"
     return sorted(set(netuids)), "ok"
+
+
+def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]:
+    # Production always reaches the strict pin: every real ChainReader has pin_finalized_head_strict
+    # (full 64-hex head only, with provider fallback), and SnapshotBuilder builds its own reader. Only a
+    # bare reader double that has just ``pin_finalized_head`` falls back to the loose pin, on purpose:
+    # main's tests/test_subnet_universe.py pins "0xabc" through such a double and must stay unedited.
+    # What a loose read yields is never admitted: receipt provenance, completeness and reload all
+    # parse the block strictly.
+    strict_pin = getattr(reader, "pin_finalized_head_strict", None)
+    pin = strict_pin or reader.pin_finalized_head
+    at_hash, outcome = pin()
+    if outcome != "ok" or not at_hash:
+        return None, outcome if outcome != "ok" else "absent"
+    # Every read at this block follows the provider that served the accepted head (real readers only).
+    pinned_call_fn = getattr(reader, "pinned_call_fn", None) if strict_pin is not None else None
+    members, outcome = get_member_netuids(pinned_call_fn() if pinned_call_fn else reader.call_fn(), at_hash)
+    if outcome != "ok":
+        return None, outcome
+    # The receipt names the provider that served the head (per thread on a real reader), not whatever
+    # provider another thread's call left in the shared ``provider_served``.
+    rpc = getattr(reader, "head_provider", None) if strict_pin is not None else None
+    chain = ChainRead.parse(
+        {
+            "block_hash": str(at_hash).lower(),
+            "netuids": members,
+            "rpc": rpc or getattr(reader, "provider_served", None),
+        },
+        pinned=False,
+    )
+    if chain is None:
+        return None, "invalid"
+    return chain, "ok"
