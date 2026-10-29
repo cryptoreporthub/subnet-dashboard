@@ -78,7 +78,28 @@ test that asserts the implementation instead of the behaviour.
 If you find nothing after a real attempt, write that down as a measured
 negative. Do not invent a finding to fill the slot.
 
-## 6. Report shape
+## 6. A diff that deletes, skips or weakens tests
+
+A green suite proves nothing here: it is green because the checks are gone. For every
+deleted or weakened assertion, skipped test, `--deselect` or similar:
+
+1. Say which bug the original would have caught, and trace it by hand through the real
+   entry point to see whether the deleted assertion was true at base. A deleted assertion
+   that was true is lost coverage; one that was false was a bad test.
+2. If you want to say the rule "is still covered by another test", **verify it before you
+   write it**. Name that test, open its body at head with `read_repo_file`, and quote the
+   assertion in it that would fail if the rule broke. If you cannot name a test whose
+   assertion fails under the same mutation, the rule is uncovered: say so. "Another test
+   covers it" with no test named, or a test that only exercises the code without
+   asserting the outcome, is not coverage.
+3. A replacement assertion that cannot fail (`assert built is not None` when the function
+   always returns an object, `assert True`) is a finding of its own: the test keeps its
+   name and promises a rule it no longer checks.
+4. A suite or comparison that reads clean after a test was deleted, skipped or deselected
+   says nothing about that test: a base-to-head comparison cannot see a test that stopped
+   being collected. Say so; do not lean on the clean result.
+
+## 7. Report shape
 
 Every finding gets: severity (P0 blocks merge and rules out PASS), the file and line, the value or
 path that triggers it, the consumer it reaches, and whether it is **measured**

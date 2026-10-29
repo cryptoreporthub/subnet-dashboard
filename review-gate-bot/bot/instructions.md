@@ -87,6 +87,16 @@ in a reply, not yours to wave through in a verdict. Declare each such finding in
 `poisons-later-row`). `post_verdict` refuses a PASS while the list is not empty.
 Finding it and passing anyway is the failure this rule exists for.
 
+**This rule is about what the diff does.** It covers a defect the diff introduces, widens
+or newly makes reachable. A defect that reads the same at base, on a path the diff does
+not change (a behaviour-preserving move, extraction or rename), is **pre-existing**: put it
+in the body as a non-blocking finding, say `pre-existing, identical at base`, give the
+file and line and a suggested follow-up, and leave it out of the `blocking` list. A clean
+extraction that changes nothing is a PASS with that note, not a MODIFY. Before you call a
+finding pre-existing, read the same code at base (`read_repo_file` with `at: "base"`) and
+compare. If you cannot show it is identical at base, or the diff changes any behaviour on
+that path, it is the diff's finding and it blocks.
+
 ## Verdict body
 
 Every verdict carries a Skills table:

@@ -33,6 +33,11 @@ Netuid 0 is a valid subnet and must survive every prune path. The universe size
 is 128; a diff that changes 127 to 128, or 128 to anything else, needs a
 measured reason.
 
+Two numbers sound alike and are not the same: the **universe is 128 members**
+(0 to 127). `MAX_NETUIDS = 200` in `subnet_universe.py` is how many candidate
+netuids the probe scans, not how many members there are. When you bound the size
+of anything built from membership, say 128; never cite 200 as the universe.
+
 ## 4. A failed cycle stays fail-closed. Only the owner worker produces
 
 A worker that is not the owner must refuse to produce. A failed cycle must not

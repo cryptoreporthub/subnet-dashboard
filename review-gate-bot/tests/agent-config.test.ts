@@ -102,3 +102,33 @@ test("the model reaches no MCP server but the bot's own: nothing is attached for
   const hosted = await readdir(new URL("host-connections/", root));
   assert.deepEqual(hosted, ["replit.ts"], "host connections are invisible to the model, and only Replit is wired");
 });
+
+test("a blocking finding is scoped to what the diff does: a pre-existing defect on an unchanged path is reported, not blocking", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const text = await readFile(new URL("../bot/instructions.md", import.meta.url), "utf8");
+  assert.match(text, /about what the diff does/);
+  assert.match(text, /pre-existing, identical at base/);
+  assert.match(text, /leave it out of the `blocking` list/);
+  assert.match(text, /read the same code at base/);
+  // the rule that rules out PASS is kept: a finding the diff introduces still forces MODIFY or FAIL
+  assert.match(text, /the verdict is \*\*MODIFY or FAIL, never PASS\*\*/);
+});
+
+test("adversarial-review: 'covered by another test' must name a test whose assertion fails under the same mutation", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const text = await readFile(new URL("../bot/skills/adversarial-review/SKILL.md", import.meta.url), "utf8");
+  assert.match(text, /A diff that deletes, skips or weakens tests/);
+  assert.match(text, /verify it before\s+you\s+write\s+it/);
+  assert.match(text, /Name that test, open its body at head/);
+  assert.match(text, /assertion in it that would fail if the rule broke/);
+  assert.match(text, /cannot fail/);
+  assert.match(text, /cannot see a test that stopped\s+being collected/);
+});
+
+test("owner-rules: the universe is 128 members and MAX_NETUIDS = 200 is the probe's scan width", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const text = await readFile(new URL("../bot/skills/owner-rules/SKILL.md", import.meta.url), "utf8");
+  assert.match(text, /universe is 128 members/);
+  assert.match(text, /MAX_NETUIDS = 200/);
+  assert.match(text, /never cite 200 as the universe/);
+});
