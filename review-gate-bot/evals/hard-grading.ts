@@ -225,7 +225,13 @@ const NEGATIVE = "never";
 function refusedPass(output: unknown): boolean {
   const reason = asObject(output)?.reason;
   // `skill-not-read`: the Skills table claimed a skill the session never opened, so the tool wrote nothing and the model may resubmit.
-  return reason === "pass-with-blocking-finding" || reason === "skill-not-read";
+  // `incomplete-skills-table` and `pass-with-credential-value` are the same kind of refusal: nothing was written, the model may resubmit.
+  return (
+    reason === "pass-with-blocking-finding" ||
+    reason === "skill-not-read" ||
+    reason === "incomplete-skills-table" ||
+    reason === "pass-with-credential-value"
+  );
 }
 
 /**
