@@ -114,21 +114,21 @@ def _snapshot_stamp(payload: Optional[Dict[str, Any]]) -> Optional[datetime]:
 
 
 def snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:
-    """Age of the volume snapshot when present; None if the volume file is absent.
+    """Age of whatever the volume file holds; None when it is absent or unreadable.
 
-    Pick readers use ``read_served_snapshot`` (volume or seed). Ops probes that
-    pass an explicit path keep the legacy soul_map fallback when the volume file
-    is missing.
+    This is the volume's freshness, so a seed is never consulted: while the volume is absent or
+    holds something incomplete, readers are served the (much older) seed, and reporting the seed's
+    age here made a stale or missing volume look like the seed's age. Callers: the revive check
+    (did a tick refresh the volume?), ops probes (``loop_health``, which falls back to the file's
+    mtime and then the last tick when this is None) and the scheduler state. Pick readers and the
+    ``subnet_score_snapshot_age_seconds`` gauge want the age of what is *served* and use
+    ``read_served_snapshot(...).age_seconds`` instead.
     """
     volume_path = path or SCORE_SNAPSHOTS_PATH
-    try:
-        os.stat(volume_path)
-    except OSError:
+    snap = load_score_snapshot(volume_path)
+    if snap is None:
         return None
-    served = read_served_snapshot(path=volume_path)
-    if served.origin == "seed":
-        return served.age_seconds
-    return served.age_seconds if served.servable else None
+    return _snapshot_age_for_path(volume_path, snap)
 
 
 @contextmanager
