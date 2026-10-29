@@ -899,3 +899,37 @@ def test_without_pidfd_nothing_is_signalled_and_main_refuses_to_start(monkeypatc
         assert "pidfd is unavailable" in capsys.readouterr().err
     finally:
         _cleanup_procs(owned, foreign)
+
+
+def test_main_exits_2_on_a_keyboard_interrupt_that_leaves_a_process_behind(monkeypatch, capsys):
+    harness = _load_harness()
+    monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
+    monkeypatch.setattr(harness, "_wait_http", lambda *a, **k: True)
+
+    def phase(label, *a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(harness, "_phase", phase)
+    monkeypatch.setattr(harness, "_stop_entrypoint", lambda proc: None)
+    monkeypatch.setattr(harness, "_kill_worker_sigkill", lambda: True)
+    monkeypatch.setattr(harness, "_kill_run_processes", lambda token, timeout=15.0: [4242])
+    monkeypatch.setattr(harness, "_clear_volume", lambda data_dir: None)
+    monkeypatch.setattr(harness.time, "sleep", lambda s: None)
+
+    assert harness.main() == 2
+    assert "processes still alive after cleanup: [4242]" in capsys.readouterr().err
+
+
+def test_main_still_propagates_a_keyboard_interrupt_when_the_cleanup_is_clean(monkeypatch):
+    harness = _load_harness()
+    monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
+    monkeypatch.setattr(harness, "_wait_http", lambda *a, **k: True)
+    monkeypatch.setattr(harness, "_phase", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt()))
+    monkeypatch.setattr(harness, "_stop_entrypoint", lambda proc: None)
+    monkeypatch.setattr(harness, "_kill_worker_sigkill", lambda: True)
+    monkeypatch.setattr(harness, "_kill_run_processes", lambda token, timeout=15.0: [])
+    monkeypatch.setattr(harness, "_clear_volume", lambda data_dir: None)
+    monkeypatch.setattr(harness.time, "sleep", lambda s: None)
+
+    with pytest.raises(KeyboardInterrupt):
+        harness.main()

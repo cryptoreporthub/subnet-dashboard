@@ -437,7 +437,7 @@ def main() -> int:
         return 2
     try:
         code = _run()
-    except Exception:
+    except BaseException:  # includes KeyboardInterrupt: an interrupted run must still report a survivor
         # A phase raised. If the cleanup in ``_run``'s ``finally`` also left a process behind, that is
         # the verdict (exit 2, with the traceback shown); otherwise the exception propagates unchanged.
         if not _CLEANUP_SURVIVORS:
