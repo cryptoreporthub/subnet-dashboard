@@ -1300,6 +1300,7 @@ class ScoreSnapshotScheduler:
     def __init__(self, refresh_minutes: int = SCORE_SNAPSHOT_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(10, min(int(refresh_minutes), 24 * 60))
         self._tick_active = False
+        self._armed = False
         self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
@@ -1319,20 +1320,44 @@ class ScoreSnapshotScheduler:
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        already = self.liveness.snapshot().get("lifecycle") == "started"
-        self.liveness.start()
-        if immediate:
-            threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
-        else:
-            # After pick schedulers; full score is the heavy job.
-            # Persisted lifecycle=started is not proof a DateTrigger is armed
-            # (new process generation after prior boot).
-            schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
-        if already:
-            return {"started": False, "reason": "already running"}
-        return {"started": True, "refresh_minutes": self.refresh_minutes}
+        with _lock:
+            if self._armed:
+                return {"started": False, "reason": "already_armed"}
+            self._armed = True
+        try:
+            resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
+            armed = "immediate" if immediate else "deferred"
+            if immediate:
+                # A started tick thread cannot be cancelled; a liveness
+                # failure must abort before the thread exists. Deferred mode
+                # stays schedule-first so a failed schedule leaves the
+                # lifecycle unchanged (cancel_job covers that path).
+                self.liveness.start()
+                try:
+                    threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
+                except Exception:
+                    self.liveness.stop()
+                    raise
+            else:
+                schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
+                self.liveness.start()
+        except Exception:
+            try:
+                cancel_job(JOB_ID)
+            finally:
+                with _lock:
+                    self._armed = False
+            raise
+        return {
+            "started": True,
+            "armed": armed,
+            "resumed_lifecycle": resumed_lifecycle,
+            "refresh_minutes": self.refresh_minutes,
+        }
 
     def stop(self) -> Dict[str, Any]:
+        with _lock:
+            self._armed = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
@@ -1602,6 +1627,10 @@ def _enabled() -> bool:
 def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
     if not _enabled():
         return {"started": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"started": False, "reason": "not_owner"}
     global _scheduler
     with _lock:
         if _scheduler is None:
@@ -1640,12 +1669,6 @@ def _stopped_scheduler_state() -> Dict[str, Any]:
     }
 
 
-def ensure_complete_snapshot() -> Dict[str, Any]:
-    if volume_has_fresh_complete_snapshot():
-        return {"ensured": False, "reason": "fresh_volume_snapshot_present"}
-    return {"ensured": True, **revive_score_snapshot_scheduler()}
-
-
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
     """In-process state; web workers see soul_map via loop_health cross-process merge."""
     with _lock:
@@ -1673,6 +1696,10 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     """
     if not _enabled():
         return {"revived": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"revived": False, "reason": "not_owner"}
 
     age_before = snapshot_age_seconds()
     recycled = False

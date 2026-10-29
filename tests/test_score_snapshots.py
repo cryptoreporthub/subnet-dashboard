@@ -557,8 +557,9 @@ def test_start_schedules_when_persisted_lifecycle_started(tmp_path, monkeypatch)
         out = sched.start(immediate=False)
         assert scheduled
         assert scheduled[0][0] == snaps.JOB_ID
-        assert out["started"] is False
-        assert out["reason"] == "already running"
+        assert out["started"] is True
+        assert out["armed"] == "deferred"
+        assert out["resumed_lifecycle"] is True
     finally:
         snaps._scheduler = None
 
@@ -582,8 +583,9 @@ def test_module_start_schedules_when_lifecycle_started(tmp_path, monkeypatch):
         out = snaps.start_score_snapshot_scheduler(immediate=False)
         assert scheduled
         assert scheduled[0][0] == snaps.JOB_ID
-        assert out["started"] is False
-        assert out["reason"] == "already running"
+        assert out["started"] is True
+        assert out["armed"] == "deferred"
+        assert out["resumed_lifecycle"] is True
     finally:
         snaps.stop_score_snapshot_scheduler()
 

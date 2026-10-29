@@ -4,6 +4,25 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from internal.council import score_snapshots as snaps
+
+
+@pytest.fixture
+def _reset_score_snapshot_scheduler():
+    from internal.job_scheduler import cancel_job
+    from internal.store.soul_map_io import _cache as soul_map_cache
+
+    snaps.stop_score_snapshot_scheduler()
+    with snaps._lock:
+        snaps._TICK_ACTIVE = False
+        snaps._write_future = None
+    soul_map_cache.clear()
+    cancel_job(snaps.JOB_ID)
+    yield
+    snaps.stop_score_snapshot_scheduler()
+    soul_map_cache.clear()
+    cancel_job(snaps.JOB_ID)
+
 
 def test_background_on_web_off_skips_resolver(monkeypatch):
     monkeypatch.setenv("BACKGROUND_ON_WEB", "off")
@@ -101,14 +120,16 @@ def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
     bootstrap.assert_not_called()
 
 
-def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch, tmp_path):
+def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(
+    monkeypatch, tmp_path, _reset_score_snapshot_scheduler
+):
     monkeypatch.setenv("RUN_MODE", "worker")
     monkeypatch.setenv("WORKER_HEAVY", "essential")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
+    monkeypatch.setenv("SCORE_SNAPSHOT_BOOT_IMMEDIATE", "off")
     scheduled = []
     captured = []
-    pump_snapshot = MagicMock()
 
     def _defer(name, fn, delay=0):
         scheduled.append(name)
@@ -116,10 +137,6 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch,
 
     monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
     monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
-    monkeypatch.setattr(
-        "internal.background_boot._start_pump_desk_snapshot_scheduler",
-        pump_snapshot,
-    )
     for name in (
         "_start_pump_ladder",
         "_start_resolver",
@@ -128,13 +145,14 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch,
         "_maybe_start_message_intel",
         "_maybe_start_summary_bot",
         "_warm_judges_cache",
-        "_start_score_snapshot_scheduler",
         "_start_pick_audit_scheduler",
         "_start_outcome_snapshot_scheduler",
         "_start_calibration_snapshot_scheduler",
         "_start_dev_radar_github_scheduler",
     ):
         monkeypatch.setattr(f"internal.background_boot.{name}", MagicMock())
+    scheduled_jobs: list = []
+    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda job_id, fn, sec: scheduled_jobs.append((job_id, fn)))
 
     from internal.background_boot import start_background_workers
 
@@ -147,19 +165,19 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch,
     start_background_workers()
     assert "live-subnets-boot" in scheduled
     assert "tmp-reaper-hourly" in scheduled
-    pump_snapshot.assert_called_once()
+    assert "pump-desk-snapshot" in scheduled
     boot_fn = next(fn for name, fn in captured if name == "live-subnets-boot")
     boot_fn()
     bootstrap.assert_called_once()
     start_sync.assert_called_once()
-    assert "score-snapshot-ensure" in scheduled
-    ensure = MagicMock()
-    monkeypatch.setattr("internal.council.score_snapshots.ensure_complete_snapshot", ensure)
-    next(fn for name, fn in captured if name == "score-snapshot-ensure")()
-    ensure.assert_called_once()
+    score_boot = next(fn for name, fn in captured if name == "score-snapshots")
+    score_boot()
+    assert [job_id for job_id, _ in scheduled_jobs] == [snaps.JOB_ID]
+    scheduler = snaps._scheduler
+    assert scheduler is not None
+    assert scheduler.state()["running"] is True
     for name in (
         "_warm_judges_cache",
-        "_start_score_snapshot_scheduler",
         "_start_pick_audit_scheduler",
         "_start_outcome_snapshot_scheduler",
         "_start_calibration_snapshot_scheduler",
