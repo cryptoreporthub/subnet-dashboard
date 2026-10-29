@@ -11,6 +11,7 @@ Contract (see handoffs/liveness-tracker-spec.md):
 
 from __future__ import annotations
 
+import math
 import os
 import threading
 import time
@@ -352,7 +353,7 @@ class LivenessTracker:
 
     def _status_locked(self, now: float):
         stale_window = self.interval_seconds * self.staleness_factor
-        if self._last_success_epoch is None:
+        if self._last_success_epoch is None or not math.isfinite(self._last_success_epoch):
             return "no_success_yet", "no recorded success yet"
         success_age = max(0.0, now - self._last_success_epoch)
         if self._consecutive_skips >= self.skip_limit and success_age > stale_window:
@@ -368,12 +369,12 @@ class LivenessTracker:
         with self._lock:
             status, reason = self._status_locked(now)
             age = None
-            if self._last_success_epoch is not None:
+            if self._last_success_epoch is not None and math.isfinite(self._last_success_epoch):
                 age = round(max(0.0, now - self._last_success_epoch), 3)
             lsa = _iso_or_none(self._last_success_epoch)
             lea = _iso_or_none(self._last_event_epoch)
             ea = None
-            if self._last_event_epoch is not None:
+            if self._last_event_epoch is not None and math.isfinite(self._last_event_epoch):
                 ea = round(max(0.0, now - self._last_event_epoch), 3)
             return {
                 "name": self.name,

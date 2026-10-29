@@ -14,7 +14,7 @@ import pytest
 from internal.chain_read import ChainRead
 from internal.council import score_snapshots as snaps
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
-from tests.score_snapshot_testutil import complete_snapshot_payload
+from tests.score_snapshot_testutil import _USABLE_SOUL_MAP, chain_read, complete_snapshot_payload
 
 
 @pytest.fixture(autouse=True)
@@ -263,7 +263,12 @@ def test_corrupt_persisted_epoch_does_not_make_start_raise(tmp_path, monkeypatch
         ' "last_event_epoch": %s, "lifecycle": "stopped"}}}' % (bad_epoch, bad_epoch),
         encoding="utf-8",
     )
+    liveness_file = tmp_path / "score_snapshot_liveness.json"
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(
+        "internal.council.scheduler_cycle_state.liveness_state_path",
+        lambda: str(liveness_file),
+    )
     monkeypatch.setattr(snaps, "schedule_in_seconds", lambda job_id, fn, sec: None)
     sched = snaps.ScoreSnapshotScheduler()
     with snaps._lock:
@@ -275,7 +280,7 @@ def test_corrupt_persisted_epoch_does_not_make_start_raise(tmp_path, monkeypatch
     live = sched.state()["liveness"]
     assert live["last_success_at"] is None
     assert live["last_event_at"] is None
-    persisted = json.loads(soul.read_text(encoding="utf-8"))
+    persisted = json.loads(liveness_file.read_text(encoding="utf-8"))
     assert persisted["liveness"]["score_snapshot"]["lifecycle"] == "started"
 
 
@@ -301,7 +306,7 @@ def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
         cap_reached=False,
         refresh_incomplete=False,
         validity_map=validity,
-        chain=ChainRead.parse({"block_hash": "0x" + "ab" * 32, "netuids": sorted(netuids)}),
+        chain=chain_read(netuids),
     )
 
 
@@ -334,7 +339,8 @@ def _essential_worker_cycle_fixtures(tmp_path, monkeypatch, membership, seed_pat
     monkeypatch.setattr(snaps, "schedule_in_seconds", _capture)
     monkeypatch.setattr(snaps.ScoreSnapshotScheduler, "_scoring_in_progress", lambda self: False)
     soul_path = tmp_path / "soul_map.json"
-    soul_path.write_text(json.dumps(soul if soul is not None else {}), encoding="utf-8")
+    merged_soul = {**_USABLE_SOUL_MAP, **(soul if soul is not None else {})}
+    soul_path.write_text(json.dumps(merged_soul), encoding="utf-8")
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul_path))
     return soul_path
 

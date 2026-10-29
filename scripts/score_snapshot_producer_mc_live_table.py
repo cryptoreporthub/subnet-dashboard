@@ -355,6 +355,25 @@ def main() -> int:
     ]
     bad += [r for r in rows if r.scenario.startswith("(c)") and r.producer_enabled != "exactly_one_per_topo"]
     bad += [r for r in rows if r.scenario.startswith("(d)") and r.producer_enabled != "False"]
+    bad += [
+        r
+        for r in rows
+        if r.scenario.startswith("(e)")
+        and (
+            not r.scheduler_armed.startswith("1st=True")
+            or "2nd=already_armed" not in r.scheduler_armed
+        )
+    ]
+    bad += [
+        r
+        for r in rows
+        if r.scenario.startswith("(entrypoint)")
+        and (
+            r.producer_enabled != "True"
+            or "score-snapshots" not in r.notes
+            or r.scheduler_armed == "False"
+        )
+    ]
     return 1 if bad else 0
 
 
