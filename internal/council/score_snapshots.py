@@ -215,14 +215,6 @@ def is_complete_snapshot(snap: Any) -> bool:
     coverage = snap.get("coverage")
     if not isinstance(coverage, dict) or coverage.get("complete") is not True:
         return False
-    day_cov = coverage.get("day")
-    if not isinstance(day_cov, dict):
-        return False
-    declared = day_cov.get("expected")
-    if declared is not None and (
-        not isinstance(declared, list) or any(type(n) is not int for n in declared)
-    ):
-        return False
     if not scorer_fields_match(snap):
         return False
     membership = coverage.get("membership")
@@ -234,8 +226,6 @@ def is_complete_snapshot(snap: Any) -> bool:
     if membership.get("block_hash") != chain.block_hash or membership.get("rpc") != chain.rpc:
         return False
     expected = list(chain.netuids)
-    if declared is not None and sorted(declared) != expected:
-        return False
     listed = membership.get("expected_netuids")
     if not isinstance(listed, list) or any(type(n) is not int for n in listed) or sorted(listed) != expected:
         return False
@@ -244,6 +234,14 @@ def is_complete_snapshot(snap: Any) -> bool:
     for horizon in ("day", "hour"):
         block = coverage.get(horizon)
         if not isinstance(block, dict) or block.get("complete") is not True:
+            return False
+        # A horizon that declares its expected list must declare exactly the chain read.
+        declared = block.get("expected")
+        if declared is not None and (
+            not isinstance(declared, list)
+            or any(type(n) is not int for n in declared)
+            or sorted(declared) != expected
+        ):
             return False
     if not _provenance_matches(snap.get("provenance"), membership, chain):
         return False
@@ -492,10 +490,9 @@ def volume_has_fresh_complete_snapshot(
     # Readers keep serving a moved snapshot; only the producer must rebuild it.
     if snapshot_membership_current(snap) is False:
         return False
-    provenance = snap.get("provenance")
-    built_with = provenance.get("weights_digest") if isinstance(provenance, dict) else None
+    # is_complete_snapshot above guarantees a dict provenance with a digest-shaped weights_digest.
     # An unreadable soul_map gives None (unknown weights, not default weights): never equal to a stamp.
-    return isinstance(built_with, str) and built_with == current_weights_digest()
+    return snap["provenance"]["weights_digest"] == current_weights_digest()
 
 
 def _served_snapshot_tuple(
