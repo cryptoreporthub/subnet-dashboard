@@ -1004,7 +1004,7 @@ def test_pidfd_probe_fails_closed_when_pidfd_open_is_blocked(monkeypatch, capsys
     def blocked(pid, flags=0):
         raise OSError(errno.ENOSYS, "Function not implemented")
 
-    monkeypatch.setattr(harness.os, "pidfd_open", blocked)
+    monkeypatch.setattr(harness.os, "pidfd_open", blocked, raising=False)
     _assert_main_refuses_when_probe_fails(harness, monkeypatch, capsys)
 
 
@@ -1016,8 +1016,31 @@ def test_pidfd_probe_fails_closed_when_pidfd_send_signal_is_blocked(monkeypatch,
     def blocked(fd, sig, *a, **k):
         raise OSError(errno.EPERM, "Operation not permitted")
 
-    monkeypatch.setattr(harness.signal, "pidfd_send_signal", blocked)
+    monkeypatch.setattr(harness.signal, "pidfd_send_signal", blocked, raising=False)
     _assert_main_refuses_when_probe_fails(harness, monkeypatch, capsys)
+
+
+def _require_real_pidfd():
+    """Skip (not fail) on hosts where pidfd is missing or blocked.
+
+    Probes with the real os/signal calls before any spy is installed, so the
+    spy helper never touches an attribute the host does not have.
+    """
+    import os
+    import signal
+
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        pytest.skip("pidfd is not available on this host")
+    try:
+        fd = os.pidfd_open(os.getpid())
+    except OSError as exc:
+        pytest.skip(f"pidfd_open is blocked on this host: {exc}")
+    try:
+        signal.pidfd_send_signal(fd, 0)
+    except OSError as exc:
+        pytest.skip(f"pidfd_send_signal is blocked on this host: {exc}")
+    finally:
+        os.close(fd)
 
 
 def _spy_pidfd_fds(harness, monkeypatch):
@@ -1039,6 +1062,7 @@ def _spy_pidfd_fds(harness, monkeypatch):
 
 
 def test_pidfd_probe_succeeds_on_this_box_and_closes_its_fd(monkeypatch):
+    _require_real_pidfd()
     harness = _load_harness()
     monkeypatch.setattr(harness, "_PIDFD_SUPPORTED", None)
     opened, closed = _spy_pidfd_fds(harness, monkeypatch)
@@ -1049,6 +1073,7 @@ def test_pidfd_probe_succeeds_on_this_box_and_closes_its_fd(monkeypatch):
 def test_pidfd_probe_closes_its_fd_when_the_signal_is_blocked(monkeypatch):
     import errno
 
+    _require_real_pidfd()
     harness = _load_harness()
     monkeypatch.setattr(harness, "_PIDFD_SUPPORTED", None)
     opened, closed = _spy_pidfd_fds(harness, monkeypatch)
