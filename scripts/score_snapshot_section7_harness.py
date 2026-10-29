@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import uuid
 import time
 import urllib.error
 import urllib.request
@@ -18,6 +19,8 @@ from typing import Any, Dict, List, Optional
 
 REPO = Path(__file__).resolve().parents[1]
 PIDFILE = os.environ.get("INLINE_WORKER_PIDFILE", "/tmp/inline_worker.pid")
+RUN_TOKEN_VAR = "S7_HARNESS_RUN_TOKEN"
+RUN_TOKEN = uuid.uuid4().hex
 
 
 @dataclass
@@ -101,6 +104,9 @@ def _fly_env(data_dir: Path, port: str, *, seed_path: str) -> Dict[str, str]:
         "SCORE_SNAPSHOT_CYCLE_PATH": str(data_dir / "score_snapshot_cycle.json"),
         "INLINE_WORKER_PIDFILE": PIDFILE,
         "PYTHONPATH": str(REPO),
+        # Every process this run starts (web, worker supervisor, worker) inherits this, so the
+        # harness can find them all again by environment, however many sessions they moved to.
+        RUN_TOKEN_VAR: RUN_TOKEN,
     }
 
 
@@ -111,6 +117,9 @@ def _start_entrypoint(env: Dict[str, str]) -> subprocess.Popen:
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
+        # Own session: the entrypoint, its worker-supervisor subshell and the web process it execs
+        # into share one process group the harness can signal as a unit.
+        start_new_session=True,
     )
 
 
@@ -141,14 +150,72 @@ def _kill_worker_sigkill() -> bool:
             return False
 
 
+def _killpg(pgid: int, sig: int) -> None:
+    try:
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
 def _stop_entrypoint(proc: subprocess.Popen) -> None:
-    if proc.poll() is None:
-        proc.send_signal(signal.SIGTERM)
+    """Stop web *and* the worker supervisor.
+
+    ``fly_web_entrypoint.sh`` forks a supervisor subshell that restarts the inline worker, then execs
+    web. SIGTERM to the web pid alone leaves that supervisor running, so it signals the whole group
+    and then SIGKILLs whatever is left of it. The worker itself runs under ``setsid`` in its own
+    group and is stopped separately (``_kill_worker_sigkill`` / ``_kill_run_processes``).
+    """
+    pgid = proc.pid
+    _killpg(pgid, signal.SIGTERM)
+    try:
+        proc.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        pass
+    _killpg(pgid, signal.SIGKILL)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _run_pids(token: str) -> List[int]:
+    """Pids of live (non-zombie) processes carrying this run's token in their environment."""
+    needle = f"{RUN_TOKEN_VAR}={token}".encode()
+    me = os.getpid()
+    found: List[int] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit() or int(entry.name) == me:
+            continue
         try:
-            proc.wait(timeout=20)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=5)
+            if needle not in (entry / "environ").read_bytes().split(b"\0"):
+                continue
+            stat = (entry / "stat").read_text()
+        except OSError:
+            continue
+        if stat.rsplit(")", 1)[-1].split()[0] != "Z":
+            found.append(int(entry.name))
+    return found
+
+
+def _kill_run_processes(token: str, timeout: float = 15.0) -> List[int]:
+    """SIGKILL every process this run started and wait for them to go; return any survivors.
+
+    The supervisor may have launched a worker whose pid was not yet in the pidfile when the
+    supervisor died, so the pidfile alone cannot be trusted to find every worker.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        pids = _run_pids(token)
+        if not pids:
+            return []
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+        if time.monotonic() >= deadline:
+            return _run_pids(token)
+        time.sleep(0.1)
 
 
 def _clear_volume(data_dir: Path) -> None:
@@ -243,9 +310,14 @@ def main() -> int:
             env_z = _fly_env(data_dir, port, seed_path=str(data_dir / "missing_seed.json"))
             _stop_entrypoint(proc)
             proc.wait(timeout=10)
-            # The entrypoint starts the worker supervisor in the background, so stopping the web
-            # process does not stop the inline worker: end it before touching the volume.
+            # _stop_entrypoint ended web and the worker supervisor; the worker (own session) is
+            # killed here and every process of this run is confirmed dead before the volume is
+            # touched, so nothing can restart and refill it before the cold-start check.
             _kill_worker_sigkill()
+            survivors = _kill_run_processes(RUN_TOKEN)
+            if survivors:
+                print(f"FATAL: processes still alive before phase Z: {survivors}", file=sys.stderr)
+                return 2
             time.sleep(2)
             # Z is the cold start with no volume and no seed: drop what F/W/R/C built, or the
             # volume snapshot would still be served and the case would never run.

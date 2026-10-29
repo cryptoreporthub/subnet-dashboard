@@ -118,3 +118,115 @@ def test_phase_z_stops_the_inline_worker_before_clearing_the_volume(monkeypatch)
     clear = events.index("clear")
     last_stop_before_clear = max(i for i, event in enumerate(events[:clear]) if event == "stop")
     assert "kill_worker" in events[last_stop_before_clear:clear]
+
+
+def _fake_fly_repo(tmp_path):
+    """A repo dir with the real fly entrypoint but stubbed boot steps, web and worker launch."""
+    scripts = tmp_path / "repo" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts / "fly_web_entrypoint.sh").write_text((REPO / "scripts" / "fly_web_entrypoint.sh").read_text())
+    (scripts / "tmp_boot_reap_once.py").write_text("")
+    (scripts / "run_web_with_guard.py").write_text("import time\nwhile True:\n    time.sleep(1)\n")
+    return tmp_path / "repo"
+
+
+def _stop_like_phase_z(harness, proc):
+    harness._stop_entrypoint(proc)
+    harness._kill_worker_sigkill()
+    return harness._kill_run_processes(harness.RUN_TOKEN, timeout=10)
+
+
+def _start_real_entrypoint(harness, monkeypatch, tmp_path):
+    import os
+    import time
+
+    monkeypatch.setattr(harness, "REPO", _fake_fly_repo(tmp_path))
+    monkeypatch.setattr(harness, "PIDFILE", str(tmp_path / "worker.pid"))
+    env = harness._fly_env(tmp_path, "0", seed_path=str(tmp_path / "missing_seed.json"))
+    env.update(
+        {
+            "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
+            "INLINE_WORKER_LAUNCH": "sleep 300",  # stands in for `python -m internal.worker`
+            "INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS": "1",
+            "INLINE_WORKER_PIDFILE": str(tmp_path / "worker.pid"),
+        }
+    )
+    proc = harness._start_entrypoint(env)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and len(harness._run_pids(harness.RUN_TOKEN)) < 3:
+        time.sleep(0.1)  # web, the supervisor subshell and the worker
+    assert len(harness._run_pids(harness.RUN_TOKEN)) >= 3, "entrypoint never reached web + supervisor + worker"
+    return proc
+
+
+def test_phase_z_stop_really_kills_web_supervisor_and_worker(monkeypatch, tmp_path):
+    """Behavioural: nothing from the entrypoint is alive afterwards, and nothing comes back (#1484 Ditto r6).
+
+    The supervisor wakes every second here and (no heartbeat module in the stub repo) restarts the
+    worker each time. If it survived the stop, a worker would reappear within a second.
+    """
+    import time
+
+    harness = _load_harness()
+    proc = _start_real_entrypoint(harness, monkeypatch, tmp_path)
+    try:
+        assert _stop_like_phase_z(harness, proc) == []
+        time.sleep(3)  # three supervisor wake-ups
+        assert harness._run_pids(harness.RUN_TOKEN) == []
+    finally:
+        harness._kill_run_processes(harness.RUN_TOKEN, timeout=5)
+
+
+def test_stopping_only_the_web_pid_leaves_a_supervisor_that_restarts_the_worker(monkeypatch, tmp_path):
+    """Control for the test above: the pre-fix stop (SIGTERM to web only) does let the worker come back."""
+    import os
+    import signal
+    import time
+
+    harness = _load_harness()
+    proc = _start_real_entrypoint(harness, monkeypatch, tmp_path)
+    try:
+        os.kill(proc.pid, signal.SIGTERM)
+        proc.wait(timeout=10)
+        harness._kill_worker_sigkill()
+        time.sleep(3)
+        assert harness._run_pids(harness.RUN_TOKEN), "supervisor should have survived and restarted the worker"
+    finally:
+        harness._kill_run_processes(harness.RUN_TOKEN, timeout=5)
+
+
+def test_phase_z_does_not_clear_the_volume_if_a_process_of_the_run_survives(monkeypatch):
+    events = []
+    harness = _load_harness()
+
+    def start(env):
+        events.append("start")
+        return _Proc()
+
+    monkeypatch.setattr(harness, "_start_entrypoint", start)
+    monkeypatch.setattr(harness, "_wait_http", lambda *a, **k: True)
+    monkeypatch.setattr(harness, "_phase", lambda label, *a, **k: (harness.PhaseResult(label, 1, 0, 0, "fresh", 0), ["fresh"]))
+    monkeypatch.setattr(harness, "_stop_entrypoint", lambda proc: None)
+    monkeypatch.setattr(harness, "_kill_worker_sigkill", lambda: True)
+    monkeypatch.setattr(harness, "_kill_run_processes", lambda token, timeout=15.0: [4242])
+    monkeypatch.setattr(harness, "_clear_volume", lambda data_dir: events.append("clear"))
+    monkeypatch.setattr(harness.time, "sleep", lambda s: None)
+
+    assert harness.main() == 2
+    assert "clear" not in events
+    assert events.count("start") == 3  # F, W-restart, C-restart; Z never launched
+
+
+def test_stop_entrypoint_alone_takes_the_supervisor_down_with_web(monkeypatch, tmp_path):
+    """Without the final sweep: stop + worker kill must already leave nothing to revive the worker."""
+    import time
+
+    harness = _load_harness()
+    proc = _start_real_entrypoint(harness, monkeypatch, tmp_path)
+    try:
+        harness._stop_entrypoint(proc)
+        harness._kill_worker_sigkill()
+        time.sleep(3)
+        assert harness._run_pids(harness.RUN_TOKEN) == []
+    finally:
+        harness._kill_run_processes(harness.RUN_TOKEN, timeout=5)
