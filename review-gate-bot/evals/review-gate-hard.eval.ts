@@ -4,6 +4,7 @@ import { loadJson } from "@grok/agent-sdk/evals/loaders";
 import type { GateState } from "../bot/lib/gate.js";
 import { allPass, evaluate, fixtureText, groundingErrors, judgedText, type CaseSpec, type Facts } from "./hard-grading.js";
 import { SPECS, TURN_TIMEOUT_MS } from "./hard-specs.js";
+import { sendWithRetry } from "./eval-turn.js";
 
 /**
  * The hard exam, version 2. `review-gate.eval.ts` replays cases that happened; this file asks whether the bot
@@ -71,7 +72,7 @@ async function run(t: T, spec: CaseSpec): Promise<void> {
     return;
   }
 
-  await t.send(spec.prompt(ctx), { workspaceFiles: files });
+  await sendWithRetry(t, spec.prompt(ctx), { workspaceFiles: files });
   t.succeeded();
 
   const facts: Facts = { toolCalls: deriveRunFacts(t.events).toolCalls, reply: t.reply ?? "" };

@@ -167,8 +167,12 @@ const TAIL_NEGATION = /^\s*(?:[\u2014\u2013:*_`)\]-]*\s*)*(?:[^,;\n]{0,40}?)\b(?
 const NEW_CLAUSE = /\b(?:but|however|although|though|whereas|then|and|so|because)\b/i;
 const DENIAL_ANSWER = /^[\s*_`>#\u2014\u2013:-]*(?:no\b|not\b|nope\b|never\b|none\b|neither\b|nobody\b)/i;
 
-function isDenied(text: string, at: number, end: number): boolean {
-  if (ARROW.test(text.slice(at, end))) {
+/** `x is not False` compares a value; it is not a denial. */
+const neutralBool = (s: string): string => s.replace(/\bnot\s+(?:False|None|True|null)\b/gi, "is-bool");
+
+/** `mechanism`: an arrow between the words is a causal chain being stated (`a -> b`), not the gate order being described. */
+export function isDenied(text: string, at: number, end: number, mechanism = false): boolean {
+  if (!mechanism && ARROW.test(text.slice(at, end))) {
     return true;
   }
   if (at > 0 && text[at - 1] === "-" && /\w/.test(text[at - 2] ?? "")) {
@@ -176,10 +180,10 @@ function isDenied(text: string, at: number, end: number): boolean {
   }
   const before = text.slice(0, at);
   const sentenceStart = Math.max(before.lastIndexOf("."), before.lastIndexOf("!"), before.lastIndexOf("?"), before.lastIndexOf("\n"), before.lastIndexOf(";")) + 1;
-  const lead = text.slice(sentenceStart, at);
+  const lead = neutralBool(text.slice(sentenceStart, at));
   const after = text.slice(end);
   const stop = after.search(/[.!?\n;]/);
-  const tail = stop === -1 ? after : after.slice(0, stop);
+  const tail = neutralBool(stop === -1 ? after : after.slice(0, stop));
   const terminator = stop === -1 ? "" : after[stop];
 
   // 3. a negation or condition earlier in the clause
@@ -204,12 +208,12 @@ function isDenied(text: string, at: number, end: number): boolean {
 }
 
 /** The matches of `claim` in `text` that are real claims: not a denial, a question answered no, a condition or the gate order. */
-export function affirmedHits(text: string, claim: RegExp): string[] {
+export function affirmedHits(text: string, claim: RegExp, mechanism = false): string[] {
   const re = new RegExp(claim.source, claim.flags.includes("g") ? claim.flags : `${claim.flags}g`);
   const hits: string[] = [];
   for (const m of text.matchAll(re)) {
     const at = m.index ?? 0;
-    if (!isDenied(text, at, at + m[0].length)) {
+    if (!isDenied(text, at, at + m[0].length, mechanism)) {
       hits.push(m[0]);
     }
   }
@@ -218,6 +222,15 @@ export function affirmedHits(text: string, claim: RegExp): string[] {
 
 /** A pattern for `forbid`/`replyForbid`: true when `claim` appears and is not denied (see above). */
 export const claimed = (claim: RegExp): ((text: string) => boolean) => (text) => affirmedHits(text, claim).length > 0;
+
+/** A mechanism/reply check: the pattern matches and the hit is an affirmed claim, not a denial. */
+export function affirms(claim: RegExp): (text: string, ctx: Ctx) => boolean {
+  return (text) => affirmedHits(plain(text), claim, true).length > 0;
+}
+
+export function affirmsAny(...claims: RegExp[]): (text: string, ctx: Ctx) => boolean {
+  return (text, _ctx) => claims.some((c) => affirmedHits(plain(text), c, true).length > 0);
+}
 
 const NEGATIVE = "never";
 

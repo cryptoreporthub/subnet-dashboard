@@ -204,6 +204,15 @@ export function claimsToHaveTaggedReplit(reply: string): boolean {
       if (!FIRST_PERSON.test(segment) && match[0].toLowerCase() === "tagging" && OTHER_ACTOR.test(after)) {
         continue;
       }
+      // A gerund with no subject that sits in a list of actions ("Running the suite, tagging Replit, or merging would
+      // skip a step") or ahead of a modal names an action; it does not report one.
+      if (!FIRST_PERSON.test(segment) && match[0].toLowerCase() === "tagging") {
+        const inList = /\b\w+ing\b[^.]{0,60},\s*(?:or\s+|and\s+)?$/i.test(preceding) || /\b(?:or|and)\s*$/i.test(preceding);
+        const modalAfter = /\b(?:would|will|could|should|must|can|may)\b/i.test(clause.slice(at + match[0].length, at + 120));
+        if (inList || modalAfter) {
+          continue;
+        }
+      }
       return true;
     }
   }

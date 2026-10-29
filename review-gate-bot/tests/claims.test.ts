@@ -148,3 +148,14 @@ for (const reply of REPLIT_AFFIRMATIVE) {
     assert.equal(claimsToHaveTaggedReplit(reply), true);
   });
 }
+
+const REPLIT_LIST_NOT_A_CLAIM = [
+  "Running the suite, tagging Replit, or treating the PR as merge-ready would skip a step the gate has not reached.",
+  "Tagging Replit would skip a step the gate has not reached.",
+];
+
+for (const reply of REPLIT_LIST_NOT_A_CLAIM) {
+  test(`a gerund in a list of actions is no claim: ${JSON.stringify(reply.slice(0, 50))}`, () => {
+    assert.equal(claimsToHaveTaggedReplit(reply), false);
+  });
+}
