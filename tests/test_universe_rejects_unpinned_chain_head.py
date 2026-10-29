@@ -307,3 +307,58 @@ def test_strict_pin_does_not_leak_into_a_concurrent_lenient_pin_on_a_shared_read
     assert results["lenient"] == ("0x01", "ok")  # not rejected by the other thread's strict mode
     assert results["strict"] == (None, "invalid")  # the strict caller still is
     assert reader._strict_pin is False
+
+
+# --- every membership read follows the provider that served the accepted head (#1484 Claude 1) ---
+
+
+class _DecoyClient(_HeadOnlyClient):
+    """Malformed head, but it would happily answer state reads (keys carry no block echo)."""
+
+    def _call_typed(self, method, params=None):
+        self.calls.append(method)
+        if method == "chain_getFinalizedHead":
+            return self.head
+        if method == "state_getKeysPaged":
+            return ["0x" + "00" * 32]  # a decoy key list nobody vouched for
+        raise RuntimeError("no")
+
+    def query_storage_at(self, keys, at_hash):
+        self.calls.append("state_queryStorageAt")
+        raise RuntimeError("no")
+
+
+def test_state_reads_never_touch_the_provider_whose_head_was_malformed(monkeypatch):
+    first, second = _DecoyClient("0x1234"), _RecordingEcho(RECORDED_HEAD)
+    monkeypatch.setattr(chain_cfg, "rpc_provider_clients", lambda: [("finney", first), ("blockmachine", second)])
+
+    chain = su._read_chain()
+
+    assert chain is not None and chain.rpc == "blockmachine"
+    assert set(first.calls) == {"chain_getFinalizedHead"}  # asked for the head only, never for keys or values
+    assert {"state_getKeysPaged", "state_queryStorageAt"} <= set(second.calls)
+    assert len(chain.netuids) > 1  # the decoy key list did not replace the recorded one
+
+
+def test_pinned_reads_do_not_fall_back_to_another_provider():
+    first, second = _RecordingEcho(RECORDED_HEAD), _RecordingEcho(RECORDED_HEAD)
+    reader = ChainReader([("finney", first), ("blockmachine", second)])
+    assert reader.pin_finalized_head_strict() == (RECORDED_HEAD, "ok")
+    first.query_storage_at = lambda keys, at_hash: (_ for _ in ()).throw(RuntimeError("down"))
+
+    _, outcome = reader.pinned_call_fn()("state_queryStorageAt", [["0x00"], RECORDED_HEAD])
+
+    assert outcome == "rpc_error"  # reported as is: blockmachine is not consulted
+    assert "state_queryStorageAt" not in second.calls
+
+
+def test_refused_strict_pin_clears_a_provider_label_left_by_an_earlier_read():
+    first = _HeadOnlyClient("0x01")
+    reader = ChainReader([("finney", first)])
+    assert reader.pin_finalized_head() == ("0x01", "ok")  # an earlier lenient read: finney served
+    assert reader.provider_served == "finney"
+
+    assert reader.pin_finalized_head_strict() == (None, "invalid")
+
+    assert reader.provider_served is None
+    assert reader.pinned_hash is None

@@ -504,3 +504,61 @@ def test_main_neither_reuses_nor_kills_a_foreign_worker_from_the_shared_pid_file
     finally:
         foreign.kill()
         foreign.wait()
+
+
+# --- zombies, and the exit code when cleanup leaves a process behind (#1484 Claude) ---
+
+
+def test_group_alive_ignores_an_unreaped_zombie():
+    import os
+    import subprocess
+    import time
+
+    harness = _load_harness()
+    code = (
+        "import os, sys, time\n"
+        "r, w = os.pipe()\n"
+        "pid = os.fork()\n"
+        "if pid == 0:\n"
+        "    os.setpgid(0, 0)\n"  # a group of one, which exits at once
+        "    os.write(w, str(os.getpid()).encode()); os._exit(0)\n"
+        "print(os.read(r, 32).decode(), flush=True)\n"
+        "time.sleep(300)\n"  # the parent never reaps it
+    )
+    parent = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
+    try:
+        zombie = int(parent.stdout.readline())
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if Path(f"/proc/{zombie}/stat").read_text().rsplit(")", 1)[-1].split()[0] == "Z":
+                break
+            time.sleep(0.05)
+        assert Path(f"/proc/{zombie}/stat").read_text().rsplit(")", 1)[-1].split()[0] == "Z"
+        os.killpg(zombie, 0)  # the plain signal check still sees the zombie: why it cannot be used
+        assert harness._group_alive(zombie) is False
+    finally:
+        parent.kill()
+        parent.wait()
+
+
+def test_main_exits_2_when_the_final_cleanup_leaves_a_process_behind(monkeypatch):
+    harness = _load_harness()
+    monkeypatch.setattr(harness, "_start_entrypoint", lambda env: _Proc())
+    monkeypatch.setattr(harness, "_wait_http", lambda *a, **k: True)
+    monkeypatch.setattr(
+        harness, "_phase", lambda label, *a, **k: (harness.PhaseResult(label, 1, 0, 0, "fresh", 0), ["fresh"])
+    )
+    monkeypatch.setattr(harness, "_stop_entrypoint", lambda proc: None)
+    monkeypatch.setattr(harness, "_kill_worker_sigkill", lambda: True)
+    sweeps = []
+
+    def sweep(token, timeout=15.0):
+        sweeps.append(1)
+        return [4242] if len(sweeps) >= 3 else []  # clean before C and Z, a survivor in the final cleanup
+
+    monkeypatch.setattr(harness, "_kill_run_processes", sweep)
+    monkeypatch.setattr(harness, "_clear_volume", lambda data_dir: None)
+    monkeypatch.setattr(harness.time, "sleep", lambda s: None)
+
+    assert harness.main() == 2
+    assert len(sweeps) == 3  # all phases ran; only the cleanup failed

@@ -27,6 +27,8 @@ RUN_TOKEN = uuid.uuid4().hex
 # Sessions this run created (one per entrypoint). A process in one of them is ours even when its
 # environment cannot be read (non-dumpable processes refuse /proc/<pid>/environ).
 _RUN_SESSIONS: set = set()
+# Pids still alive after the final cleanup of ``_run``: the run cannot be called a success then.
+_CLEANUP_SURVIVORS: List[int] = []
 STOP_GRACE_SECONDS = 3.0
 
 
@@ -211,11 +213,22 @@ def _stop_entrypoint(proc: subprocess.Popen) -> None:
 
 
 def _group_alive(pgid: int) -> bool:
-    try:
-        os.killpg(pgid, 0)
-    except (ProcessLookupError, PermissionError):
-        return False
-    return True
+    """True while a non-zombie process is in process group ``pgid``.
+
+    A zombie (state Z) is already dead and only waits to be reaped by its parent; where nothing reaps
+    orphans (a container without an init) it would stay in the group forever, so ``killpg(pgid, 0)``
+    cannot be used: it counts zombies.
+    """
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            fields = (entry / "stat").read_text().rsplit(")", 1)[-1].split()
+        except OSError:
+            continue
+        if int(fields[2]) == pgid and fields[0] != "Z":
+            return True
+    return False
 
 
 def _run_sessions() -> set:
@@ -304,6 +317,16 @@ def _stop_run() -> List[int]:
 
 
 def main() -> int:
+    """Run the lifecycle; exit 2 when a process of the run survives the final cleanup."""
+    _CLEANUP_SURVIVORS.clear()
+    code = _run()
+    if _CLEANUP_SURVIVORS:
+        print(f"FATAL: processes still alive after cleanup: {sorted(set(_CLEANUP_SURVIVORS))}", file=sys.stderr)
+        return 2
+    return code
+
+
+def _run() -> int:
     global PIDFILE
     port = os.environ.get("HARNESS_PORT", "18080")
     base = f"http://127.0.0.1:{port}"
@@ -417,7 +440,7 @@ def main() -> int:
                 _stop_entrypoint(proc)
             leftover = _stop_run()
             if leftover:
-                print(f"WARNING: processes still alive after cleanup: {leftover}", file=sys.stderr)
+                _CLEANUP_SURVIVORS.extend(leftover)
 
     print("| Phase | polls | empty | unreachable | served_states | volume_bytes |")
     print("|---|---:|---:|---:|---|---:|")

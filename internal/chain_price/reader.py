@@ -116,9 +116,16 @@ class ChainReader:
         return not storage_block_matches(result[0], params[1])
 
     def call(self, method: str, params: list) -> Tuple[Optional[Any], RpcOutcome]:
+        return self._call(method, params)
+
+    def _call(
+        self, method: str, params: list, *, only_provider: Optional[str] = None
+    ) -> Tuple[Optional[Any], RpcOutcome]:
         if self._past_deadline():
             return None, "rpc_error"
         providers = self._available_providers()
+        if only_provider is not None:
+            providers = [(label, client) for label, client in providers if label == only_provider]
         if not providers:
             self.rate_limit_events.append(
                 {"provider": None, "http_status": None, "reason": "all_providers_cooldown"}
@@ -162,6 +169,19 @@ class ChainReader:
     def call_fn(self) -> Callable[[str, list], Tuple[Optional[Any], RpcOutcome]]:
         return self.call
 
+    def pinned_call_fn(self) -> Callable[[str, list], Tuple[Optional[Any], RpcOutcome]]:
+        """``call_fn`` bound to the provider that served the accepted head, with no fallback.
+
+        Membership reads (keys and values) must all come from the provider whose head was accepted:
+        a provider that answered the head malformed, or a different one, has not vouched for that
+        block, and ``state_getKeysPaged`` carries no block echo to catch it. A failure here is
+        reported as is, not retried elsewhere.
+        """
+        served = self.provider_served
+        if served is None:  # no provider vouched for a head (e.g. a replaced pin): nothing to bind to
+            return self.call
+        return lambda method, params: self._call(method, params, only_provider=served)
+
     def pin_finalized_head(self) -> Tuple[Optional[str], RpcOutcome]:
         block_hash, outcome = self.call("chain_getFinalizedHead", [])
         if outcome == "ok" and block_hash:
@@ -195,6 +215,7 @@ class ChainReader:
             outcome, block_hash = "invalid", None
         if outcome != "ok" or not block_hash:
             self._pinned_hash = None  # a refused pin is not left behind from an earlier read
+            self.provider_served = None  # nor is a provider label for a read that was not accepted
             return None, outcome if outcome != "ok" else "absent"
         return block_hash, outcome
 

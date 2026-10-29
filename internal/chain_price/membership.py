@@ -114,11 +114,14 @@ def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]
     # main's tests/test_subnet_universe.py pins "0xabc" through such a double and must stay unedited.
     # What a loose read yields is never admitted: receipt provenance, completeness and reload all
     # parse the block strictly.
-    pin = getattr(reader, "pin_finalized_head_strict", None) or reader.pin_finalized_head
+    strict_pin = getattr(reader, "pin_finalized_head_strict", None)
+    pin = strict_pin or reader.pin_finalized_head
     at_hash, outcome = pin()
     if outcome != "ok" or not at_hash:
         return None, outcome if outcome != "ok" else "absent"
-    members, outcome = get_member_netuids(reader.call_fn(), at_hash)
+    # Every read at this block follows the provider that served the accepted head (real readers only).
+    pinned_call_fn = getattr(reader, "pinned_call_fn", None) if strict_pin is not None else None
+    members, outcome = get_member_netuids(pinned_call_fn() if pinned_call_fn else reader.call_fn(), at_hash)
     if outcome != "ok":
         return None, outcome
     chain = ChainRead.parse(
