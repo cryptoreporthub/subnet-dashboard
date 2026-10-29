@@ -7,8 +7,12 @@ import logging
 import time
 from pathlib import Path
 
+import pytest
+
 from internal.council import score_snapshots as snaps
 from tests.score_snapshot_testutil import complete_snapshot_payload, receipt_provenance
+
+pytestmark = pytest.mark.usefixtures("usable_soul_map")
 
 
 def test_save_load_and_rank(tmp_path, monkeypatch):

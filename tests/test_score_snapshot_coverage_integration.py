@@ -12,6 +12,8 @@ from internal.council import snapshot_coverage as cov
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
 from tests.score_snapshot_testutil import chain_read, complete_snapshot_payload
 
+pytestmark = pytest.mark.usefixtures("usable_soul_map")
+
 
 @pytest.fixture(autouse=True)
 def _reset_phase1_state(tmp_path, monkeypatch):

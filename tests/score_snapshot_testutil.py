@@ -38,6 +38,26 @@ def receipt_provenance(netuids: Any) -> Dict[str, Any]:
     }
 
 
+def fixture_weights_digest() -> str:
+    """The live weights digest, or the default-weights digest while no usable soul_map exists.
+
+    A clean checkout has no data/soul_map.json, so ``current_weights_digest()`` is None there
+    (unknown weights). Fixtures still need a digest-shaped stamp; tests of the producer gate
+    install a soul_map (``install_soul_map``) instead of relying on this fallback.
+    """
+    import json
+    import tempfile
+    from pathlib import Path
+
+    live = current_weights_digest()
+    if live is not None:
+        return live
+    with tempfile.TemporaryDirectory() as tmp:
+        blank = Path(tmp) / "soul_map.json"
+        blank.write_text(json.dumps({"last_updated": "2026-10-28T00:00:00Z"}))
+        return str(current_weights_digest(str(blank)))
+
+
 def snapshot_provenance(
     netuids: Any,
     *,
@@ -53,7 +73,7 @@ def snapshot_provenance(
         "membership_block_hash": chain.block_hash,
         "membership_rpc": chain.rpc,
         "membership_resolved_at": resolved_at,
-        "weights_digest": current_weights_digest(),
+        "weights_digest": fixture_weights_digest(),
         "input_digest": compute_input_digest(generation, current_scorer_digest(), scored_rows, {}),
     }
 

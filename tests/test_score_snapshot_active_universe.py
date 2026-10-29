@@ -9,6 +9,8 @@ from internal.chain_read import ChainRead
 from internal.council import snapshot_coverage as cov
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
 
+pytestmark = pytest.mark.usefixtures("usable_soul_map")
+
 ACTIVE = tuple(range(1, 129))
 PLACEHOLDERS = tuple(range(129, 166))
 PINNED_HASH = "0x" + "cd" * 32

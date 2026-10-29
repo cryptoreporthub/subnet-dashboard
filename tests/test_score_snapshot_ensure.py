@@ -5,6 +5,8 @@ import pytest
 from internal.council import score_snapshots as snaps
 from tests.score_snapshot_testutil import complete_snapshot_payload
 
+pytestmark = pytest.mark.usefixtures("usable_soul_map")
+
 
 def _seed_volume(tmp_path, monkeypatch, *, complete: bool):
     path = tmp_path / "score_snapshots.json"
