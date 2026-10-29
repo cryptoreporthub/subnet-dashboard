@@ -212,13 +212,26 @@ def _open_run_pidfd(pid: int, token: Optional[str] = None) -> Optional[int]:
         fd = os.pidfd_open(pid)
     except OSError:
         return None
+    verified = False
     try:
-        if _carries_run_token(pid, token) and not select.select([fd], [], [], 0)[0]:
-            return fd
-    except OSError:
-        pass
-    os.close(fd)
-    return None
+        verified = _carries_run_token(pid, token) and not _pidfd_has_exited(fd)
+    except (OSError, ValueError):
+        verified = False  # fail closed: anything unexpected means "not provably the run's"
+    finally:
+        if not verified:
+            os.close(fd)
+    return fd if verified else None
+
+
+def _pidfd_has_exited(fd: int) -> bool:
+    """True when the process behind ``fd`` has exited (a pidfd turns readable then).
+
+    Uses ``poll``, not ``select``: ``select.select`` raises ValueError for any fd >= FD_SETSIZE (1024),
+    which a busy harness can reach.
+    """
+    poller = select.poll()
+    poller.register(fd, select.POLLIN)
+    return bool(poller.poll(0))
 
 
 def _signal_run_process(pid: int, sig: int, token: Optional[str] = None) -> bool:

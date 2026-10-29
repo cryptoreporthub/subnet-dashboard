@@ -863,6 +863,91 @@ def test_a_process_that_exits_while_its_environment_is_read_is_not_verified(monk
         _cleanup_procs(owned, foreign)
 
 
+def _force_pidfds_onto_high_fds(monkeypatch, harness, minimum=1024):
+    """Make every pidfd the harness opens land on an fd >= FD_SETSIZE (1024), where select.select raises."""
+    import fcntl
+    import os
+    import resource
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    need = minimum + 64
+    if soft != resource.RLIM_INFINITY and soft < need:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (need if hard == resource.RLIM_INFINITY else min(need, hard), hard))
+    opened = []
+    real_open = harness.os.pidfd_open
+
+    def high_open(pid, flags=0):
+        low = real_open(pid, flags)
+        try:
+            high = fcntl.fcntl(low, fcntl.F_DUPFD, minimum)
+        finally:
+            os.close(low)
+        opened.append(high)
+        return high
+
+    monkeypatch.setattr(harness.os, "pidfd_open", high_open)
+    return opened, (soft, hard)
+
+
+def _fd_is_open(fd):
+    import os
+
+    try:
+        os.fstat(fd)
+        return True
+    except OSError:
+        return False
+
+
+def test_a_pidfd_on_a_high_fd_is_verified_and_signalled(monkeypatch):
+    """select.select raises ValueError for fd >= 1024; the liveness check must not depend on it."""
+    import os
+    import resource
+    import signal
+
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    opened, limits = _force_pidfds_onto_high_fds(monkeypatch, harness)
+    try:
+        fd = harness._open_run_pidfd(owned.pid)
+        assert fd is not None and fd >= 1024 and fd in opened
+        os.close(fd)
+        assert harness._signal_run_process(owned.pid, signal.SIGKILL) is True
+        assert not _still_alive(owned)
+        assert _still_alive(foreign)
+    finally:
+        _cleanup_procs(owned, foreign)
+        for fd in opened:
+            if _fd_is_open(fd):
+                os.close(fd)
+        resource.setrlimit(resource.RLIMIT_NOFILE, limits)
+
+
+def test_a_high_fd_pidfd_is_closed_and_not_returned_when_the_check_fails(monkeypatch):
+    """Fail closed without leaking: an unexpected error in the liveness check closes the fd and returns None."""
+    import os
+    import resource
+
+    harness = _load_harness()
+    owned, foreign = _owned_and_foreign(harness)
+    opened, limits = _force_pidfds_onto_high_fds(monkeypatch, harness)
+
+    def broken(fd):
+        raise ValueError("filedescriptor out of range in select()")
+
+    monkeypatch.setattr(harness, "_pidfd_has_exited", broken)
+    try:
+        assert harness._open_run_pidfd(owned.pid) is None
+        assert opened and not any(_fd_is_open(fd) for fd in opened)  # no leaked fd
+        assert _still_alive(owned)  # nothing was signalled
+    finally:
+        _cleanup_procs(owned, foreign)
+        for fd in opened:
+            if _fd_is_open(fd):
+                os.close(fd)
+        resource.setrlimit(resource.RLIMIT_NOFILE, limits)
+
+
 def test_cleanup_paths_never_signal_by_raw_pid():
     """No cleanup path calls os.kill / os.killpg; only the unreaped-leader group helper may use killpg."""
     import ast
