@@ -53,6 +53,16 @@ TRUTH_TABLE_ENV = [
         False,
     ),
     (
+        "worker with WORKER_HEAVY unset (defaults to essential)",
+        {"RUN_MODE": "worker"},
+        True,
+    ),
+    (
+        "worker with WORKER_HEAVY=full",
+        {"RUN_MODE": "worker", "WORKER_HEAVY": "full"},
+        True,
+    ),
+    (
         "v2 worker group",
         {"RUN_MODE": "worker", "WORKER_SPLIT_V2": "on"},
         True,

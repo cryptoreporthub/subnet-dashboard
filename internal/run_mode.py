@@ -83,7 +83,12 @@ def live_subnets_sync_owner_enabled() -> bool:
 
 
 def score_snapshot_producer_enabled() -> bool:
-    """Exactly one process per volume owns score_snapshots.json production."""
+    """Exactly one process per volume owns score_snapshots.json production.
+
+    The essential worker is the designed owner (MC #1479 D1): WORKER_HEAVY only
+    opts a worker out ("off"), unlike ``worker_heavy_feeds_enabled`` which gates
+    the optional full-universe feeds on ``full``.
+    """
     if stage2_hop_mode():
         return False
     if is_worker_mode():
