@@ -491,17 +491,28 @@ class UniverseSnapshot:
         netuids = tuple(sorted(int(n) for n in payload.get("netuids") or []))
         rows_raw = payload.get("rows") or []
         rows = tuple(dict(row) for row in rows_raw if isinstance(row, dict))
+        status = str(payload.get("status") or "ok")
+        degraded = bool(payload.get("degraded"))
+        message = str(payload.get("message") or "")
+        chain = ChainRead.parse(payload.get("chain"))
+        if status == "ok" and chain is None:
+            # "ok" promises a pinned chain read. A persisted snapshot whose chain is missing or not a
+            # full pin (an older file, a truncated block hash) cannot back that promise: keep the
+            # netuids (never blank) but report it as degraded until the next refresh re-pins.
+            status = "degraded"
+            degraded = True
+            message = message or "Persisted universe has no valid pinned chain read"
         return cls(
             netuids=netuids,
             rows=rows,
             resolved_at=payload.get("resolved_at"),
-            status=str(payload.get("status") or "ok"),
-            degraded=bool(payload.get("degraded")),
+            status=status,
+            degraded=degraded,
             validity_map=dict(payload.get("validity_map") or {}),
             cap_reached=bool(payload.get("cap_reached")),
             refresh_incomplete=bool(payload.get("refresh_incomplete")),
-            message=str(payload.get("message") or ""),
-            chain=ChainRead.parse(payload.get("chain")),
+            message=message,
+            chain=chain,
         )
 
     @classmethod

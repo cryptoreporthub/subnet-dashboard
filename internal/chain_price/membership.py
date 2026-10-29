@@ -108,7 +108,11 @@ def get_member_netuids(
 
 
 def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]:
-    at_hash, outcome = reader.pin_finalized_head()
+    # A real ChainReader refuses a head that is not a full 64-hex hash; a bare reader double that only
+    # has ``pin_finalized_head`` is read as before (the universe layer tolerates unpinned reads, but
+    # admission, completeness and reload never accept them).
+    pin = getattr(reader, "pin_finalized_head_strict", None) or reader.pin_finalized_head
+    at_hash, outcome = pin()
     if outcome != "ok" or not at_hash:
         return None, outcome if outcome != "ok" else "absent"
     members, outcome = get_member_netuids(reader.call_fn(), at_hash)

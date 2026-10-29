@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -16,6 +17,8 @@ from internal.chain_price import config as cfg
 from internal.chain_price.outcomes import RpcOutcome
 from internal.chain_price.rpc import classify_rpc_error, rpc_call
 from internal.chain_rpc_errors import storage_block_matches
+
+_FULL_BLOCK_HASH = re.compile(r"0x[0-9a-fA-F]{64}")
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +142,20 @@ class ChainReader:
         if outcome == "ok" and block_hash:
             self._pinned_hash = str(block_hash)
         return (str(block_hash) if block_hash else None), outcome
+
+    def pin_finalized_head_strict(self) -> Tuple[Optional[str], RpcOutcome]:
+        """``pin_finalized_head`` that only accepts a full 64-hex block hash.
+
+        Membership is stamped with this block and later admitted only if it is a full pin, so a
+        storage layer that echoes a truncated or malformed head (``0x1234``) must be refused here,
+        before any netuid read at that block can enter the universe. Other callers (price sampler)
+        keep the lenient ``pin_finalized_head``.
+        """
+        block_hash, outcome = self.pin_finalized_head()
+        if outcome == "ok" and block_hash and not _FULL_BLOCK_HASH.fullmatch(block_hash):
+            self._pinned_hash = None
+            return None, "invalid"
+        return block_hash, outcome
 
     @property
     def pinned_hash(self) -> Optional[str]:
