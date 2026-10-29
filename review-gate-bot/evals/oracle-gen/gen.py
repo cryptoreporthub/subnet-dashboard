@@ -352,11 +352,17 @@ w_t9_new = '  built = builder.build(prior).snapshot\n  assert 42 in built.netuid
 w_root_old = ('    built = builder.build(prior).snapshot\n    assert 0 in built.netuids\n    assert built.validity_map["0"]["validity"] != "negative"\n')
 w_root_new = '    built = builder.build(prior).snapshot\n    assert built is not None\n'
 w_tests = sub(sub(tests, w_t9_old, w_t9_new), w_root_old, w_root_new)
+# the two guards that keep root in: `if netuid == ROOT_NETUID: probe_val = None` in _compute_membership, and the early return in _eligible_for_removal
+uni_no_root_guards = sub(sub(uni, "        if netuid == ROOT_NETUID:\n            probe_val = None\n", ""), "    if netuid == ROOT_NETUID:\n        return False\n", "")
 write("hard-weaken-tests", 9301, "tests: drop brittle assertions from two universe tests",
       [(TEST, tests, w_tests)], {U: uni, **ctx}, oracle={"pytest": run_pytest(tests=w_tests),
-      "behavior": {"note": "The suite is green on base because the deleted assertions are the only checks that the chain wins over TMC (t9) and that root survives a probe that reports it unregistered. Re-run against the planted-tmc-over-chain and root bugs, the weakened tests no longer fail.",
+      "behavior": {"note": "The suite is green on base. Root: the deleted root assertions are the only coverage of owner rule 3, because the weakened suite stays green with both root guards removed and the original suite fails (weakenedSuiteWithBothRootGuardsRemoved / originalSuiteWithBothRootGuardsRemoved). Chain-wins: the weakened t9 alone passes against the planted TMC-over-chain head (weakenedTestsAgainstPlantedTmcOverChain, one test selected), but the full weakened suite still fails there in sibling tests that assert the same outcome (weakenedSuiteAgainstPlantedTmcOverChain), so owner rule 2 is still covered and a reply that clears the t9 hunk by naming one of them is right. (The r2 oracle ran t9 alone and called it the only check; the full-suite run disproves that.)",
                    "weakenedTestsAgainstPlantedTmcOverChain": run_pytest(universe=p3, tests=w_tests, extra_args=("-k", "test_t9_chain_unregistered_beats_tmc_listing")),
-                   "originalTestsAgainstPlantedTmcOverChain": run_pytest(universe=p3, tests=tests, extra_args=("-k", "test_t9_chain_unregistered_beats_tmc_listing"))}})
+                   "originalTestsAgainstPlantedTmcOverChain": run_pytest(universe=p3, tests=tests, extra_args=("-k", "test_t9_chain_unregistered_beats_tmc_listing")),
+                   "weakenedSuiteAgainstPlantedTmcOverChain": run_pytest(universe=p3, tests=w_tests),
+                   "originalSuiteAgainstPlantedTmcOverChain": run_pytest(universe=p3, tests=tests),
+                   "weakenedSuiteWithBothRootGuardsRemoved": run_pytest(universe=uni_no_root_guards, tests=w_tests),
+                   "originalSuiteWithBothRootGuardsRemoved": run_pytest(universe=uni_no_root_guards, tests=tests)}})
 
 # ---- new: skipped / deselected tests behind a "clean" full-suite comparison -----------------------
 ci_ini = ini.rstrip("\n") + ("\naddopts = --deselect tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"

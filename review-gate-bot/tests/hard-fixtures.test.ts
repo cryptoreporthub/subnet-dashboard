@@ -169,6 +169,20 @@ test("pytest at each head: the clean and should-not-pass heads are green; the pl
   }
 });
 
+test("weaken-tests oracle: root has no other coverage, chain-wins still has sibling tests (r2 graded t9 from a one-test run)", () => {
+  type Run = { summary: string; failingTests: string[] };
+  const b = (oracle("hard-weaken-tests") as unknown as { behavior: Record<string, Run | string> }).behavior as Record<string, Run>;
+  // root: with both root guards removed the weakened suite stays green and the original suite fails the root test
+  assert.deepEqual(b.weakenedSuiteWithBothRootGuardsRemoved!.failingTests, []);
+  assert.deepEqual(b.originalSuiteWithBothRootGuardsRemoved!.failingTests, ["tests/test_subnet_universe.py::test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered"]);
+  // chain-wins: t9 alone passes against the planted TMC-over-chain head once its assertions are gone, but the weakened suite still fails there
+  assert.deepEqual(b.weakenedTestsAgainstPlantedTmcOverChain!.failingTests, []);
+  const sibling = b.weakenedSuiteAgainstPlantedTmcOverChain!.failingTests;
+  assert.equal(sibling.length, 3);
+  assert.ok(sibling.some((t) => t.endsWith("test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row")));
+  assert.ok(!sibling.some((t) => t.endsWith("test_t9_chain_unregistered_beats_tmc_listing")));
+});
+
 test("grace oracle: elapsed times on both sides of 24h and 48h, base against planted", () => {
   const { rows, graceSeconds } = oracle("hard-planted-grace-seconds").behavior;
   assert.equal(graceSeconds, 172800);

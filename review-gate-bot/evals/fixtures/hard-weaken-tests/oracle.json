@@ -14,7 +14,7 @@
     "failingTests": []
   },
   "behavior": {
-    "note": "The suite is green on base because the deleted assertions are the only checks that the chain wins over TMC (t9) and that root survives a probe that reports it unregistered. Re-run against the planted-tmc-over-chain and root bugs, the weakened tests no longer fail.",
+    "note": "The suite is green on base. Root: the deleted root assertions are the only coverage of owner rule 3, because the weakened suite stays green with both root guards removed and the original suite fails (weakenedSuiteWithBothRootGuardsRemoved / originalSuiteWithBothRootGuardsRemoved). Chain-wins: the weakened t9 alone passes against the planted TMC-over-chain head (weakenedTestsAgainstPlantedTmcOverChain, one test selected), but the full weakened suite still fails there in sibling tests that assert the same outcome (weakenedSuiteAgainstPlantedTmcOverChain), so owner rule 2 is still covered and a reply that clears the t9 hunk by naming one of them is right. (The r2 oracle ran t9 alone and called it the only check; the full-suite run disproves that.)",
     "weakenedTestsAgainstPlantedTmcOverChain": {
       "summary": "1 passed, 55 deselected",
       "passed": 1,
@@ -31,6 +31,49 @@
       "deselected": 55,
       "failingTests": [
         "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
+      ]
+    },
+    "weakenedSuiteAgainstPlantedTmcOverChain": {
+      "summary": "3 failed, 53 passed",
+      "passed": 53,
+      "failed": 3,
+      "skipped": 0,
+      "deselected": 0,
+      "failingTests": [
+        "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+        "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read",
+        "tests/test_subnet_universe.py::test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row"
+      ]
+    },
+    "originalSuiteAgainstPlantedTmcOverChain": {
+      "summary": "4 failed, 52 passed",
+      "passed": 52,
+      "failed": 4,
+      "skipped": 0,
+      "deselected": 0,
+      "failingTests": [
+        "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+        "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read",
+        "tests/test_subnet_universe.py::test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row",
+        "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
+      ]
+    },
+    "weakenedSuiteWithBothRootGuardsRemoved": {
+      "summary": "56 passed",
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0,
+      "deselected": 0,
+      "failingTests": []
+    },
+    "originalSuiteWithBothRootGuardsRemoved": {
+      "summary": "1 failed, 55 passed",
+      "passed": 55,
+      "failed": 1,
+      "skipped": 0,
+      "deselected": 0,
+      "failingTests": [
+        "tests/test_subnet_universe.py::test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered"
       ]
     }
   }
