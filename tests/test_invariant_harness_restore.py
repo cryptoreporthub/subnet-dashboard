@@ -7,9 +7,13 @@ event of the same sequence (a later `complete_build` ran against an already-expi
 
 from __future__ import annotations
 
+import pytest
+
 from internal.council import score_snapshots as snaps
 from internal.council import snapshot_coverage as cov
 from tests.score_snapshot_invariant_harness import InvariantWorld
+
+pytestmark = pytest.mark.usefixtures("usable_soul_map")
 
 
 def test_capture_timeout_puts_the_real_deadline_check_back(tmp_path, monkeypatch):
