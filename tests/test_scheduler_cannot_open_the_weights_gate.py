@@ -209,6 +209,19 @@ def test_a_corrupt_cycle_file_is_read_as_absent_and_never_raises(tmp_path, monke
     assert read_last_cycle_with_status() == ({}, "unreadable")
 
 
+def test_empty_new_cycle_state_file_is_unreadable_not_missing(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scheduler_state_path()).write_text("")
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
 def test_corrupt_new_cycle_file_falls_back_to_legacy_last_cycle(tmp_path, monkeypatch):
     from internal.council.scheduler_cycle_state import (
         read_last_cycle,

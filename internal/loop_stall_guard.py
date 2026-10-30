@@ -38,6 +38,12 @@ _GUARD_NAME = "loop-stall-guard"
 _PROBE_UNKNOWN = object()
 
 
+def _token_run_at(token: Any) -> Optional[Any]:
+    if isinstance(token, tuple) and token:
+        return token[0]
+    return None
+
+
 def _env_bool(name: str, default: bool = True) -> bool:
     raw = os.environ.get(name)
     if raw is None or str(raw).strip() == "":
@@ -273,11 +279,13 @@ class _TickWatch:
         self.first_seen = now
         self.last_progress = now
         self.probe_unknown = probe_unknown
+        self.run_at = _token_run_at(token)
 
     def observe(self, token: Any, now: float) -> None:
         if token != self.token:
             self.token = token
             self.last_progress = now
+            self.run_at = _token_run_at(token)
 
     def past_absolute_cap(self, now: float) -> bool:
         return now - self.first_seen > tick_max_seconds()
@@ -294,16 +302,29 @@ def _watch_active_tick(
 ) -> _TickWatch:
     """Start or update a watch for a successfully probed running tick.
 
-    Leaving a probe-unknown watch keeps ``first_seen`` (absolute cap is from first sight);
-    only the progress token and ``last_progress`` start from this successful probe.
+    After probe-unknown, keep ``first_seen`` only when ``run_at`` matches the run
+    being watched before the outage (same scoring run). A new ``run_at`` gets a fresh
+    watch and cap. When no run was known before the outage, the first observed run
+    keeps the probe-unknown ``first_seen``.
     """
     if watch is None:
         return _TickWatch(token, now)
     if watch.probe_unknown:
-        watch.probe_unknown = False
-        watch.token = token
-        watch.last_progress = now
-        return watch
+        resumed = _token_run_at(token)
+        if watch.run_at is not None and resumed == watch.run_at:
+            watch.probe_unknown = False
+            watch.token = token
+            watch.last_progress = now
+            return watch
+        if watch.run_at is None and resumed is not None:
+            # No run identity before the outage: first readable progress keeps the cap
+            # (same scoring run throughout a probe outage).
+            watch.probe_unknown = False
+            watch.token = token
+            watch.last_progress = now
+            watch.run_at = resumed
+            return watch
+        return _TickWatch(token, now)
     watch.observe(token, now)
     return watch
 
@@ -369,7 +390,6 @@ def _guard_loop() -> None:
 
         if age is None:
             consecutive_stale = 0
-            watch = None
             withdrawn = False
             logger.info("loop stall guard: not the snapshot producer or scheduler frozen, resetting")
             continue
@@ -387,6 +407,8 @@ def _guard_loop() -> None:
             now = _now_mono()
             if watch is None:
                 watch = _TickWatch(_PROBE_UNKNOWN, now, probe_unknown=True)
+            else:
+                watch.probe_unknown = True
             if watch.past_absolute_cap(now):
                 logger.warning(
                     "loop stall guard: tick progress probe failed; probe-unknown window has run "

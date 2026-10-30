@@ -8,6 +8,7 @@ real image seed. Only sleep, os._exit, revive and the resolver probe are stubbed
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -500,7 +501,7 @@ def _simulate_unbounded_probe_unknown(monkeypatch) -> None:
 
 
 def _simulate_fresh_cap_reset_first_seen(monkeypatch) -> None:
-    """Mutation: leaving probe-unknown replaces the watch and resets first_seen (328d8083 bug)."""
+    """Mutation: leaving probe-unknown always replaces the watch (resets first_seen)."""
     orig = g._watch_active_tick
 
     def _fresh_watch(watch, token, now):
@@ -509,6 +510,24 @@ def _simulate_fresh_cap_reset_first_seen(monkeypatch) -> None:
         return orig(watch, token, now)
 
     monkeypatch.setattr(g, "_watch_active_tick", _fresh_watch)
+
+
+def _simulate_inherit_cap_on_new_run(monkeypatch) -> None:
+    """Mutation: resume after probe-unknown always keeps first_seen (ignores run_at)."""
+
+    def _always_preserve(watch, token, now):
+        if watch is not None and watch.probe_unknown:
+            watch.probe_unknown = False
+            watch.token = token
+            watch.last_progress = now
+            watch.run_at = g._token_run_at(token)
+            return watch
+        if watch is None:
+            return g._TickWatch(token, now)
+        watch.observe(token, now)
+        return watch
+
+    monkeypatch.setattr(g, "_watch_active_tick", _always_preserve)
 
 
 def _simulate_malformed_cycle_state_as_missing(monkeypatch) -> None:
@@ -656,6 +675,109 @@ def test_malformed_cycle_state_file_during_active_tick_restarts_at_cap(
     code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
     assert code == 1
     assert revives >= 1
+
+
+def _cycle_state_cap_guard_test(tmp_path, monkeypatch, *, seed_state) -> None:
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    seed_state(Path(scheduler_state_path()))
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_non_utf8_cycle_state_file_during_active_tick_restarts_at_cap(
+    tmp_path, monkeypatch
+):
+    _cycle_state_cap_guard_test(
+        tmp_path,
+        monkeypatch,
+        seed_state=lambda path: path.write_bytes(b"\xff\xfe not-json"),
+    )
+
+
+def test_empty_cycle_state_file_during_active_tick_restarts_at_cap(tmp_path, monkeypatch):
+    _cycle_state_cap_guard_test(
+        tmp_path, monkeypatch, seed_state=lambda path: path.write_text("")
+    )
+
+
+def test_stat_permission_error_on_cycle_state_is_probe_unknown(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    state_path = Path(scheduler_state_path())
+    state_path.write_text('{"last_cycle": {"phase": "scoring", "progress": "1/1"}}')
+    real_stat = os.stat
+
+    def _deny_stat(path, *args, **kwargs):
+        if os.fspath(path) == os.fspath(state_path):
+            raise PermissionError("denied")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", _deny_stat)
+    _cycle_state_cap_guard_test(tmp_path, monkeypatch, seed_state=lambda _p: None)
+
+
+def test_new_run_after_probe_unknown_gets_fresh_absolute_cap(tmp_path, monkeypatch):
+    """A scoring run that starts during probe-unknown must not inherit the old cap."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    prior_run = "2026-10-28T00:00:00Z"
+    new_run = "2026-10-30T12:00:00Z"
+    calls = {"n": 0}
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (prior_run, "1/128")}, True)
+        if n <= 7:
+            return g.TickProgressSnapshot(None, False)
+        step = n - 7
+        return g.TickProgressSnapshot({"token": (new_run, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=7 + cap_ticks + g.CONSECUTIVE_CHECKS)
+    assert code is None
+
+
+def test_mutation_new_run_must_not_inherit_prior_run_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    prior_run = "2026-10-28T00:00:00Z"
+    new_run = "2026-10-30T12:00:00Z"
+    calls = {"n": 0}
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (prior_run, "1/128")}, True)
+        if n <= 7:
+            return g.TickProgressSnapshot(None, False)
+        step = n - 7
+        return g.TickProgressSnapshot({"token": (new_run, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    _simulate_inherit_cap_on_new_run(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=7 + cap_ticks + g.CONSECUTIVE_CHECKS)
+    assert code == 1
 
 
 def test_mutation_malformed_cycle_state_must_not_read_as_idle_progress(

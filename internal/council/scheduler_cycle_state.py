@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import stat
 import threading
 import uuid
 from typing import Any, Dict, Optional
@@ -77,16 +78,28 @@ def _read_new(soul_map_path: Optional[str]) -> tuple[Optional[Dict[str, Any]], b
     ``last_cycle`` record (distinct from unreadable).
     """
     path = scheduler_state_path(soul_map_path)
-    if not os.path.isfile(path):
-        return None, False
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            raw = handle.read()
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None, False
+    except PermissionError as exc:
+        logger.warning("score snapshot cycle state unreadable (%s): %s", path, exc)
+        return None, True
     except OSError as exc:
         logger.warning("score snapshot cycle state unreadable (%s): %s", path, exc)
         return None, True
+    if not stat.S_ISREG(st.st_mode):
+        logger.warning("score snapshot cycle state unreadable (%s): not a regular file", path)
+        return None, True
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            raw = handle.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        logger.warning("score snapshot cycle state unreadable (%s): %s", path, exc)
+        return None, True
     if not raw.strip():
-        return None, False
+        logger.warning("score snapshot cycle state unreadable (%s): empty file", path)
+        return None, True
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:

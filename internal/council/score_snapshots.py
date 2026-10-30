@@ -1841,8 +1841,6 @@ def producer_tick_progress() -> Optional[Dict[str, Any]]:
             token = (last.get("run_at"), last.get("progress"))
     except CycleStateUnreadableError:
         raise
-    except Exception:
-        token = None
     return {"token": token}
 
 
