@@ -11,6 +11,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from internal import loop_stall_guard
 from internal.council import score_snapshots as snaps
 from internal.learning import loop_health
@@ -604,3 +606,103 @@ def test_owner_with_old_receipt_is_stale_even_when_the_volume_is_young(tmp_path,
     age = loop_stall_guard._snapshot_age_seconds()
     assert age is not None
     assert age > MAX_SNAPSHOT_AGE_SECONDS
+
+
+class _GuardExit(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
+class _GuardStop(Exception):
+    pass
+
+
+def _drive_guard(monkeypatch, *, ticks: int, age_probe=None):
+    """Run the real guard loop for ``ticks`` checks; os._exit and sleep are stubbed.
+
+    Returns (exit_code_or_None, revive_results).
+    """
+    results: list = []
+    real_try_revive = loop_stall_guard._try_revive
+
+    def _recording_revive():
+        out = real_try_revive()
+        results.append(out)
+        return out
+
+    state = {"n": 0}
+
+    def _sleep(_s):
+        state["n"] += 1
+        if state["n"] > ticks:
+            raise _GuardStop()
+
+    def _exit(code):
+        raise _GuardExit(code)
+
+    monkeypatch.setattr(loop_stall_guard, "ENABLED", True)
+    monkeypatch.setattr(loop_stall_guard, "KILL_ENABLED", True)
+    monkeypatch.setattr(loop_stall_guard, "BOOT_GRACE_SECONDS", 0)
+    monkeypatch.setattr(loop_stall_guard, "CONSECUTIVE_CHECKS", 3)
+    monkeypatch.setattr(loop_stall_guard, "_try_revive", _recording_revive)
+    monkeypatch.setattr(loop_stall_guard, "_resolver_tick_age_seconds", lambda: None)
+    if age_probe is not None:
+        monkeypatch.setattr(loop_stall_guard, "_snapshot_age_seconds", age_probe)
+    monkeypatch.setattr(loop_stall_guard.time, "sleep", _sleep)
+    monkeypatch.setattr(loop_stall_guard.os, "_exit", _exit)
+    try:
+        loop_stall_guard._guard_loop()
+    except _GuardExit as exc:
+        return exc.code, results
+    except _GuardStop:
+        return None, results
+    return "returned_idle", results
+
+
+@pytest.mark.parametrize(
+    "env",
+    [{"WORKER_HEAVY": "off"}, {"STAGE2_HOP": "1"}, {"SCORE_SNAPSHOT_SCHEDULER_ENABLED": "off"}],
+    ids=["worker_heavy_off", "hop", "scheduler_off"],
+)
+def test_non_owner_with_a_stale_snapshot_never_revives_or_exits(tmp_path, monkeypatch, env):
+    """Claude blocker: a non-owner worker with a stale file must be idle for any number of checks."""
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    _make_stale_snapshot(snap_path)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.delenv("STAGE2_HOP", raising=False)
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCHEDULER_ENABLED", raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    assert loop_health._snapshot_age_seconds(str(snap_path)) > loop_stall_guard.MAX_SNAPSHOT_AGE_SECONDS
+    code, revives = _drive_guard(monkeypatch, ticks=20)
+    assert code in (None, "returned_idle")
+    assert revives == []
+
+
+def test_owner_with_a_stale_snapshot_still_strikes_and_exits(tmp_path, monkeypatch):
+    """Control: the owner keeps the existing wedge behaviour (revive that does nothing, then exit)."""
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    _make_stale_snapshot(snap_path)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.delenv("STAGE2_HOP", raising=False)
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCHEDULER_ENABLED", raising=False)
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", lambda progress_cb=None: {"ok": False})
+    code, revives = _drive_guard(monkeypatch, ticks=20)
+    assert code == 1
+    assert len(revives) == 1
+
+
+def test_not_owner_revive_result_is_idle_not_a_strike(tmp_path, monkeypatch):
+    """Even if the age probe wrongly reports stale, a not_owner revive keeps the guard idle."""
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "off")
+    monkeypatch.delenv("STAGE2_HOP", raising=False)
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCHEDULER_ENABLED", raising=False)
+    code, revives = _drive_guard(
+        monkeypatch, ticks=20, age_probe=lambda: float(loop_stall_guard.MAX_SNAPSHOT_AGE_SECONDS + 1)
+    )
+    assert code in (None, "returned_idle")
+    assert revives and all(r.get("reason") == "not_owner" for r in revives)

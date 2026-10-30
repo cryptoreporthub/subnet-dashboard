@@ -681,6 +681,23 @@ def test_scheduler_is_constructed_without_the_global_lock(tmp_path, monkeypatch)
     assert observed == [(False, True)]
 
 
+@pytest.mark.parametrize("immediate", [False, True], ids=["deferred", "immediate"])
+def test_fenced_start_does_not_report_started(tmp_path, monkeypatch, immediate):
+    """Claude: a start whose liveness write was fenced out must not return started=True."""
+    _isolated_soul(tmp_path, monkeypatch)
+    jobs = _fake_job_table(monkeypatch)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    monkeypatch.setattr(sched, "_start_liveness", lambda: False)
+    result = sched.start(immediate=immediate)
+    assert result == {"started": False, "reason": "stopped_during_arm"}
+    assert jobs == {}
+    assert sched._armed is False
+    assert _persisted_record() == {}
+    assert not [t for t in threading.enumerate() if t.name == "score-snap-tick"]
+
+
 def test_stale_arm_cannot_cancel_replacement_scheduler_job(tmp_path, monkeypatch):
     """Replit P2 #1 / Ditto L1328: stop A, start B, resume A -> B's job survives and B ticks."""
     _isolated_soul(tmp_path, monkeypatch)

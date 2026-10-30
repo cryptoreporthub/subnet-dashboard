@@ -373,6 +373,11 @@ def _guard_loop() -> None:
                     )
                     continue
                 # A hung tick (past its progress deadline): the strike stands; revive may retry.
+            elif isinstance(result, dict) and result.get("reason") == "not_owner":
+                # Not the producer: nothing here can refresh the file, so this is idle, not wedged.
+                consecutive_stale = 0
+                logger.info("loop stall guard: revive says not_owner; staying idle")
+                continue
             else:
                 revived = True
 
