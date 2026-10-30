@@ -79,7 +79,15 @@ def test_p4b_calibrated_default_thresholds():
 def test_probe_failures_are_warning_level_and_fail_closed(monkeypatch, caplog):
     caplog.set_level(logging.WARNING, logger="internal.loop_stall_guard")
 
-    monkeypatch.delattr(loop_health, "_snapshot_age_seconds", raising=False)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.delenv("STAGE2_HOP", raising=False)
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCHEDULER_ENABLED", raising=False)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("receipt probe exploded")
+
+    monkeypatch.setattr(snaps, "producer_cycle_age_seconds", _boom)
     assert loop_stall_guard._snapshot_age_seconds() is None
 
     monkeypatch.delattr(loop_health, "_last_resolver_tick", raising=False)
