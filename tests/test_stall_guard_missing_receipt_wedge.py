@@ -693,6 +693,65 @@ def _cycle_state_cap_guard_test(tmp_path, monkeypatch, *, seed_state) -> None:
     assert revives >= 1
 
 
+def _count_probe_unknown_watch_inits(monkeypatch):
+    inits = []
+    orig = g._TickWatch.__init__
+
+    def wrapped(self, token, now, *, probe_unknown=False):
+        orig(self, token, now, probe_unknown=probe_unknown)
+        if probe_unknown:
+            inits.append(self.first_seen)
+
+    monkeypatch.setattr(g._TickWatch, "__init__", wrapped)
+    return inits
+
+
+def _flapping_snapshot_age_probe(monkeypatch, *, none_at_checks=(2, 3)):
+    calls = {"n": 0}
+
+    def age():
+        calls["n"] += 1
+        if calls["n"] in none_at_checks:
+            return None
+        return float(g.MAX_SNAPSHOT_AGE_SECONDS + 1)
+
+    monkeypatch.setattr(g, "_snapshot_age_seconds", age)
+    return calls
+
+
+def test_snapshot_age_none_does_not_clear_probe_unknown_watch(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    inits = _count_probe_unknown_watch_inits(monkeypatch)
+    _flapping_snapshot_age_probe(monkeypatch)
+    monkeypatch.setattr(
+        g, "_tick_progress", lambda: g.TickProgressSnapshot(None, False)
+    )
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 3)
+    assert len(inits) == 1
+    assert code == 1
+
+
+def test_mutation_snapshot_age_none_must_not_clear_probe_unknown_watch(
+    tmp_path, monkeypatch
+):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    inits = _count_probe_unknown_watch_inits(monkeypatch)
+    _flapping_snapshot_age_probe(monkeypatch)
+    monkeypatch.setattr(
+        g, "_tick_progress", lambda: g.TickProgressSnapshot(None, False)
+    )
+    monkeypatch.setattr(g, "_tick_watch_when_snapshot_age_unknown", lambda _w: None)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 3)
+    assert len(inits) > 1
+    assert code is None
+
+
 def test_non_utf8_cycle_state_file_during_active_tick_restarts_at_cap(
     tmp_path, monkeypatch
 ):

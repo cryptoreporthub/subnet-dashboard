@@ -79,10 +79,9 @@ KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 # receipt is old. Judge it by progress on the monotonic clock. The no-progress deadline is
 # the scheduler's own stuck threshold (SCORE_SNAPSHOT_STUCK_SECONDS), read from the scheduler
 # so the two can never disagree; LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS may only raise it.
-# The cap is absolute: a tick still running tick_max_seconds() after the guard FIRST saw it is
-# hung too, even if it keeps advancing or resumed after a stall. It is counted from first sight,
-# never from the last progress (that would just be the no-progress deadline again), so a tick
-# that stalled and resumed does NOT get a fresh runway.
+# The cap is absolute: a tick still running tick_max_seconds() after the guard first saw this
+# scoring run (same run_at on the progress token) is hung too, even if it keeps advancing or
+# resumed after a probe outage on that run. A new run_at gets a fresh watch and cap.
 TICK_PROGRESS_OVERRIDE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS", 0)
 TICK_MAX_BASE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_MAX_SECONDS", 3600)
 _override_clamp_logged = False
@@ -123,12 +122,20 @@ def tick_progress_seconds() -> int:
 
 
 def tick_max_seconds() -> int:
-    """Absolute cap on one running tick, counted from when the guard first saw it.
+    """Absolute cap on one scoring run (one run_at), from when the guard first saw that run.
 
-    Progress does not extend it. It is only kept at least twice the no-progress deadline,
-    so a tick that is merely slow (never stalled) is never cut off by the cap alone.
+    Progress does not extend it. After probe-unknown, first_seen is kept only when the resumed
+    run_at matches the run before the outage; a new run gets a fresh cap. The value is kept at
+    least twice the no-progress deadline so a merely slow tick is never cut off by the cap alone.
     """
     return max(TICK_MAX_BASE_SECONDS, 2 * tick_progress_seconds())
+
+
+def _tick_watch_when_snapshot_age_unknown(
+    watch: Optional["_TickWatch"],
+) -> Optional["_TickWatch"]:
+    """Preserve tick watch when snapshot age is unknown; tests may monkeypatch to simulate regressions."""
+    return watch
 
 
 def _now_mono() -> float:
@@ -391,7 +398,11 @@ def _guard_loop() -> None:
         if age is None:
             consecutive_stale = 0
             withdrawn = False
-            logger.info("loop stall guard: not the snapshot producer or scheduler frozen, resetting")
+            watch = _tick_watch_when_snapshot_age_unknown(watch)
+            logger.info(
+                "loop stall guard: snapshot age unknown (not producer or unreadable); "
+                "clearing stale strikes, preserving tick watch"
+            )
             continue
 
         if age <= MAX_SNAPSHOT_AGE_SECONDS:
