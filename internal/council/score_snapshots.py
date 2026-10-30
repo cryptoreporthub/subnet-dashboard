@@ -87,6 +87,10 @@ _job_owner: Optional["ScoreSnapshotScheduler"] = None
 # under _lifecycle_lock, and registering a replacement (which loads the persisted
 # record) takes the same lock. Lock order: _lifecycle_lock, _job_lock, _lock.
 _lifecycle_lock = threading.Lock()
+# The generation that was registered most recently. An unregistered module
+# (_scheduler is None) is true for every past generation, so only this one may
+# still persist a shutdown or a finishing tick; older generations never may.
+_last_registered: Optional["ScoreSnapshotScheduler"] = None
 
 
 def _write_future_active() -> bool:
@@ -1369,16 +1373,20 @@ class ScoreSnapshotScheduler:
 
         Ownership check and write are atomic under _lifecycle_lock. A replaced
         generation is fenced out (returns False). ``strict`` (startup) also
-        requires the registered generation to be armed; the others accept an
-        unregistered module (clean shutdown, a tick finishing after stop()).
+        requires the registered generation to be armed; the others also accept
+        the most recently registered generation after it was unregistered
+        (clean shutdown, a tick finishing after stop()), never an older one.
         """
+        global _last_registered
         with _lifecycle_lock:
             with _lock:
-                current = _scheduler is self
-                if not current and not strict:
-                    current = _scheduler is None
-                if strict:
-                    current = current and self._armed
+                if _scheduler is self:
+                    _last_registered = self
+                    current = self._armed if strict else True
+                else:
+                    current = (
+                        not strict and _scheduler is None and _last_registered is self
+                    )
             if not current:
                 return False
             write(self.liveness)
@@ -1728,21 +1736,29 @@ def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
     if not score_snapshot_producer_enabled():
         return {"started": False, "reason": "not_owner"}
     global _scheduler
+    global _last_registered
     # Constructing a scheduler loads the persisted liveness record; do it under
     # _lifecycle_lock so no outgoing generation can write between load and register.
+    # The global _lock is held only to register, never while reading the file.
     with _lifecycle_lock:
         with _lock:
-            if _scheduler is None:
-                _scheduler = ScoreSnapshotScheduler()
             sched = _scheduler
+        if sched is None:
+            created = ScoreSnapshotScheduler()
+            with _lock:
+                if _scheduler is None:
+                    _scheduler = _last_registered = created
+                sched = _scheduler
     return sched.start(immediate=immediate)
 
 
 def stop_score_snapshot_scheduler() -> Dict[str, Any]:
-    global _scheduler
+    global _scheduler, _last_registered
     with _lock:
         sched = _scheduler
         _scheduler = None
+        if sched is not None:
+            _last_registered = sched
     if sched is None:
         return {"stopped": False, "reason": "not running"}
     return sched.stop()
