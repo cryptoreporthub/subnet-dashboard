@@ -44,6 +44,30 @@ def _token_run_id(token: Any) -> Optional[Any]:
     return None
 
 
+def _tokens_same_run(watch: "_TickWatch", token: Any) -> bool:
+    """Whether ``token`` still refers to the scoring run ``watch`` is tracking."""
+    resumed = _token_run_id(token)
+    if watch.run_id is None:
+        return resumed is None
+    if resumed == watch.run_id:
+        return True
+    # Legacy/clobbered cycle record dropped run_id; progress still advances the same run.
+    if resumed is None:
+        return True
+    return False
+
+
+def _fresh_watch_for_token(
+    watch: Optional["_TickWatch"], token: Any, now: float
+) -> "_TickWatch":
+    """Create a watch for ``token``, inheriting unknown-window cap anchor when required."""
+    fresh = _TickWatch(token, now)
+    if watch is not None and watch.run_id is None:
+        # S1/S1b: first run_id after a window with no identity — cap counts from window start.
+        fresh.first_seen = watch.first_seen
+    return fresh
+
+
 def _env_bool(name: str, default: bool = True) -> bool:
     raw = os.environ.get(name)
     if raw is None or str(raw).strip() == "":
@@ -287,9 +311,6 @@ class _TickWatch:
         if token != self.token:
             self.token = token
             self.last_progress = now
-            resumed = _token_run_id(token)
-            if resumed is not None:
-                self.run_id = resumed
 
     def past_absolute_cap(self, now: float) -> bool:
         return now - self.first_seen > tick_max_seconds()
@@ -306,28 +327,32 @@ def _watch_active_tick(
 ) -> _TickWatch:
     """Start or update a watch for a successfully probed running tick.
 
-    After probe-unknown, keep ``first_seen`` only when ``run_id`` matches the run
-    being watched before the outage. A different or newly observed ``run_id`` gets a
-    fresh watch and cap (including the first readable token after unknown when no
-    ``run_id`` was known before the outage).
+    Run changes are resolved here only (not in ``observe``). After probe-unknown,
+    keep ``first_seen`` when the resumed token is the same run (including clobbered
+    ``(None, progress)`` with a known ``run_id``). A different run gets a fresh watch;
+    the first ``run_id`` after an identity-less unknown window keeps the window's
+    ``first_seen`` for the absolute cap (S1).
     """
     if watch is None:
         return _TickWatch(token, now)
     if watch.probe_unknown:
-        resumed = _token_run_id(token)
-        if watch.run_id is not None and resumed == watch.run_id:
+        if _tokens_same_run(watch, token):
             watch.probe_unknown = False
             watch.token = token
             watch.last_progress = now
+            resumed = _token_run_id(token)
+            if resumed is not None:
+                watch.run_id = resumed
             return watch
-        return _TickWatch(token, now)
+        return _fresh_watch_for_token(watch, token, now)
     resumed = _token_run_id(token)
-    if (
-        watch.run_id is not None
-        and resumed is not None
-        and resumed != watch.run_id
-    ):
+    if watch.run_id is not None and resumed is not None and resumed != watch.run_id:
         return _TickWatch(token, now)
+    if watch.run_id is None and resumed is not None:
+        return _fresh_watch_for_token(watch, token, now)
+    if watch.run_id is not None and resumed is None:
+        watch.observe(token, now)
+        return watch
     watch.observe(token, now)
     return watch
 

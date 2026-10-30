@@ -749,29 +749,6 @@ def test_new_run_after_age_none_window_gets_fresh_cap(tmp_path, monkeypatch):
     assert code is None
 
 
-def test_first_run_after_unknown_without_prior_run_id_gets_fresh_cap(
-    tmp_path, monkeypatch
-):
-    """Converse: probe-unknown with no run_id must not cap-kill a genuinely new run early."""
-    _wire(tmp_path, monkeypatch)
-    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
-    fail_checks = 7
-    calls = {"n": 0}
-
-    def _controlled():
-        calls["n"] += 1
-        if calls["n"] <= fail_checks:
-            return g.TickProgressSnapshot(None, False)
-        step = calls["n"] - fail_checks
-        return g.TickProgressSnapshot(
-            {"token": ("brand-new-run", f"{step}/128")}, True
-        )
-
-    monkeypatch.setattr(g, "_tick_progress", _controlled)
-    code, _ = _run_guard(monkeypatch, ticks=fail_checks + 6)
-    assert code is None
-
-
 def test_successful_idle_probe_clears_probe_unknown_watch(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
     _old_receipt(6001)
