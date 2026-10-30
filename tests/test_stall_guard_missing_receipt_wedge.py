@@ -480,6 +480,39 @@ def _simulate_pre_fix_unknown_is_idle(monkeypatch) -> None:
     monkeypatch.setattr(g, "_tick_progress", _idle_on_unknown)
 
 
+def _always_fail_producer_tick_probe(monkeypatch) -> None:
+    def _probe():
+        raise RuntimeError("tick progress probe failed")
+
+    monkeypatch.setattr(snaps, "producer_tick_progress", _probe)
+
+
+def _simulate_unbounded_probe_unknown(monkeypatch) -> None:
+    """Mutation: probe-unknown never hits the absolute cap."""
+    orig = g._TickWatch.past_absolute_cap
+
+    def _never_for_unknown(self, now: float) -> bool:
+        if self.probe_unknown:
+            return False
+        return orig(self, now)
+
+    monkeypatch.setattr(g._TickWatch, "past_absolute_cap", _never_for_unknown)
+
+
+def _simulate_inherited_unknown_first_seen(monkeypatch) -> None:
+    """Mutation: a real tick after probe-unknown keeps the old first_seen."""
+    orig = g._watch_active_tick
+
+    def _observe_instead_of_fresh(watch, token, now):
+        if watch is not None and watch.probe_unknown:
+            watch.observe(token, now)
+            watch.probe_unknown = False
+            return watch
+        return orig(watch, token, now)
+
+    monkeypatch.setattr(g, "_watch_active_tick", _observe_instead_of_fresh)
+
+
 def test_failed_tick_probe_during_healthy_advancing_tick_never_exits(tmp_path, monkeypatch):
     """Ditto P2: a live tick must not be killed when the progress probe keeps failing."""
     _wire(tmp_path, monkeypatch)
@@ -535,6 +568,77 @@ def test_mutation_hung_probe_fail_treats_unknown_as_idle(tmp_path, monkeypatch):
     _simulate_pre_fix_unknown_is_idle(monkeypatch)
     cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
     code, _ = _run_guard(monkeypatch, ticks=cap_ticks - 1)
+    assert code == 1
+
+
+def test_permanent_probe_failure_without_watch_restarts_after_cap(tmp_path, monkeypatch):
+    """Probe always raises with no prior watch: bounded by the absolute cap, then restart."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _always_fail_producer_tick_probe(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_probe_unknown_then_real_advancing_tick_not_killed_early(tmp_path, monkeypatch):
+    """After probe-unknown, a successfully probed advancing tick gets a fresh cap."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    fail_checks = 6
+    calls = {"n": 0}
+    run_at = "2026-10-29T00:00:00Z"
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        if calls["n"] <= fail_checks:
+            return g.TickProgressSnapshot(None, False)
+        step = calls["n"] - fail_checks
+        return g.TickProgressSnapshot({"token": (run_at, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    # Cap counts from the first successful probe (check fail_checks+1), not from probe-unknown.
+    code, revives = _run_guard(monkeypatch, ticks=fail_checks + cap_ticks - 1)
+    assert (code, revives) == (None, 0)
+
+
+def test_mutation_permanent_probe_fail_requires_unknown_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _always_fail_producer_tick_probe(monkeypatch)
+    _simulate_unbounded_probe_unknown(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code is None
+
+
+def test_mutation_unknown_then_real_tick_must_not_inherit_first_seen(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    fail_checks = 6
+    calls = {"n": 0}
+    run_at = "2026-10-29T00:00:00Z"
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        if calls["n"] <= fail_checks:
+            return g.TickProgressSnapshot(None, False)
+        step = calls["n"] - fail_checks
+        return g.TickProgressSnapshot({"token": (run_at, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    _simulate_inherited_unknown_first_seen(monkeypatch)
+
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=fail_checks + cap_ticks + 2)
     assert code == 1
 
 
