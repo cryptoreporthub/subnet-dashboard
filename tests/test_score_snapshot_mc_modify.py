@@ -103,6 +103,7 @@ def test_skipped_older_records_liveness_skip(tmp_path, monkeypatch):
     soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     sched = snaps.ScoreSnapshotScheduler()
+    monkeypatch.setattr(snaps, "_scheduler", sched)  # only the registered generation persists
     sched._record_liveness({"published": False, "skipped_older": True})
     assert sched.liveness.snapshot()["last_skip_reason"] == "skipped_older"
 
