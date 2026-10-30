@@ -37,7 +37,10 @@ def test_absent_keys_still_missing_not_unreadable(tmp_path, monkeypatch):
     _wire_paths(tmp_path, monkeypatch)
     assert read_last_cycle_with_status() == ({}, "missing")
     monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
-    assert snaps.producer_tick_progress() == {"token": None}
+    with pytest.raises(CycleStateUnreadableError):
+        snaps.producer_tick_progress()
+    monkeypatch.setattr(snaps, "_TICK_ACTIVE", False)
+    assert snaps.producer_tick_progress() is None
 
 
 def test_new_file_last_cycle_null_is_unreadable(tmp_path, monkeypatch):

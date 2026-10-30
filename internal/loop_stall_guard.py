@@ -44,6 +44,15 @@ def _token_run_id(token: Any) -> Optional[Any]:
     return None
 
 
+def _token_progress(token: Any) -> Any:
+    """Progress component of a tick token; ``None`` when absent or identity-less."""
+    if token is _PROBE_UNKNOWN:
+        return _PROBE_UNKNOWN
+    if isinstance(token, tuple):
+        return token[1] if len(token) > 1 else None
+    return None
+
+
 def _tokens_same_run(watch: "_TickWatch", token: Any) -> bool:
     """Whether ``token`` still refers to the scoring run ``watch`` is tracking."""
     resumed = _token_run_id(token)
@@ -316,9 +325,9 @@ class _TickWatch:
         self.run_id = _token_run_id(token)
 
     def observe(self, token: Any, now: float) -> None:
-        if token != self.token:
-            self.token = token
+        if _token_progress(token) != _token_progress(self.token):
             self.last_progress = now
+        self.token = token
 
     def past_absolute_cap(self, now: float) -> bool:
         return now - self.first_seen > tick_max_seconds()
@@ -338,8 +347,8 @@ def _watch_active_tick(
     Run changes are resolved here only (not in ``observe``). After probe-unknown,
     keep ``first_seen`` when the resumed token is the same run (including clobbered
     ``(None, progress)`` with a known ``run_id``). On same-run resume, refresh the
-    no-progress deadline only when the progress token changed (frozen token behind
-    flapping probe must not reset ``last_progress`` every outage). A different run,
+    no-progress deadline only when the **progress** component changed (a clobbered
+    ``run_id`` with the same ``progress`` must not refresh ``last_progress``). A different run,
     or the first non-None ``run_id`` after an identity-less watch, gets a fresh watch
     and cap.
     """
@@ -348,9 +357,9 @@ def _watch_active_tick(
     if watch.probe_unknown:
         if _tokens_same_run(watch, token):
             watch.probe_unknown = False
-            if token != watch.token:
-                watch.token = token
+            if _token_progress(token) != _token_progress(watch.token):
                 watch.last_progress = now
+            watch.token = token
             resumed = _token_run_id(token)
             if resumed is not None:
                 watch.run_id = resumed

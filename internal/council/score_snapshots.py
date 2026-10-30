@@ -1835,8 +1835,10 @@ def score_snapshot_stuck_seconds() -> int:
 def producer_tick_progress() -> Optional[Dict[str, Any]]:
     """Is a scoring tick running, and what is its progress marker?
 
-    None when no tick is active. Otherwise ``{"token": (run_id, progress)}`` from the
-    last-cycle record while ``phase=scoring``. ``run_id`` is written once per tick;
+    None when no tick is active. Otherwise ``{"token": (run_id, progress)}`` when the
+    persisted summary has ``phase=scoring``. When a tick is active in memory but the on-disk
+    summary is absent, null, or non-scoring, raises ``CycleStateUnreadableError`` (probe-unknown
+    for the stall guard, not known idle). ``run_id`` is written once per tick;
     ``run_at`` is a heartbeat and must not be used for cap continuity. Records without
     ``run_id`` use ``(None, progress)`` (legacy deploys: no same-run cap match after
     probe-unknown).
@@ -1849,7 +1851,6 @@ def producer_tick_progress() -> Optional[Dict[str, Any]]:
         )
     if not active:
         return None
-    token = None
     try:
         from internal.council.scheduler_cycle_state import (
             CycleStateUnreadableError,
@@ -1860,10 +1861,14 @@ def producer_tick_progress() -> Optional[Dict[str, Any]]:
         if status == "unreadable":
             raise CycleStateUnreadableError("score snapshot cycle state unreadable")
         if last.get("phase") == "scoring":
-            token = (last.get("run_id"), last.get("progress"))
+            return {"token": (last.get("run_id"), last.get("progress"))}
+        raise CycleStateUnreadableError(
+            "active scoring tick but persisted cycle summary is not in scoring phase"
+        )
     except CycleStateUnreadableError:
         raise
-    return {"token": token}
+    except Exception:
+        raise CycleStateUnreadableError("score snapshot cycle state unreadable")
 
 
 def revive_score_snapshot_scheduler() -> Dict[str, Any]:
