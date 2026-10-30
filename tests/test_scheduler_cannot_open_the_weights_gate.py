@@ -9,6 +9,7 @@ digested default weights and passed. The summary now has its own file, and a sou
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -306,6 +307,44 @@ def test_mutation_non_utf8_legacy_fallback_requires_unreadable_flag(tmp_path, mo
 
     monkeypatch.setattr(scs, "read_last_cycle", _broken_read)
     assert scs.read_last_cycle() == {}
+
+
+def test_empty_legacy_soul_map_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("   \n")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_whitespace_legacy_soul_map_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("\t\n")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+@pytest.mark.skipif(os.environ.get("PR1485_MUTATION") != "1", reason="mutation job only")
+def test_m8_mutation_non_dict_score_snapshot_scheduler_is_unreadable(tmp_path, monkeypatch):
+    from internal.council import scheduler_cycle_state as scs
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": "not-an-object"}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+
+    real = scs._read_legacy_with_status
+
+    def _hide_non_dict_unreadable(soul_map_path=None):
+        summary, unreadable = real(soul_map_path)
+        if unreadable:
+            return {}, False
+        return summary, unreadable
+
+    monkeypatch.setattr(scs, "_read_legacy_with_status", _hide_non_dict_unreadable)
+    assert scs.read_last_cycle_with_status() == ({}, "missing")
 
 
 def test_malformed_legacy_last_cycle_object_is_unreadable(tmp_path, monkeypatch):

@@ -142,7 +142,8 @@ def _read_legacy_with_status(
         logger.warning("score snapshot legacy cycle state unreadable (%s): %s", path, exc)
         return {}, True
     if not raw.strip():
-        return {}, False
+        logger.warning("score snapshot legacy cycle state unreadable (%s): empty file", path)
+        return {}, True
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:

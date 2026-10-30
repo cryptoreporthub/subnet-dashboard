@@ -48,7 +48,8 @@ def _tokens_same_run(watch: "_TickWatch", token: Any) -> bool:
     """Whether ``token`` still refers to the scoring run ``watch`` is tracking."""
     resumed = _token_run_id(token)
     if watch.run_id is None:
-        return resumed is None
+        # Identity-less watch after probe-unknown: always a fresh cap (pairs with identity-less writer).
+        return False
     if resumed == watch.run_id:
         return True
     # Legacy/clobbered cycle record dropped run_id; progress still advances the same run.
@@ -139,8 +140,9 @@ def tick_max_seconds() -> int:
 
     Progress does not extend it. After probe-unknown, ``first_seen`` is kept when the resumed
     token is the same run (matching ``run_id``, or clobbered ``(None, progress)`` with a
-    known ``run_id`` on the watch). Repeated probe-unknown outages for that same run do **not**
-    reset the cap. A new ``run_id`` after an identity-less window gets a fresh watch and cap.
+    known ``run_id`` on the watch). An identity-less watch always gets a fresh cap on resume.
+    Repeated probe-unknown outages for that same run do **not** reset the cap. A new ``run_id``
+    after an identity-less window gets a fresh watch and cap.
 
     Snapshot age ``None`` (not producer / unreadable age probe) can leave an identity-less
     watch unchanged for an **unbounded** number of guard ticks (pre-existing S7); this module

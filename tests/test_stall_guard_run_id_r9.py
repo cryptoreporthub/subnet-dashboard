@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -161,22 +162,30 @@ def test_fresh_cap_after_age_none_identity_less_window(tmp_path, monkeypatch):
 
 
 def test_hung_late_run_id_worst_case_numeric_bound(tmp_path, monkeypatch):
-    """Default TICK_MAX_BASE=1200 → cap 1800s after first late run_id sight."""
+    """Default cap runway: 3600s + W·interval + CONSECUTIVE_CHECKS·interval."""
     _wire(tmp_path, monkeypatch)
-    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    monkeypatch.setattr(g, "INTERVAL_SECONDS", 240)
+    monkeypatch.setattr(g, "CONSECUTIVE_CHECKS", 3)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 3600)
     _old_receipt(6001)
-    fail_checks = 7
+    window_checks = 7
+    bound_seconds = (
+        g.TICK_MAX_BASE_SECONDS
+        + window_checks * g.INTERVAL_SECONDS
+        + g.CONSECUTIVE_CHECKS * g.INTERVAL_SECONDS
+    )
     cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
     strikes = g.CONSECUTIVE_CHECKS
-    first_progress_tick = fail_checks + 1
+    first_progress_tick = window_checks + 1
     kill_at = first_progress_tick + cap_ticks + strikes
+    assert bound_seconds == (kill_at - 1) * g.INTERVAL_SECONDS
     calls = {"n": 0}
 
     def _controlled():
         calls["n"] += 1
-        if calls["n"] <= fail_checks:
+        if calls["n"] <= window_checks:
             return g.TickProgressSnapshot(None, False)
-        step = calls["n"] - fail_checks
+        step = calls["n"] - window_checks
         return g.TickProgressSnapshot({"token": ("late-hung", f"{step}/128")}, True)
 
     monkeypatch.setattr(g, "_tick_progress", _controlled)
@@ -185,6 +194,111 @@ def test_hung_late_run_id_worst_case_numeric_bound(tmp_path, monkeypatch):
     calls["n"] = 0
     code_kill, _ = _run_guard(monkeypatch, ticks=kill_at)
     assert code_kill == 1
+
+
+def test_write_phase_none_none_after_probe_window_keeps_full_cap(tmp_path, monkeypatch):
+    """Ditto #2: identity-less resume after W=7 probe-unknown → fresh cap for healthy run."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    window = 7
+    calls = {"n": 0}
+
+    def _controlled():
+        calls["n"] += 1
+        n = calls["n"]
+        if n <= window:
+            return g.TickProgressSnapshot(None, False)
+        if n == window + 1:
+            return g.TickProgressSnapshot({"token": (None, None)}, True)
+        step = n - window - 1
+        return g.TickProgressSnapshot({"token": ("healthy-b", f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled)
+    code, _ = _run_guard(monkeypatch, ticks=window + 6)
+    assert code is None
+
+
+def test_legacy_advancing_none_progress_after_probe_window_fresh_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    window = 7
+    calls = {"n": 0}
+
+    def _controlled():
+        calls["n"] += 1
+        n = calls["n"]
+        if n <= window:
+            return g.TickProgressSnapshot(None, False)
+        if n == window + 1:
+            return g.TickProgressSnapshot({"token": (None, "1/128")}, True)
+        step = n - window
+        return g.TickProgressSnapshot({"token": ("run-b", f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled)
+    code, _ = _run_guard(monkeypatch, ticks=window + 6)
+    assert code is None
+
+
+def test_write_timeout_summary_keeps_run_id_and_not_scoring_phase(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle
+    from tests.test_score_snapshots import _reset_write_occupancy
+
+    soul, vol = _tick_body_env(tmp_path, monkeypatch)
+    monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle_state.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1)
+
+    def _slow_build(*_args, **_kwargs):
+        time.sleep(2)
+        return {"ok": True, "published": True, "count": 1, "path": str(vol)}
+
+    monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
+    _reset_write_occupancy()
+    sched = snaps.ScoreSnapshotScheduler()
+    monkeypatch.setattr(snaps, "_scheduler", sched)
+    result = sched._tick_body(reschedule=False)
+    assert "write_timeout" in str(result.get("error", ""))
+    last = read_last_cycle()
+    assert last.get("run_id")
+    assert last.get("phase") != "scoring"
+    assert result.get("run_id") == last.get("run_id")
+    time.sleep(2.5)
+    _reset_write_occupancy()
+
+
+def test_write_timeout_summary_does_not_open_second_cap_window(tmp_path, monkeypatch):
+    """Timeout final summary must not leave phase=scoring (would reset cap via identity-less token)."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    run_id = "timeout-run"
+    calls = {"n": 0}
+
+    def _controlled():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (run_id, "1/128")}, True)
+        if n == 2:
+            from internal.council.scheduler_cycle_state import write_last_cycle
+
+            write_last_cycle(
+                {
+                    "run_id": run_id,
+                    "run_at": "2026-01-01T00:00:00Z",
+                    "ok": False,
+                    "error": "write_timeout_600s",
+                }
+            )
+            return g.TickProgressSnapshot(None, True)
+        step = n - 2
+        return g.TickProgressSnapshot({"token": (run_id, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=2 + cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
 
 
 def test_repeated_probe_unknown_same_run_does_not_reset_cap(tmp_path, monkeypatch):
