@@ -19,8 +19,6 @@
 
 **Forbidden:** Claude Sonnet **4.5** and **4.6** (any effort). Do not use `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families unless the human asks.
 
-**Sol (human 2026-10-25):** do not use — `gpt-5.6-sol-*` pricing is out of line with Sol 6, and no Sol 6/6.1 slug exists in the catalog. Until one appears, give Sol's work to Grok 4.7 / Composer 2.5 / Luna high instead. Never fall back to 5.6.
-
 **Default build:** **Composer 2.5 slow** (`composer-2.5`).
 
 **Grok thinking policy (mandatory) — user 2026-07-15; updated 2026-08-01:**

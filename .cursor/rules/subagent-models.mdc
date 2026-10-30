@@ -20,9 +20,7 @@ Product rebuilds that are outside that campaign may still use Composer slow as t
 
 **Do not use Claude Sonnet 4.5 or Sonnet 4.6** (any thinking effort, fast/slow, or leftover “Sonnet gate”). Do not pick `claude-sonnet-*` 4.x slugs.
 
-Also do not use unless the human explicitly asks: `composer-2.5-fast`, Grok 4.5 (`cursor-grok-4.5-*`), Grok 4.6 high-fast, Opus, Gemini, Fable, Sonnet 5.
-
-**Sol: do not use at all (human 2026-10-25).** Not even as an explicitly-asked seat: `gpt-5.6-sol-*` pricing is out of line with Sol 6, so until a Sol 6/6.1 slug actually exists in the Task catalog, pick another family (Grok 4.7 / Composer 2.5 / Luna high) for anything Sol would have done. Re-check the catalog each run; never fall back to 5.6.
+Also do not use unless the human explicitly asks: `composer-2.5-fast`, Grok 4.5 (`cursor-grok-4.5-*`), Grok 4.6 high-fast, Opus, Gemini, Sol, Fable, Sonnet 5.
 
 If a Task catalog has no Grok 4.7 slug, inherit from a Grok 4.7 parent rather than substituting Sonnet, Grok 4.6, or Grok 4.5. Bump thinking effort only when the parent is stuck.
 
