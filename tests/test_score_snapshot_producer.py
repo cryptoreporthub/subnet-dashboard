@@ -177,6 +177,16 @@ def test_stop_during_deferred_arm_leaves_no_pending_job(tmp_path, monkeypatch):
         name="test-stop",
     )
     stop_thread.start()
+    # Release the gate only once stop has unregistered, so the arm must observe it.
+    deadline = time.monotonic() + 5
+    while True:
+        with snaps._lock:
+            if snaps._scheduler is None:
+                break
+        if time.monotonic() > deadline:
+            release.set()
+            pytest.fail("stop thread did not unregister the scheduler within 5s")
+        time.sleep(0.005)
     release.set()
     arm_thread.join(timeout=5)
     stop_thread.join(timeout=5)
@@ -187,6 +197,30 @@ def test_stop_during_deferred_arm_leaves_no_pending_job(tmp_path, monkeypatch):
     assert jobs == {}
     with snaps._lock:
         assert snaps._scheduler is None
+    assert sched._armed is False
+    assert sched.liveness.snapshot().get("lifecycle") != "started"
+
+
+def test_aborted_arm_without_stop_leaves_no_pending_job(tmp_path, monkeypatch):
+    """Reviewer P3-1: unregistered (no stop()) mid deferred arm -> job cancelled, disarmed."""
+    _isolated_soul(tmp_path, monkeypatch)
+    jobs = _fake_job_table(monkeypatch)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    real_start = sched.liveness.start
+
+    def unregister_then_start():
+        # Job is already scheduled; drop registration without calling stop().
+        with snaps._lock:
+            snaps._scheduler = None
+        return real_start()
+
+    monkeypatch.setattr(sched.liveness, "start", unregister_then_start)
+    result = sched.start(immediate=False)
+    assert result == {"started": False, "reason": "stopped_during_arm"}
+    assert jobs == {}
+    assert snaps._job_owner is not sched
     assert sched._armed is False
     assert sched.liveness.snapshot().get("lifecycle") != "started"
 

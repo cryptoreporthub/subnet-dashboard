@@ -1390,6 +1390,8 @@ class ScoreSnapshotScheduler:
                 self.liveness.start()
             aborted = self._stopped_during_arm()
             if aborted:
+                # Unregistered without stop(): drop our pending job and disarm.
+                self._cancel_own_job()
                 self.liveness.stop()
                 return aborted
         except Exception:
