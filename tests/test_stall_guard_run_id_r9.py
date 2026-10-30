@@ -160,26 +160,88 @@ def test_fresh_cap_after_age_none_identity_less_window(tmp_path, monkeypatch):
     assert code is None
 
 
-def test_hung_late_run_id_worst_case_bound_documented(tmp_path, monkeypatch):
-    """Hung run: long unknown then late id may survive up to ~cap+window before kill."""
+def test_hung_late_run_id_worst_case_numeric_bound(tmp_path, monkeypatch):
+    """Default TICK_MAX_BASE=1200 → cap 1800s after first late run_id sight."""
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
     fail_checks = 7
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    strikes = g.CONSECUTIVE_CHECKS
+    first_progress_tick = fail_checks + 1
+    kill_at = first_progress_tick + cap_ticks + strikes
     calls = {"n": 0}
 
     def _controlled():
         calls["n"] += 1
         if calls["n"] <= fail_checks:
             return g.TickProgressSnapshot(None, False)
-        return g.TickProgressSnapshot({"token": ("late-hung", "1/128")}, True)
+        step = calls["n"] - fail_checks
+        return g.TickProgressSnapshot({"token": ("late-hung", f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled)
+    code_survive, _ = _run_guard(monkeypatch, ticks=first_progress_tick + cap_ticks - 1)
+    assert code_survive is None
+    calls["n"] = 0
+    code_kill, _ = _run_guard(monkeypatch, ticks=kill_at)
+    assert code_kill == 1
+
+
+def test_repeated_probe_unknown_same_run_does_not_reset_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    run_id = "same-through-outages"
+    calls = {"n": 0}
+
+    def _controlled():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (run_id, "1/128")}, True)
+        if 2 <= n <= 4:
+            return g.TickProgressSnapshot(None, False)
+        if 5 <= n <= 7:
+            step = n - 4
+            return g.TickProgressSnapshot({"token": (run_id, f"{step}/128")}, True)
+        if 8 <= n <= 10:
+            return g.TickProgressSnapshot(None, False)
+        step = n - 10
+        return g.TickProgressSnapshot({"token": (run_id, f"{step}/128")}, True)
 
     monkeypatch.setattr(g, "_tick_progress", _controlled)
     cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=8)
+    assert code is None
     code, _ = _run_guard(
-        monkeypatch, ticks=fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS + 4
+        monkeypatch, ticks=10 + cap_ticks + g.CONSECUTIVE_CHECKS + 2
     )
     assert code == 1
+
+
+def test_clear_stuck_scoring_persist_carries_run_id(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from internal.council.scheduler_cycle_state import read_last_cycle, write_last_cycle
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps(REAL_WEIGHTS))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    write_last_cycle(
+        {
+            "run_id": "stuck-run-id",
+            "run_at": old,
+            "ok": False,
+            "phase": "scoring",
+            "progress": "1/128",
+        }
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 60)
+    snaps.ScoreSnapshotScheduler()._clear_stuck_scoring()
+    last = read_last_cycle()
+    assert last.get("run_id") == "stuck-run-id"
+    assert last.get("error") == "scoring_stuck_timeout"
 
 
 def test_s2_clobbered_token_after_probe_unknown_keeps_same_run_cap(

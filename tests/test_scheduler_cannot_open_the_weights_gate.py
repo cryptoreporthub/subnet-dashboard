@@ -308,6 +308,17 @@ def test_mutation_non_utf8_legacy_fallback_requires_unreadable_flag(tmp_path, mo
     assert scs.read_last_cycle() == {}
 
 
+def test_malformed_legacy_last_cycle_object_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps({"score_snapshot_scheduler": {"last_cycle": "old-string-format"}})
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
 def test_unreadable_legacy_soul_map_with_active_tick_is_probe_unknown(
     tmp_path, monkeypatch
 ):

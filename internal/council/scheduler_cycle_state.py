@@ -151,8 +151,20 @@ def _read_legacy_with_status(
     if not isinstance(data, dict):
         return {}, True
     sched = data.get("score_snapshot_scheduler")
-    last = sched.get("last_cycle") if isinstance(sched, dict) else None
-    return (dict(last), False) if isinstance(last, dict) else ({}, False)
+    if sched is None:
+        return {}, False
+    if not isinstance(sched, dict):
+        return {}, True
+    last = sched.get("last_cycle")
+    if last is None:
+        return {}, False
+    if not isinstance(last, dict):
+        logger.warning(
+            "score snapshot legacy cycle state malformed (%s): last_cycle is not an object",
+            path,
+        )
+        return {}, True
+    return dict(last), False
 
 
 def _read_legacy(soul_map_path: Optional[str]) -> Dict[str, Any]:

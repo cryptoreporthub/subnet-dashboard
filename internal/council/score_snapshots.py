@@ -1512,14 +1512,16 @@ class ScoreSnapshotScheduler:
                 return
             age = max(0.0, (datetime.now(timezone.utc) - tick).total_seconds())
             if age >= SCORE_SNAPSHOT_STUCK_SECONDS:
-                self._persist_cycle_summary(
-                    {
-                        "run_at": _now_iso(),
-                        "ok": False,
-                        "error": "scoring_stuck_timeout",
-                        "phase": "failed",
-                    }
-                )
+                stuck = {
+                    "run_at": _now_iso(),
+                    "ok": False,
+                    "error": "scoring_stuck_timeout",
+                    "phase": "failed",
+                }
+                run_id = last.get("run_id")
+                if run_id:
+                    stuck["run_id"] = run_id
+                self._persist_cycle_summary(stuck)
         except Exception:
             pass
 

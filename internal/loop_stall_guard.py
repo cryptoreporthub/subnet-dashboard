@@ -137,15 +137,18 @@ def tick_progress_seconds() -> int:
 def tick_max_seconds() -> int:
     """Absolute cap on one scoring run (one run_id), from when the guard first saw that run.
 
-    Progress does not extend it. After probe-unknown, ``first_seen`` is kept only when the
-    resumed token is the same run (matching ``run_id``, or clobbered ``(None, progress)``).
-    A new ``run_id`` after an identity-less window gets a **fresh** watch and cap (healthy runs
-    keep the full ``tick_max_seconds()`` runway).
+    Progress does not extend it. After probe-unknown, ``first_seen`` is kept when the resumed
+    token is the same run (matching ``run_id``, or clobbered ``(None, progress)`` with a
+    known ``run_id`` on the watch). Repeated probe-unknown outages for that same run do **not**
+    reset the cap. A new ``run_id`` after an identity-less window gets a fresh watch and cap.
 
-    Worst case for a hung run whose ``run_id`` appears only after a long probe-unknown or
-    age-unknown window: the run may survive up to roughly ``tick_max_seconds()`` plus that
-    window plus stale strikes before exit — the window itself is bounded by the existing
-    probe-unknown absolute cap and strike logic when progress never becomes readable.
+    Snapshot age ``None`` (not producer / unreadable age probe) can leave an identity-less
+    watch unchanged for an **unbounded** number of guard ticks (pre-existing S7); this module
+    does not cap that gap.
+
+    Hung run with ``run_id`` appearing only after a long probe-unknown window: worst-case
+    survival is about ``window_ticks * INTERVAL_SECONDS + tick_max_seconds()`` before the
+    absolute cap, plus up to ``CONSECUTIVE_CHECKS`` stale strikes after the tick is hung.
     """
     return max(TICK_MAX_BASE_SECONDS, 2 * tick_progress_seconds())
 
