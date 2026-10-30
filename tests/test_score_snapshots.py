@@ -113,6 +113,8 @@ def test_tick_skips_when_gate_busy_without_blocking(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
 
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
     with heavy_job_slot("other_heavy_job"):
         out = sched._tick(reschedule=False)
@@ -142,6 +144,8 @@ def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
 
     monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write)
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
     out = sched._tick(reschedule=False)
     assert out.get("ok") is True
@@ -395,6 +399,8 @@ def test_timeout_second_tick_skips_second_write(monkeypatch, tmp_path):
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
 
     first = sched.run_once()
@@ -428,6 +434,8 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
 
     timed_out = sched.run_once()
