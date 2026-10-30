@@ -153,6 +153,11 @@ def tick_max_seconds() -> int:
     ``CONSECUTIVE_CHECKS`` stale strikes, the guard may exit with no resumed tick token — by
     design, within the documented worst-case bound.
 
+    Frozen identity-less tick under **period-2 alternating probe-unknown** (every other guard
+    check) is killed at the **absolute cap plus ``CONSECUTIVE_CHECKS`` stale strikes** (~check
+    **11** at MC test scale: ``TICK_MAX_BASE=1200``, ``INTERVAL_SECONDS=240``), not the
+    no-progress deadline alone — still inside the documented bound.
+
     Hung run with ``run_id`` appearing only after a long probe-unknown window: worst-case
     survival is about ``window_ticks * INTERVAL_SECONDS + tick_max_seconds()`` before the
     absolute cap, plus up to ``CONSECUTIVE_CHECKS`` stale strikes after the tick is hung.

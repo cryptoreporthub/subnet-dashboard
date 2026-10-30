@@ -36,7 +36,6 @@ def _assert_unreadable_probe_unknown(monkeypatch) -> None:
 @pytest.mark.parametrize(
     "last_cycle",
     [
-        {"phase": None, "run_id": "r", "progress": "1/9"},
         {"phase": 5, "run_id": "r", "progress": "1/9"},
         {"phase": ["scoring"], "run_id": "r"},
         {"phase": True, "run_id": "r"},
@@ -45,7 +44,6 @@ def _assert_unreadable_probe_unknown(monkeypatch) -> None:
         {"phase": "scoring", "run_id": "r", "progress": ["1/9"]},
     ],
     ids=[
-        "phase-null",
         "phase-int",
         "phase-list",
         "phase-bool",
@@ -65,11 +63,10 @@ def test_new_file_bad_last_cycle_field_types_unreadable(
 @pytest.mark.parametrize(
     "last_cycle",
     [
-        {"phase": None, "run_id": "r", "progress": "1/9"},
         {"phase": 5, "run_id": "r", "progress": "1/9"},
         {"phase": "scoring", "run_id": 99},
     ],
-    ids=["phase-null", "phase-int", "run_id-int"],
+    ids=["phase-int", "run_id-int"],
 )
 def test_legacy_bad_last_cycle_field_types_unreadable(
     tmp_path, monkeypatch, last_cycle

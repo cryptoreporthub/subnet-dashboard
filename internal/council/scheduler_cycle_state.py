@@ -11,7 +11,7 @@ still carries only the old record (for example the first read after a deploy, or
 reading before the worker has ticked) keeps its in-flight and age information.
 
 A present-but-empty ``last_cycle`` object (``{}``) is **unreadable**, same on the new file and
-legacy soul_map key. Field typing: ``phase`` must be absent or a string; ``run_id`` and
+legacy soul_map key. Field typing: ``phase`` may be absent, JSON null, or a string; ``run_id`` and
 ``progress`` may be absent, JSON null, or a string.
 """
 
@@ -41,8 +41,8 @@ def _last_cycle_summary_unreadable(last: Dict[str, Any], path: str, *, channel: 
 
     Empty ``{}`` is unreadable (no cycle summary; new and legacy readers agree).
 
-    ``phase`` must be absent or a string. ``run_id`` and ``progress`` may be absent,
-    JSON null (identity-less), or a string. Any other type → unreadable.
+    ``phase`` may be absent, JSON null (legacy writers), or a string. ``run_id`` and ``progress``
+    may be absent, JSON null (identity-less), or a string. Any other type → unreadable.
     """
     if not last:
         logger.warning(
@@ -53,7 +53,7 @@ def _last_cycle_summary_unreadable(last: Dict[str, Any], path: str, *, channel: 
         return True
     if "phase" in last:
         phase = last["phase"]
-        if not isinstance(phase, str):
+        if phase is not None and not isinstance(phase, str):
             logger.warning(
                 "score snapshot %s cycle state malformed (%s): phase has wrong type",
                 channel,
