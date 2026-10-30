@@ -454,6 +454,90 @@ def test_withdrawn_strike_cannot_hold_off_the_restart_forever(tmp_path, monkeypa
     assert code == 1
 
 
+def _flaky_producer_tick_probe(monkeypatch, *, succeed_checks: int = 1) -> None:
+    real = snaps.producer_tick_progress
+    calls = {"n": 0}
+
+    def _probe():
+        calls["n"] += 1
+        if calls["n"] <= succeed_checks:
+            return real()
+        raise RuntimeError("tick progress probe failed")
+
+    monkeypatch.setattr(snaps, "producer_tick_progress", _probe)
+
+
+def _simulate_pre_fix_unknown_is_idle(monkeypatch) -> None:
+    """Reintroduce the bug: probe failure reads as idle (clears watch, strikes accrue)."""
+    real = g._tick_progress
+
+    def _idle_on_unknown():
+        snap = real()
+        if not snap.probe_ok:
+            return g.TickProgressSnapshot(None, True)
+        return snap
+
+    monkeypatch.setattr(g, "_tick_progress", _idle_on_unknown)
+
+
+def test_failed_tick_probe_during_healthy_advancing_tick_never_exits(tmp_path, monkeypatch):
+    """Ditto P2: a live tick must not be killed when the progress probe keeps failing."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    assert 12 * g.INTERVAL_SECONDS < g.tick_max_seconds()
+    code, revives = _run_guard(
+        monkeypatch, ticks=12, on_tick=lambda n: _scoring_progress(n)
+    )
+    assert (code, revives) == (None, 0)
+
+
+def test_failed_tick_probe_on_hung_watched_tick_still_restarts_at_cap(tmp_path, monkeypatch):
+    """Probe failure must not erase the watch; the absolute cap still restarts a hung tick."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    assert g.tick_max_seconds() == 1800  # max(base, 2 * progress deadline)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    # One guard run: establish watch on check 1, probe fails after, cap + 3 strikes in one loop.
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_mutation_healthy_probe_fail_treats_unknown_as_idle(tmp_path, monkeypatch):
+    """If unknown is treated as idle, the healthy-tick probe-fail scenario exits."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    _simulate_pre_fix_unknown_is_idle(monkeypatch)
+    code, _ = _run_guard(
+        monkeypatch, ticks=12, on_tick=lambda n: _scoring_progress(n)
+    )
+    assert code == 1
+
+
+def test_mutation_hung_probe_fail_treats_unknown_as_idle(tmp_path, monkeypatch):
+    """If unknown clears the watch, a hung tick is restarted before the absolute cap."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    _simulate_pre_fix_unknown_is_idle(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=cap_ticks - 1)
+    assert code == 1
+
+
 def test_fresh_receipt_beats_old_seed_age(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
     snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")

@@ -29,7 +29,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, NamedTuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -237,15 +237,26 @@ def _try_revive() -> Optional[Dict[str, Any]]:
         return None
 
 
-def _tick_progress() -> Optional[Dict[str, Any]]:
-    """Progress marker of a running scoring tick, or None (no tick, or unreadable)."""
+class TickProgressSnapshot(NamedTuple):
+    """Result of ``producer_tick_progress()`` as seen by the guard loop.
+
+    ``probe_ok`` is False when the probe raised: that is unknown, not proof that no tick is
+    running (must not clear an existing watch or count a stale strike as if the tick ended).
+    """
+
+    tick: Optional[Dict[str, Any]]
+    probe_ok: bool
+
+
+def _tick_progress() -> TickProgressSnapshot:
+    """Progress marker of a running scoring tick, idle, or probe-unavailable."""
     try:
         from internal.council.score_snapshots import producer_tick_progress
 
-        return producer_tick_progress()
+        return TickProgressSnapshot(producer_tick_progress(), True)
     except Exception as exc:
         logger.warning("loop stall guard: tick progress probe failed: %s", exc)
-        return None
+        return TickProgressSnapshot(None, False)
 
 
 class _TickWatch:
@@ -265,10 +276,13 @@ class _TickWatch:
             self.token = token
             self.last_progress = now
 
+    def past_absolute_cap(self, now: float) -> bool:
+        return now - self.first_seen > tick_max_seconds()
+
     def hung(self, now: float) -> bool:
         return (
             now - self.last_progress > tick_progress_seconds()
-            or now - self.first_seen > tick_max_seconds()
+            or self.past_absolute_cap(now)
         )
 
 
@@ -346,10 +360,38 @@ def _guard_loop() -> None:
             continue
 
         # Old output, but a running scoring tick that keeps advancing is working, not wedged.
-        tick = _tick_progress()
-        if tick is None:
+        progress = _tick_progress()
+        if not progress.probe_ok:
+            if watch is not None:
+                now = _now_mono()
+                if watch.past_absolute_cap(now):
+                    logger.warning(
+                        "loop stall guard: tick progress probe failed but the watched tick has run "
+                        "%ss since first sight (cap=%ss); counting as hung",
+                        int(now - watch.first_seen),
+                        tick_max_seconds(),
+                    )
+                else:
+                    consecutive_stale = 0
+                    logger.info(
+                        "loop stall guard: snapshot old (age=%ss) but tick progress probe failed; "
+                        "preserving watch (running %ss); not striking",
+                        int(age),
+                        int(now - watch.first_seen),
+                    )
+                    continue
+            else:
+                consecutive_stale = 0
+                logger.info(
+                    "loop stall guard: snapshot old (age=%ss) but tick progress probe failed; "
+                    "tick state unknown; not striking",
+                    int(age),
+                )
+                continue
+        elif progress.tick is None:
             watch = None
         else:
+            tick = progress.tick
             now = _now_mono()
             if watch is None:
                 watch = _TickWatch(tick.get("token"), now)
