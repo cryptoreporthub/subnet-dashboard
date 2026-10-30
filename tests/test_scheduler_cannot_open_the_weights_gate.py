@@ -287,6 +287,46 @@ def test_mutation_non_utf8_legacy_fallback_requires_unreadable_flag(tmp_path, mo
     assert scs.read_last_cycle() == {}
 
 
+def test_unreadable_legacy_soul_map_with_active_tick_is_probe_unknown(
+    tmp_path, monkeypatch
+):
+    from internal.council.scheduler_cycle_state import (
+        CycleStateUnreadableError,
+        read_last_cycle,
+        read_last_cycle_with_status,
+    )
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_bytes(b"\xff\xfe")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
+    assert read_last_cycle() == {}
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+    with pytest.raises(CycleStateUnreadableError):
+        snaps.producer_tick_progress()
+
+
+def test_mutation_unreadable_legacy_must_not_look_like_idle_progress(
+    tmp_path, monkeypatch
+):
+    from internal.council import scheduler_cycle_state as scs
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_bytes(b"\xff\xfe")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+
+    real = scs._read_legacy_with_status
+
+    def _hide_unreadable(soul_map_path=None):
+        summary, unreadable = real(soul_map_path)
+        if unreadable:
+            return {}, False
+        return summary, unreadable
+
+    monkeypatch.setattr(scs, "_read_legacy_with_status", _hide_unreadable)
+    assert scs.read_last_cycle_with_status() == ({}, "missing")
+
+
 def test_empty_new_cycle_state_file_is_unreadable_not_missing(tmp_path, monkeypatch):
     from internal.council.scheduler_cycle_state import (
         read_last_cycle_with_status,

@@ -1661,11 +1661,15 @@ class ScoreSnapshotScheduler:
         try:
             self._clear_stuck_scoring()
             started_at = _now_iso()
-            self._persist_cycle_summary({"run_at": started_at, "ok": False, "phase": "scoring"})
+            run_id = uuid.uuid4().hex
+            self._persist_cycle_summary(
+                {"run_at": started_at, "run_id": run_id, "ok": False, "phase": "scoring"}
+            )
 
             def _progress(done: int, total: int) -> None:
                 self._persist_cycle_summary(
                     {
+                        "run_id": run_id,
                         "run_at": _now_iso(),
                         "ok": False,
                         "phase": "scoring",
@@ -1814,10 +1818,11 @@ def score_snapshot_stuck_seconds() -> int:
 def producer_tick_progress() -> Optional[Dict[str, Any]]:
     """Is a scoring tick running, and what is its progress marker?
 
-    None when no tick is active. Otherwise ``{"token": ...}``: the last-cycle
-    record's (run_at, progress) while it is in ``phase=scoring``, which the tick
-    rewrites as items finish, or None while no scoring record exists. The caller
-    compares tokens between checks; an unchanged token means no progress.
+    None when no tick is active. Otherwise ``{"token": (run_id, progress)}`` from the
+    last-cycle record while ``phase=scoring``. ``run_id`` is written once per tick;
+    ``run_at`` is a heartbeat and must not be used for cap continuity. Records without
+    ``run_id`` use ``(None, progress)`` (legacy deploys: no same-run cap match after
+    probe-unknown).
     """
     with _lock:
         active = (
@@ -1838,7 +1843,7 @@ def producer_tick_progress() -> Optional[Dict[str, Any]]:
         if status == "unreadable":
             raise CycleStateUnreadableError("score snapshot cycle state unreadable")
         if last.get("phase") == "scoring":
-            token = (last.get("run_at"), last.get("progress"))
+            token = (last.get("run_id"), last.get("progress"))
     except CycleStateUnreadableError:
         raise
     return {"token": token}

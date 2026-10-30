@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -220,12 +221,40 @@ def _old_receipt(age_seconds: float) -> None:
     path.write_text(json.dumps(receipt), encoding="utf-8")
 
 
-def _scoring_progress(done: int, total: int = 128, run_at: str = "2026-10-29T00:00:00Z") -> None:
+_PROGRESS_CTX = {"run_id": None}
+
+
+def _reset_scoring_progress_run() -> None:
+    _PROGRESS_CTX["run_id"] = None
+
+
+def _scoring_progress(
+    done: int,
+    total: int = 128,
+    *,
+    run_id: str | None = None,
+    run_at: str | None = None,
+) -> str:
+    """Persist like ``ScoreSnapshotScheduler._progress``: stable run_id, fresh run_at heartbeat."""
     from internal.council.scheduler_cycle_state import write_last_cycle
 
+    if run_id is None:
+        if _PROGRESS_CTX["run_id"] is None:
+            _PROGRESS_CTX["run_id"] = uuid.uuid4().hex
+        run_id = _PROGRESS_CTX["run_id"]
+    else:
+        _PROGRESS_CTX["run_id"] = run_id
+    heartbeat = run_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     write_last_cycle(
-        {"run_at": run_at, "ok": False, "phase": "scoring", "progress": f"{done}/{total}"}
+        {
+            "run_id": run_id,
+            "run_at": heartbeat,
+            "ok": False,
+            "phase": "scoring",
+            "progress": f"{done}/{total}",
+        }
     )
+    return run_id
 
 
 def _active_tick(monkeypatch) -> None:
@@ -236,8 +265,9 @@ def test_premise_active_tick_is_visible_to_the_probe(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
     assert snaps.producer_tick_progress() is None
     _active_tick(monkeypatch)
-    _scoring_progress(3)
-    assert snaps.producer_tick_progress() == {"token": ("2026-10-29T00:00:00Z", "3/128")}
+    _reset_scoring_progress_run()
+    run_id = _scoring_progress(3)
+    assert snaps.producer_tick_progress() == {"token": (run_id, "3/128")}
 
 
 def test_long_running_advancing_tick_with_an_old_receipt_is_never_killed(tmp_path, monkeypatch):
@@ -513,14 +543,14 @@ def _simulate_fresh_cap_reset_first_seen(monkeypatch) -> None:
 
 
 def _simulate_inherit_cap_on_new_run(monkeypatch) -> None:
-    """Mutation: resume after probe-unknown always keeps first_seen (ignores run_at)."""
+    """Mutation: resume after probe-unknown always keeps first_seen (ignores run_id)."""
 
     def _always_preserve(watch, token, now):
         if watch is not None and watch.probe_unknown:
             watch.probe_unknown = False
             watch.token = token
             watch.last_progress = now
-            watch.run_at = g._token_run_at(token)
+            watch.run_id = g._token_run_id(token)
             return watch
         if watch is None:
             return g._TickWatch(token, now)
@@ -615,30 +645,131 @@ def test_permanent_probe_failure_without_watch_restarts_after_cap(tmp_path, monk
 def test_probe_unknown_then_real_advancing_tick_exits_at_cap_from_first_sight(
     tmp_path, monkeypatch
 ):
-    """Absolute cap is from first probe-unknown sight, not reset when the probe recovers."""
+    """Same run_id after probe-unknown keeps the absolute cap from first sight of that run."""
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
     fail_checks = 6
     calls = {"n": 0}
-    run_at = "2026-10-29T00:00:00Z"
+    run_id = "same-run-through-outage"
 
     def _controlled_tick_progress():
         calls["n"] += 1
-        if calls["n"] <= fail_checks:
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (run_id, "1/128")}, True)
+        if n <= 1 + fail_checks:
             return g.TickProgressSnapshot(None, False)
-        step = calls["n"] - fail_checks
-        return g.TickProgressSnapshot({"token": (run_at, f"{step}/128")}, True)
+        step = n - fail_checks - 1
+        return g.TickProgressSnapshot({"token": (run_id, f"{step}/128")}, True)
 
     monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
 
     cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
     assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
     code, revives = _run_guard(
-        monkeypatch, ticks=fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS
+        monkeypatch, ticks=1 + fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS
     )
     assert code == 1
     assert revives >= 1
+
+
+def test_same_run_changing_run_at_heartbeat_keeps_cap_after_probe_outage(
+    tmp_path, monkeypatch
+):
+    """Real writer shape: run_id stable while run_at heartbeat changes every progress write."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    run_id = _scoring_progress(1)
+    fail_checks = 6
+    calls = {"n": 0}
+    real = g._tick_progress
+
+    def _flaky_then_real():
+        calls["n"] += 1
+        if calls["n"] <= fail_checks:
+            return g.TickProgressSnapshot(None, False)
+        _scoring_progress(calls["n"] - fail_checks, run_id=run_id)
+        return real()
+
+    monkeypatch.setattr(g, "_tick_progress", _flaky_then_real)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(
+        monkeypatch, ticks=fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS + 2
+    )
+    assert code == 1
+
+
+def test_new_run_without_outage_gets_fresh_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    calls = {"n": 0}
+
+    def _controlled():
+        calls["n"] += 1
+        run = "run-a" if calls["n"] <= 4 else "run-b"
+        return g.TickProgressSnapshot({"token": (run, f"{calls['n']}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled)
+    code, _ = _run_guard(monkeypatch, ticks=6)
+    assert code is None
+
+
+def test_new_run_after_age_none_window_gets_fresh_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    calls = {"n": 0}
+    prior_run = "prior-run-id"
+
+    def _tick():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (prior_run, "1/128")}, True)
+        if n in (2, 3):
+            return g.TickProgressSnapshot(None, True)
+        if n <= 7:
+            return g.TickProgressSnapshot({"token": (prior_run, "2/128")}, True)
+        step = n - 7
+        return g.TickProgressSnapshot({"token": ("new-run-after-none", f"{step}/128")}, True)
+
+    def _age():
+        if calls["n"] in (2, 3):
+            return None
+        return float(g.MAX_SNAPSHOT_AGE_SECONDS + 1)
+
+    monkeypatch.setattr(g, "_tick_progress", _tick)
+    monkeypatch.setattr(g, "_snapshot_age_seconds", _age)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=7 + cap_ticks // 2)
+    assert code is None
+
+
+def test_first_run_after_unknown_without_prior_run_id_gets_fresh_cap(
+    tmp_path, monkeypatch
+):
+    """Converse: probe-unknown with no run_id must not cap-kill a genuinely new run early."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    fail_checks = 7
+    calls = {"n": 0}
+
+    def _controlled():
+        calls["n"] += 1
+        if calls["n"] <= fail_checks:
+            return g.TickProgressSnapshot(None, False)
+        step = calls["n"] - fail_checks
+        return g.TickProgressSnapshot(
+            {"token": ("brand-new-run", f"{step}/128")}, True
+        )
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled)
+    code, _ = _run_guard(monkeypatch, ticks=fail_checks + 6)
+    assert code is None
 
 
 def test_successful_idle_probe_clears_probe_unknown_watch(tmp_path, monkeypatch):
@@ -734,24 +865,6 @@ def test_snapshot_age_none_does_not_clear_probe_unknown_watch(tmp_path, monkeypa
     assert code == 1
 
 
-def test_mutation_snapshot_age_none_must_not_clear_probe_unknown_watch(
-    tmp_path, monkeypatch
-):
-    _wire(tmp_path, monkeypatch)
-    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
-    _old_receipt(6001)
-    inits = _count_probe_unknown_watch_inits(monkeypatch)
-    _flapping_snapshot_age_probe(monkeypatch)
-    monkeypatch.setattr(
-        g, "_tick_progress", lambda: g.TickProgressSnapshot(None, False)
-    )
-    monkeypatch.setattr(g, "_tick_watch_when_snapshot_age_unknown", lambda _w: None)
-    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
-    code, _ = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 3)
-    assert len(inits) > 1
-    assert code is None
-
-
 def test_non_utf8_cycle_state_file_during_active_tick_restarts_at_cap(
     tmp_path, monkeypatch
 ):
@@ -794,8 +907,8 @@ def test_new_run_after_probe_unknown_gets_fresh_absolute_cap(tmp_path, monkeypat
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
-    prior_run = "2026-10-28T00:00:00Z"
-    new_run = "2026-10-30T12:00:00Z"
+    prior_run = "prior-run-id"
+    new_run = "new-run-id"
     calls = {"n": 0}
 
     def _controlled_tick_progress():
@@ -818,8 +931,8 @@ def test_mutation_new_run_must_not_inherit_prior_run_cap(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
-    prior_run = "2026-10-28T00:00:00Z"
-    new_run = "2026-10-30T12:00:00Z"
+    prior_run = "prior-run-id"
+    new_run = "new-run-id"
     calls = {"n": 0}
 
     def _controlled_tick_progress():
@@ -872,14 +985,14 @@ def test_mutation_unknown_then_real_tick_fresh_cap_resets_first_sight(tmp_path, 
     _old_receipt(6001)
     fail_checks = 6
     calls = {"n": 0}
-    run_at = "2026-10-29T00:00:00Z"
+    run_id = "same-run-resume"
 
     def _controlled_tick_progress():
         calls["n"] += 1
         if calls["n"] <= fail_checks:
             return g.TickProgressSnapshot(None, False)
         step = calls["n"] - fail_checks
-        return g.TickProgressSnapshot({"token": (run_at, f"{step}/128")}, True)
+        return g.TickProgressSnapshot({"token": (run_id, f"{step}/128")}, True)
 
     monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
     _simulate_fresh_cap_reset_first_seen(monkeypatch)

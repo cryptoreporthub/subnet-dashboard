@@ -38,7 +38,7 @@ _GUARD_NAME = "loop-stall-guard"
 _PROBE_UNKNOWN = object()
 
 
-def _token_run_at(token: Any) -> Optional[Any]:
+def _token_run_id(token: Any) -> Optional[Any]:
     if isinstance(token, tuple) and token:
         return token[0]
     return None
@@ -80,8 +80,8 @@ KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 # the scheduler's own stuck threshold (SCORE_SNAPSHOT_STUCK_SECONDS), read from the scheduler
 # so the two can never disagree; LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS may only raise it.
 # The cap is absolute: a tick still running tick_max_seconds() after the guard first saw this
-# scoring run (same run_at on the progress token) is hung too, even if it keeps advancing or
-# resumed after a probe outage on that run. A new run_at gets a fresh watch and cap.
+# scoring run (same run_id on the progress token) is hung too, even if it keeps advancing or
+# resumed after a probe outage on that run. A new run_id gets a fresh watch and cap.
 TICK_PROGRESS_OVERRIDE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS", 0)
 TICK_MAX_BASE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_MAX_SECONDS", 3600)
 _override_clamp_logged = False
@@ -122,20 +122,15 @@ def tick_progress_seconds() -> int:
 
 
 def tick_max_seconds() -> int:
-    """Absolute cap on one scoring run (one run_at), from when the guard first saw that run.
+    """Absolute cap on one scoring run (one run_id), from when the guard first saw that run.
 
     Progress does not extend it. After probe-unknown, first_seen is kept only when the resumed
-    run_at matches the run before the outage; a new run gets a fresh cap. The value is kept at
-    least twice the no-progress deadline so a merely slow tick is never cut off by the cap alone.
+    run_id matches the run before the outage; a new run_id gets a fresh cap. When no run_id was
+    known before the outage, the first readable progress after unknown also gets a fresh cap.
+    The value is kept at least twice the no-progress deadline so a merely slow tick is never
+    cut off by the cap alone.
     """
     return max(TICK_MAX_BASE_SECONDS, 2 * tick_progress_seconds())
-
-
-def _tick_watch_when_snapshot_age_unknown(
-    watch: Optional["_TickWatch"],
-) -> Optional["_TickWatch"]:
-    """Preserve tick watch when snapshot age is unknown; tests may monkeypatch to simulate regressions."""
-    return watch
 
 
 def _now_mono() -> float:
@@ -286,13 +281,15 @@ class _TickWatch:
         self.first_seen = now
         self.last_progress = now
         self.probe_unknown = probe_unknown
-        self.run_at = _token_run_at(token)
+        self.run_id = _token_run_id(token)
 
     def observe(self, token: Any, now: float) -> None:
         if token != self.token:
             self.token = token
             self.last_progress = now
-            self.run_at = _token_run_at(token)
+            resumed = _token_run_id(token)
+            if resumed is not None:
+                self.run_id = resumed
 
     def past_absolute_cap(self, now: float) -> bool:
         return now - self.first_seen > tick_max_seconds()
@@ -309,28 +306,27 @@ def _watch_active_tick(
 ) -> _TickWatch:
     """Start or update a watch for a successfully probed running tick.
 
-    After probe-unknown, keep ``first_seen`` only when ``run_at`` matches the run
-    being watched before the outage (same scoring run). A new ``run_at`` gets a fresh
-    watch and cap. When no run was known before the outage, the first observed run
-    keeps the probe-unknown ``first_seen``.
+    After probe-unknown, keep ``first_seen`` only when ``run_id`` matches the run
+    being watched before the outage. A different or newly observed ``run_id`` gets a
+    fresh watch and cap (including the first readable token after unknown when no
+    ``run_id`` was known before the outage).
     """
     if watch is None:
         return _TickWatch(token, now)
     if watch.probe_unknown:
-        resumed = _token_run_at(token)
-        if watch.run_at is not None and resumed == watch.run_at:
+        resumed = _token_run_id(token)
+        if watch.run_id is not None and resumed == watch.run_id:
             watch.probe_unknown = False
             watch.token = token
             watch.last_progress = now
             return watch
-        if watch.run_at is None and resumed is not None:
-            # No run identity before the outage: first readable progress keeps the cap
-            # (same scoring run throughout a probe outage).
-            watch.probe_unknown = False
-            watch.token = token
-            watch.last_progress = now
-            watch.run_at = resumed
-            return watch
+        return _TickWatch(token, now)
+    resumed = _token_run_id(token)
+    if (
+        watch.run_id is not None
+        and resumed is not None
+        and resumed != watch.run_id
+    ):
         return _TickWatch(token, now)
     watch.observe(token, now)
     return watch
@@ -398,7 +394,6 @@ def _guard_loop() -> None:
         if age is None:
             consecutive_stale = 0
             withdrawn = False
-            watch = _tick_watch_when_snapshot_age_unknown(watch)
             logger.info(
                 "loop stall guard: snapshot age unknown (not producer or unreadable); "
                 "clearing stale strikes, preserving tick watch"

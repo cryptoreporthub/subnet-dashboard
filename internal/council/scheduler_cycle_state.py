@@ -117,15 +117,49 @@ def _read_new(soul_map_path: Optional[str]) -> tuple[Optional[Dict[str, Any]], b
     return last, False
 
 
-def _read_legacy(soul_map_path: Optional[str]) -> Dict[str, Any]:
+def _read_legacy_with_status(
+    soul_map_path: Optional[str],
+) -> tuple[Dict[str, Any], bool]:
+    """Read the legacy soul_map ``score_snapshot_scheduler.last_cycle`` record."""
+    path = _soul_path(soul_map_path)
     try:
-        from internal.council import weights
+        st = os.stat(path)
+    except FileNotFoundError:
+        return {}, False
+    except PermissionError as exc:
+        logger.warning("score snapshot legacy cycle state unreadable (%s): %s", path, exc)
+        return {}, True
+    except OSError as exc:
+        logger.warning("score snapshot legacy cycle state unreadable (%s): %s", path, exc)
+        return {}, True
+    if not stat.S_ISREG(st.st_mode):
+        logger.warning("score snapshot legacy cycle state unreadable (%s): not a regular file", path)
+        return {}, True
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            raw = handle.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        logger.warning("score snapshot legacy cycle state unreadable (%s): %s", path, exc)
+        return {}, True
+    if not raw.strip():
+        return {}, False
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.warning("score snapshot legacy cycle state malformed (%s): %s", path, exc)
+        return {}, True
+    if not isinstance(data, dict):
+        return {}, True
+    sched = data.get("score_snapshot_scheduler")
+    last = sched.get("last_cycle") if isinstance(sched, dict) else None
+    return (dict(last), False) if isinstance(last, dict) else ({}, False)
 
-        sched = weights._load_raw(_soul_path(soul_map_path), copy_blob=False).get("score_snapshot_scheduler")
-        last = sched.get("last_cycle") if isinstance(sched, dict) else None
-    except Exception:
+
+def _read_legacy(soul_map_path: Optional[str]) -> Dict[str, Any]:
+    summary, unreadable = _read_legacy_with_status(soul_map_path)
+    if unreadable:
         return {}
-    return dict(last) if isinstance(last, dict) else {}
+    return summary
 
 
 def read_last_cycle_with_status(
@@ -139,11 +173,13 @@ def read_last_cycle_with_status(
     """
     new, unreadable = _read_new(soul_map_path)
     if unreadable:
-        legacy = _read_legacy(soul_map_path)
+        legacy, _leg_unread = _read_legacy_with_status(soul_map_path)
         return (legacy, "unreadable") if legacy else ({}, "unreadable")
     if new is not None:
         return dict(new), "ok"
-    legacy = _read_legacy(soul_map_path)
+    legacy, leg_unread = _read_legacy_with_status(soul_map_path)
+    if leg_unread:
+        return {}, "unreadable"
     if legacy:
         return legacy, "ok"
     return {}, "missing"
@@ -154,4 +190,7 @@ def read_last_cycle(soul_map_path: Optional[str] = None) -> Dict[str, Any]:
     new, _unreadable = _read_new(soul_map_path)
     if new is not None:
         return dict(new)
-    return _read_legacy(soul_map_path)
+    legacy, unreadable = _read_legacy_with_status(soul_map_path)
+    if unreadable:
+        return {}
+    return legacy
