@@ -332,6 +332,210 @@ def test_failed_deferred_start_disarms_before_job_lock_is_released(tmp_path, mon
     assert snaps._job_owner is not sched
 
 
+def _persisted_record() -> dict:
+    from internal.store.soul_map_io import read_soul_map
+
+    blob = read_soul_map(snaps._liveness_state_path()) or {}
+    return dict((blob.get("liveness") or {}).get("score_snapshot") or {})
+
+
+_PUBLISHED = {"ok": True, "published": True, "count": 7, "path": "/tmp/snap.json"}
+
+
+def test_resumed_stale_start_cannot_wipe_replacement_health(tmp_path, monkeypatch):
+    """Replit P2: A paused after scheduling, before its liveness start; stop A; B starts and
+    records a success; A resumes -> B's success time, event time and evidence survive a reload."""
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    old = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = old
+    paused, resume = threading.Event(), threading.Event()
+    real_start = old._start_liveness
+
+    def paused_start():
+        paused.set()
+        if not resume.wait(timeout=5):
+            raise AssertionError("resume gate timed out")
+        return real_start()
+
+    monkeypatch.setattr(old, "_start_liveness", paused_start)
+    old_result: dict = {}
+    old_thread = threading.Thread(target=lambda: old_result.update(old.start(immediate=False)))
+    old_thread.start()
+    assert paused.wait(timeout=5)
+
+    snaps.stop_score_snapshot_scheduler()
+    assert snaps.start_score_snapshot_scheduler(immediate=False)["started"] is True
+    new = snaps._scheduler
+    assert new is not old
+    new._record_liveness(dict(_PUBLISHED))
+    before = _persisted_record()
+    assert before["lifecycle"] == "started"
+    assert before["last_success_epoch"] is not None and before["last_event_epoch"] is not None
+    assert before["last_evidence"]["count"] == 7
+
+    resume.set()
+    old_thread.join(timeout=5)
+    assert not old_thread.is_alive()
+    assert old_result == {"started": False, "reason": "stopped_during_arm"}
+    after = _persisted_record()
+    for key in ("lifecycle", "last_success_epoch", "last_event_epoch", "last_evidence", "updated_at"):
+        assert after[key] == before[key], key
+
+
+def test_stale_tick_skip_after_losing_ownership_is_not_persisted(tmp_path, monkeypatch):
+    """Ditto: a tick loses ownership while _scoring_in_progress() runs, then records a skip."""
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    _record_snapshot_writes(monkeypatch)
+    old = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = old
+    assert old.start(immediate=False)["started"] is True
+
+    def lose_ownership_then_report_busy() -> bool:
+        snaps.stop_score_snapshot_scheduler()
+        assert snaps.start_score_snapshot_scheduler(immediate=False)["started"] is True
+        snaps._scheduler._record_liveness(dict(_PUBLISHED))
+        return True
+
+    monkeypatch.setattr(old, "_scoring_in_progress", lose_ownership_then_report_busy)
+    result = old._tick(reschedule=False)
+
+    assert result["skipped"] == "scoring_in_progress"
+    new = snaps._scheduler
+    assert new is not old
+    persisted = _persisted_record()
+    assert persisted["consecutive_skips"] == 0
+    assert persisted["last_success_epoch"] is not None
+    assert persisted["lifecycle"] == "started"
+
+
+def test_current_tick_skip_is_persisted(tmp_path, monkeypatch):
+    """Control: the registered generation's skip still lands in the record."""
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    _record_snapshot_writes(monkeypatch)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    assert sched.start(immediate=False)["started"] is True
+    monkeypatch.setattr(sched, "_scoring_in_progress", lambda: True)
+    sched._tick(reschedule=False)
+    assert _persisted_record()["consecutive_skips"] == 1
+
+
+def test_clean_stop_persists_stopped(tmp_path, monkeypatch):
+    """Ditto: stop_score_snapshot_scheduler() must not leave the persisted lifecycle 'started'."""
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    assert snaps.start_score_snapshot_scheduler(immediate=False)["started"] is True
+    assert _persisted_lifecycle() == "started"
+    assert snaps.stop_score_snapshot_scheduler()["stopped"] is True
+    assert _persisted_lifecycle() == "stopped"
+
+
+def test_direct_stop_of_registered_scheduler_persists_stopped(tmp_path, monkeypatch):
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    assert sched.start(immediate=False)["started"] is True
+    sched.stop()
+    assert _persisted_lifecycle() == "stopped"
+
+
+def test_stop_of_replaced_scheduler_does_not_persist(tmp_path, monkeypatch):
+    """Control: an old generation's late stop() must leave the replacement's 'started' alone."""
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    old = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = old
+    assert old.start(immediate=False)["started"] is True
+    with snaps._lock:
+        snaps._scheduler = None
+    assert snaps.start_score_snapshot_scheduler(immediate=False)["started"] is True
+    new = snaps._scheduler
+    new._record_liveness(dict(_PUBLISHED))
+    before = _persisted_record()
+    old.stop()
+    assert _persisted_record() == before
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_storm_persisted_liveness_only_written_by_current_generation(tmp_path, monkeypatch, seed):
+    """Randomized interleaving: no persisted liveness write ever comes from a replaced generation."""
+    import random
+
+    from internal.liveness import LivenessTracker
+
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    generations: list = []
+    real_init = snaps.ScoreSnapshotScheduler.__init__
+
+    def tracking_init(self, *a, **kw):
+        real_init(self, *a, **kw)
+        generations.append(self)
+
+    monkeypatch.setattr(snaps.ScoreSnapshotScheduler, "__init__", tracking_init)
+    violations: list = []
+    real_save = LivenessTracker._save
+
+    def checking_save(self):
+        if self.name == "score_snapshot":
+            with snaps._lock:
+                current = snaps._scheduler
+            if current is not None and current.liveness is not self:
+                violations.append("write from a replaced generation")
+        return real_save(self)
+
+    monkeypatch.setattr(LivenessTracker, "_save", checking_save)
+    errors: list = []
+
+    def worker(worker_seed: int) -> None:
+        rng = random.Random(worker_seed)
+        try:
+            for i in range(60):
+                op = rng.choice(["start", "stop", "record", "skip", "stale_start", "stale_stop"])
+                gens = list(generations)
+                gen = rng.choice(gens) if gens else None
+                if op == "start":
+                    snaps.start_score_snapshot_scheduler(immediate=False)
+                elif op == "stop":
+                    snaps.stop_score_snapshot_scheduler()
+                elif gen is None:
+                    continue
+                elif op == "record":
+                    gen._record_liveness({**_PUBLISHED, "count": i})
+                elif op == "skip":
+                    gen._record_liveness({"ok": False, "skipped": "scoring_in_progress"})
+                elif op == "stale_start":
+                    gen._start_liveness()
+                else:
+                    gen.stop()
+        except Exception as exc:  # pragma: no cover - surfaced below
+            errors.append(repr(exc))
+
+    threads = [threading.Thread(target=worker, args=(seed * 10 + n,)) for n in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+        assert not t.is_alive()
+    assert errors == []
+    assert violations == []
+    current = snaps._scheduler
+    if current is not None:
+        persisted = _persisted_record()
+        assert persisted["lifecycle"] == current.liveness.snapshot()["lifecycle"]
+
+
 def test_stale_arm_cannot_cancel_replacement_scheduler_job(tmp_path, monkeypatch):
     """Replit P2 #1 / Ditto L1328: stop A, start B, resume A -> B's job survives and B ticks."""
     _isolated_soul(tmp_path, monkeypatch)
@@ -344,9 +548,11 @@ def test_stale_arm_cannot_cancel_replacement_scheduler_job(tmp_path, monkeypatch
     real_snapshot = old.liveness.snapshot
 
     def paused_snapshot():
-        paused.set()
-        if not resume.wait(timeout=5):
-            raise AssertionError("resume gate timed out")
+        # Pause only start()'s read; stop() also reads the snapshot when it persists.
+        if not paused.is_set():
+            paused.set()
+            if not resume.wait(timeout=5):
+                raise AssertionError("resume gate timed out")
         return real_snapshot()
 
     monkeypatch.setattr(old.liveness, "snapshot", paused_snapshot)
