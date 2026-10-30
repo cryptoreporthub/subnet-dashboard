@@ -363,28 +363,9 @@ def test_clear_stuck_scoring_persist_carries_run_id(tmp_path, monkeypatch):
 def test_s2_clobbered_token_after_probe_unknown_keeps_same_run_cap(
     tmp_path, monkeypatch
 ):
-    _wire(tmp_path, monkeypatch)
-    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
-    _old_receipt(6001)
-    run_id = "stable-run-id"
-    calls = {"n": 0}
+    from tests.test_stall_guard_run_id_r13 import assert_s2_clobbered_kills_at_check_11
 
-    def _controlled():
-        calls["n"] += 1
-        n = calls["n"]
-        if n == 1:
-            return g.TickProgressSnapshot({"token": (run_id, "1/128")}, True)
-        if n <= 6:
-            return g.TickProgressSnapshot(None, False)
-        if n == 7:
-            return g.TickProgressSnapshot({"token": (None, "2/128")}, True)
-        step = n - 6
-        return g.TickProgressSnapshot({"token": (None, f"{step}/128")}, True)
-
-    monkeypatch.setattr(g, "_tick_progress", _controlled)
-    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
-    code, _ = _run_guard(monkeypatch, ticks=6 + cap_ticks + g.CONSECUTIVE_CHECKS + 2)
-    assert code == 1
+    assert_s2_clobbered_kills_at_check_11(tmp_path, monkeypatch)
 
 
 def _tick_body_records(tmp_path, monkeypatch, *, progress_steps=(1, 2, 3)):
