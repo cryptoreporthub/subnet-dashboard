@@ -118,10 +118,16 @@ def _read_legacy(soul_map_path: Optional[str]) -> Dict[str, Any]:
 def read_last_cycle_with_status(
     soul_map_path: Optional[str] = None,
 ) -> tuple[Dict[str, Any], str]:
-    """Return ``(summary, status)`` where status is ``ok``, ``missing``, or ``unreadable``."""
+    """Return ``(summary, status)`` where status is ``ok``, ``missing``, or ``unreadable``.
+
+    When the new cycle-state file exists but is unreadable, ``summary`` still falls back to
+    the legacy soul_map record (same as ``read_last_cycle``), but ``status`` remains
+    ``unreadable`` so the stall-guard tick probe can treat the new file as probe-unknown.
+    """
     new, unreadable = _read_new(soul_map_path)
     if unreadable:
-        return {}, "unreadable"
+        legacy = _read_legacy(soul_map_path)
+        return (legacy, "unreadable") if legacy else ({}, "unreadable")
     if new is not None:
         return dict(new), "ok"
     legacy = _read_legacy(soul_map_path)
@@ -131,11 +137,8 @@ def read_last_cycle_with_status(
 
 
 def read_last_cycle(soul_map_path: Optional[str] = None) -> Dict[str, Any]:
-    """The last cycle summary, ``{}`` when neither the new file nor the legacy key has one.
-
-    Malformed or unreadable cycle-state files also read as ``{}`` here so existing callers
-    keep treating them as absent. Use ``read_last_cycle_with_status`` when the distinction
-    matters (for example the stall guard tick-progress probe).
-    """
-    summary, _status = read_last_cycle_with_status(soul_map_path)
-    return summary
+    """The last cycle summary, ``{}`` when neither the new file nor the legacy key has one."""
+    new, _unreadable = _read_new(soul_map_path)
+    if new is not None:
+        return dict(new)
+    return _read_legacy(soul_map_path)

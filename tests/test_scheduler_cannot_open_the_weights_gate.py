@@ -209,6 +209,48 @@ def test_a_corrupt_cycle_file_is_read_as_absent_and_never_raises(tmp_path, monke
     assert read_last_cycle_with_status() == ({}, "unreadable")
 
 
+def test_corrupt_new_cycle_file_falls_back_to_legacy_last_cycle(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle,
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
+
+    legacy_cycle = {
+        "run_at": "2026-01-01T00:00:00Z",
+        "ok": True,
+        "phase": "scoring",
+        "progress": "3/128",
+    }
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": {"last_cycle": legacy_cycle}}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scheduler_state_path()).write_text("{not json")
+    assert read_last_cycle() == legacy_cycle
+    assert read_last_cycle_with_status() == (legacy_cycle, "unreadable")
+
+
+def test_mutation_corrupt_new_file_must_still_fallback_to_legacy(tmp_path, monkeypatch):
+    from internal.council import scheduler_cycle_state as scs
+
+    legacy_cycle = {"run_at": "2026-01-01T00:00:00Z", "ok": True}
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": {"last_cycle": legacy_cycle}}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scs.scheduler_state_path()).write_text("{not json")
+
+    def _broken_read(soul_map_path=None):
+        new, unreadable = scs._read_new(soul_map_path)
+        if unreadable:
+            return {}
+        if new is not None:
+            return dict(new)
+        return scs._read_legacy(soul_map_path)
+
+    monkeypatch.setattr(scs, "read_last_cycle", _broken_read)
+    assert scs.read_last_cycle() == {}
+
+
 # --- the scheduler's liveness record is the other thing a tick used to write into the soul_map ---
 
 
