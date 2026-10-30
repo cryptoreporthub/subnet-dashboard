@@ -108,9 +108,15 @@ def _read_new(soul_map_path: Optional[str]) -> tuple[Optional[Dict[str, Any]], b
     if not isinstance(data, dict):
         logger.warning("score snapshot cycle state malformed (%s): root is not an object", path)
         return None, True
-    last = data.get("last_cycle")
-    if last is None:
+    if "last_cycle" not in data:
         return None, False
+    last = data["last_cycle"]
+    if last is None:
+        logger.warning(
+            "score snapshot cycle state malformed (%s): last_cycle is null",
+            path,
+        )
+        return None, True
     if not isinstance(last, dict):
         logger.warning("score snapshot cycle state malformed (%s): last_cycle is not an object", path)
         return None, True
@@ -151,14 +157,26 @@ def _read_legacy_with_status(
         return {}, True
     if not isinstance(data, dict):
         return {}, True
-    sched = data.get("score_snapshot_scheduler")
-    if sched is None:
+    if "score_snapshot_scheduler" not in data:
         return {}, False
+    sched = data["score_snapshot_scheduler"]
+    if sched is None:
+        logger.warning(
+            "score snapshot legacy cycle state malformed (%s): score_snapshot_scheduler is null",
+            path,
+        )
+        return {}, True
     if not isinstance(sched, dict):
         return {}, True
-    last = sched.get("last_cycle")
-    if last is None:
+    if "last_cycle" not in sched:
         return {}, False
+    last = sched["last_cycle"]
+    if last is None:
+        logger.warning(
+            "score snapshot legacy cycle state malformed (%s): last_cycle is null",
+            path,
+        )
+        return {}, True
     if not isinstance(last, dict):
         logger.warning(
             "score snapshot legacy cycle state malformed (%s): last_cycle is not an object",
