@@ -29,7 +29,7 @@ import logging
 import os
 import threading
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,18 @@ CONSECUTIVE_CHECKS = max(1, _env_int("LOOP_STALL_GUARD_CONSECUTIVE_CHECKS", 3))
 # ponytail: loop_health snapshot boot grace defaults 900s; guard waits 1500s — intentional dual, no knob change
 BOOT_GRACE_SECONDS = max(60, _env_int("LOOP_STALL_GUARD_BOOT_GRACE_SECONDS", 1500))
 KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
+# A scoring tick that is running and still advancing is not a wedge even when the last
+# receipt is old. Judge it by progress on the monotonic clock: no advance for
+# TICK_PROGRESS_SECONDS (the scheduler's own SCORE_SNAPSHOT_STUCK_SECONDS), or still
+# running TICK_MAX_SECONDS after the guard first saw it, and it counts as hung.
+TICK_PROGRESS_SECONDS = max(60, _env_int("LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS", 900))
+TICK_MAX_SECONDS = max(
+    TICK_PROGRESS_SECONDS, _env_int("LOOP_STALL_GUARD_TICK_MAX_SECONDS", 3600)
+)
+
+
+def _now_mono() -> float:
+    return time.monotonic()
 
 
 # A receipt or snapshot dated further ahead than this is not evidence of life
@@ -167,14 +179,47 @@ def _worker_mode() -> bool:
         return True  # assume worker context; guard is otherwise inert
 
 
-def _try_revive() -> None:
+def _try_revive() -> Optional[Dict[str, Any]]:
     try:
         from internal.council.score_snapshots import revive_score_snapshot_scheduler
 
         result = revive_score_snapshot_scheduler()
         logger.warning("loop stall guard: in-place revive attempt -> %s", result)
+        return result
     except Exception as exc:
         logger.warning("loop stall guard: revive attempt failed: %s", exc)
+        return None
+
+
+def _tick_progress() -> Optional[Dict[str, Any]]:
+    """Progress marker of a running scoring tick, or None (no tick, or unreadable)."""
+    try:
+        from internal.council.score_snapshots import producer_tick_progress
+
+        return producer_tick_progress()
+    except Exception as exc:
+        logger.warning("loop stall guard: tick progress probe failed: %s", exc)
+        return None
+
+
+class _TickWatch:
+    """What the guard has seen of one running tick, on the monotonic clock."""
+
+    def __init__(self, token: Any, now: float) -> None:
+        self.token = token
+        self.first_seen = now
+        self.last_progress = now
+
+    def observe(self, token: Any, now: float) -> None:
+        if token != self.token:
+            self.token = token
+            self.last_progress = now
+
+    def hung(self, now: float) -> bool:
+        return (
+            now - self.last_progress > TICK_PROGRESS_SECONDS
+            or now - self.first_seen > TICK_MAX_SECONDS
+        )
 
 
 def _try_revive_resolver() -> None:
@@ -199,6 +244,8 @@ def _guard_loop() -> None:
     consecutive_stale = 0
     revived = False
     resolver_revived = False
+    watch: Optional[_TickWatch] = None
+    withdrawn = False  # one premature strike per stale episode may be withdrawn
 
     logger.info(
         "loop stall guard started (interval=%ss, max_snapshot_age=%ss, resolver_revive_after=%ss, consecutive=%s, kill=%s)",
@@ -233,13 +280,42 @@ def _guard_loop() -> None:
 
         if age is None:
             consecutive_stale = 0
+            watch = None
+            withdrawn = False
             logger.info("loop stall guard: not the snapshot producer or scheduler frozen, resetting")
             continue
 
         if age <= MAX_SNAPSHOT_AGE_SECONDS:
             consecutive_stale = 0
+            watch = None
+            withdrawn = False
             logger.info("loop stall guard: snapshot fresh (age=%ss)", int(age))
             continue
+
+        # Old output, but a running scoring tick that keeps advancing is working, not wedged.
+        tick = _tick_progress()
+        if tick is None:
+            watch = None
+        else:
+            now = _now_mono()
+            if watch is None:
+                watch = _TickWatch(tick.get("token"), now)
+            else:
+                watch.observe(tick.get("token"), now)
+            if not watch.hung(now):
+                consecutive_stale = 0
+                logger.info(
+                    "loop stall guard: snapshot old (age=%ss) but a scoring tick is running and "
+                    "advancing (last progress %ss ago); not striking",
+                    int(age),
+                    int(now - watch.last_progress),
+                )
+                continue
+            logger.warning(
+                "loop stall guard: scoring tick has not advanced for %ss (running %ss); counting as hung",
+                int(now - watch.last_progress),
+                int(now - watch.first_seen),
+            )
 
         consecutive_stale += 1
         logger.warning(
@@ -250,9 +326,23 @@ def _guard_loop() -> None:
             CONSECUTIVE_CHECKS,
         )
 
-        if consecutive_stale == 1 and not revived:
-            revived = True
-            _try_revive()
+        if not revived:
+            result = _try_revive()
+            if isinstance(result, dict) and result.get("reason") == "tick_in_progress":
+                # Not a revive: a tick is running and revive cannot stop it.
+                if watch is None and not withdrawn:
+                    # A tick started after our check, so this strike was premature:
+                    # start judging it by progress on the next check.
+                    withdrawn = True
+                    consecutive_stale = 0
+                    logger.info(
+                        "loop stall guard: revive found a tick that started after the check; "
+                        "strike withdrawn"
+                    )
+                    continue
+                # A hung tick (past its progress deadline): the strike stands; revive may retry.
+            else:
+                revived = True
 
         if consecutive_stale >= CONSECUTIVE_CHECKS:
             logger.critical(

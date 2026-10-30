@@ -1801,6 +1801,34 @@ def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
         return {**_scheduler.state(), "enabled": _enabled()}
 
 
+def producer_tick_progress() -> Optional[Dict[str, Any]]:
+    """Is a scoring tick running, and what is its progress marker?
+
+    None when no tick is active. Otherwise ``{"token": ...}``: the last-cycle
+    record's (run_at, progress) while it is in ``phase=scoring``, which the tick
+    rewrites as items finish, or None while no scoring record exists. The caller
+    compares tokens between checks; an unchanged token means no progress.
+    """
+    with _lock:
+        active = (
+            _write_future_active()
+            or _TICK_ACTIVE
+            or bool(_scheduler and _scheduler._tick_active)
+        )
+    if not active:
+        return None
+    token = None
+    try:
+        from internal.council.scheduler_cycle_state import read_last_cycle
+
+        last = read_last_cycle()
+        if last.get("phase") == "scoring":
+            token = (last.get("run_at"), last.get("progress"))
+    except Exception:
+        token = None
+    return {"token": token}
+
+
 def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     """Best-effort in-place revive when ``score_snapshots.json`` goes stale.
 
