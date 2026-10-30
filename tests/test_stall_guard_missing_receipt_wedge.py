@@ -332,6 +332,68 @@ def test_a_tick_that_advances_forever_still_hits_the_absolute_cap(tmp_path, monk
     assert code == 1
 
 
+def test_cap_is_absolute_from_first_sight_even_after_a_stall_and_resume(tmp_path, monkeypatch):
+    """Claude's probe: advance 14 checks, freeze 2 (480s), resume at check 17.
+
+    The stall never reached the 900s deadline and the tick kept advancing, but the cap counts
+    from when the guard first saw the tick, so it is still restarted once the cap has passed.
+    It is not restarted before the cap, and progress after the stall gives no fresh runway.
+    """
+    _wire(tmp_path, monkeypatch)
+    cap = g.tick_max_seconds()
+    assert cap == 3600
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+
+    def _probe(n):
+        # checks 1-14 advance, 15-16 frozen, 17+ advance again
+        if n <= 14 or n >= 17:
+            _scoring_progress(n)
+
+    # 16 checks watch 3600s (first check at 0s): not past the cap yet, so no restart.
+    assert 16 * g.INTERVAL_SECONDS - g.INTERVAL_SECONDS == cap
+    assert _run_guard(monkeypatch, ticks=16, on_tick=_probe) == (None, 0)
+
+    code, revives = _run_guard(monkeypatch, ticks=30, on_tick=_probe)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_tick_that_finishes_under_the_cap_survives(tmp_path, monkeypatch):
+    """A tick that advances and completes before the cap is never restarted."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+
+    def _finish_at_12(n):
+        if n < 12:
+            _scoring_progress(n)
+        elif n == 12:
+            monkeypatch.setattr(snaps, "_TICK_ACTIVE", False)
+            snaps.record_cycle_receipt({"complete": True}, outcome="published")
+
+    assert 12 * g.INTERVAL_SECONDS < g.tick_max_seconds()
+    assert _run_guard(monkeypatch, ticks=40, on_tick=_finish_at_12) == (None, 0)
+
+
+def test_write_phase_outlasts_a_raised_write_timeout(tmp_path, monkeypatch):
+    """The progress token is constant while the write phase waits: the deadline covers it."""
+    _wire(tmp_path, monkeypatch)
+    assert g.tick_progress_seconds() == 900  # defaults unchanged (write timeout 600s)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1500)
+    assert g.tick_progress_seconds() == 1560
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(128, 128)  # scoring done, the write phase is waiting
+    # 1500s of a healthy, silent write (7 checks reach 1440s) must not strike.
+    assert _run_guard(monkeypatch, ticks=7) == (None, 0)
+    # A write that outlives its timeout is still restarted.
+    code, _ = _run_guard(monkeypatch, ticks=30)
+    assert code == 1
+
+
 def test_tick_in_progress_revive_on_a_hung_tick_is_not_a_success(tmp_path, monkeypatch):
     """The revive cannot stop a hung tick: it is not marked done, the strikes stand and it retries."""
     _wire(tmp_path, monkeypatch)

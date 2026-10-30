@@ -71,14 +71,17 @@ KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 # receipt is old. Judge it by progress on the monotonic clock. The no-progress deadline is
 # the scheduler's own stuck threshold (SCORE_SNAPSHOT_STUCK_SECONDS), read from the scheduler
 # so the two can never disagree; LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS may only raise it.
-# A tick still running after tick_max_seconds() since the guard first saw it is hung too.
+# The cap is absolute: a tick still running tick_max_seconds() after the guard FIRST saw it is
+# hung too, even if it keeps advancing or resumed after a stall. It is counted from first sight,
+# never from the last progress (that would just be the no-progress deadline again), so a tick
+# that stalled and resumed does NOT get a fresh runway.
 TICK_PROGRESS_OVERRIDE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS", 0)
 TICK_MAX_BASE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_MAX_SECONDS", 3600)
 _override_clamp_logged = False
 
 
 def tick_progress_seconds() -> int:
-    """No-progress deadline: never below the scheduler's configured stuck threshold."""
+    """No-progress deadline: never below the scheduler's stuck threshold or its write timeout."""
     global _override_clamp_logged
     try:
         from internal.council.score_snapshots import score_snapshot_stuck_seconds
@@ -88,6 +91,16 @@ def tick_progress_seconds() -> int:
         logger.warning("loop stall guard: scheduler stuck threshold unreadable (%s); using 900s", exc)
         threshold = 900
     threshold = max(60, threshold)
+    try:
+        from internal.council.score_snapshots import SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
+
+        write_timeout = int(SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS)
+    except Exception:
+        write_timeout = 0
+    if write_timeout > 0:
+        # The progress token is constant while the write phase waits (up to the write timeout),
+        # so the deadline must outlast a healthy write. The default (600s) is below 900s: no change.
+        threshold = max(threshold, write_timeout + 60)
     if TICK_PROGRESS_OVERRIDE_SECONDS and TICK_PROGRESS_OVERRIDE_SECONDS < threshold:
         if not _override_clamp_logged:
             _override_clamp_logged = True
@@ -102,7 +115,11 @@ def tick_progress_seconds() -> int:
 
 
 def tick_max_seconds() -> int:
-    """Hard cap on a running tick; always at least twice the no-progress deadline."""
+    """Absolute cap on one running tick, counted from when the guard first saw it.
+
+    Progress does not extend it. It is only kept at least twice the no-progress deadline,
+    so a tick that is merely slow (never stalled) is never cut off by the cap alone.
+    """
     return max(TICK_MAX_BASE_SECONDS, 2 * tick_progress_seconds())
 
 
@@ -232,7 +249,11 @@ def _tick_progress() -> Optional[Dict[str, Any]]:
 
 
 class _TickWatch:
-    """What the guard has seen of one running tick, on the monotonic clock."""
+    """What the guard has seen of one running tick, on the monotonic clock.
+
+    ``first_seen`` never moves (the absolute cap counts from it); ``last_progress``
+    moves every time the progress token changes (the no-progress deadline counts from it).
+    """
 
     def __init__(self, token: Any, now: float) -> None:
         self.token = token

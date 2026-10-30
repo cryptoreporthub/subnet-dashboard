@@ -108,8 +108,8 @@ def main() -> None:
     schedule_summary_bot_worker_watchdog()
     _start_job_inventory_http()
 
-    # Loop stall guard (loop-stall-guard commit d03a3789): watch the pump desk
-    # snapshot age; if it stays stale across consecutive checks, revive in place
+    # Loop stall guard (loop-stall-guard commit d03a3789): watch the score-snapshot
+    # producer (owner only); if it stays stale across consecutive checks, revive in place
     # then exit so the supervisor restarts the worker fresh. Must stay wired in
     # alongside the scheduler self-heal below.
     try:
