@@ -48,8 +48,9 @@ def _tokens_same_run(watch: "_TickWatch", token: Any) -> bool:
     """Whether ``token`` still refers to the scoring run ``watch`` is tracking."""
     resumed = _token_run_id(token)
     if watch.run_id is None:
-        # Identity-less watch after probe-unknown: always a fresh cap (pairs with identity-less writer).
-        return False
+        # Identity-less watch: same run while the writer token stays (None, ·).
+        # A non-None run_id on resume is handled in ``_watch_active_tick`` (fresh cap).
+        return resumed is None
     if resumed == watch.run_id:
         return True
     # Legacy/clobbered cycle record dropped run_id; progress still advances the same run.
@@ -139,12 +140,13 @@ def tick_max_seconds() -> int:
     """Absolute cap on one scoring run (one run_id), from when the guard first saw that run.
 
     Progress does not extend it. After probe-unknown, ``first_seen`` is kept when the resumed
-    token is the same run (matching ``run_id``, or clobbered ``(None, progress)`` with a
-    known ``run_id`` on the watch). An identity-less watch always gets a fresh cap on resume.
-    Repeated probe-unknown outages for that same run do **not** reset the cap. A new ``run_id``
-    after an identity-less window gets a fresh watch and cap.
+    token is the same run (matching ``run_id``, clobbered ``(None, progress)`` with a known
+    ``run_id`` on the watch, or identity-less ``(None, ·)``). A **non-None ``run_id``** on
+    the token after an identity-less watch gets a fresh watch and cap (R9). Fully identity-less
+    new runs (legacy writer only) may hit the cap earlier than a run that later shows ``run_id``
+    — bounded false-positive vs an unbounded hung run when probe flaps during write phase.
 
-    Snapshot age ``None`` (not producer / unreadable age probe) can leave an identity-less
+    Repeated probe-unknown outages for that same run do **not** reset the cap. Snapshot age ``None`` (not producer / unreadable age probe) can leave an identity-less
     watch unchanged for an **unbounded** number of guard ticks (pre-existing S7); this module
     does not cap that gap.
 

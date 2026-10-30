@@ -197,7 +197,7 @@ def test_hung_late_run_id_worst_case_numeric_bound(tmp_path, monkeypatch):
 
 
 def test_write_phase_none_none_after_probe_window_keeps_full_cap(tmp_path, monkeypatch):
-    """Ditto #2: identity-less resume after W=7 probe-unknown → fresh cap for healthy run."""
+    """After identity-less (None, None), first non-None run_id gets fresh cap (R9)."""
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
@@ -257,14 +257,16 @@ def test_write_timeout_summary_keeps_run_id_and_not_scoring_phase(tmp_path, monk
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
     monkeypatch.setattr(snaps, "_scheduler", sched)
-    result = sched._tick_body(reschedule=False)
-    assert "write_timeout" in str(result.get("error", ""))
-    last = read_last_cycle()
-    assert last.get("run_id")
-    assert last.get("phase") != "scoring"
-    assert result.get("run_id") == last.get("run_id")
-    time.sleep(2.5)
-    _reset_write_occupancy()
+    try:
+        result = sched._tick_body(reschedule=False)
+        assert "write_timeout" in str(result.get("error", ""))
+        last = read_last_cycle()
+        assert last.get("run_id")
+        assert last.get("phase") != "scoring"
+        assert result.get("run_id") == last.get("run_id")
+    finally:
+        time.sleep(2.5)
+        _reset_write_occupancy()
 
 
 def test_write_timeout_summary_does_not_open_second_cap_window(tmp_path, monkeypatch):

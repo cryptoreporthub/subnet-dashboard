@@ -327,6 +327,24 @@ def test_whitespace_legacy_soul_map_is_unreadable(tmp_path, monkeypatch):
     assert read_last_cycle_with_status() == ({}, "unreadable")
 
 
+def test_legacy_non_dict_score_snapshot_scheduler_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": "not-an-object"}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_zero_byte_legacy_soul_map_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_bytes(b"")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
 @pytest.mark.skipif(os.environ.get("PR1485_MUTATION") != "1", reason="mutation job only")
 def test_m8_mutation_non_dict_score_snapshot_scheduler_is_unreadable(tmp_path, monkeypatch):
     from internal.council import scheduler_cycle_state as scs

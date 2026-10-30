@@ -1597,8 +1597,6 @@ class ScoreSnapshotScheduler:
             if not result.get("run_id") and last.get("run_id"):
                 result["run_id"] = last["run_id"]
             result["run_at"] = _now_iso()
-            if not result.get("ok"):
-                result.pop("phase", None)
             with _lock:
                 self._last_tick_at = result["run_at"]
                 self._last_error = result.get("error")
@@ -1698,9 +1696,6 @@ class ScoreSnapshotScheduler:
             result["run_at"] = _now_iso()
             if not result.get("run_id"):
                 result["run_id"] = run_id
-            if not result.get("ok"):
-                # Final failure must not read as an in-flight scoring tick (stall-guard cap continuity).
-                result.pop("phase", None)
             with _lock:
                 self._last_tick_at = result["run_at"]
                 self._last_error = result.get("error")
