@@ -109,6 +109,27 @@ def test_the_cycle_summary_has_its_own_file_beside_the_soul_map(tmp_path, monkey
     assert last["phase"] is None  # the final summary replaced the in-flight "scoring" one
 
 
+def test_persist_cycle_summary_preserves_run_id(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle, scheduler_state_path
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._persist_cycle_summary(
+        {
+            "run_id": "RID-SHOULD-SURVIVE",
+            "run_at": snaps._now_iso(),
+            "ok": False,
+            "phase": "scoring",
+            "progress": "1/128",
+        }
+    )
+    last = read_last_cycle()
+    assert last.get("run_id") == "RID-SHOULD-SURVIVE"
+    assert Path(scheduler_state_path()).exists()
+
+
 # --- "usable" means real council weights ---
 
 

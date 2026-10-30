@@ -1713,6 +1713,7 @@ class ScoreSnapshotScheduler:
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {
+            "run_id": result.get("run_id"),
             "run_at": result.get("run_at"),
             "ok": bool(result.get("ok")),
             "published": result.get("published"),
