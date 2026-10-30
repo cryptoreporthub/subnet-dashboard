@@ -57,17 +57,6 @@ def _tokens_same_run(watch: "_TickWatch", token: Any) -> bool:
     return False
 
 
-def _fresh_watch_for_token(
-    watch: Optional["_TickWatch"], token: Any, now: float
-) -> "_TickWatch":
-    """Create a watch for ``token``, inheriting unknown-window cap anchor when required."""
-    fresh = _TickWatch(token, now)
-    if watch is not None and watch.run_id is None:
-        # S1/S1b: first run_id after a window with no identity — cap counts from window start.
-        fresh.first_seen = watch.first_seen
-    return fresh
-
-
 def _env_bool(name: str, default: bool = True) -> bool:
     raw = os.environ.get(name)
     if raw is None or str(raw).strip() == "":
@@ -148,11 +137,15 @@ def tick_progress_seconds() -> int:
 def tick_max_seconds() -> int:
     """Absolute cap on one scoring run (one run_id), from when the guard first saw that run.
 
-    Progress does not extend it. After probe-unknown, first_seen is kept only when the resumed
-    run_id matches the run before the outage; a new run_id gets a fresh cap. When no run_id was
-    known before the outage, the first readable progress after unknown also gets a fresh cap.
-    The value is kept at least twice the no-progress deadline so a merely slow tick is never
-    cut off by the cap alone.
+    Progress does not extend it. After probe-unknown, ``first_seen`` is kept only when the
+    resumed token is the same run (matching ``run_id``, or clobbered ``(None, progress)``).
+    A new ``run_id`` after an identity-less window gets a **fresh** watch and cap (healthy runs
+    keep the full ``tick_max_seconds()`` runway).
+
+    Worst case for a hung run whose ``run_id`` appears only after a long probe-unknown or
+    age-unknown window: the run may survive up to roughly ``tick_max_seconds()`` plus that
+    window plus stale strikes before exit — the window itself is bounded by the existing
+    probe-unknown absolute cap and strike logic when progress never becomes readable.
     """
     return max(TICK_MAX_BASE_SECONDS, 2 * tick_progress_seconds())
 
@@ -329,9 +322,8 @@ def _watch_active_tick(
 
     Run changes are resolved here only (not in ``observe``). After probe-unknown,
     keep ``first_seen`` when the resumed token is the same run (including clobbered
-    ``(None, progress)`` with a known ``run_id``). A different run gets a fresh watch;
-    the first ``run_id`` after an identity-less unknown window keeps the window's
-    ``first_seen`` for the absolute cap (S1).
+    ``(None, progress)`` with a known ``run_id``). A different run, or the first
+    non-None ``run_id`` after an identity-less watch, gets a fresh watch and cap.
     """
     if watch is None:
         return _TickWatch(token, now)
@@ -344,15 +336,12 @@ def _watch_active_tick(
             if resumed is not None:
                 watch.run_id = resumed
             return watch
-        return _fresh_watch_for_token(watch, token, now)
+        return _TickWatch(token, now)
     resumed = _token_run_id(token)
     if watch.run_id is not None and resumed is not None and resumed != watch.run_id:
         return _TickWatch(token, now)
     if watch.run_id is None and resumed is not None:
-        return _fresh_watch_for_token(watch, token, now)
-    if watch.run_id is not None and resumed is None:
-        watch.observe(token, now)
-        return watch
+        return _TickWatch(token, now)
     watch.observe(token, now)
     return watch
 
