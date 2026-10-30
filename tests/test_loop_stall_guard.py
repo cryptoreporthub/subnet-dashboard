@@ -533,6 +533,54 @@ def test_owner_with_servable_volume_snapshot_of_unknown_age_is_unknown_not_stale
     assert loop_stall_guard._snapshot_age_seconds() is None
 
 
+def _iso_offset(seconds: float) -> str:
+    return datetime.fromtimestamp(time.time() + seconds, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _write_receipt(tmp_path, seconds_from_now: float) -> None:
+    (tmp_path / "cycle.json").write_text(
+        json.dumps({"attempted_at": _iso_offset(seconds_from_now), "outcome": "published"}),
+        encoding="utf-8",
+    )
+
+
+def _write_volume_dated(tmp_path, seconds_from_now: float) -> None:
+    payload = complete_snapshot_payload(
+        day_rows=[{"netuid": 1, "total_score": 1.0}], written_at=_iso_offset(seconds_from_now)
+    )
+    payload["build_started_at"] = payload["written_at"] = _iso_offset(seconds_from_now)
+    (tmp_path / "volume.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_future_dated_receipt_is_stale_not_fresh_forever(tmp_path, monkeypatch):
+    """A far-future receipt (clock step, corrupt file) cannot prove the producer is alive."""
+    _owner_env(monkeypatch, tmp_path)
+    _write_receipt(tmp_path, 30 * 86400)
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None
+    assert age > MAX_SNAPSHOT_AGE_SECONDS
+
+
+def test_future_dated_volume_snapshot_without_receipt_is_stale(tmp_path, monkeypatch):
+    _owner_env(monkeypatch, tmp_path)
+    _write_volume_dated(tmp_path, 30 * 86400)
+    assert snaps.read_served_snapshot().origin == "volume"
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None
+    assert age > MAX_SNAPSHOT_AGE_SECONDS
+
+
+def test_small_clock_skew_still_reads_as_young(tmp_path, monkeypatch):
+    _owner_env(monkeypatch, tmp_path)
+    _write_receipt(tmp_path, 60)
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None and age < MAX_SNAPSHOT_AGE_SECONDS
+    (tmp_path / "cycle.json").unlink()
+    _write_volume_dated(tmp_path, 60)
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None and age < MAX_SNAPSHOT_AGE_SECONDS
+
+
 def test_owner_with_no_snapshot_at_all_is_stale_on_first_check(tmp_path, monkeypatch):
     _owner_env(monkeypatch, tmp_path)
     age = loop_stall_guard._snapshot_age_seconds()

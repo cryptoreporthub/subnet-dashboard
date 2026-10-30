@@ -69,6 +69,24 @@ BOOT_GRACE_SECONDS = max(60, _env_int("LOOP_STALL_GUARD_BOOT_GRACE_SECONDS", 150
 KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 
 
+# A receipt or snapshot dated further ahead than this is not evidence of life
+# (clock step or a corrupt file); small skew is tolerated and reads as age 0.
+FUTURE_TIMESTAMP_TOLERANCE_SECONDS = 300
+
+
+def _evidence_age(signed_age: Optional[float]) -> Optional[float]:
+    """Age of a liveness witness; a future-dated one is stale, never fresh."""
+    if signed_age is None:
+        return None
+    if signed_age < -FUTURE_TIMESTAMP_TOLERANCE_SECONDS:
+        logger.warning(
+            "loop stall guard: snapshot evidence is dated %.0fs in the future; treating as stale",
+            -signed_age,
+        )
+        return float(MAX_SNAPSHOT_AGE_SECONDS + 1)
+    return max(0.0, signed_age)
+
+
 def _snapshot_age_seconds() -> Optional[float]:
     """Producer liveness for the score-snapshot owner; None (idle) everywhere else.
 
@@ -82,8 +100,13 @@ def _snapshot_age_seconds() -> Optional[float]:
       nothing about the producer. No receipt and no volume snapshot means the
       producer has not completed a cycle; that is stale on the first check (the
       guard's boot grace covers a normal startup).
+    * A receipt or volume snapshot dated more than FUTURE_TIMESTAMP_TOLERANCE_SECONDS
+      ahead of now is stale: a clock step or corrupt file cannot prove the producer
+      is alive, and a wedged producer must not hide behind it. The revive rewrites
+      the receipt, so a live producer self-heals.
     """
     try:
+        from internal.council import score_snapshots as snaps
         from internal.council.score_snapshots import (
             _enabled,
             producer_cycle_age_seconds,
@@ -93,12 +116,19 @@ def _snapshot_age_seconds() -> Optional[float]:
 
         if not _enabled() or not score_snapshot_producer_enabled():
             return None
-        cycle_age = producer_cycle_age_seconds()
+        cycle_age = producer_cycle_age_seconds(signed=True)
         if cycle_age is not None:
-            return cycle_age
+            return _evidence_age(cycle_age)
         served = read_served_snapshot()
         if served.servable and served.origin == "volume":
-            return served.age_seconds
+            if served.age_seconds is None:
+                return None
+            # served.age_seconds is clamped at 0; re-read it signed to see a future date.
+            return _evidence_age(
+                snaps._snapshot_age_for_path(
+                    snaps.SCORE_SNAPSHOTS_PATH, served.snapshot, signed=True
+                )
+            )
         return float(MAX_SNAPSHOT_AGE_SECONDS + 1)
     except Exception as exc:
         logger.warning("loop stall guard: snapshot age probe failed: %s", exc)

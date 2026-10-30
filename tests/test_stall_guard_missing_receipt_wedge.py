@@ -168,6 +168,33 @@ def test_servable_volume_snapshot_of_unknown_age_never_revives_or_exits(tmp_path
     assert (code, revives) == (None, 0)
 
 
+def test_future_dated_receipt_does_not_hide_a_wedged_producer(tmp_path, monkeypatch):
+    """A receipt dated 30 days ahead must not read as fresh forever."""
+    _wire(tmp_path, monkeypatch)
+    snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")
+    path = Path(snaps._score_snapshot_cycle_path())
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["attempted_at"] = datetime.fromtimestamp(time.time() + 30 * 86400, tz=timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    code, revives = _run_guard(monkeypatch)
+    assert (code, revives) == (1, 1)
+
+
+def test_future_dated_receipt_self_heals_when_revive_rewrites_the_receipt(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")
+    path = Path(snaps._score_snapshot_cycle_path())
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["attempted_at"] = datetime.fromtimestamp(time.time() + 30 * 86400, tz=timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    code, revives = _run_guard(monkeypatch, revive_writes_receipt=True)
+    assert (code, revives) == (None, 1)
+
+
 def test_fresh_receipt_beats_old_seed_age(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
     snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")

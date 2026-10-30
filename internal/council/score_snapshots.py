@@ -373,7 +373,9 @@ def record_cycle_receipt(
         logger.warning("score snapshot cycle receipt write failed: %s", exc)
 
 
-def producer_cycle_age_seconds(path: Optional[str] = None) -> Optional[float]:
+def producer_cycle_age_seconds(path: Optional[str] = None, *, signed: bool = False) -> Optional[float]:
+    """Seconds since the last cycle receipt. ``signed`` keeps a future-dated receipt
+    negative (readers clamp it to 0; the stall guard must see it)."""
     cycle_path = path or _score_snapshot_cycle_path()
     try:
         with open(cycle_path, "r", encoding="utf-8") as handle:
@@ -385,7 +387,8 @@ def producer_cycle_age_seconds(path: Optional[str] = None) -> Optional[float]:
     parsed = _parse_iso(data.get("attempted_at"))
     if parsed is None:
         return None
-    return max(0.0, datetime.now(timezone.utc).timestamp() - parsed.timestamp())
+    age = datetime.now(timezone.utc).timestamp() - parsed.timestamp()
+    return age if signed else max(0.0, age)
 
 
 def snapshot_membership_current(snap: Optional[Dict[str, Any]]) -> Optional[bool]:
@@ -447,14 +450,19 @@ class ServedSnapshot:
         return out
 
 
-def _snapshot_age_for_path(path: str, snap: Optional[Dict[str, Any]]) -> Optional[float]:
+def _snapshot_age_for_path(
+    path: str, snap: Optional[Dict[str, Any]], *, signed: bool = False
+) -> Optional[float]:
+    """Snapshot age in seconds; ``signed`` keeps a future-dated snapshot negative."""
     started = _parse_iso((snap or {}).get("build_started_at")) if snap else None
     if started is not None:
-        return max(0.0, datetime.now(timezone.utc).timestamp() - started.timestamp())
+        age = datetime.now(timezone.utc).timestamp() - started.timestamp()
+        return age if signed else max(0.0, age)
     try:
-        return max(0.0, datetime.now(timezone.utc).timestamp() - os.path.getmtime(path))
+        age = datetime.now(timezone.utc).timestamp() - os.path.getmtime(path)
     except OSError:
         return None
+    return age if signed else max(0.0, age)
 
 
 def read_served_snapshot(
