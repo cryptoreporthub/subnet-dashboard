@@ -1829,11 +1829,18 @@ def producer_tick_progress() -> Optional[Dict[str, Any]]:
         return None
     token = None
     try:
-        from internal.council.scheduler_cycle_state import read_last_cycle
+        from internal.council.scheduler_cycle_state import (
+            CycleStateUnreadableError,
+            read_last_cycle_with_status,
+        )
 
-        last = read_last_cycle()
+        last, status = read_last_cycle_with_status()
+        if status == "unreadable":
+            raise CycleStateUnreadableError("score snapshot cycle state unreadable")
         if last.get("phase") == "scoring":
             token = (last.get("run_at"), last.get("progress"))
+    except CycleStateUnreadableError:
+        raise
     except Exception:
         token = None
     return {"token": token}

@@ -27,6 +27,10 @@ LIVENESS_FILENAME = "score_snapshot_liveness.json"
 _write_lock = threading.Lock()
 
 
+class CycleStateUnreadableError(Exception):
+    """The on-disk cycle state file exists but cannot be read or parsed."""
+
+
 def _soul_path(soul_map_path: Optional[str]) -> str:
     if soul_map_path:
         return soul_map_path
@@ -65,14 +69,39 @@ def write_last_cycle(summary: Dict[str, Any], soul_map_path: Optional[str] = Non
         logger.warning("score snapshot cycle summary persist failed: %s", exc)
 
 
-def _read_new(soul_map_path: Optional[str]) -> Optional[Dict[str, Any]]:
+def _read_new(soul_map_path: Optional[str]) -> tuple[Optional[Dict[str, Any]], bool]:
+    """Read the new cycle-state file.
+
+    Returns ``(summary, unreadable)``. ``unreadable`` is True when the file exists but
+    cannot be read or parsed; ``summary`` is None when the file is absent or has no
+    ``last_cycle`` record (distinct from unreadable).
+    """
+    path = scheduler_state_path(soul_map_path)
+    if not os.path.isfile(path):
+        return None, False
     try:
-        with open(scheduler_state_path(soul_map_path), "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except Exception:
-        return None
-    last = data.get("last_cycle") if isinstance(data, dict) else None
-    return last if isinstance(last, dict) else None
+        with open(path, "r", encoding="utf-8") as handle:
+            raw = handle.read()
+    except OSError as exc:
+        logger.warning("score snapshot cycle state unreadable (%s): %s", path, exc)
+        return None, True
+    if not raw.strip():
+        return None, False
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        logger.warning("score snapshot cycle state malformed (%s): %s", path, exc)
+        return None, True
+    if not isinstance(data, dict):
+        logger.warning("score snapshot cycle state malformed (%s): root is not an object", path)
+        return None, True
+    last = data.get("last_cycle")
+    if last is None:
+        return None, False
+    if not isinstance(last, dict):
+        logger.warning("score snapshot cycle state malformed (%s): last_cycle is not an object", path)
+        return None, True
+    return last, False
 
 
 def _read_legacy(soul_map_path: Optional[str]) -> Dict[str, Any]:
@@ -86,7 +115,27 @@ def _read_legacy(soul_map_path: Optional[str]) -> Dict[str, Any]:
     return dict(last) if isinstance(last, dict) else {}
 
 
+def read_last_cycle_with_status(
+    soul_map_path: Optional[str] = None,
+) -> tuple[Dict[str, Any], str]:
+    """Return ``(summary, status)`` where status is ``ok``, ``missing``, or ``unreadable``."""
+    new, unreadable = _read_new(soul_map_path)
+    if unreadable:
+        return {}, "unreadable"
+    if new is not None:
+        return dict(new), "ok"
+    legacy = _read_legacy(soul_map_path)
+    if legacy:
+        return legacy, "ok"
+    return {}, "missing"
+
+
 def read_last_cycle(soul_map_path: Optional[str] = None) -> Dict[str, Any]:
-    """The last cycle summary, ``{}`` when neither the new file nor the legacy key has one."""
-    new = _read_new(soul_map_path)
-    return dict(new) if new is not None else _read_legacy(soul_map_path)
+    """The last cycle summary, ``{}`` when neither the new file nor the legacy key has one.
+
+    Malformed or unreadable cycle-state files also read as ``{}`` here so existing callers
+    keep treating them as absent. Use ``read_last_cycle_with_status`` when the distinction
+    matters (for example the stall guard tick-progress probe).
+    """
+    summary, _status = read_last_cycle_with_status(soul_map_path)
+    return summary

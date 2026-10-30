@@ -499,18 +499,27 @@ def _simulate_unbounded_probe_unknown(monkeypatch) -> None:
     monkeypatch.setattr(g._TickWatch, "past_absolute_cap", _never_for_unknown)
 
 
-def _simulate_inherited_unknown_first_seen(monkeypatch) -> None:
-    """Mutation: a real tick after probe-unknown keeps the old first_seen."""
+def _simulate_fresh_cap_reset_first_seen(monkeypatch) -> None:
+    """Mutation: leaving probe-unknown replaces the watch and resets first_seen (328d8083 bug)."""
     orig = g._watch_active_tick
 
-    def _observe_instead_of_fresh(watch, token, now):
+    def _fresh_watch(watch, token, now):
         if watch is not None and watch.probe_unknown:
-            watch.observe(token, now)
-            watch.probe_unknown = False
-            return watch
+            return g._TickWatch(token, now)
         return orig(watch, token, now)
 
-    monkeypatch.setattr(g, "_watch_active_tick", _observe_instead_of_fresh)
+    monkeypatch.setattr(g, "_watch_active_tick", _fresh_watch)
+
+
+def _simulate_malformed_cycle_state_as_missing(monkeypatch) -> None:
+    """Mutation: unreadable cycle state looks like a missing record (Replit bug)."""
+
+    def _missing(*_a, **_k):
+        return {}, "missing"
+
+    monkeypatch.setattr(
+        "internal.council.scheduler_cycle_state.read_last_cycle_with_status", _missing
+    )
 
 
 def test_failed_tick_probe_during_healthy_advancing_tick_never_exits(tmp_path, monkeypatch):
@@ -584,8 +593,10 @@ def test_permanent_probe_failure_without_watch_restarts_after_cap(tmp_path, monk
     assert revives >= 1
 
 
-def test_probe_unknown_then_real_advancing_tick_not_killed_early(tmp_path, monkeypatch):
-    """After probe-unknown, a successfully probed advancing tick gets a fresh cap."""
+def test_probe_unknown_then_real_advancing_tick_exits_at_cap_from_first_sight(
+    tmp_path, monkeypatch
+):
+    """Absolute cap is from first probe-unknown sight, not reset when the probe recovers."""
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
@@ -603,9 +614,64 @@ def test_probe_unknown_then_real_advancing_tick_not_killed_early(tmp_path, monke
     monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
 
     cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
-    # Cap counts from the first successful probe (check fail_checks+1), not from probe-unknown.
-    code, revives = _run_guard(monkeypatch, ticks=fail_checks + cap_ticks - 1)
-    assert (code, revives) == (None, 0)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(
+        monkeypatch, ticks=fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS
+    )
+    assert code == 1
+    assert revives >= 1
+
+
+def test_successful_idle_probe_clears_probe_unknown_watch(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    calls = {"n": 0}
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            return g.TickProgressSnapshot(None, False)
+        return g.TickProgressSnapshot(None, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    code, revives = _run_guard(monkeypatch, ticks=20)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_malformed_cycle_state_file_during_active_tick_restarts_at_cap(
+    tmp_path, monkeypatch
+):
+    """Replit: unreadable cycle state must not look like a stuck token=None progress probe."""
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    Path(scheduler_state_path()).write_text("{not json", encoding="utf-8")
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_mutation_malformed_cycle_state_must_not_read_as_idle_progress(
+    tmp_path, monkeypatch
+):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    Path(scheduler_state_path()).write_text("{not json", encoding="utf-8")
+    _simulate_malformed_cycle_state_as_missing(monkeypatch)
+    code, _ = _run_guard(monkeypatch, ticks=20)
+    assert code == 1
 
 
 def test_mutation_permanent_probe_fail_requires_unknown_cap(tmp_path, monkeypatch):
@@ -619,7 +685,7 @@ def test_mutation_permanent_probe_fail_requires_unknown_cap(tmp_path, monkeypatc
     assert code is None
 
 
-def test_mutation_unknown_then_real_tick_must_not_inherit_first_seen(tmp_path, monkeypatch):
+def test_mutation_unknown_then_real_tick_fresh_cap_resets_first_sight(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
@@ -635,11 +701,13 @@ def test_mutation_unknown_then_real_tick_must_not_inherit_first_seen(tmp_path, m
         return g.TickProgressSnapshot({"token": (run_at, f"{step}/128")}, True)
 
     monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
-    _simulate_inherited_unknown_first_seen(monkeypatch)
+    _simulate_fresh_cap_reset_first_seen(monkeypatch)
 
     cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
-    code, _ = _run_guard(monkeypatch, ticks=fail_checks + cap_ticks + 2)
-    assert code == 1
+    code, _ = _run_guard(
+        monkeypatch, ticks=fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS
+    )
+    assert code is None
 
 
 def test_fresh_receipt_beats_old_seed_age(tmp_path, monkeypatch):

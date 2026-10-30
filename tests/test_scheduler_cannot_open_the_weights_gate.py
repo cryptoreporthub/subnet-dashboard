@@ -195,13 +195,18 @@ def test_loop_health_reads_the_new_file_and_falls_back_to_the_legacy_key(tmp_pat
 
 
 def test_a_corrupt_cycle_file_is_read_as_absent_and_never_raises(tmp_path, monkeypatch):
-    from internal.council.scheduler_cycle_state import read_last_cycle, scheduler_state_path
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle,
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
 
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     Path(scheduler_state_path()).write_text("{not json")
     assert read_last_cycle() == {}
+    assert read_last_cycle_with_status() == ({}, "unreadable")
 
 
 # --- the scheduler's liveness record is the other thing a tick used to write into the soul_map ---

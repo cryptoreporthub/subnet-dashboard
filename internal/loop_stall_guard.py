@@ -292,9 +292,18 @@ class _TickWatch:
 def _watch_active_tick(
     watch: Optional[_TickWatch], token: Any, now: float
 ) -> _TickWatch:
-    """Start or update a watch for a successfully probed running tick."""
-    if watch is None or watch.probe_unknown:
+    """Start or update a watch for a successfully probed running tick.
+
+    Leaving a probe-unknown watch keeps ``first_seen`` (absolute cap is from first sight);
+    only the progress token and ``last_progress`` start from this successful probe.
+    """
+    if watch is None:
         return _TickWatch(token, now)
+    if watch.probe_unknown:
+        watch.probe_unknown = False
+        watch.token = token
+        watch.last_progress = now
+        return watch
     watch.observe(token, now)
     return watch
 
