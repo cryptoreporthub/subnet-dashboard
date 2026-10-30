@@ -68,13 +68,42 @@ CONSECUTIVE_CHECKS = max(1, _env_int("LOOP_STALL_GUARD_CONSECUTIVE_CHECKS", 3))
 BOOT_GRACE_SECONDS = max(60, _env_int("LOOP_STALL_GUARD_BOOT_GRACE_SECONDS", 1500))
 KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 # A scoring tick that is running and still advancing is not a wedge even when the last
-# receipt is old. Judge it by progress on the monotonic clock: no advance for
-# TICK_PROGRESS_SECONDS (the scheduler's own SCORE_SNAPSHOT_STUCK_SECONDS), or still
-# running TICK_MAX_SECONDS after the guard first saw it, and it counts as hung.
-TICK_PROGRESS_SECONDS = max(60, _env_int("LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS", 900))
-TICK_MAX_SECONDS = max(
-    TICK_PROGRESS_SECONDS, _env_int("LOOP_STALL_GUARD_TICK_MAX_SECONDS", 3600)
-)
+# receipt is old. Judge it by progress on the monotonic clock. The no-progress deadline is
+# the scheduler's own stuck threshold (SCORE_SNAPSHOT_STUCK_SECONDS), read from the scheduler
+# so the two can never disagree; LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS may only raise it.
+# A tick still running after tick_max_seconds() since the guard first saw it is hung too.
+TICK_PROGRESS_OVERRIDE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS", 0)
+TICK_MAX_BASE_SECONDS = _env_int("LOOP_STALL_GUARD_TICK_MAX_SECONDS", 3600)
+_override_clamp_logged = False
+
+
+def tick_progress_seconds() -> int:
+    """No-progress deadline: never below the scheduler's configured stuck threshold."""
+    global _override_clamp_logged
+    try:
+        from internal.council.score_snapshots import score_snapshot_stuck_seconds
+
+        threshold = int(score_snapshot_stuck_seconds())
+    except Exception as exc:
+        logger.warning("loop stall guard: scheduler stuck threshold unreadable (%s); using 900s", exc)
+        threshold = 900
+    threshold = max(60, threshold)
+    if TICK_PROGRESS_OVERRIDE_SECONDS and TICK_PROGRESS_OVERRIDE_SECONDS < threshold:
+        if not _override_clamp_logged:
+            _override_clamp_logged = True
+            logger.warning(
+                "loop stall guard: LOOP_STALL_GUARD_TICK_PROGRESS_SECONDS=%s is below the scheduler "
+                "stuck threshold (%ss); using the scheduler threshold",
+                TICK_PROGRESS_OVERRIDE_SECONDS,
+                threshold,
+            )
+        return threshold
+    return max(threshold, TICK_PROGRESS_OVERRIDE_SECONDS)
+
+
+def tick_max_seconds() -> int:
+    """Hard cap on a running tick; always at least twice the no-progress deadline."""
+    return max(TICK_MAX_BASE_SECONDS, 2 * tick_progress_seconds())
 
 
 def _now_mono() -> float:
@@ -217,8 +246,8 @@ class _TickWatch:
 
     def hung(self, now: float) -> bool:
         return (
-            now - self.last_progress > TICK_PROGRESS_SECONDS
-            or now - self.first_seen > TICK_MAX_SECONDS
+            now - self.last_progress > tick_progress_seconds()
+            or now - self.first_seen > tick_max_seconds()
         )
 
 
@@ -248,12 +277,15 @@ def _guard_loop() -> None:
     withdrawn = False  # one premature strike per stale episode may be withdrawn
 
     logger.info(
-        "loop stall guard started (interval=%ss, max_snapshot_age=%ss, resolver_revive_after=%ss, consecutive=%s, kill=%s)",
+        "loop stall guard started (interval=%ss, max_snapshot_age=%ss, resolver_revive_after=%ss, "
+        "consecutive=%s, kill=%s, tick_progress=%ss, tick_max=%ss)",
         INTERVAL_SECONDS,
         MAX_SNAPSHOT_AGE_SECONDS,
         RESOLVER_REVIVE_AFTER_SECONDS,
         CONSECUTIVE_CHECKS,
         KILL_ENABLED,
+        tick_progress_seconds(),
+        tick_max_seconds(),
     )
     while True:
         time.sleep(INTERVAL_SECONDS)

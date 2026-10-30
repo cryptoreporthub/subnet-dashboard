@@ -246,7 +246,7 @@ def test_long_running_advancing_tick_with_an_old_receipt_is_never_killed(tmp_pat
     _active_tick(monkeypatch)
     _scoring_progress(0)
     # 12 checks = 2880s of fake time: past the 900s progress deadline, inside the 3600s cap.
-    assert 12 * g.INTERVAL_SECONDS < g.TICK_MAX_SECONDS
+    assert 12 * g.INTERVAL_SECONDS < g.tick_max_seconds()
     code, revives = _run_guard(
         monkeypatch, ticks=12, on_tick=lambda n: _scoring_progress(n)
     )
@@ -269,14 +269,62 @@ def test_hung_tick_is_not_killed_before_the_progress_deadline(tmp_path, monkeypa
     _old_receipt(6001)
     _active_tick(monkeypatch)
     _scoring_progress(5)
-    deadline_ticks = int(g.TICK_PROGRESS_SECONDS // g.INTERVAL_SECONDS)
+    deadline_ticks = int(g.tick_progress_seconds() // g.INTERVAL_SECONDS)
     code, revives = _run_guard(monkeypatch, ticks=deadline_ticks)
+    assert (code, revives) == (None, 0)
+
+
+def test_no_progress_deadline_follows_the_schedulers_configured_threshold(tmp_path, monkeypatch):
+    """Replit/Ditto: with SCORE_SNAPSHOT_STUCK_SECONDS=1800 the guard must not strike at 900."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 1800)
+    assert g.tick_progress_seconds() == 1800
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    # Check k sees 240*(k-1)s of no progress: 8 checks reach 1680s, still inside 1800s.
+    code, revives = _run_guard(monkeypatch, ticks=8)
+    assert (code, revives) == (None, 0)
+
+
+def test_no_progress_past_the_schedulers_threshold_is_restarted(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 1800)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    code, revives = _run_guard(monkeypatch, ticks=20)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_guard_override_may_raise_but_never_undercut_the_scheduler_threshold(monkeypatch):
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 1800)
+    monkeypatch.setattr(g, "TICK_PROGRESS_OVERRIDE_SECONDS", 300)
+    monkeypatch.setattr(g, "_override_clamp_logged", False)
+    assert g.tick_progress_seconds() == 1800
+    monkeypatch.setattr(g, "TICK_PROGRESS_OVERRIDE_SECONDS", 2400)
+    assert g.tick_progress_seconds() == 2400
+    monkeypatch.setattr(g, "TICK_PROGRESS_OVERRIDE_SECONDS", 0)
+    assert g.tick_progress_seconds() == 1800
+
+
+def test_hard_cap_never_undercuts_the_progress_deadline(tmp_path, monkeypatch):
+    """Threshold 3000s: the 3600s base cap alone would kill a tick that is still advancing."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 3000)
+    assert g.tick_max_seconds() == 6000
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    # 20 checks = 4560s of watching: past the 3600s base cap, inside 2x the deadline.
+    code, revives = _run_guard(monkeypatch, ticks=20, on_tick=lambda n: _scoring_progress(n))
     assert (code, revives) == (None, 0)
 
 
 def test_a_tick_that_advances_forever_still_hits_the_absolute_cap(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
-    monkeypatch.setattr(g, "TICK_MAX_SECONDS", 1200)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)
     _active_tick(monkeypatch)
     _scoring_progress(0)

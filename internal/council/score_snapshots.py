@@ -1801,6 +1801,11 @@ def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
         return {**_scheduler.state(), "enabled": _enabled()}
 
 
+def score_snapshot_stuck_seconds() -> int:
+    """The scheduler's no-progress threshold for a scoring tick; the stall guard reads it too."""
+    return SCORE_SNAPSHOT_STUCK_SECONDS
+
+
 def producer_tick_progress() -> Optional[Dict[str, Any]]:
     """Is a scoring tick running, and what is its progress marker?
 
