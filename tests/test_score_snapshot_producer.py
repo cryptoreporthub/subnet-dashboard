@@ -225,6 +225,113 @@ def test_aborted_arm_without_stop_leaves_no_pending_job(tmp_path, monkeypatch):
     assert sched.liveness.snapshot().get("lifecycle") != "started"
 
 
+def _persisted_lifecycle() -> str:
+    from internal.store.soul_map_io import read_soul_map
+
+    blob = read_soul_map(snaps._liveness_state_path()) or {}
+    return str((blob.get("liveness") or {}).get("score_snapshot", {}).get("lifecycle"))
+
+
+def test_aborted_old_scheduler_does_not_overwrite_replacement_persisted_liveness(
+    tmp_path, monkeypatch
+):
+    """Replit P2: A defers, B starts and persists 'started', A aborts -> file still says started."""
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    old, new = snaps.ScoreSnapshotScheduler(), snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = old
+    paused, resume = threading.Event(), threading.Event()
+    real_start = old._start_liveness
+
+    def paused_start():
+        # A has scheduled its job and is about to persist 'started'.
+        paused.set()
+        if not resume.wait(timeout=5):
+            raise AssertionError("resume gate timed out")
+        return real_start()
+
+    monkeypatch.setattr(old, "_start_liveness", paused_start)
+    old_result: dict = {}
+    old_thread = threading.Thread(target=lambda: old_result.update(old.start(immediate=False)))
+    old_thread.start()
+    assert paused.wait(timeout=5)
+
+    snaps.stop_score_snapshot_scheduler()
+    with snaps._lock:
+        snaps._scheduler = new
+    assert new.start(immediate=False)["started"] is True
+    assert _persisted_lifecycle() == "started"
+
+    resume.set()
+    old_thread.join(timeout=5)
+    assert not old_thread.is_alive()
+    assert old_result == {"started": False, "reason": "stopped_during_arm"}
+    assert _persisted_lifecycle() == "started"
+    assert new.liveness.snapshot().get("lifecycle") == "started"
+
+
+def test_aborted_scheduler_without_replacement_still_persists_stopped(tmp_path, monkeypatch):
+    """The fence must not stop an abort from recording 'stopped' when nobody replaced it."""
+    _isolated_soul(tmp_path, monkeypatch)
+    _fake_job_table(monkeypatch)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    real_start = sched.liveness.start
+
+    def unregister_then_start():
+        with snaps._lock:
+            snaps._scheduler = None
+        return real_start()
+
+    monkeypatch.setattr(sched.liveness, "start", unregister_then_start)
+    assert sched.start(immediate=False) == {"started": False, "reason": "stopped_during_arm"}
+    assert _persisted_lifecycle() == "stopped"
+
+
+def test_failed_deferred_start_disarms_before_job_lock_is_released(tmp_path, monkeypatch):
+    """Ditto Medium: a tick that takes _job_lock the moment cleanup releases it must not reschedule."""
+    _isolated_soul(tmp_path, monkeypatch)
+    jobs = _fake_job_table(monkeypatch)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+
+    class TickAfterRelease:
+        """_job_lock stand-in: right after a release, a waiting tick gets the lock."""
+
+        def __init__(self, real):
+            self.real = real
+            self.armed = False
+            self.rescheduled = None
+
+        def __enter__(self):
+            self.real.acquire()
+
+        def __exit__(self, *exc):
+            self.real.release()
+            if self.armed:
+                self.armed = False
+                self.rescheduled = sched._schedule_tick(5)
+
+    gate = TickAfterRelease(snaps._job_lock)
+    monkeypatch.setattr(snaps, "_job_lock", gate)
+
+    def failing_liveness_start():
+        gate.armed = True  # the next _job_lock release is the failed-start cleanup
+        raise RuntimeError("liveness write failed")
+
+    monkeypatch.setattr(sched.liveness, "start", failing_liveness_start)
+    with pytest.raises(RuntimeError):
+        sched.start(immediate=False)
+
+    assert gate.rescheduled is False
+    assert jobs == {}
+    assert sched._armed is False
+    assert snaps._job_owner is not sched
+
+
 def test_stale_arm_cannot_cancel_replacement_scheduler_job(tmp_path, monkeypatch):
     """Replit P2 #1 / Ditto L1328: stop A, start B, resume A -> B's job survives and B ticks."""
     _isolated_soul(tmp_path, monkeypatch)

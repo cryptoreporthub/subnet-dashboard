@@ -80,6 +80,11 @@ _scheduler: Optional["ScoreSnapshotScheduler"] = None
 # scheduled it. Lock order: _job_lock before _lock, never the reverse.
 _job_lock = threading.Lock()
 _job_owner: Optional["ScoreSnapshotScheduler"] = None
+# Every scheduler generation persists the same score_snapshot liveness record, so
+# lifecycle writes are fenced: "am I still the current generation" and the write
+# happen under _lifecycle_lock, and a replacement's start() writes under it too.
+# Lock order: _lifecycle_lock before _job_lock before _lock.
+_lifecycle_lock = threading.Lock()
 
 
 def _write_future_active() -> bool:
@@ -1344,16 +1349,34 @@ class ScoreSnapshotScheduler:
             return True
 
     def _cancel_own_job(self) -> None:
-        """Disarm and cancel JOB_ID unless a replacement generation owns it."""
+        """Disarm and cancel JOB_ID unless a replacement generation owns it.
+
+        _armed is cleared under _lock while _job_lock is still held, so a tick
+        that already passed _arm_still_valid() cannot reschedule after failed startup.
+        """
         global _job_owner
-        try:
-            with _job_lock:
-                if _job_owner is self:
-                    _job_owner = None
-                    cancel_job(JOB_ID)
-        finally:
+        with _job_lock:
             with _lock:
                 self._armed = False
+            if _job_owner is self:
+                _job_owner = None
+                cancel_job(JOB_ID)
+
+    def _start_liveness(self) -> None:
+        with _lifecycle_lock:
+            self.liveness.start()
+
+    def _stop_liveness_if_current(self) -> None:
+        """Persist 'stopped' only while no replacement generation is registered.
+
+        An aborted old generation must not overwrite the replacement's persisted
+        'started' record (both write the same score_snapshot_liveness.json).
+        """
+        with _lifecycle_lock:
+            with _lock:
+                current = _scheduler is None or _scheduler is self
+            if current:
+                self.liveness.stop()
 
     def _scheduled_tick(self) -> Dict[str, Any]:
         """Entry point for scheduled and thread-dispatched ticks."""
@@ -1374,7 +1397,7 @@ class ScoreSnapshotScheduler:
                 # failure must abort before the thread exists. Deferred mode
                 # stays schedule-first so a failed schedule leaves the
                 # lifecycle unchanged (_cancel_own_job covers that path).
-                self.liveness.start()
+                self._start_liveness()
                 try:
                     threading.Thread(
                         target=self._scheduled_tick,
@@ -1382,17 +1405,17 @@ class ScoreSnapshotScheduler:
                         name="score-snap-tick",
                     ).start()
                 except Exception:
-                    self.liveness.stop()
+                    self._stop_liveness_if_current()
                     raise
             elif not self._schedule_tick(SCORE_SNAPSHOT_FIRST_DELAY_SECONDS):
                 return {"started": False, "reason": "stopped_during_arm"}
             else:
-                self.liveness.start()
+                self._start_liveness()
             aborted = self._stopped_during_arm()
             if aborted:
                 # Unregistered without stop(): drop our pending job and disarm.
                 self._cancel_own_job()
-                self.liveness.stop()
+                self._stop_liveness_if_current()
                 return aborted
         except Exception:
             self._cancel_own_job()
