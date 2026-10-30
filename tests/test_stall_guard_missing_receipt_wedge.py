@@ -140,6 +140,34 @@ def test_missing_receipt_with_young_complete_volume_does_not_strike(tmp_path, mo
     assert (code, revives) == (None, 0)
 
 
+def test_missing_receipt_is_not_masked_by_a_young_seed(tmp_path, monkeypatch):
+    """Ditto: a young seed is a static artifact, not proof the producer ran."""
+    young_seed = _aged_real_seed(tmp_path, age_seconds=60)
+    vol = _wire(tmp_path, monkeypatch, seed=young_seed)
+    assert not vol.exists()
+    served = snaps.read_served_snapshot()
+    assert served.origin == "seed" and served.age_seconds < 5400
+    code, revives = _run_guard(monkeypatch)
+    assert (code, revives) == (1, 1)
+
+
+def test_young_seed_wedge_self_heals_when_revive_writes_a_receipt(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch, seed=_aged_real_seed(tmp_path, age_seconds=60))
+    code, revives = _run_guard(monkeypatch, revive_writes_receipt=True)
+    assert (code, revives) == (None, 1)
+
+
+def test_servable_volume_snapshot_of_unknown_age_never_revives_or_exits(tmp_path, monkeypatch):
+    """Ditto: readers still have a snapshot, so an unknown age is not a stale one."""
+    vol = _wire(tmp_path, monkeypatch)
+    _write_volume(vol, age_seconds=60)
+    real = snaps.read_served_snapshot()
+    unknown = snaps.ServedSnapshot(real.state, real.snapshot, None, "volume", None)
+    monkeypatch.setattr(snaps, "read_served_snapshot", lambda *a, **k: unknown)
+    code, revives = _run_guard(monkeypatch, ticks=6)
+    assert (code, revives) == (None, 0)
+
+
 def test_fresh_receipt_beats_old_seed_age(tmp_path, monkeypatch):
     _wire(tmp_path, monkeypatch)
     snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")

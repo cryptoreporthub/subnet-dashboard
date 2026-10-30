@@ -75,11 +75,13 @@ def _snapshot_age_seconds() -> Optional[float]:
     * Not the producer (hop, WORKER_HEAVY=off, web) or the freeze lever is off:
       None. Those processes never write a receipt, so any age would restart-loop.
     * Owner with a cycle receipt: receipt age (published, refused or gated).
-    * Owner with no receipt: age of whatever readers serve right now, volume or
-      seed, whether or not the volume file exists. A young served file means the
-      producer is publishing (receipt write may have failed); an old one means
-      the producer never ran.
-    * Owner with no receipt and nothing servable: stale on the first check.
+    * Owner with no receipt: only a volume snapshot counts as evidence. Its age
+      is returned as is, and an unknown age is unknown (None: the guard resets
+      instead of striking, because readers still have a snapshot). The committed
+      seed never counts, young or not: it is a static artifact, so it proves
+      nothing about the producer. No receipt and no volume snapshot means the
+      producer has not completed a cycle; that is stale on the first check (the
+      guard's boot grace covers a normal startup).
     """
     try:
         from internal.council.score_snapshots import (
@@ -95,7 +97,7 @@ def _snapshot_age_seconds() -> Optional[float]:
         if cycle_age is not None:
             return cycle_age
         served = read_served_snapshot()
-        if served.servable and served.age_seconds is not None:
+        if served.servable and served.origin == "volume":
             return served.age_seconds
         return float(MAX_SNAPSHOT_AGE_SECONDS + 1)
     except Exception as exc:

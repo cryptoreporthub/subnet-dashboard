@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 import logging
 
 import os
@@ -474,9 +475,8 @@ def _owner_env(monkeypatch, tmp_path):
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "seed.json"))
 
 
-def test_owner_without_receipt_reads_a_young_seed_as_young(tmp_path, monkeypatch):
-    _owner_env(monkeypatch, tmp_path)
-    (tmp_path / "seed.json").write_text(
+def _write_young_snapshot(path) -> None:
+    path.write_text(
         json.dumps(
             complete_snapshot_payload(
                 day_rows=[{"netuid": 1, "total_score": 1.0}],
@@ -485,9 +485,59 @@ def test_owner_without_receipt_reads_a_young_seed_as_young(tmp_path, monkeypatch
         ),
         encoding="utf-8",
     )
+
+
+def test_owner_without_receipt_is_not_kept_alive_by_a_young_seed(tmp_path, monkeypatch):
+    """A seed is a static artifact: a young one must not hide a producer that never ran."""
+    _owner_env(monkeypatch, tmp_path)
+    _write_young_snapshot(tmp_path / "seed.json")
+    assert snaps.read_served_snapshot().origin == "seed"
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None
+    assert age > MAX_SNAPSHOT_AGE_SECONDS
+
+
+def test_owner_without_receipt_reads_a_young_volume_snapshot_as_young(tmp_path, monkeypatch):
+    """Receipt write may have failed while the producer keeps publishing to the volume."""
+    _owner_env(monkeypatch, tmp_path)
+    _write_young_snapshot(tmp_path / "volume.json")
+    assert snaps.read_served_snapshot().origin == "volume"
     age = loop_stall_guard._snapshot_age_seconds()
     assert age is not None
     assert age < MAX_SNAPSHOT_AGE_SECONDS
+
+
+def test_owner_without_receipt_and_an_old_volume_snapshot_is_stale(tmp_path, monkeypatch):
+    _owner_env(monkeypatch, tmp_path)
+    _write_young_snapshot(tmp_path / "volume.json")
+    old = time.time() - 10 * MAX_SNAPSHOT_AGE_SECONDS
+    payload = json.loads((tmp_path / "volume.json").read_text(encoding="utf-8"))
+    stamp = datetime.fromtimestamp(old, timezone.utc).isoformat()
+    payload["written_at"] = payload["build_started_at"] = stamp
+    (tmp_path / "volume.json").write_text(json.dumps(payload), encoding="utf-8")
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None
+    assert age > MAX_SNAPSHOT_AGE_SECONDS
+
+
+def test_owner_with_servable_volume_snapshot_of_unknown_age_is_unknown_not_stale(
+    tmp_path, monkeypatch
+):
+    """Readers still have a snapshot: an unknown age must not strike, revive or exit."""
+    _owner_env(monkeypatch, tmp_path)
+    _write_young_snapshot(tmp_path / "volume.json")
+    served = snaps.ServedSnapshot(
+        snaps.ServedState.AGED, {"day": {}}, None, "volume", None
+    )
+    monkeypatch.setattr(snaps, "read_served_snapshot", lambda *a, **k: served)
+    assert loop_stall_guard._snapshot_age_seconds() is None
+
+
+def test_owner_with_no_snapshot_at_all_is_stale_on_first_check(tmp_path, monkeypatch):
+    _owner_env(monkeypatch, tmp_path)
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None
+    assert age > MAX_SNAPSHOT_AGE_SECONDS
 
 
 def test_owner_with_old_receipt_is_stale_even_when_the_volume_is_young(tmp_path, monkeypatch):
