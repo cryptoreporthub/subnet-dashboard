@@ -1418,7 +1418,10 @@ class ScoreSnapshotScheduler:
                 # failure must abort before the thread exists. Deferred mode
                 # stays schedule-first so a failed schedule leaves the
                 # lifecycle unchanged (_cancel_own_job covers that path).
-                self._start_liveness()
+                if not self._start_liveness():
+                    # Fenced out (replaced or disarmed): no thread, nothing persisted.
+                    self._cancel_own_job()
+                    return {"started": False, "reason": "stopped_during_arm"}
                 try:
                     threading.Thread(
                         target=self._scheduled_tick,
@@ -1430,8 +1433,10 @@ class ScoreSnapshotScheduler:
                     raise
             elif not self._schedule_tick(SCORE_SNAPSHOT_FIRST_DELAY_SECONDS):
                 return {"started": False, "reason": "stopped_during_arm"}
-            else:
-                self._start_liveness()
+            elif not self._start_liveness():
+                # Fenced out after scheduling: drop our job, report it, persist nothing.
+                self._cancel_own_job()
+                return {"started": False, "reason": "stopped_during_arm"}
             aborted = self._stopped_during_arm()
             if aborted:
                 # Unregistered without stop(): drop our pending job and disarm.

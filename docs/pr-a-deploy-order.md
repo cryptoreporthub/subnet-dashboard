@@ -2,16 +2,17 @@
 
 **Do not deploy the complete-only reader (#1484) alone on a new or wiped volume** without the producer owner change (#1486).
 
-**#1486 must not deploy without #1485 (PR-C).** This is a hard dependency, not a preference:
+**Non-owner workers stay idle in the loop stall guard (#1486).** `revive_score_snapshot_scheduler` and
+`start_score_snapshot_scheduler` return `not_owner` on a `WORKER_HEAVY=off` worker (or hop, or
+`SCORE_SNAPSHOT_SCHEDULER_ENABLED=off`), so such a process can never freshen `score_snapshots.json`.
+The loop stall guard therefore reads its snapshot age only on the owner: `_snapshot_age_seconds()`
+returns `None` for every other process, and a `not_owner` revive result is treated as idle. A
+non-owner worker with a stale volume file never revives, strikes or exits, so there is no crash loop.
+This is enforced in code and covered by `tests/test_loop_stall_guard.py`, not by deploy order.
 
-#1486 makes a non-owner worker refuse to produce. `revive_score_snapshot_scheduler` and
-`start_score_snapshot_scheduler` return `not_owner` on a `WORKER_HEAVY=off` worker (PR-A commit
-`01b6e00d`). Only #1485's stall-guard change teaches the loop stall guard what `not_owner` means.
-With #1486 but without #1485, a non-owner worker whose volume holds a stale `score_snapshots.json`
-gets `not_owner` from the strike-1 revive, the snapshot never freshens, and the guard escalates to
-`os._exit(1)` — the supervisor restarts the worker, the stale snapshot is still there, and the
-worker crash-loops until the volume freshens some other way. Deploy #1484 + #1486 + #1485 together
-(in the same image), or hold #1486 back.
+#1485 (PR-C) is a separate improvement to the same guard (the owner is judged by its cycle receipt,
+and a running scoring tick by its progress). It is not required for non-owner safety. Merging and
+deploying #1486 and #1485 together is still the plan; deploying needs Joshua's explicit GO.
 
 ## Why
 
@@ -19,10 +20,10 @@ On **main @ `affd0c6a` (PR-B #1484 merged)**, #1484 serves only **complete** sna
 
 Without **#1486**, production still lacks a dedicated **`score_snapshot_producer_enabled()`** gate and the deferred **`score-snapshots`** boot job that keeps the essential worker owning periodic publishes. On a **wiped or empty volume**, readers stay on the **seed** (never blank), but nothing guarantees the **essential worker** keeps refreshing the volume after boot unless ensure/revive fires again.
 
-**#1486** wires the essential worker to `_start_score_snapshot_scheduler()` when `score_snapshot_producer_enabled()` is true, gates `start_score_snapshot_scheduler` / `revive_score_snapshot_scheduler` with **`not_owner`** on non-producer workers, and **removes** the `score-snapshot-ensure` boot path so production relies on the owner producer instead of the one-shot ensure job.
+**#1486** wires the essential worker to `_start_score_snapshot_scheduler()` when `score_snapshot_producer_enabled()` is true, gates `start_score_snapshot_scheduler` / `revive_score_snapshot_scheduler` with **`not_owner`** on non-producer workers (and the stall guard stays idle there), and **removes** the `score-snapshot-ensure` boot path so production relies on the owner producer instead of the one-shot ensure job.
 
 ## Merge and deploy order
 
 1. #1483 membership from chain (alone).
-2. #1484 complete-only snapshots, #1486 producer owner, #1485 stall guard, deployed together — **#1486 without #1485 crash-loops non-owner workers with a stale snapshot** (see above).
+2. #1484 complete-only snapshots, #1486 producer owner, #1485 stall guard, deployed together.
 3. PR-D readers after.
