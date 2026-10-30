@@ -80,10 +80,12 @@ _scheduler: Optional["ScoreSnapshotScheduler"] = None
 # scheduled it. Lock order: _job_lock before _lock, never the reverse.
 _job_lock = threading.Lock()
 _job_owner: Optional["ScoreSnapshotScheduler"] = None
-# Every scheduler generation persists the same score_snapshot liveness record, so
-# lifecycle writes are fenced: "am I still the current generation" and the write
-# happen under _lifecycle_lock, and a replacement's start() writes under it too.
-# Lock order: _lifecycle_lock before _job_lock before _lock.
+# Every scheduler generation persists the same score_snapshot liveness record
+# (LivenessTracker saves its whole in-memory state), so a generation that is no
+# longer the registered one must never write it. ScoreSnapshotScheduler._persist_liveness
+# is the only path to a liveness write: it checks ownership and writes together
+# under _lifecycle_lock, and registering a replacement (which loads the persisted
+# record) takes the same lock. Lock order: _lifecycle_lock, _job_lock, _lock.
 _lifecycle_lock = threading.Lock()
 
 
@@ -1362,21 +1364,32 @@ class ScoreSnapshotScheduler:
                 _job_owner = None
                 cancel_job(JOB_ID)
 
-    def _start_liveness(self) -> None:
-        with _lifecycle_lock:
-            self.liveness.start()
+    def _persist_liveness(self, write: Callable[[LivenessTracker], None], *, strict: bool = False) -> bool:
+        """The only way this scheduler writes the shared liveness record.
 
-    def _stop_liveness_if_current(self) -> None:
-        """Persist 'stopped' only while no replacement generation is registered.
-
-        An aborted old generation must not overwrite the replacement's persisted
-        'started' record (both write the same score_snapshot_liveness.json).
+        Ownership check and write are atomic under _lifecycle_lock. A replaced
+        generation is fenced out (returns False). ``strict`` (startup) also
+        requires the registered generation to be armed; the others accept an
+        unregistered module (clean shutdown, a tick finishing after stop()).
         """
         with _lifecycle_lock:
             with _lock:
-                current = _scheduler is None or _scheduler is self
-            if current:
-                self.liveness.stop()
+                current = _scheduler is self
+                if not current and not strict:
+                    current = _scheduler is None
+                if strict:
+                    current = current and self._armed
+            if not current:
+                return False
+            write(self.liveness)
+            return True
+
+    def _start_liveness(self) -> bool:
+        return self._persist_liveness(lambda t: t.start(), strict=True)
+
+    def _stop_liveness_if_current(self) -> bool:
+        """Persist 'stopped' unless a replacement generation is registered."""
+        return self._persist_liveness(lambda t: t.stop())
 
     def _scheduled_tick(self) -> Dict[str, Any]:
         """Entry point for scheduled and thread-dispatched ticks."""
@@ -1431,6 +1444,7 @@ class ScoreSnapshotScheduler:
         with _lock:
             self._armed = False
         self._cancel_own_job()
+        self._stop_liveness_if_current()
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -1489,12 +1503,15 @@ class ScoreSnapshotScheduler:
             pass
 
     def _record_liveness(self, result: Dict[str, Any]) -> None:
+        self._persist_liveness(lambda t: self._write_liveness_result(t, result))
+
+    def _write_liveness_result(self, tracker: LivenessTracker, result: Dict[str, Any]) -> None:
         skipped = result.get("skipped")
         if skipped:
-            self.liveness.record_skip(str(skipped))
+            tracker.record_skip(str(skipped))
             return
         if result.get("skipped_older"):
-            self.liveness.record_skip("skipped_older")
+            tracker.record_skip("skipped_older")
             return
         if result.get("published"):
             evidence = {
@@ -1508,9 +1525,9 @@ class ScoreSnapshotScheduler:
 
                 evidence["coverage"] = coverage_counts_summary(coverage)
                 evidence["coverage"]["complete"] = coverage.get("complete")
-            self.liveness.record_success(evidence=evidence)
+            tracker.record_success(evidence=evidence)
             return
-        self.liveness.record_failure(
+        tracker.record_failure(
             error=str(result.get("error") or "score_snapshot_unpublished")
         )
 
@@ -1711,10 +1728,14 @@ def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
     if not score_snapshot_producer_enabled():
         return {"started": False, "reason": "not_owner"}
     global _scheduler
-    with _lock:
-        if _scheduler is None:
-            _scheduler = ScoreSnapshotScheduler()
-    return _scheduler.start(immediate=immediate)
+    # Constructing a scheduler loads the persisted liveness record; do it under
+    # _lifecycle_lock so no outgoing generation can write between load and register.
+    with _lifecycle_lock:
+        with _lock:
+            if _scheduler is None:
+                _scheduler = ScoreSnapshotScheduler()
+            sched = _scheduler
+    return sched.start(immediate=immediate)
 
 
 def stop_score_snapshot_scheduler() -> Dict[str, Any]:
