@@ -15,11 +15,14 @@ from tests.test_stall_guard_missing_receipt_wedge import (
 _R10_WORST_KILL_SECONDS = 2400
 
 
+# MC r15: frozen ``run_id``/``progress`` None behind flapping probe exits at no-progress
+# deadline (outage 3→9, 4→7, 5→8 checks @ 240s). Outage 2 still hits absolute cap (~11).
+_DOCUMENTED_FLAP_KILL_CHECKS = {2: 11, 3: 9, 4: 7, 5: 8}
+
+
 def _documented_flap_kill_bound_checks(outage_every: int) -> int:
-    """Worst kill tick (MC r10 ~11 @ 240s interval, cap 1800s + 3 strikes)."""
-    _ = outage_every
-    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
-    return cap_ticks + g.CONSECUTIVE_CHECKS + 1
+    """Exact kill check for hung identity-less write + periodic probe-unknown (incl. 3 strikes)."""
+    return _DOCUMENTED_FLAP_KILL_CHECKS[outage_every]
 
 
 def _flapping_hung_none_none_ticks(*, outage_every: int, ticks: int, monkeypatch, tmp_path):
@@ -44,7 +47,7 @@ def _flapping_hung_none_none_ticks(*, outage_every: int, ticks: int, monkeypatch
 def test_hung_none_none_flapping_probe_exits_within_documented_bound(
     tmp_path, monkeypatch, outage_every
 ):
-    """Port of MC r11-break-repro: hung write-phase (None, None) with periodic probe-unknown."""
+    """Port of MC r11-break-repro: hung write-phase (``run_id`` and ``progress`` None) with periodic probe-unknown."""
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     monkeypatch.setattr(g, "INTERVAL_SECONDS", 240)

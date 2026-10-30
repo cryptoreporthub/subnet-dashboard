@@ -197,7 +197,7 @@ def test_hung_late_run_id_worst_case_numeric_bound(tmp_path, monkeypatch):
 
 
 def test_write_phase_none_none_after_probe_window_keeps_full_cap(tmp_path, monkeypatch):
-    """After identity-less (None, None), first non-None run_id gets fresh cap (R9)."""
+    """After identity-less window (``run_id`` None), first non-None ``run_id`` gets fresh cap (R9)."""
     _wire(tmp_path, monkeypatch)
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     _old_receipt(6001)

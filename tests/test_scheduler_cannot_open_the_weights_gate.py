@@ -107,7 +107,7 @@ def test_the_cycle_summary_has_its_own_file_beside_the_soul_map(tmp_path, monkey
     state = tmp_path / "soul" / "score_snapshot_scheduler.json"
     last = json.loads(state.read_text())["last_cycle"]
     assert last["skipped"] == "weights_unavailable"
-    assert last["phase"] is None  # the final summary replaced the in-flight "scoring" one
+    assert "phase" not in last  # the final summary replaced the in-flight "scoring" one
 
 
 def test_persist_cycle_summary_preserves_run_id(tmp_path, monkeypatch):
@@ -182,7 +182,7 @@ def test_the_in_flight_marker_is_read_from_the_new_file(tmp_path, monkeypatch):
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     write_last_cycle({"run_at": snaps._now_iso(), "ok": False, "phase": "scoring"})
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is True
-    write_last_cycle({"run_at": snaps._now_iso(), "ok": True, "phase": None})
+    write_last_cycle({"run_at": snaps._now_iso(), "ok": True})
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is False
 
 
@@ -196,7 +196,7 @@ def test_a_legacy_in_flight_marker_is_still_read_until_the_new_file_exists(tmp_p
 
     soul_map_io._cache.clear()
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is True
-    write_last_cycle({"run_at": snaps._now_iso(), "ok": True, "phase": None})  # the new file wins over the old key
+    write_last_cycle({"run_at": snaps._now_iso(), "ok": True})  # the new file wins over the old key
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is False
 
 

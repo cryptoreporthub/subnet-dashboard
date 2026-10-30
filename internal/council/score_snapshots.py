@@ -1743,6 +1743,10 @@ class ScoreSnapshotScheduler:
             from internal.council.snapshot_coverage import coverage_counts_summary
 
             summary["coverage"] = coverage_counts_summary(coverage)
+        if summary.get("phase") is None:
+            summary.pop("phase", None)
+        if summary.get("progress") is None:
+            summary.pop("progress", None)
         # Never the soul_map: a tick must not create or rewrite the file the weights gate reads.
         from internal.council.scheduler_cycle_state import write_last_cycle
 

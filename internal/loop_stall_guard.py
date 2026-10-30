@@ -146,9 +146,12 @@ def tick_max_seconds() -> int:
     new runs (legacy writer only) may hit the cap earlier than a run that later shows ``run_id``
     — bounded false-positive vs an unbounded hung run when probe flaps during write phase.
 
-    Repeated probe-unknown outages for that same run do **not** reset the cap. Snapshot age ``None`` (not producer / unreadable age probe) can leave an identity-less
+    Repeated probe-unknown outages for that same run do **not** reset the cap.     Snapshot age ``None`` (not producer / unreadable age probe) can leave an identity-less
     watch unchanged for an **unbounded** number of guard ticks (pre-existing S7); this module
-    does not cap that gap.
+    does not cap that gap. During repeated probe-unknown outages the watch **keeps
+    ``first_seen``**; if the tick progress probe stays unavailable past the absolute cap plus
+    ``CONSECUTIVE_CHECKS`` stale strikes, the guard may exit with no resumed tick token — by
+    design, within the documented worst-case bound.
 
     Hung run with ``run_id`` appearing only after a long probe-unknown window: worst-case
     survival is about ``window_ticks * INTERVAL_SECONDS + tick_max_seconds()`` before the
@@ -329,16 +332,20 @@ def _watch_active_tick(
 
     Run changes are resolved here only (not in ``observe``). After probe-unknown,
     keep ``first_seen`` when the resumed token is the same run (including clobbered
-    ``(None, progress)`` with a known ``run_id``). A different run, or the first
-    non-None ``run_id`` after an identity-less watch, gets a fresh watch and cap.
+    ``(None, progress)`` with a known ``run_id``). On same-run resume, refresh the
+    no-progress deadline only when the progress token changed (frozen token behind
+    flapping probe must not reset ``last_progress`` every outage). A different run,
+    or the first non-None ``run_id`` after an identity-less watch, gets a fresh watch
+    and cap.
     """
     if watch is None:
         return _TickWatch(token, now)
     if watch.probe_unknown:
         if _tokens_same_run(watch, token):
             watch.probe_unknown = False
-            watch.token = token
-            watch.last_progress = now
+            if token != watch.token:
+                watch.token = token
+                watch.last_progress = now
             resumed = _token_run_id(token)
             if resumed is not None:
                 watch.run_id = resumed

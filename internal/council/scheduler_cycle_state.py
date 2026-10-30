@@ -9,6 +9,10 @@ soul_map for writing.
 Readers use ``read_last_cycle``: the new file first, then the legacy soul_map key, so a volume that
 still carries only the old record (for example the first read after a deploy, or a web process
 reading before the worker has ticked) keeps its in-flight and age information.
+
+A present-but-empty ``last_cycle`` object (``{}``) is **unreadable**, same on the new file and
+legacy soul_map key. Field typing: ``phase`` must be absent or a string; ``run_id`` and
+``progress`` may be absent, JSON null, or a string.
 """
 
 from __future__ import annotations
@@ -30,6 +34,45 @@ _write_lock = threading.Lock()
 
 class CycleStateUnreadableError(Exception):
     """The on-disk cycle state file exists but cannot be read or parsed."""
+
+
+def _last_cycle_summary_unreadable(last: Dict[str, Any], path: str, *, channel: str) -> bool:
+    """Validate ``last_cycle`` field types when the value is a JSON object.
+
+    Empty ``{}`` is unreadable (no cycle summary; new and legacy readers agree).
+
+    ``phase`` must be absent or a string. ``run_id`` and ``progress`` may be absent,
+    JSON null (identity-less), or a string. Any other type → unreadable.
+    """
+    if not last:
+        logger.warning(
+            "score snapshot %s cycle state malformed (%s): last_cycle is empty",
+            channel,
+            path,
+        )
+        return True
+    if "phase" in last:
+        phase = last["phase"]
+        if not isinstance(phase, str):
+            logger.warning(
+                "score snapshot %s cycle state malformed (%s): phase has wrong type",
+                channel,
+                path,
+            )
+            return True
+    for key in ("run_id", "progress"):
+        if key not in last:
+            continue
+        val = last[key]
+        if val is not None and not isinstance(val, str):
+            logger.warning(
+                "score snapshot %s cycle state malformed (%s): %s has wrong type",
+                channel,
+                path,
+                key,
+            )
+            return True
+    return False
 
 
 def _soul_path(soul_map_path: Optional[str]) -> str:
@@ -120,7 +163,9 @@ def _read_new(soul_map_path: Optional[str]) -> tuple[Optional[Dict[str, Any]], b
     if not isinstance(last, dict):
         logger.warning("score snapshot cycle state malformed (%s): last_cycle is not an object", path)
         return None, True
-    return last, False
+    if _last_cycle_summary_unreadable(last, path, channel="cycle state"):
+        return None, True
+    return dict(last), False
 
 
 def _read_legacy_with_status(
@@ -182,6 +227,8 @@ def _read_legacy_with_status(
             "score snapshot legacy cycle state malformed (%s): last_cycle is not an object",
             path,
         )
+        return {}, True
+    if _last_cycle_summary_unreadable(last, path, channel="legacy cycle state"):
         return {}, True
     return dict(last), False
 
