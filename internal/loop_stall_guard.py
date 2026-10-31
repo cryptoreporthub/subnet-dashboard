@@ -131,6 +131,7 @@ def tick_progress_seconds() -> int:
     if write_timeout > 0:
         # The progress token is constant while the write phase waits (up to the write timeout),
         # so the deadline must outlast a healthy write. The default (600s) is below 900s: no change.
+        # R18-2 pins: frozen write-phase token must not strike before this deadline (see silent-write tests).
         threshold = max(threshold, write_timeout + 60)
     if TICK_PROGRESS_OVERRIDE_SECONDS and TICK_PROGRESS_OVERRIDE_SECONDS < threshold:
         if not _override_clamp_logged:
@@ -357,6 +358,8 @@ def _watch_active_tick(
     if watch.probe_unknown:
         if _tokens_same_run(watch, token):
             watch.probe_unknown = False
+            # Compare progress components only (Ditto #4429065242 / R17): clobbered ``run_id`` must not
+            # refresh ``last_progress`` when ``progress`` is unchanged.
             if _token_progress(token) != _token_progress(watch.token):
                 watch.last_progress = now
             watch.token = token
@@ -458,6 +461,7 @@ def _guard_loop() -> None:
             else:
                 watch.probe_unknown = True
             if watch.past_absolute_cap(now):
+                # R18-1 pins: probe-unknown past cap counts as hung (strikes), not idle ``continue``.
                 logger.warning(
                     "loop stall guard: tick progress probe failed; probe-unknown window has run "
                     "%ss since first sight (cap=%ss); counting as hung",

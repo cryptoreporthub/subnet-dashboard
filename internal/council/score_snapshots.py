@@ -1672,11 +1672,14 @@ class ScoreSnapshotScheduler:
             self._clear_stuck_scoring()
             started_at = _now_iso()
             run_id = uuid.uuid4().hex
+            # Stall guard reads ``(run_id, progress)`` from this file; the write phase keeps progress
+            # fixed while the snapshot finishes — ``tick_progress_seconds()`` must cover that silence.
             self._persist_cycle_summary(
                 {"run_at": started_at, "run_id": run_id, "ok": False, "phase": "scoring"}
             )
 
             def _progress(done: int, total: int) -> None:
+                # Heartbeat ``run_at`` only; progress token is what the guard uses for no-progress deadline.
                 self._persist_cycle_summary(
                     {
                         "run_id": run_id,

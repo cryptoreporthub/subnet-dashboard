@@ -1,0 +1,120 @@
+"""PR #1485 R18-1 (Claude #1533): cap-kill pins on r17 null-phase / stale-disk probe-unknown path."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from internal import loop_stall_guard as g
+from internal.council import score_snapshots as snaps
+from internal.council import weights
+from tests.test_scheduler_cycle_state_phase_null_r16 import PRE_R15_WRITER_LAST_CYCLE
+from tests.test_stall_guard_missing_receipt_wedge import _old_receipt, _run_guard, _wire
+
+
+def _wire_paths(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    state = tmp_path / "score_snapshot_scheduler.json"
+    monkeypatch.setenv("SCORE_SNAPSHOT_SCHEDULER_STATE_PATH", str(state))
+    return soul, state
+
+
+def _disk_last_cycle(shape: str) -> dict | None:
+    if shape == "null":
+        return dict(PRE_R15_WRITER_LAST_CYCLE)
+    if shape == "absent":
+        row = {k: v for k, v in PRE_R15_WRITER_LAST_CYCLE.items() if k != "phase"}
+        return row
+    if shape == "failed":
+        return {
+            **PRE_R15_WRITER_LAST_CYCLE,
+            "ok": False,
+            "error": "write_timeout",
+            "skipped": None,
+        }
+    if shape == "missing":
+        return None
+    raise ValueError(shape)
+
+
+def _seed_disk(tmp_path, monkeypatch, *, channel: str, shape: str) -> None:
+    soul, state = _wire_paths(tmp_path, monkeypatch)
+    payload = _disk_last_cycle(shape)
+    if channel == "new":
+        if payload is None:
+            state.unlink(missing_ok=True)
+        else:
+            state.write_text(json.dumps({"last_cycle": payload}), encoding="utf-8")
+    else:
+        if payload is None:
+            soul.write_text("{}", encoding="utf-8")
+        else:
+            soul.write_text(
+                json.dumps({"score_snapshot_scheduler": {"last_cycle": payload}}),
+                encoding="utf-8",
+            )
+        state.write_text("{}", encoding="utf-8")
+
+
+def _guard_defaults(monkeypatch) -> int:
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    monkeypatch.setattr(g, "INTERVAL_SECONDS", 240)
+    monkeypatch.setattr(g, "CONSECUTIVE_CHECKS", 3)
+    cap_checks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    # First stale strike after cap, then CONSECUTIVE_CHECKS (R18-1 pin: kill at check 11 @ MC scale).
+    return cap_checks + g.CONSECUTIVE_CHECKS + 1
+
+
+def _assert_cap_kill_pins(tmp_path, monkeypatch, *, channel: str, shape: str) -> None:
+    _seed_disk(tmp_path, monkeypatch, channel=channel, shape=shape)
+    _wire(tmp_path, monkeypatch)
+    kill_at = _guard_defaults(monkeypatch)
+    monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
+    _old_receipt(6001)
+    code_survive, _ = _run_guard(monkeypatch, ticks=kill_at - 1)
+    assert code_survive is None
+    code_kill, _ = _run_guard(monkeypatch, ticks=kill_at)
+    assert code_kill == 1
+
+
+@pytest.mark.parametrize("channel", ["new", "legacy"])
+@pytest.mark.parametrize("shape", ["null", "absent", "failed", "missing"])
+def test_null_phase_stale_disk_cap_kill_pins(
+    tmp_path, monkeypatch, channel, shape
+):
+    """Real ``_guard_loop`` via ``_run_guard``: exit at cap + ``CONSECUTIVE_CHECKS``, not before."""
+    _assert_cap_kill_pins(tmp_path, monkeypatch, channel=channel, shape=shape)
+
+
+def _r1a_past_absolute_cap_if_false(monkeypatch) -> None:
+    monkeypatch.setattr(g._TickWatch, "past_absolute_cap", lambda self, now: False)
+
+
+def _r1b_cap_branch_not_hung(monkeypatch) -> None:
+    """Mutant: cap exceeded but probe-unknown branch always ``continue`` (never strikes)."""
+    orig = g._TickWatch.past_absolute_cap
+
+    def _never_cap_for_unknown(self, now: float) -> bool:
+        if self.probe_unknown or self.token is g._PROBE_UNKNOWN:
+            return False
+        return orig(self, now)
+
+    monkeypatch.setattr(g._TickWatch, "past_absolute_cap", _never_cap_for_unknown)
+
+
+def _r1c_cap_branch_clears_strikes(monkeypatch) -> None:
+    _r1b_cap_branch_not_hung(monkeypatch)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [_r1a_past_absolute_cap_if_false, _r1b_cap_branch_not_hung, _r1c_cap_branch_clears_strikes],
+    ids=["R1a-cap-if-false", "R1b-cap-branch-not-hung", "R1c-consecutive-stale-zero"],
+)
+def test_r18_1_mutations_fail_cap_kill_pin(tmp_path, monkeypatch, mutator):
+    mutator(monkeypatch)
+    with pytest.raises(AssertionError):
+        _assert_cap_kill_pins(tmp_path, monkeypatch, channel="new", shape="null")
