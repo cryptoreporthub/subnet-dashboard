@@ -5,7 +5,7 @@
 
 ## Why
 
-Production runs on a **single Fly machine** (`shared-cpu-1x`, 2GB) that does everything:
+Production runs on a **single Fly machine** (`shared-cpu-2x`, 1GB) that does everything:
 
 - Serves `GET /` + 40+ `/api/*` routes
 - Runs resolver, registry sync, live subnet feed, feed warmup on boot (via **inline worker** sibling process)
@@ -23,7 +23,7 @@ When the worker saturates, even `/health` stops responding. Phase A (#1) mitigat
 | **B v1** | 2 | One machine — **web** + **inline worker** subprocess (this doc) | **Now** |
 | **B v2** | 2b | Separate worker machine + volume strategy | Deferred |
 | C | 3 | Static front (CDN) + API-only Fly | Optional later |
-| D | 4 | 2GB RAM or `min_machines_running = 2` | Optional later |
+| D | 4 | 2GB RAM **or** `min_machines_running = 2` (sizing to be re-derived against the 1GB web VM — see #1312) | Optional later |
 | E | 5 | Microservices split | Not now |
 
 ## Target architecture
