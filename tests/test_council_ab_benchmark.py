@@ -94,3 +94,188 @@ def test_settle_due_snapshots_grades_long_short_and_neutral(tmp_path):
     assert snap["daily_model"][0]["result"] == "hit"
     assert snap["judge_council"][0]["result"] == "hit"
     assert snap["judge_council"][1]["result"] == "neutral"
+
+def _seed(path, captured, rows):
+    from internal.council import ab_benchmark
+
+    ab_benchmark.record_snapshot(
+        [_subnet(1, 10), _subnet(2, 10)],
+        {},
+        captured_at=captured.isoformat().replace("+00:00", "Z"),
+        path=path,
+    )
+    data = ab_benchmark._load(path)
+    data["snapshots"][0]["daily_model"] = rows
+    data["snapshots"][0]["judge_council"] = []
+    ab_benchmark._save(data, path)
+
+
+
+def _quote(netuid, price, live=None):
+    row = _subnet(netuid, price)
+    if live is not None:
+        row["live"] = live
+    return row
+
+
+def test_registry_fallback_quote_is_deferred_until_a_live_quote_arrives(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    captured = datetime.now(timezone.utc) - timedelta(hours=30)
+    _seed(path, captured, [{"netuid": 1, "direction": "long", "entry_price": 10, "result": None}])
+
+    deferred = ab_benchmark.settle_due_snapshots(
+        [_quote(1, 10, live=False)], now=captured + timedelta(hours=25), path=path
+    )
+    assert deferred["snapshots"][0]["daily_model"][0]["result"] is None
+    assert deferred["snapshots"][0]["status"] == "partial"
+
+    live = ab_benchmark.settle_due_snapshots(
+        [_quote(1, 11, live=True)], now=captured + timedelta(hours=26), path=path
+    )
+    row = live["snapshots"][0]["daily_model"][0]
+    assert row["result"] == "hit" and row["exit_price"] == 11
+    assert live["snapshots"][0]["status"] == "settled"
+
+
+def test_registry_fallback_after_grace_is_stale_and_excluded_from_hit_rate(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    captured = datetime.now(timezone.utc) - timedelta(hours=60)
+    _seed(
+        path,
+        captured,
+        [
+            {"netuid": 1, "direction": "long", "entry_price": 10, "result": None},
+            {"netuid": 2, "direction": "long", "entry_price": 10, "result": None},
+        ],
+    )
+    late = captured + timedelta(
+        hours=ab_benchmark.AB_BENCHMARK_HORIZON_HOURS + ab_benchmark.AB_STALE_EXIT_GRACE_HOURS
+    )
+    ab_benchmark.settle_due_snapshots(
+        [_quote(1, 10, live=False), _quote(2, 12, live=True)], now=late, path=path
+    )
+
+    rows = ab_benchmark._load(path)["snapshots"][0]["daily_model"]
+    assert [r["result"] for r in rows] == ["stale", "hit"]
+    assert rows[0]["exit_price"] is None and rows[0]["return_pct"] is None
+    metrics = ab_benchmark.comparison(path=path)["daily_model"]
+    assert metrics["stale_exit_entries"] == 1
+    assert metrics["directional_entries"] == 1
+    assert metrics["hit_rate"] == 1.0
+
+
+def test_unchanged_live_quote_is_a_real_flat_move_and_stays_graded(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    captured = datetime.now(timezone.utc) - timedelta(hours=30)
+    _seed(path, captured, [{"netuid": 1, "direction": "long", "entry_price": 10, "result": None}])
+
+    settled = ab_benchmark.settle_due_snapshots(
+        [_quote(1, 10, live=True)], now=captured + timedelta(hours=25), path=path
+    )
+    row = settled["snapshots"][0]["daily_model"][0]
+    assert row["result"] == "miss" and row["exit_price"] == 10 and row["return_pct"] == 0.0
+    metrics = ab_benchmark.comparison(path=path)["daily_model"]
+    assert metrics["stale_exit_entries"] == 0
+    assert metrics["directional_entries"] == 1
+
+
+def test_row_without_a_live_flag_is_graded_as_before(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    captured = datetime.now(timezone.utc) - timedelta(hours=30)
+    _seed(path, captured, [{"netuid": 1, "direction": "long", "entry_price": 10, "result": None}])
+
+    settled = ab_benchmark.settle_due_snapshots(
+        [_quote(1, 10)], now=captured + timedelta(hours=25), path=path
+    )
+    assert settled["snapshots"][0]["daily_model"][0]["result"] == "miss"
+
+
+def _settled_snapshots(path, count, daily="hit", judge="hit", judge_scored=None):
+    """Write ``count`` settled snapshots. ``judge`` of None leaves that arm empty;
+    ``judge_scored`` limits how many snapshots carry a ``judge`` row (the rest are empty)."""
+    from internal.council import ab_benchmark
+
+    base = datetime.now(timezone.utc) - timedelta(days=30)
+    snapshots = []
+    for index in range(count):
+        def arm(result):
+            if result is None:
+                return []
+            return [{"netuid": 1, "direction": "long", "entry_price": 10, "result": result}]
+
+        carries_judge = judge_scored is None or index < judge_scored
+        snapshots.append(
+            {
+                "captured_at": (base + timedelta(minutes=index)).isoformat().replace("+00:00", "Z"),
+                "date": "2026-09-01",
+                "status": "settled",
+                "daily_model": arm(daily),
+                "judge_council": arm(judge if carries_judge else None),
+            }
+        )
+    ab_benchmark._save({"snapshots": snapshots}, path)
+
+
+def _needed(path):
+    from internal.council import ab_benchmark
+
+    return ab_benchmark.comparison(path=path)["minimum_recommended_snapshots"]
+
+
+def test_stale_only_snapshots_do_not_make_the_comparison_research_ready(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    needed = _needed(path)
+    _settled_snapshots(path, needed, daily="stale", judge="stale")
+
+    result = ab_benchmark.comparison(path=path)
+    assert result["settled_observation_count"] == needed
+    assert result["scored_observation_count"] == 0
+    assert result["daily_model"]["stale_exit_entries"] == needed
+    assert result["daily_model"]["directional_entries"] == 0
+    assert result["research_ready"] is False
+
+
+def test_both_arms_scored_make_the_comparison_research_ready(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    needed = _needed(path)
+    _settled_snapshots(path, needed)
+    result = ab_benchmark.comparison(path=path)
+    assert result["scored_observation_count"] == needed
+    assert result["scored_observation_count_by_arm"] == {"daily_model": needed, "judge_council": needed}
+    assert result["research_ready"] is True
+
+
+def test_an_empty_arm_is_not_research_ready(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    needed = _needed(path)
+    _settled_snapshots(path, needed, judge=None)
+    result = ab_benchmark.comparison(path=path)
+    assert result["scored_observation_count_by_arm"] == {"daily_model": needed, "judge_council": 0}
+    assert result["research_ready"] is False
+
+
+def test_a_sparsely_scored_arm_is_not_research_ready(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    needed = _needed(path)
+    _settled_snapshots(path, needed, judge_scored=1)
+    result = ab_benchmark.comparison(path=path)
+    assert result["scored_observation_count_by_arm"] == {"daily_model": needed, "judge_council": 1}
+    assert result["scored_observation_count"] == 1
+    assert result["judge_council"]["directional_entries"] == 1
+    assert result["research_ready"] is False
