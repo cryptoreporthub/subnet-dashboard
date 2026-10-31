@@ -1,0 +1,100 @@
+{
+  "schema_version": "1",
+  "claim_id": "P-CENSUS-002c",
+  "bundle_id": "P-CENSUS-002c.tracer.1",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "confirmed",
+  "evidence_class": "repo_blob",
+  "scope_tag": "code-only",
+  "fetch_method": "raw",
+  "path": "internal/council/score_snapshots.py",
+  "held_state": {
+    "locks": [],
+    "sqlite": [],
+    "sockets_network": [],
+    "notes": "During build loop :189-218 / _build_and_save :291-298, module _lock (threading.Lock :55) is NOT held: with _lock only wraps brief single-flight submit (:318-326), _release_write_future (:74-76), and finally-clear-if-done (:395-397). No sqlite symbols in this file. No socket/HTTP open in this file during the loop; the only open() in the write path is save_score_snapshot :114-116 after scoring completes. Callee network inside score_subnet_for_day/hour: NOT_OBSERVABLE (not read this turn). Global _write_future remains set to the in-flight Future (:325-326) until release paths \u2014 a Future reference, not a Lock."
+  },
+  "late_write": {
+    "executes_after_caller_timeout": "yes",
+    "write_cites": [
+      "internal/council/score_snapshots.py:298",
+      "internal/council/score_snapshots.py:110-116",
+      "internal/council/score_snapshots.py:24-26"
+    ],
+    "error_handling_cites": [
+      "internal/council/score_snapshots.py:382-390",
+      "internal/council/score_snapshots.py:391-393",
+      "internal/council/score_snapshots.py:380"
+    ],
+    "timeout_default_cite": "internal/council/score_snapshots.py:31-33",
+    "timeout_default_seconds": 600,
+    "joshua_cited_seconds": 480,
+    "bytes_read": "24|SCORE_SNAPSHOTS_PATH = os.environ.get(\n25|    \"SCORE_SNAPSHOTS_PATH\", os.path.join(\"data\", \"score_snapshots.json\")\n26|)\n31|SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(\n32|    os.environ.get(\"SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS\", \"600\")\n33|)\n110|def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> None:\n111|    snap_path = path or SCORE_SNAPSHOTS_PATH\n112|    os.makedirs(os.path.dirname(snap_path) or \".\", exist_ok=True)\n113|    tmp = snap_path + \".tmp\"\n114|    with open(tmp, \"w\", encoding=\"utf-8\") as handle:\n115|        json.dump(payload, handle, indent=2)\n116|    os.replace(tmp, snap_path)\n291|    def _build_and_save() -> Dict[str, Any]:\n292|        payload = build_full_universe_snapshot(\n293|            subnets or [],\n294|            ctx,\n295|            progress_cb=progress_cb,\n296|        )\n297|        payload[\"source\"] = source\n298|        save_score_snapshot(payload)\n299|        return {\n300|            \"ok\": True,\n301|            \"count\": payload.get(\"count\"),\n302|            \"written_at\": payload.get(\"written_at\"),\n303|            \"path\": SCORE_SNAPSHOTS_PATH,\n304|        }\n380|    fut.add_done_callback(_log_build_completion)\n381|    try:\n382|        return fut.result(timeout=timeout)\n383|    except FuturesTimeoutError:\n384|        caller_abandoned.set()\n385|        logger.warning(\n386|            \"score snapshot build timed out after %ds \"\n387|            \"(build continues in background)\",\n388|            timeout,\n389|        )\n390|        return {\"ok\": False, \"error\": f\"write_timeout_{timeout}s\"}\n391|    except Exception as exc:\n392|        logger.warning(\"score snapshot write failed: %s\", exc)\n393|        return {\"ok\": False, \"error\": str(exc)}\n394|    finally:\n395|        with _lock:\n396|            if _write_future is fut and fut.done():\n397|                _write_future = None",
+    "notes": "FuturesTimeoutError at fut.result(timeout=timeout) :382-383 sets caller_abandoned and returns write_timeout_* without cancelling the Future; log :385-388 states build continues in background. _build_and_save still reaches save_score_snapshot(payload) :298 which atomic-writes via tmp+os.replace to SCORE_SNAPSHOTS_PATH default data/score_snapshots.json (:24-26, :110-116). Code default timeout is 600s (env SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS); live 480s env value NOT_OBSERVABLE this turn."
+  },
+  "clear_stuck": {
+    "def_cite": "internal/council/score_snapshots.py:471",
+    "call_cite": "internal/council/score_snapshots.py:610",
+    "line_615_note": "internal/council/score_snapshots.py:615 is _persist_cycle_summary progress callback \u2014 not clear def",
+    "trigger_conditions": [
+      "weights._load_raw()['score_snapshot_scheduler']['last_cycle'] is a dict",
+      "last_cycle.phase == 'scoring' (else return :477-478)",
+      "last_cycle.run_at parses via _parse_iso (else return :479-481)",
+      "age_seconds >= SCORE_SNAPSHOT_STUCK_SECONDS (default 900 from :30) then _persist_cycle_summary ok=False error=scoring_stuck_timeout phase=failed (:483-491)"
+    ],
+    "clears_write_future_while_running": "no",
+    "allows_second_build": "no",
+    "guard_cites": [
+      "internal/council/score_snapshots.py:318-320",
+      "internal/council/score_snapshots.py:72-76",
+      "internal/council/score_snapshots.py:394-397",
+      "internal/council/score_snapshots.py:560-563",
+      "internal/council/score_snapshots.py:594-606"
+    ],
+    "bytes_read": "30|SCORE_SNAPSHOT_STUCK_SECONDS = int(os.environ.get(\"SCORE_SNAPSHOT_STUCK_SECONDS\", \"900\"))\n72|def _release_write_future(done_fut: Any) -> None:\n73|    global _write_future\n74|    with _lock:\n75|        if _write_future is done_fut:\n76|            _write_future = None\n317|    caller_abandoned = threading.Event()\n318|    with _lock:\n319|        if _write_future is not None and not _write_future.done():\n320|            return {\"ok\": False, \"error\": \"scoring_in_progress\"}\n321|        if _write_executor is None:\n322|            _write_executor = ThreadPoolExecutor(\n323|                max_workers=1, thread_name_prefix=\"score-snap-write\"\n324|            )\n325|        fut = _write_executor.submit(_build_and_save)\n326|        _write_future = fut\n327|    fut.add_done_callback(_release_write_future)\n394|    finally:\n395|        with _lock:\n396|            if _write_future is fut and fut.done():\n397|                _write_future = None\n471|    def _clear_stuck_scoring(self) -> None:\n472|        try:\n473|            from internal.council import weights\n474|\n475|            sched = weights._load_raw().get(\"score_snapshot_scheduler\") or {}\n476|            last = sched.get(\"last_cycle\") if isinstance(sched, dict) else {}\n477|            if not isinstance(last, dict) or last.get(\"phase\") != \"scoring\":\n478|                return\n479|            tick = _parse_iso(last.get(\"run_at\"))\n480|            if tick is None:\n481|                return\n482|            age = max(0.0, (datetime.now(timezone.utc) - tick).total_seconds())\n483|            if age >= SCORE_SNAPSHOT_STUCK_SECONDS:\n484|                self._persist_cycle_summary(\n485|                    {\n486|                        \"run_at\": _now_iso(),\n487|                        \"ok\": False,\n488|                        \"error\": \"scoring_stuck_timeout\",\n489|                        \"phase\": \"failed\",\n490|                    }\n491|                )\n492|        except Exception:\n493|            pass\n560|        finally:\n561|            with _lock:\n562|                if _write_future is fut:\n563|                    _write_future = None\n594|        with _lock:\n595|            if _TICK_ACTIVE or _write_future_active():\n596|                skipped = {\n597|                    \"ok\": False,\n598|                    \"run_at\": _now_iso(),\n599|                    \"skipped\": \"scoring_in_progress\",\n600|                }\n601|                self._record_liveness(skipped)\n602|                if reschedule and self._is_registered():\n603|                    schedule_in_seconds(\n604|                        JOB_ID, self._tick, min(120, self.refresh_minutes * 60)\n605|                    )\n606|                return skipped\n607|            _TICK_ACTIVE = True\n608|            self._tick_active = True\n609|        try:\n610|            self._clear_stuck_scoring()\n611|            started_at = _now_iso()\n612|            self._persist_cycle_summary({\"run_at\": started_at, \"ok\": False, \"phase\": \"scoring\"})\n613|\n614|            def _progress(done: int, total: int) -> None:\n615|                self._persist_cycle_summary(\n616|                    {\n617|                        \"run_at\": _now_iso(),\n618|                        \"ok\": False,\n619|                        \"phase\": \"scoring\",\n620|                        \"progress\": f\"{done}/{total}\",",
+    "notes": "_clear_stuck_scoring does not read or assign _write_future and does not take _lock. It only rewrites persisted last_cycle when stuck. Single-flight :319-320 still returns scoring_in_progress while _write_future is not done. Release paths :72-76 (done callback), :396-397 (finally if fut.done()), and :562-563 (_complete_write_future finally after fut.result()) clear only after/at completion \u2014 so clearing stuck does not enable a concurrent second build while the orphan thread still runs."
+  },
+  "citations": [
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 189
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 298
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 319
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 383
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 471
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 610
+    }
+  ],
+  "falsifier": {
+    "probe": "raw-fetch internal/council/score_snapshots.py at pin; extract T1/T2/T3 loci",
+    "expected": "no lock/sqlite/socket held across :189-218 in this file; late write yes via :298/:110-116 after timeout :383-390; clear_stuck :471 does not clear _write_future; :319 blocks second build",
+    "refutes_if": "raw/api 404 OR sha256 mismatch vs this turn's bytes OR save cancelled on FuturesTimeoutError OR _clear_stuck_scoring assigns _write_future=None OR :319 absent OR bytes not from this turn's tool output"
+  },
+  "produced_by": "Tracer",
+  "notes": "Ticket path 404 at pin; ticket body from MC local /workspace/pcensus002c/ticket.json. Rule 8: verification only."
+}

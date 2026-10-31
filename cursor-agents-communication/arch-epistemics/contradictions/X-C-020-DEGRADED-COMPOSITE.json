@@ -1,0 +1,9 @@
+{
+  "contradiction_id": "X-C-020-DEGRADED-COMPOSITE",
+  "status": "RESOLVED",
+  "resolved_at": "2026-09-20T13:20Z",
+  "resolution": "BOTH_PARTIAL",
+  "resolution_cite": "C-020b VERIFIED code-only (MC spot-check PASS)",
+  "detail": "Degraded path sets empty signal_contributions AND technical_score=0.5. Both embed under expert_contributions after total_score is finalized \u2014 nested technical_score does not feed total. Ditto correct on empty contributions; Tracer correct that 0.5 appears nested; neither alone was full.",
+  "closes_ticket": "C-020b"
+}

@@ -1,0 +1,56 @@
+{
+  "claim_id": "C-016",
+  "status": "VERIFIED",
+  "verdict": "partial",
+  "scope": "code-only",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "verified_by": "Joshua",
+  "verified_at": "2026-09-20T01:06Z",
+  "tiers": {
+    "A": {
+      "label": "code facts at pin",
+      "facts": [
+        {
+          "fact": "snapshot write path reads SCORE_SNAPSHOT_MAX_SUBNETS via _snapshot_subnet_cap",
+          "cites": [
+            "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:40",
+            "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:276"
+          ]
+        },
+        {
+          "fact": "scoring/homepage path reads TOP_SCORING_UNIVERSE (server.py:628 default 20)",
+          "cites": [
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:628",
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:899",
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:1028",
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:3331"
+          ]
+        }
+      ]
+    },
+    "B": {
+      "label": "effective caps (inferred from code+fly file, not live)",
+      "facts": [
+        {
+          "fact": "effective snapshot cap 40 when fly SCORE_SNAPSHOT_MAX_SUBNETS=40",
+          "tier": "B"
+        },
+        {
+          "fact": "effective scoring/homepage default 20 when TOP unset in fly",
+          "tier": "B"
+        },
+        {
+          "fact": "live env including Fly secrets NOT_OBSERVABLE",
+          "tier": "B"
+        }
+      ]
+    }
+  },
+  "bundles": [
+    "bundles/C-016.tracer.1.json",
+    "bundles/C-016.configtruth.1.json"
+  ],
+  "x_c_016_cap": "resolved_code_only",
+  "tracer_followup": "C-016b cite code default at score_snapshots.py:276 independent of fly.toml",
+  "updated_at": "2026-09-20T01:06Z"
+}

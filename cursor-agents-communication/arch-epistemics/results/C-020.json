@@ -1,0 +1,109 @@
+{
+  "claim_id": "C-020",
+  "status": "VERIFIED",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "accepted_at": "2026-09-20T12:22Z",
+  "accepted_by": "mission-control",
+  "method": "MC spot-checked Tracer raw cites against pin blobs",
+  "tracer_bundle": "bundles/C-020.tracer.1.json",
+  "mc_spot_check": "PASS",
+  "rule_8": "verification only \u2014 no remediation",
+  "summary": "guard :574-575 \u2192 degraded; flat 0.5; _compute_technical_score short-circuit 0.5; hour/day expert embed; UI NOT_OBSERVABLE",
+  "tracer": {
+    "claim_id": "C-020",
+    "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "fetch_method": "raw",
+    "citations": [
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 574,
+        "bytes": "    if hist.get(\"source\") in (\"synthetic\", \"unavailable\") or len(closes) < 30:"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 575,
+        "bytes": "        return _degraded_technical_indicators(hist)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 550,
+        "bytes": "        \"degraded\": True,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 537,
+        "bytes": "    neutral = 0.5"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 557,
+        "bytes": "        \"williams_r\": neutral,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 632,
+        "bytes": "    if indicators.get(\"degraded\"):"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 634,
+        "bytes": "            \"technical_score\": 0.5,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1755,
+        "bytes": "    tech_score = _compute_technical_score(sn, \"hour\", indicators, market_context)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1763,
+        "bytes": "            \"technical_score\": tech_score[\"technical_score\"],"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1909,
+        "bytes": "    tech_score = _compute_technical_score(sn, \"day\", indicators, market_context)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1917,
+        "bytes": "            \"technical_score\": tech_score[\"technical_score\"],"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1297,
+        "bytes": "        \"technical_indicators\": indicators,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1950,
+        "bytes": "        \"technical_indicators\": state_vector.get(\"technical_indicators\"),"
+      }
+    ],
+    "findings": [
+      "Guard: _compute_technical_indicators returns _degraded_technical_indicators when hist.get('source') in ('synthetic','unavailable') OR len(closes)<30 (state_vector.py:574-575).",
+      "Degraded payload: degraded=True (:550); neutral=0.5 (:537); flat 0.5 on score slots including williams_r (:551-558).",
+      "Score short-circuit: _compute_technical_score if indicators.get('degraded') returns technical_score=0.5 with degraded=True (:632-640).",
+      "Composite/snapshot path (in-file): hour score embeds tech_score['technical_score'] into expert_contributions (:1755,:1763); day path same (:1909,:1917). State vector sets technical_indicators (:1297); format_top_pick copies it (:1950).",
+      "UI/template consumer of degraded flag or flat technical_score at this pin: NOT_OBSERVABLE (no matches in templates/index.html, templates/partials/cockpit_cards.html, static/js/hour_watch_ui.js, static/js/market_drivers_ui.js, static/js/story_path_ui.js, templates/council_ab.html, templates/judge_council.html, templates/listener.html)."
+    ],
+    "bytes_read": {
+      "degraded_guard": "535|def _degraded_technical_indicators(hist: Dict[str, Any]) -> Dict[str, Any]:\n536|    \"\"\"Honest-empty technical payload when history is unavailable (SciWeave Q6).\"\"\"\n537|    neutral = 0.5\n538|    return {\n539|        \"rsi\": {\"value\": 50.0, \"signal\": \"neutral\"},\n540|        \"stochastic\": {\"k\": 50.0, \"d\": 50.0, \"signal\": \"neutral\"},\n541|        \"bollinger\": {\"upper\": 0.0, \"middle\": 0.0, \"lower\": 0.0, \"signal\": \"neutral\"},\n542|        \"mfi\": {\"value\": 50.0, \"signal\": \"neutral\"},\n543|        \"cci\": {\"value\": 0.0, \"signal\": \"neutral\"},\n544|        \"williams_r\": {\"value\": -50.0, \"signal\": \"neutral\"},\n545|        \"keltner\": {\"upper\": 0.0, \"middle\": 0.0, \"lower\": 0.0, \"signal\": \"neutral\"},\n546|        \"macd\": {\"macd\": 0.0, \"signal\": 0.0, \"histogram\": 0.0},\n547|        \"ma_cross\": {\"signal\": \"neutral\"},\n548|        \"history_source\": hist.get(\"source\", \"unavailable\"),\n549|        \"history_length\": len(hist.get(\"closes\") or []),\n550|        \"degraded\": True,\n551|        \"rsi_crossover\": neutral,\n552|        \"macd_cross\": neutral,\n553|        \"stochastic_reversal\": neutral,\n554|        \"bollinger_squeeze\": neutral,\n555|        \"mfi_flow\": neutral,\n556|        \"cci_divergence\": neutral,\n557|        \"williams_r\": neutral,\n558|        \"keltner_channel\": neutral,\n559|    }\n560|\n561|\n562|def _compute_technical_indicators(\n563|    sn: Dict[str, Any],\n564|    *,\n565|    allow_hydration: bool = True,\n566|) -> Dict[str, Any]:\n567|    \"\"\"Compute all 8 indicators and return per-signal scores.\"\"\"\n568|    hist = _get_price_history(\n569|        sn.get(\"netuid\"),\n570|        sn,\n571|        allow_hydration=allow_hydration,\n572|    )\n573|    closes = hist.get(\"closes\", [])\n574|    if hist.get(\"source\") in (\"synthetic\", \"unavailable\") or len(closes) < 30:\n575|        return _degraded_technical_indicators(hist)",
+      "technical_score": "616|def _compute_technical_score(\n617|    sn: Dict[str, Any],\n618|    horizon_type: str = \"day\",\n619|    indicators: Optional[Dict[str, Any]] = None,\n620|    market_context: Optional[Dict[str, Any]] = None,\n621|) -> Dict[str, Any]:\n622|    \"\"\"Compute weighted technical score for a specific horizon type.\n623|\n624|    Uses per-signal, per-horizon weights from soul_map.json to produce a\n625|    single technical score (0.0-1.0), signal contributions, and the set of\n626|    active signals that deviated meaningfully from neutral.\n627|    \"\"\"\n628|    from internal.council.weights import load_signal_weights\n629|\n630|    if indicators is None:\n631|        indicators = _compute_technical_indicators(sn)\n632|    if indicators.get(\"degraded\"):\n633|        return {\n634|            \"technical_score\": 0.5,\n635|            \"signal_contributions\": {},\n636|            \"active_signals\": [],\n637|            \"horizon_type\": horizon_type,\n638|            \"degraded\": True,\n639|            \"history_source\": indicators.get(\"history_source\", \"unavailable\"),\n640|            \"history_length\": indicators.get(\"history_length\", 0),\n641|        }",
+      "hour_day": "1754|    # Compute weighted technical score for hour horizon\n1755|    tech_score = _compute_technical_score(sn, \"hour\", indicators, market_context)\n1756|\n1757|    return {\n1758|        \"total_score\": total,\n1759|        \"expert_contributions\": {\n1760|            **experts,\n1761|            \"signal_contributions\": tech_score[\"signal_contributions\"],\n1762|            \"active_signals\": tech_score[\"active_signals\"],\n1763|            \"technical_score\": tech_score[\"technical_score\"],\n1764|        },\n1908|    # Compute weighted technical score for day horizon\n1909|    tech_score = _compute_technical_score(sn, \"day\", indicators, market_context)\n1910|\n1911|    return {\n1912|        \"total_score\": total,\n1913|        \"expert_contributions\": {\n1914|            **experts,\n1915|            \"signal_contributions\": tech_score[\"signal_contributions\"],\n1916|            \"active_signals\": tech_score[\"active_signals\"],\n1917|            \"technical_score\": tech_score[\"technical_score\"],\n1918|        },",
+      "payload": "1295|            \"risk_flags\": sn.get(\"risk_flags\", []),\n1296|        },\n1297|        \"technical_indicators\": indicators,\n1298|        \"convergence\": convergence,\n1948|        \"hot\": state_vector.get(\"hot\"),\n1949|        \"sell\": state_vector.get(\"sell\"),\n1950|        \"technical_indicators\": state_vector.get(\"technical_indicators\"),\n1951|        \"timestamp\": state_vector.get(\"timestamp\"),"
+    },
+    "file_sha256": {
+      "state_vector.py": "7b4e011c1f310672ac2ca3156f92964df795564cba4d000eec25c10e51b8e1cc"
+    },
+    "falsifier": "Re-raw-fetch internal/council/state_vector.py at pin. Refute if :574-575 guard absent, if degraded/0.5 short-circuit absent, if hour/day technical_score embed absent, if an unread pin UI file is shown consuming degraded without NOT_OBSERVABLE, or if citation bytes differ from this turn raw tool output.",
+    "produced_by": "Tracer"
+  },
+  "joshua_accepted": true,
+  "joshua_accepted_at": "2026-09-20T13:17Z",
+  "scope_notes": [
+    "UI consumer NOT_OBSERVABLE",
+    "live env NOT_OBSERVABLE"
+  ],
+  "evidence_class": "code-only"
+}

@@ -1,0 +1,360 @@
+{
+  "schema_version": "1",
+  "claim_id": "F-1",
+  "bundle_id": "F-1-ConfigTruth-c9449d6490231373748f19f299ed19d423a1c971",
+  "dedup_key": "f-1-c9449d6490231373748f19f299ed19d423a1c971-configtruth-live-vs-code",
+  "produced_by": "ConfigTruth",
+  "fetch_method": "raw",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "partial",
+  "evidence_class": "code-only",
+  "scope_tag": "code-only",
+  "status": "f1_code_fly_observed_live_not_observable",
+  "ticket_ref": {
+    "path": "cursor-agents-communication/arch-epistemics/queue/open/F-1.json",
+    "ref_observed": "docs/arch-epistemics-pass0-skeleton",
+    "note": "Ticket JSON 404 at campaign pin SHA; observed on governing branch only. Code/fly reads used pin SHA via raw."
+  },
+  "bytes_read": {
+    "fly.toml": {
+      "fetch_method": "raw",
+      "url": "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/fly.toml",
+      "sha256": "dfb0dac75b06f705ade4d4e9bbd50d0c3098e656b3eaea5f4e9726b7ef54c85c"
+    },
+    "server.py": {
+      "fetch_method": "raw",
+      "url": "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/server.py",
+      "sha256": "906ed6cd39dcd10bb0502d0be18702892dab508016c8251ef900a32d478cc8bf"
+    },
+    "internal/council/score_snapshots.py": {
+      "fetch_method": "raw",
+      "url": "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/council/score_snapshots.py",
+      "sha256": "ad0ad36f5448ab2758075fc22ac213fdb5003f73b8162ad180ab44e03c0163e3"
+    },
+    "internal/worker_proxy.py": {
+      "fetch_method": "raw",
+      "url": "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/worker_proxy.py",
+      "sha256": "ad9dec094fa4c9192ed8f5f8ddefc6f3c3641cb802e1d1ab603a4c6727143dfe"
+    },
+    "internal/run_mode.py": {
+      "fetch_method": "raw",
+      "url": "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/run_mode.py",
+      "sha256": "2b5f71132ad7ee49fd395d7f82556650f6a9c14e17604275871e4b04a5bdfee0"
+    }
+  },
+  "comparison_table": [
+    {
+      "key": "WORKER_HEAVY",
+      "code_default": "essential",
+      "fly_toml": "essential",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only",
+      "notes": "code default from os.environ.get(\"WORKER_HEAVY\", \"essential\"); fly sets same. worker_heavy_feeds_enabled() is True only for 1/true/yes/on/full \u2014 essential is False for live-subnet feeds."
+    },
+    {
+      "key": "WORKER_PROXY_TIMEOUT_SECONDS",
+      "code_default": "8",
+      "fly_toml": "4",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only",
+      "notes": "fly overrides code default 8 -> 4"
+    },
+    {
+      "key": "WORKER_PROXY_CONNECT_SECONDS",
+      "code_default": "3",
+      "fly_toml": "3",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only"
+    },
+    {
+      "key": "WORKER_PEER_TIMEOUT_SECONDS",
+      "code_default": "4",
+      "fly_toml": "4",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only"
+    },
+    {
+      "key": "WORKER_PROXY_CIRCUIT_OPEN_SECONDS",
+      "code_default": "30",
+      "fly_toml": "30",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only"
+    },
+    {
+      "key": "WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS",
+      "code_default": "4",
+      "fly_toml": "4",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only"
+    },
+    {
+      "key": "WORKER_PROXY_LEARNING_TIMEOUT_SECONDS",
+      "code_default": "25",
+      "fly_toml": "25",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only"
+    },
+    {
+      "key": "SCORE_SNAPSHOT_MAX_SUBNETS",
+      "code_default": "0",
+      "fly_toml": "40",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only",
+      "notes": "module constant int(os.environ.get(..., \"0\")); fly sets 40"
+    },
+    {
+      "key": "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS",
+      "code_default": "600",
+      "fly_toml": "480",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only",
+      "notes": "fly overrides code default 600 -> 480"
+    },
+    {
+      "key": "TOP_SCORING_UNIVERSE",
+      "code_default": "20 (server.py module); \"40\" only as _snapshot_subnet_cap worker-mode fallback string when SCORE_SNAPSHOT_MAX_SUBNETS unset",
+      "fly_toml": "NOT_SET",
+      "live": "NOT_OBSERVABLE",
+      "evidence_class": "code-only",
+      "notes": "Absent from fly.toml [env] at pin. Do not invent live value."
+    }
+  ],
+  "deltas_code_vs_fly": [
+    {
+      "key": "WORKER_PROXY_TIMEOUT_SECONDS",
+      "code_default": "8",
+      "fly_toml": "4"
+    },
+    {
+      "key": "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS",
+      "code_default": "600",
+      "fly_toml": "480"
+    },
+    {
+      "key": "SCORE_SNAPSHOT_MAX_SUBNETS",
+      "code_default": "0",
+      "fly_toml": "40"
+    },
+    {
+      "key": "TOP_SCORING_UNIVERSE",
+      "code_default": "20",
+      "fly_toml": "NOT_SET"
+    }
+  ],
+  "c016_path_routing": {
+    "TOP_SCORING_UNIVERSE": {
+      "used_by": [
+        "server.py module binding TOP_SCORING_UNIVERSE (default 20)",
+        "_cap_subnets_for_scoring(..., default_limit=TOP_SCORING_UNIVERSE) at server.py:899",
+        "homepage/shell scoring caps referencing TOP_SCORING_UNIVERSE (e.g. server.py:1028)"
+      ],
+      "not_in_fly_toml_at_pin": true
+    },
+    "SCORE_SNAPSHOT_MAX_SUBNETS": {
+      "used_by": [
+        "module constant SCORE_SNAPSHOT_MAX_SUBNETS default 0 (score_snapshots.py:34)",
+        "_snapshot_subnet_cap(): if env set and non-empty, return max(0, int(raw)) \u2014 with fly=40 this path wins"
+      ]
+    },
+    "_snapshot_subnet_cap": {
+      "priority": [
+        "1) SCORE_SNAPSHOT_MAX_SUBNETS if present and non-empty",
+        "2) else if is_worker_mode(): TOP_SCORING_UNIVERSE with default string \"40\" (distinct from server.py default 20)",
+        "3) else return 0"
+      ],
+      "applied_at": "score snapshot build: cap = _snapshot_subnet_cap(); then _cap_subnets_for_scoring(subnets, limit=cap) when cap > 0",
+      "at_pin_with_fly_env": "SCORE_SNAPSHOT_MAX_SUBNETS=40 is set in fly.toml, so snapshot path uses 40 from that env; TOP_SCORING_UNIVERSE is not consulted by _snapshot_subnet_cap when SCORE_SNAPSHOT_MAX_SUBNETS is set"
+    }
+  },
+  "citations": [
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:40",
+      "literal_bytes": "  WORKER_HEAVY = \"essential\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:82",
+      "literal_bytes": "  SCORE_SNAPSHOT_MAX_SUBNETS = \"40\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:83",
+      "literal_bytes": "  SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = \"480\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:120",
+      "literal_bytes": "  WORKER_PROXY_TIMEOUT_SECONDS = \"4\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:121",
+      "literal_bytes": "  WORKER_PROXY_CONNECT_SECONDS = \"3\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:122",
+      "literal_bytes": "  WORKER_PEER_TIMEOUT_SECONDS = \"4\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:123",
+      "literal_bytes": "  WORKER_PROXY_CIRCUIT_OPEN_SECONDS = \"30\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:124",
+      "literal_bytes": "  WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS = \"4\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:125",
+      "literal_bytes": "  WORKER_PROXY_LEARNING_TIMEOUT_SECONDS = \"25\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:server.py:628",
+      "literal_bytes": "TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:server.py:899",
+      "literal_bytes": "    return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:31",
+      "literal_bytes": "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:32",
+      "literal_bytes": "    os.environ.get(\"SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS\", \"600\")",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:34",
+      "literal_bytes": "SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\", \"0\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:38",
+      "literal_bytes": "def _snapshot_subnet_cap() -> int:",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:40",
+      "literal_bytes": "    raw = os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\")",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:41",
+      "literal_bytes": "    if raw is not None and str(raw).strip() != \"\":",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:43",
+      "literal_bytes": "            return max(0, int(raw))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:49",
+      "literal_bytes": "        if is_worker_mode():",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:50",
+      "literal_bytes": "            return int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"40\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:53",
+      "literal_bytes": "    return 0",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:276",
+      "literal_bytes": "        cap = _snapshot_subnet_cap()",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:280",
+      "literal_bytes": "            subnets = _cap_subnets_for_scoring(subnets, limit=cap)",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/run_mode.py:73",
+      "literal_bytes": "    flag = os.environ.get(\"WORKER_HEAVY\", \"essential\").strip().lower()",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/run_mode.py:74",
+      "literal_bytes": "    return flag in (\"1\", \"true\", \"yes\", \"on\", \"full\")",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/worker_proxy.py:38",
+      "literal_bytes": "        return float(os.environ.get(\"WORKER_PROXY_CIRCUIT_OPEN_SECONDS\", \"30\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/worker_proxy.py:60",
+      "literal_bytes": "        read = float(os.environ.get(\"WORKER_PROXY_TIMEOUT_SECONDS\", \"8\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/worker_proxy.py:64",
+      "literal_bytes": "        connect = float(os.environ.get(\"WORKER_PROXY_CONNECT_SECONDS\", \"3\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/worker_proxy.py:97",
+      "literal_bytes": "        read = float(os.environ.get(\"WORKER_PROXY_LEARNING_TIMEOUT_SECONDS\", \"25\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/worker_proxy.py:106",
+      "literal_bytes": "        read = float(os.environ.get(\"WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS\", \"4\"))",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:internal/worker_proxy.py:760",
+      "literal_bytes": "            timeout = float(os.environ.get(\"WORKER_PEER_TIMEOUT_SECONDS\", \"4\"))",
+      "scope_tag": "code-only"
+    }
+  ],
+  "falsifier": {
+    "probe": "Re-fetch fly.toml, server.py:628, internal/council/score_snapshots.py:_snapshot_subnet_cap, internal/worker_proxy.py timeout helpers, internal/run_mode.py:worker_heavy_feeds_enabled at pin c9449d6490231373748f19f299ed19d423a1c971 via raw; compare literal bytes to comparison_table",
+    "expected": "Table rows match cited literals; live columns remain NOT_OBSERVABLE without ConfigTruth-observed runtime env bytes; WORKER_PROXY_TIMEOUT_SECONDS code default 8 vs fly 4; SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS code 600 vs fly 480; SCORE_SNAPSHOT_MAX_SUBNETS code 0 vs fly 40; TOP_SCORING_UNIVERSE absent from fly.toml",
+    "refutes_if": "Any live env value asserted without ConfigTruth-observed runtime bytes, OR WORKER_HEAVY/proxy/snapshot/TOP_SCORING keys omitted from comparison_table, OR code_default for WORKER_PROXY_TIMEOUT_SECONDS claimed as 4, OR SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS code_default claimed as 480, OR SCORE_SNAPSHOT_MAX_SUBNETS code_default claimed as 40"
+  },
+  "proposed_probe_read_only": {
+    "approver": "Joshua",
+    "blast_radius": "Optional GET of public APP_BASE_URL /version only; no secrets; no mutate; no deploy; does not disclose WORKER_* or SCORE_* process env",
+    "cannot_affect": "Fly machines, secrets, process env, deploys, Ditto",
+    "executed": false,
+    "reason_not_executed": "No Joshua Go this turn; /version cannot confirm named env keys; live remains NOT_OBSERVABLE"
+  },
+  "mc_version_claim": {
+    "status": "NOT_USED_AS_EVIDENCE",
+    "reason": "Zero Prose Laundering: MC ticket known_code_fly.version_live not ConfigTruth-observed bytes; pin.deploy_sha stays NOT_OBSERVABLE"
+  },
+  "mc_validation": {
+    "validated_at": "2026-09-19T23:25Z",
+    "validated_by": "mission-control",
+    "spot_checks": {
+      "WORKER_PROXY_TIMEOUT_SECONDS": "code default 8 (worker_proxy.py:60) fly 4 OK",
+      "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS": "code default 600 fly 480 OK",
+      "SCORE_SNAPSHOT_MAX_SUBNETS": "code default 0 fly 40 OK",
+      "TOP_SCORING_UNIVERSE": "server.py:628 default 20; fly NOT_SET OK",
+      "C-016_routing": "_snapshot_subnet_cap prefers SCORE_SNAPSHOT_MAX_SUBNETS when set; worker fallback string 40 distinct from server default 20 \u2014 noted"
+    },
+    "live_columns": "NOT_OBSERVABLE accepted for ConfigTruth seat",
+    "pin_equals_version": "MC-observed separately; ConfigTruth correctly did not launder MC /version into their evidence",
+    "result": "PASS_schema_pending_joshua_spotcheck"
+  }
+}

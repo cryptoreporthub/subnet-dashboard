@@ -1,0 +1,15 @@
+{
+  "event": "CAMPAIGN_UNFREEZE_PUSH",
+  "unfrozen_at": "2026-09-20T08:59Z",
+  "by": "joshua-GO",
+  "scope": "verification artifacts only \u2014 Rule 8 zero remediation",
+  "pushed": [
+    "bundles/P-CENSUS-002c.tracer.1.json",
+    "results/P-CENSUS-002c.json",
+    "results/C-018.json",
+    "queue/done/P-CENSUS-002c.json",
+    "SPINE-COMPLETE.json",
+    "STATUS.md",
+    "FREEZE.md"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": "1",
+  "evidence_id": "E-PROD-VERSION-2026-09-20",
+  "evidence_class": "prod_observation",
+  "captured_at": "2026-09-20T00:44:36Z",
+  "captured_by": "mission-control",
+  "method": "GET",
+  "url": "https://subnet-dashboard.fly.dev/version",
+  "http_status": 200,
+  "response_json": {
+    "version": "c9449d6",
+    "sentry_release": "c9449d6490231373748f19f299ed19d423a1c971",
+    "python": "3.12.14"
+  },
+  "pin_match": {
+    "campaign_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "sentry_release": "c9449d6490231373748f19f299ed19d423a1c971",
+    "version_short": "c9449d6",
+    "match": true
+  },
+  "use": "prod-observation evidence that campaign pin equals live /version at capture time; does NOT disclose WORKER_HEAVY or other secrets"
+}

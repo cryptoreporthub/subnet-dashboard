@@ -1,0 +1,13 @@
+{
+  "id": "SPINE-TRACED",
+  "status": "code-level-spine-traced-code-only",
+  "supersedes": "SPINE-COMPLETE (wording held per Joshua 2026-09-20)",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "updated_at": "2026-09-20T12:16Z",
+  "claims_pending_joshua_confirm_for_complete_label": [
+    "P-CENSUS-002b",
+    "P-CENSUS-002c",
+    "C-018"
+  ],
+  "spot_check_log": "see STATUS.md provenance table"
+}

@@ -1,0 +1,120 @@
+{
+  "claim_id": "C-015",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "fetch_method": "raw",
+  "citations": [
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 24,
+      "bytes": "SCORE_SNAPSHOTS_PATH = os.environ.get("
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 25,
+      "bytes": "    \"SCORE_SNAPSHOTS_PATH\", os.path.join(\"data\", \"score_snapshots.json\")"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 110,
+      "bytes": "def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> None:"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 113,
+      "bytes": "    tmp = snap_path + \".tmp\""
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 115,
+      "bytes": "        json.dump(payload, handle, indent=2)"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 116,
+      "bytes": "    os.replace(tmp, snap_path)"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 291,
+      "bytes": "    def _build_and_save() -> Dict[str, Any]:"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 298,
+      "bytes": "        save_score_snapshot(payload)"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 333,
+      "bytes": "        The snapshot write is atomic and idempotent, so late completion is benign"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 383,
+      "bytes": "    except FuturesTimeoutError:"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 384,
+      "bytes": "        caller_abandoned.set()"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 92,
+      "bytes": "def snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 95,
+      "bytes": "        return max(0.0, datetime.now(timezone.utc).timestamp() - os.path.getmtime(snap_path))"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 143,
+      "bytes": "    age = snapshot_age_seconds(path)"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 145,
+      "bytes": "    if age is None or age > limit:"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "line": 146,
+      "bytes": "        return None"
+    }
+  ],
+  "findings": [
+    "Production writer of SCORE_SNAPSHOTS_PATH/data/score_snapshots.json at pin: save_score_snapshot (:110-116) only. Sole production call site: _build_and_save :298 inside write_full_universe_snapshot. revive_score_snapshot_scheduler does not write the file; it run_once \u2192 write path. Tests also call save_score_snapshot (out of product scope).",
+    "save_score_snapshot always writes tmp then os.replace(tmp, snap_path) (:113-116). Successful replace advances final-path mtime (new content just written to tmp).",
+    "Orphan late-complete: FuturesTimeoutError sets caller_abandoned and returns write_timeout (:383-390) while build continues; comment :333 late completion benign; on success _build_and_save still reaches save_score_snapshot (:298) \u2192 mtime refreshes.",
+    "Partial replace: no mid-build replace. save only after build_full_universe_snapshot returns into _build_and_save. Exception before :298 \u21d2 no replace/mtime change. Whether build_full_universe_snapshot can return a sparse-but-complete payload is a separate question; the write itself is always a full json.dump of the given payload.",
+    "snapshot_age_seconds (:92-95) = now - getmtime. rank_subnets_by_snapshot returns None when age is None or age>SCORE_SNAPSHOT_MAX_AGE_SECONDS (default 7200) (:143-146). Fresher mtime \u2192 smaller age \u2192 can flip stale(None) to fresh ranked list."
+  ],
+  "answer": {
+    "writers": [
+      {
+        "def": "save_score_snapshot",
+        "line": 110,
+        " mechan": "tmp+os.replace"
+      },
+      {
+        "caller": "_build_and_save",
+        "line": 298
+      }
+    ],
+    "mtime_advances_on_every_successful_save": "yes",
+    "orphan_late_complete_refreshes_mtime": "yes",
+    "partial_payload_replace_path": "none_found_in_save_path"
+  },
+  "bytes_read": {
+    "path_and_save": "24|SCORE_SNAPSHOTS_PATH = os.environ.get(\n25|    \"SCORE_SNAPSHOTS_PATH\", os.path.join(\"data\", \"score_snapshots.json\")\n26|)\n92|def snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:\n93|    snap_path = path or SCORE_SNAPSHOTS_PATH\n94|    try:\n95|        return max(0.0, datetime.now(timezone.utc).timestamp() - os.path.getmtime(snap_path))\n96|    except OSError:\n97|        return None\n98|\n99|\n100|def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:\n101|    snap_path = path or SCORE_SNAPSHOTS_PATH\n102|    try:\n103|        with open(snap_path, \"r\", encoding=\"utf-8\") as handle:\n104|            data = json.load(handle)\n105|        return data if isinstance(data, dict) else None\n106|    except Exception:\n107|        return None\n108|\n109|\n110|def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> None:\n111|    snap_path = path or SCORE_SNAPSHOTS_PATH\n112|    os.makedirs(os.path.dirname(snap_path) or \".\", exist_ok=True)\n113|    tmp = snap_path + \".tmp\"\n114|    with open(tmp, \"w\", encoding=\"utf-8\") as handle:\n115|        json.dump(payload, handle, indent=2)\n116|    os.replace(tmp, snap_path)",
+    "build_and_orphan": "291|    def _build_and_save() -> Dict[str, Any]:\n292|        payload = build_full_universe_snapshot(\n293|            subnets or [],\n294|            ctx,\n295|            progress_cb=progress_cb,\n296|        )\n297|        payload[\"source\"] = source\n298|        save_score_snapshot(payload)\n299|        return {\n300|            \"ok\": True,\n301|            \"count\": payload.get(\"count\"),\n302|            \"written_at\": payload.get(\"written_at\"),\n303|            \"path\": SCORE_SNAPSHOTS_PATH,\n304|        }\n330|        \"\"\"Log builds that outlive their caller-side timeout.\n331|\n332|        The caller may abandon the wait while the single-flight build continues.\n333|        The snapshot write is atomic and idempotent, so late completion is benign\n334|        with respect to corruption, but it can create staleness drift. The\n335|        duration and start timestamp make a slow crawl visible.\n380|    fut.add_done_callback(_log_build_completion)\n381|    try:\n382|        return fut.result(timeout=timeout)\n383|    except FuturesTimeoutError:\n384|        caller_abandoned.set()\n385|        logger.warning(\n386|            \"score snapshot build timed out after %ds \"\n387|            \"(build continues in background)\",\n388|            timeout,\n389|        )\n390|        return {\"ok\": False, \"error\": f\"write_timeout_{timeout}s\"}",
+    "age_rank": "141|) -> Optional[List[Dict[str, Any]]]:\n142|    \"\"\"Return subnets sorted by snapshot score, or None if snapshot missing/stale.\"\"\"\n143|    age = snapshot_age_seconds(path)\n144|    limit = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds\n145|    if age is None or age > limit:\n146|        return None"
+  },
+  "file_sha256": {
+    "score_snapshots.py": "ad0ad36f5448ab2758075fc22ac213fdb5003f73b8162ad180ab44e03c0163e3"
+  },
+  "falsifier": "Re-raw-fetch internal/council/score_snapshots.py at pin. Refute if another product writer of SCORE_SNAPSHOTS_PATH exists unread, if save omits os.replace, if timeout path cancels the future before save, if snapshot_age_seconds does not use getmtime, or if citation bytes differ from this turn raw tool output.",
+  "produced_by": "Tracer"
+}

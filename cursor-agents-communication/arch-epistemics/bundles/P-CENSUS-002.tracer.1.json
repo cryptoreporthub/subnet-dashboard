@@ -1,0 +1,325 @@
+{
+  "schema_version": "1",
+  "claim_id": "P-CENSUS-002",
+  "bundle_id": "P-CENSUS-002.tracer.1",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "confirmed",
+  "evidence_class": "repo_blob",
+  "fetch_method": "raw",
+  "scope_tag": "code-only",
+  "produced_by": "Tracer",
+  "prior_accepted_not_relitigated": [
+    "integrations/status.py:382 unbounded as_completed wait"
+  ],
+  "citations": [
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 381
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 810
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 817
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 945
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/bots/mission_control.py",
+      "line": 534
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/daily_pick.py",
+      "line": 221
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/pick_scheduler.py",
+      "line": 328
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/resolver_scheduler.py",
+      "line": 907
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/pump/desk_snapshot_scheduler.py",
+      "line": 135
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/subnets/feed.py",
+      "line": 169
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 784
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 804
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 939
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "message_intel/telegram_listener.py",
+      "line": 711
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/simivision/chat_service.py",
+      "line": 137
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 382
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/pick_scheduler.py",
+      "line": 321
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/resolver_scheduler.py",
+      "line": 861
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/pump/desk_snapshot_scheduler.py",
+      "line": 128
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/learning/dashboard_context.py",
+      "line": 122
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/subnets/feed.py",
+      "line": 159
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/worker_proxy.py",
+      "line": 753
+    }
+  ],
+  "sites": [
+    {
+      "kind": "shutdown_wait_false",
+      "path": "server.py",
+      "line": 381,
+      "thread_work": "Default asyncio executor aio_pool (AIO_WORKER_POOL_SIZE default 4) \u2014 any run_in_executor/to_thread still running at lifespan exit",
+      "internal_deadline": "none; cancel_futures=True cancels queued only, not running threads",
+      "held_state_leak_surface": "orphaned aio-web worker threads until process exit; no lock at site"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "server.py",
+      "line": 810,
+      "thread_work": "_build_index_context(request) from pool.submit at :802",
+      "internal_deadline": "caller already hit HOMEPAGE_BUILD_TIMEOUT (default 12) at :804; build has no cooperative cancel",
+      "held_state_leak_surface": "orphan homepage-build thread after degraded fallback return"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "server.py",
+      "line": 817,
+      "thread_work": "same _build_index_context on exception path",
+      "internal_deadline": "none beyond caller leaving; worker uncancellable",
+      "held_state_leak_surface": "same orphan build thread as :810"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "server.py",
+      "line": 945,
+      "thread_work": "build_brain_letter submitted :938",
+      "internal_deadline": "caller timeout_s default 1.5 at :939; builder has no cancel token here",
+      "held_state_leak_surface": "orphan letter-builder thread after stub return"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "internal/bots/mission_control.py",
+      "line": 534,
+      "thread_work": "_run_one specialist adapters via pool.submit :502",
+      "internal_deadline": "wait timeout SPECIALIST_TIMEOUT_SECONDS=8 at :505 bounds collection only; comment :532-533 notes no per-bot adapter timeout",
+      "held_state_leak_surface": "not_done specialist threads continue after return; no lock across wait"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "internal/council/daily_pick.py",
+      "line": 221,
+      "thread_work": "_score_one \u2192 score_subnet_for_day / cache via executor.map :218",
+      "internal_deadline": "none \u2014 map awaits all; shutdown only in finally after map completes/raises",
+      "held_state_leak_surface": "if map raised, remaining score threads may outlive finally; shared pick_score_cache session; no lock across map"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "internal/council/pick_scheduler.py",
+      "line": 328,
+      "thread_work": "_run_pick \u2192 get_or_create_today_pick(subnets,ctx,False)",
+      "internal_deadline": "paired fut.result timeout DAILY_PICK_TICK_TIMEOUT_SECONDS default 90 (:321/:304); worker uncancellable; generation bump on timeout :323-324",
+      "held_state_leak_surface": "_work_lock only around generation; orphaned pick may finish; stale generation discarded"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "internal/council/resolver_scheduler.py",
+      "line": 907,
+      "thread_work": "_run_cycle \u2192 _run_refresh_cycle under patchd/timing",
+      "internal_deadline": "paired result timeout RESOLVER_CYCLE_TIMEOUT_SECONDS default 120 or FIRST_TICK min(cycle,90); abandon on timeout :863",
+      "held_state_leak_surface": "_cycle_lock released in worker finally or abandon path; orphaned cycle may still run after error return"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "internal/pump/desk_snapshot_scheduler.py",
+      "line": 135,
+      "thread_work": "_run \u2192 run_snapshot(save=True); _cycle_lock.release in finally :122",
+      "internal_deadline": "SNAPSHOT_TIMEOUT_SECONDS default 120 at :128; run_snapshot not cancelled",
+      "held_state_leak_surface": "_cycle_lock held by worker until run_snapshot returns \u2014 timeout returns while lock held \u2192 later ticks skip cycle_in_flight"
+    },
+    {
+      "kind": "shutdown_wait_false",
+      "path": "internal/subnets/feed.py",
+      "line": 169,
+      "thread_work": "_load_subnets_inner live fetch",
+      "internal_deadline": "paired result timeout SUBNETS_LOAD_TIMEOUT_SECONDS default 25; inner load uncancellable",
+      "held_state_leak_surface": "orphan fetch thread after registry fallback; no lock"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "server.py",
+      "line": 784,
+      "thread_work": "_build \u2192 _minimal_index_context + template render",
+      "internal_deadline": "fut.result(timeout=8.0); _build has no internal deadline",
+      "held_state_leak_surface": "with ThreadPoolExecutor \u2014 on timeout __exit__ shutdown(wait=True) may block; writes _EMERGENCY_HOME_HTML"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "server.py",
+      "line": 804,
+      "thread_work": "_build_index_context(request)",
+      "internal_deadline": "HOMEPAGE_BUILD_TIMEOUT default 12; worker uncancellable",
+      "held_state_leak_surface": "pairs shutdown :810/:817 wait=False orphan"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "server.py",
+      "line": 939,
+      "thread_work": "build_brain_letter",
+      "internal_deadline": "timeout_s default 1.5; worker uncancellable",
+      "held_state_leak_surface": "pairs :945 wait=False"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "message_intel/telegram_listener.py",
+      "line": 711,
+      "thread_work": "run_coroutine_threadsafe(_do) \u2192 await _backfill_gap on listener loop",
+      "internal_deadline": "fut.result(timeout=180); coroutine not cancelled here on timeout",
+      "held_state_leak_surface": "backfill may continue on shared _loop after trigger returns False"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/simivision/chat_service.py",
+      "line": 137,
+      "thread_work": "build_investigation_context(message, netuid=, wallet=)",
+      "internal_deadline": "_INVESTIGATION_TIMEOUT_SEC default 8; builder uncancellable",
+      "held_state_leak_surface": "with pool \u2014 timeout may block on __exit__ wait=True"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/council/score_snapshots.py",
+      "line": 382,
+      "thread_work": "_build_and_save \u2192 build_full_universe_snapshot + save_score_snapshot on module executor",
+      "internal_deadline": "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS default 600; on timeout caller_abandoned set but build continues",
+      "held_state_leak_surface": "_write_future single-flight \u2014 orphaned build blocks new writes until done; _lock not held during wait"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/council/pick_scheduler.py",
+      "line": 321,
+      "thread_work": "_run_pick \u2192 get_or_create_today_pick",
+      "internal_deadline": "timeout max(5,min(DAILY_PICK_TICK_TIMEOUT_SECONDS,600)) default 90",
+      "held_state_leak_surface": "see :328 generation invalidation"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/council/resolver_scheduler.py",
+      "line": 861,
+      "thread_work": "_run_cycle \u2192 _run_refresh_cycle",
+      "internal_deadline": "cycle default 120 or first-tick min(120,90)=90",
+      "held_state_leak_surface": "see :907; abandon increments _abandoned_live"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/pump/desk_snapshot_scheduler.py",
+      "line": 128,
+      "thread_work": "run_snapshot(save=True)",
+      "internal_deadline": "SNAPSHOT_TIMEOUT_SECONDS default 120",
+      "held_state_leak_surface": "_cycle_lock held by worker across orphan window (see :135)"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/learning/dashboard_context.py",
+      "line": 122,
+      "thread_work": "_load_learning_metrics (engine/resolver/trust_banner)",
+      "internal_deadline": "fut.result(timeout=2.0); loader uncancellable",
+      "held_state_leak_surface": "with pool \u2014 timeout blocks on context __exit__ wait=True"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/subnets/feed.py",
+      "line": 159,
+      "thread_work": "_load_subnets_inner",
+      "internal_deadline": "limit default SUBNETS_LOAD_TIMEOUT_SECONDS=25",
+      "held_state_leak_surface": "pairs :169 wait=False orphan fetch"
+    },
+    {
+      "kind": "result_timeout",
+      "path": "internal/worker_proxy.py",
+      "line": 753,
+      "thread_work": "asyncio.run(coro) on helper thread (fetch_worker_json_sync._load / _fetch_worker_http)",
+      "internal_deadline": "CALL-SITE .result() has NO timeout arg (unbounded if coro hangs). Effective bound only via coro httpx: peer default WORKER_PEER_TIMEOUT_SECONDS=4 with \u22641 timeout failover \u2192 ~2\u00d7(connect\u22643+read4) wall; _proxy_timeout default read=8 if that object used. PRIOR ~11s is estimate not a code literal \u2014 refine: no hard 11s constant",
+      "held_state_leak_surface": "with ThreadPoolExecutor \u2014 hung coro without httpx deadline blocks __exit__; may mutate _LAST_GOOD_BASE / probe error globals"
+    }
+  ],
+  "bytes_read": "=== server.py:364-381 ===\n364|    pool_cap = int(os.environ.get(\"AIO_WORKER_POOL_SIZE\", \"4\"))\n365|    aio_pool = concurrent.futures.ThreadPoolExecutor(\n366|        max_workers=pool_cap, thread_name_prefix=\"aio-web\"\n367|    )\n368|    asyncio.get_running_loop().set_default_executor(aio_pool)\n369|\n370|    yield\n371|    if background_on_web() and background_boot_allowed():\n372|        from internal.background_boot import stop_background_workers\n373|\n374|        stop_background_workers()\n375|    try:\n376|        from internal.http_client import close_async_client\n377|\n378|        await close_async_client()\n379|    except Exception:\n380|        pass\n381|    aio_pool.shutdown(wait=False, cancel_futures=True)\n\n=== server.py:624-628 ===\n624|\n625|\n626|HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get(\"HOMEPAGE_BUILD_TIMEOUT\", \"12\"))\n627|HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get(\"HOMEPAGE_SHELL_CACHE_SECONDS\", \"45\"))\n628|TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))\n\n=== server.py:778-784 ===\n778|        def _build() -> str:\n779|            ctx = _minimal_index_context(_HomepageStubRequest())\n780|            return templates.get_template(\"index.html\").render(ctx)\n781|\n782|        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:\n783|            fut = pool.submit(_build)\n784|            _EMERGENCY_HOME_HTML = fut.result(timeout=8.0)\n\n=== server.py:801-817 ===\n801|    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)\n802|    fut = pool.submit(_build_index_context, request)\n803|    try:\n804|        ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)\n805|    except concurrent.futures.TimeoutError:\n806|        logger.warning(\n807|            \"homepage context: full build timed out after %ss \u2014 degraded fallback\",\n808|            HOMEPAGE_BUILD_TIMEOUT,\n809|        )\n810|        pool.shutdown(wait=False, cancel_futures=True)\n811|        return _degraded_index_context(request)\n812|    except Exception as exc:\n813|        logger.warning(\n814|            \"homepage context: full build failed (%s) \u2014 degraded fallback\",\n815|            exc,\n816|        )\n817|        pool.shutdown(wait=False, cancel_futures=True)\n\n=== server.py:930-945 ===\n930|def _safe_brain_letter_context(*, timeout_s: float = 1.5) -> Dict[str, Any]:\n931|    \"\"\"Timeboxed letter SSR \u2014 never block GET / past timeout_s.\"\"\"\n932|    import concurrent.futures\n933|\n934|    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)\n935|    try:\n936|        from internal.letter.brain_letter import build_brain_letter\n937|\n938|        fut = pool.submit(build_brain_letter)\n939|        return {\"brain_letter\": fut.result(timeout=timeout_s)}\n940|    except Exception as exc:\n941|        logger.warning(\"brain letter context skipped: %s\", exc)\n942|        return _quiet_brain_letter_stub()\n943|    finally:\n944|        # wait=False: timed-out builder must not hold the request open\n945|        pool.shutdown(wait=False, cancel_futures=True)\n\n=== internal/bots/mission_control.py:37-40 ===\n37|INTENTS = (\"monitor\", \"analyze\", \"explain\", \"recommend\")\n38|RISK_LEVELS = (\"low\", \"medium\", \"high\", \"critical\")\n39|SPECIALIST_TIMEOUT_SECONDS = 8\n40|# Overlay on FRESHNESS_THRESHOLDS: any insight older than 4h is suspect.\n\n=== internal/bots/mission_control.py:499-534 ===\n499|    ordered: Dict[str, Dict[str, Any]] = {}\n500|    pool = ThreadPoolExecutor(max_workers=max(1, len(names)))\n501|    futures = {\n502|        pool.submit(_run_one, name, query, context, runners): name for name in names\n503|    }\n504|    try:\n505|        done, not_done = wait(list(futures), timeout=SPECIALIST_TIMEOUT_SECONDS)\n506|        for future in done:\n507|            name = futures[future]\n508|            try:\n509|                ordered[name] = future.result()\n510|            except Exception as exc:\n511|                ordered[name] = _normalize_specialist_freshness(\n512|                    specialist_result(\n513|                        name,\n514|                        summary=f\"{name} failed: {exc}\",\n515|                        status=\"degraded\",\n516|                        unknowns=[str(exc)],\n517|                        sources=[classify_freshness(\"learning_health\", degraded=True)],\n518|                    )\n519|                )\n520|        for future in not_done:\n521|            name = futures[future]\n522|            ordered[name] = _normalize_specialist_freshness(\n523|                specialist_result(\n524|                    name,\n525|                    summary=f\"{name} timed out after {SPECIALIST_TIMEOUT_SECONDS}s\",\n526|                    status=\"degraded\",\n527|                    unknowns=[\"timeout\"],\n528|                    sources=[classify_freshness(\"learning_health\", degraded=True)],\n529|                )\n530|            )\n531|    finally:\n532|        # ponytail: in-flight specialists keep running; we do not block /health\n533|        # on them. Upgrade path: per-bot timeouts inside the adapters.\n534|        pool.shutdown(wait=False, cancel_futures=True)\n\n=== internal/council/daily_pick.py:214-221 ===\n214|    workers = min(DPICK_MAX_WORKERS, len(subnets))\n215|    score_wall_t0 = time.perf_counter()\n216|    executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix=\"dpick-score\")\n217|    try:\n218|        results = list(executor.map(_score_one, subnets))\n219|    finally:\n220|        # ponytail: wait=False \u2014 scorer failure must not block on peer I/O (scheduler timeout).\n221|        executor.shutdown(wait=False, cancel_futures=True)\n\n=== internal/council/pick_scheduler.py:33-36 ===\n33|# ponytail: one failed cold-start/slot tick must not wait until tomorrow 00:15.\n34|DAILY_PICK_RETRY_MINUTES = int(os.environ.get(\"DAILY_PICK_RETRY_MINUTES\", \"15\"))\n35|DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get(\"DAILY_PICK_TICK_TIMEOUT_SECONDS\", \"90\"))\n36|PICK_SCHEDULER_STATE_PATH = os.environ.get(\n\n=== internal/council/pick_scheduler.py:302-328 ===\n302|            subnets = _load_capped_subnets()\n303|            ctx = _market_context(subnets)\n304|            timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))\n305|            payload = None\n306|            with self._work_lock:\n307|                self._work_generation += 1\n308|                tick_generation = self._work_generation\n309|\n310|            pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=\"daily-pick-work\")\n311|\n312|            def _run_pick() -> Optional[Dict[str, Any]]:\n313|                out = get_or_create_today_pick(subnets, ctx, False)\n314|                with self._work_lock:\n315|                    if tick_generation != self._work_generation:\n316|                        return None\n317|                return out\n318|\n319|            try:\n320|                fut = pool.submit(_run_pick)\n321|                payload = fut.result(timeout=timeout)\n322|            except FuturesTimeoutError:\n323|                with self._work_lock:\n324|                    self._work_generation += 1\n325|                result[\"error\"] = f\"daily pick tick timed out after {timeout}s\"\n326|                logger.warning(\"%s (worker abandoned)\", result[\"error\"])\n327|            finally:\n328|                pool.shutdown(wait=False, cancel_futures=True)\n\n=== internal/council/resolver_scheduler.py:99-110 ===\n99|RESOLVER_CYCLE_TIMEOUT_SECONDS = int(os.environ.get(\"RESOLVER_CYCLE_TIMEOUT_SECONDS\", \"120\"))\n100|RESOLVER_FIRST_TICK_DELAY_SECONDS = max(\n101|    0, int(os.environ.get(\"RESOLVER_FIRST_TICK_DELAY_SECONDS\", \"60\"))\n102|)\n103|RESOLVER_FIRST_TICK_TIMEOUT_SECONDS = max(\n104|    1,\n105|    int(\n106|        os.environ.get(\n107|            \"RESOLVER_FIRST_TICK_TIMEOUT_SECONDS\",\n108|            str(min(RESOLVER_CYCLE_TIMEOUT_SECONDS, 90)),\n109|        )\n110|    ),\n\n=== internal/council/resolver_scheduler.py:856-907 ===\n856|        submitted = False\n857|        try:\n858|            fut = pool.submit(_run_cycle)\n859|            submitted = True\n860|            try:\n861|                return fut.result(timeout=timeout)\n862|            except FuturesTimeoutError:\n863|                self._abandon_inflight_cycle(\n864|                    submitted_gen=gen, resolver_cycle_id=cycle_id\n865|                )\n866|                with self._lock:\n867|                    self._abandoned_live += 1\n868|                    abandoned_live = self._abandoned_live\n869|                timing.set_abandoned_live(abandoned_live)\n870|                timing.mark_abandoned()\n871|                result = {\n872|                    \"ok\": False,\n873|                    \"run_at\": _now_iso(),\n874|                    \"resolved_now\": 0,\n875|                    \"expired_now\": 0,\n876|                    \"pending\": 0,\n877|                    # Label reports the ENFORCED budget (local timeout), not a\n878|                    # stale module constant.\n879|                    \"error\": f\"cycle_timeout_{timeout}s\",\n880|                    \"enforced_budget_s\": timeout,\n881|                    \"abandoned_live\": abandoned_live,\n882|                    \"cycle_generation\": gen,\n883|                    \"resolver_cycle_id\": cycle_id,\n884|                }\n885|                self._apply_cycle_timing(result, timing)\n886|                # force=True: timeout path owns the summary write after orphan\n887|                # ownership was revoked in _abandon_inflight_cycle.\n888|                self._persist_cycle_summary(result, force=True)\n889|                return result\n890|        except BaseException:\n891|            if not submitted:\n892|                self._cycle_lock.release()\n893|            raise\n894|        finally:\n895|            log_lifecycle(\n896|                \"shutdown\",\n897|                trigger=\"resolver_cycle\",\n898|                cycle_generation=gen,\n899|                resolver_cycle_id=cycle_id,\n900|                extra={\n901|                    \"event\": \"shutdown\",\n902|                    \"wait\": False,\n903|                    \"cancel_futures\": True,\n904|                    \"cancel_futures_requested\": True,\n905|                },\n906|            )\n907|            pool.shutdown(wait=False, cancel_futures=True)\n\n=== internal/pump/desk_snapshot_scheduler.py:16-24 ===\n16|JOB_ID = \"pump-desk-snapshot\"\n17|INTERVAL_MINUTES = int(os.environ.get(\"PUMP_DESK_SNAPSHOT_MINUTES\", \"15\"))\n18|SNAPSHOT_TIMEOUT_SECONDS = max(\n19|    1, int(os.environ.get(\"PUMP_DESK_SNAPSHOT_TIMEOUT_SECONDS\", \"120\"))\n20|)\n21|\n22|_lock = threading.Lock()\n23|_cycle_lock = threading.Lock()\n24|_scheduler: Optional[\"PumpDeskSnapshotScheduler\"] = None\n\n=== internal/pump/desk_snapshot_scheduler.py:109-137 ===\n109|    def _run_snapshot_with_timeout(self) -> Dict[str, Any]:\n110|        if not _cycle_lock.acquire(blocking=False):\n111|            return {\"ok\": False, \"skipped\": \"cycle_in_flight\"}\n112|\n113|        pool = ThreadPoolExecutor(max_workers=1)\n114|        submitted = False\n115|\n116|        def _run() -> Dict[str, Any]:\n117|            try:\n118|                from internal.pump.desk_snapshot import run_snapshot\n119|\n120|                return run_snapshot(save=True)\n121|            finally:\n122|                _cycle_lock.release()\n123|\n124|        try:\n125|            future = pool.submit(_run)\n126|            submitted = True\n127|            try:\n128|                return future.result(timeout=SNAPSHOT_TIMEOUT_SECONDS)\n129|            except FuturesTimeoutError:\n130|                return {\n131|                    \"ok\": False,\n132|                    \"error\": f\"cycle_timeout_{SNAPSHOT_TIMEOUT_SECONDS}s\",\n133|                }\n134|        finally:\n135|            pool.shutdown(wait=False, cancel_futures=True)\n136|            if not submitted:\n137|                _cycle_lock.release()\n\n=== internal/subnets/feed.py:12-16 ===\n12|logger = logging.getLogger(__name__)\n13|\n14|SUBNETS_LOAD_TIMEOUT = float(os.environ.get(\"SUBNETS_LOAD_TIMEOUT_SECONDS\", \"25\"))\n15|\n16|\n\n=== internal/subnets/feed.py:155-169 ===\n155|    pool = ThreadPoolExecutor(max_workers=1)\n156|    try:\n157|        fut = pool.submit(_load_subnets_inner)\n158|        try:\n159|            return fut.result(timeout=limit)\n160|        except FuturesTimeoutError:\n161|            logger.warning(\n162|                \"subnet feed load timed out after %.0fs; using registry fallback\",\n163|                limit,\n164|            )\n165|        except Exception as exc:\n166|            logger.warning(\"subnet feed load failed: %s; using registry fallback\", exc)\n167|    finally:\n168|        # wait=False: timed-out live fetch must not wedge hydrate APIs (Fly 1-worker).\n169|        pool.shutdown(wait=False, cancel_futures=True)\n\n=== message_intel/telegram_listener.py:704-711 ===\n704|            return False\n705|\n706|        async def _do() -> None:\n707|            await self._backfill_gap(self._monitor_entity, lim, last_ext)\n708|\n709|        try:\n710|            fut = asyncio.run_coroutine_threadsafe(_do(), self._loop)\n711|            fut.result(timeout=180)\n\n=== internal/simivision/chat_service.py:33-36 ===\n33|_CHUNK_SIZE = 48\n34|_CHAT_TIMEOUT_SEC = float(os.environ.get(\"SIMIVISION_CHAT_TIMEOUT_SECONDS\", \"35\"))\n35|_INVESTIGATION_TIMEOUT_SEC = float(os.environ.get(\"SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS\", \"8\"))\n36|_CHAT_CONTEXT_TTL = float(os.environ.get(\"SIMIVISION_CHAT_CONTEXT_SECONDS\", \"30\"))\n\n=== internal/simivision/chat_service.py:134-137 ===\n134|    try:\n135|        with ThreadPoolExecutor(max_workers=1) as pool:\n136|            fut = pool.submit(build_investigation_context, message, netuid=netuid, wallet=wallet)\n137|            return fut.result(timeout=_INVESTIGATION_TIMEOUT_SEC)\n\n=== internal/council/score_snapshots.py:29-34 ===\n29|SCORE_SNAPSHOT_FIRST_DELAY_SECONDS = int(os.environ.get(\"SCORE_SNAPSHOT_FIRST_DELAY_SECONDS\", \"90\"))\n30|SCORE_SNAPSHOT_STUCK_SECONDS = int(os.environ.get(\"SCORE_SNAPSHOT_STUCK_SECONDS\", \"900\"))\n31|SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(\n32|    os.environ.get(\"SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS\", \"600\")\n33|)\n34|SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\", \"0\"))\n\n=== internal/council/score_snapshots.py:318-382 ===\n318|    with _lock:\n319|        if _write_future is not None and not _write_future.done():\n320|            return {\"ok\": False, \"error\": \"scoring_in_progress\"}\n321|        if _write_executor is None:\n322|            _write_executor = ThreadPoolExecutor(\n323|                max_workers=1, thread_name_prefix=\"score-snap-write\"\n324|            )\n325|        fut = _write_executor.submit(_build_and_save)\n326|        _write_future = fut\n327|    fut.add_done_callback(_release_write_future)\n328|\n329|    def _log_build_completion(done_fut: Any) -> None:\n330|        \"\"\"Log builds that outlive their caller-side timeout.\n331|\n332|        The caller may abandon the wait while the single-flight build continues.\n333|        The snapshot write is atomic and idempotent, so late completion is benign\n334|        with respect to corruption, but it can create staleness drift. The\n335|        duration and start timestamp make a slow crawl visible.\n336|        \"\"\"\n337|        duration_s = time.monotonic() - build_started_mono\n338|\n339|        if done_fut.cancelled():\n340|            logger.warning(\n341|                \"score snapshot build failed: state=cancelled duration=%.1fs started_at=%s\",\n342|                duration_s,\n343|                build_started_wall,\n344|            )\n345|            return\n346|\n347|        try:\n348|            err = done_fut.exception(timeout=0)\n349|        except Exception as exc:\n350|            logger.warning(\n351|                \"score snapshot build failed: state=callback-error duration=%.1fs \"\n352|                \"started_at=%s error=%s\",\n353|                duration_s,\n354|                build_started_wall,\n355|                exc,\n356|            )\n357|            return\n358|\n359|        if err is not None:\n360|            logger.warning(\n361|                \"score snapshot build failed: duration=%.1fs started_at=%s error=%s\",\n362|                duration_s,\n363|                build_started_wall,\n364|                err,\n365|            )\n366|            return\n367|\n368|        state = (\n369|            \"completed-after-abandon\"\n370|            if caller_abandoned.is_set()\n371|            else \"completed\"\n372|        )\n373|        logger.info(\n374|            \"score snapshot build %s: duration=%.1fs started_at=%s\",\n375|            state,\n376|            duration_s,\n377|            build_started_wall,\n378|        )\n379|\n380|    fut.add_done_callback(_log_build_completion)\n381|    try:\n382|        return fut.result(timeout=timeout)\n\n=== internal/learning/dashboard_context.py:118-122 ===\n118|            }\n119|\n120|        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:\n121|            fut = pool.submit(_load_learning_metrics)\n122|            ctx[\"learning_metrics\"] = fut.result(timeout=2.0)\n\n=== internal/worker_proxy.py:58-67 ===\n58|def _proxy_timeout() -> httpx.Timeout:\n59|    try:\n60|        read = float(os.environ.get(\"WORKER_PROXY_TIMEOUT_SECONDS\", \"8\"))\n61|    except ValueError:\n62|        read = 8.0\n63|    try:\n64|        connect = float(os.environ.get(\"WORKER_PROXY_CONNECT_SECONDS\", \"3\"))\n65|    except ValueError:\n66|        connect = 3.0\n67|    return httpx.Timeout(connect=connect, read=read, write=read, pool=connect)\n\n=== internal/worker_proxy.py:745-779 ===\n745|def _run_coro_sync(coro) -> Any:\n746|    \"\"\"Run async fetch from sync or FastAPI async handlers (no nested asyncio.run).\"\"\"\n747|    try:\n748|        asyncio.get_running_loop()\n749|    except RuntimeError:\n750|        return asyncio.run(coro)\n751|    # ponytail: ops/live is async \u2014 asyncio.run there raises; thread pool is the smallest fix.\n752|    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:\n753|        return pool.submit(asyncio.run, coro).result()\n754|\n755|\n756|def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:\n757|    \"\"\"Sync GET for listener_status and worker peer probes (retries alternate bases).\"\"\"\n758|    if timeout is None:\n759|        try:\n760|            timeout = float(os.environ.get(\"WORKER_PEER_TIMEOUT_SECONDS\", \"4\"))\n761|        except ValueError:\n762|            timeout = 4.0\n763|\n764|    async def _load() -> Dict[str, Any]:\n765|        peer_timeout = httpx.Timeout(\n766|            connect=min(3.0, timeout),\n767|            read=timeout,\n768|            write=timeout,\n769|            pool=min(3.0, timeout),\n770|        )\n771|        resp = await _fetch_worker_http(\n772|            path,\n773|            timeout=peer_timeout,\n774|            fast_path=True,\n775|        )\n776|        data = resp.json()\n777|        return data if isinstance(data, dict) else {}\n778|\n779|    return _run_coro_sync(_load())",
+  "falsifier": {
+    "probe": "raw-fetch each mandated path at pin; for every site fill thread_work, internal_deadline, held_state_leak_surface from surrounding bytes; analyze worker_proxy:753 last",
+    "expected": "10 shutdown + 11 result + worker_proxy:753 with path-specific fields; desk notes _cycle_lock orphan; worker_proxy call-site .result() has no timeout",
+    "refutes_if": "Omits any mandated site (R19) OR asserts worker_proxy:753 .result() has a timeout= arg OR uses fly/secrets as code default (R25/R26) OR claims pin/version without HTTP body (R27) OR uncited narrative (R28) OR re-litigates integrations/status.py:382 OR side-ticket derail (R29)"
+  },
+  "notes": "COMPLETE re-emit after chat truncation. 22 sites. Full object also at /tmp/P-CENSUS-002.tracer.1.json on shared box. worker_proxy last. No fly secrets.",
+  "mc_validation": {
+    "validated_at": "2026-09-20T02:09Z",
+    "validated_by": "mission-control",
+    "sha256": "74b97332d93f71c9c36fae63bf4f68f50a4873c13ce4cade12adf3d7de175cdc",
+    "pin_spotcheck": "PASS",
+    "sites": 22,
+    "last_site": "internal/worker_proxy.py:753",
+    "status": "accepted_pending_joshua_spotcheck",
+    "source_path": "/tmp/P-CENSUS-002.tracer.1.json"
+  }
+}

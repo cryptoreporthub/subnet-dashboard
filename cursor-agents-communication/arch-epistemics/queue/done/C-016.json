@@ -1,0 +1,10 @@
+{
+  "claim_id": "C-016",
+  "status": "VERIFIED",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971"
+  },
+  "verified_at": "2026-09-20T01:06Z",
+  "verified_by": "Joshua",
+  "result": "results/C-016.json"
+}

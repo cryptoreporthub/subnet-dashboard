@@ -1,0 +1,22 @@
+{
+  "tip": "d1e43a1bb9433cd08352f513e0d0d4024c873877",
+  "branch": "docs/arch-epistemics-pass0-skeleton",
+  "pr": 1294,
+  "tip_commit_message": "arch-epistemics: remove open P-CENSUS-002c after DONE push",
+  "tip_files_only": [
+    "cursor-agents-communication/arch-epistemics/queue/open/P-CENSUS-002c.json"
+  ],
+  "go_push_series_messages": [
+    "push P-CENSUS-002c Tracer bundle",
+    "push P-CENSUS-002c VERIFIED result",
+    "close P-CENSUS-002c DONE",
+    "push C-018 STAMPED",
+    "timeout spine COMPLETE receipt",
+    "UNFREEZE + STATUS",
+    "FREEZE.md UNFROZEN",
+    "UNFREEZE receipt",
+    "remove open P-CENSUS-002c"
+  ],
+  "compare_main_dotdotdot_branch_files_prefix": "ALL under cursor-agents-communication/arch-epistemics/ \u2014 campaign-only (no product code paths in compare file list)",
+  "checked_at": "2026-09-20T12:16Z"
+}

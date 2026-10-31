@@ -1,0 +1,86 @@
+{
+  "claim_id": "C-021",
+  "status": "VERIFIED",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "accepted_at": "2026-09-20T12:22Z",
+  "accepted_by": "mission-control",
+  "method": "MC spot-checked Tracer raw cites against pin blobs",
+  "tracer_bundle": "bundles/C-021.tracer.1.json",
+  "mc_spot_check": "PASS",
+  "rule_8": "verification only \u2014 no remediation",
+  "summary": "duplicate williams_r: later float wins (degraded :544\u2192:557; non-degraded :598\u2192:611); score expects float; impact expects dict \u2192 unavailable",
+  "tracer": {
+    "claim_id": "C-021",
+    "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "fetch_method": "raw",
+    "citations": [
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 544,
+        "bytes": "        \"williams_r\": {\"value\": -50.0, \"signal\": \"neutral\"},"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 557,
+        "bytes": "        \"williams_r\": neutral,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 598,
+        "bytes": "        \"williams_r\": williams_raw,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 611,
+        "bytes": "        \"williams_r\": _score_williams(williams_raw),"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 651,
+        "bytes": "        \"williams_r\", \"keltner_channel\","
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 659,
+        "bytes": "        score = float(indicators.get(signal_name, 0.5))"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 904,
+        "bytes": "    wr = indicators.get(\"williams_r\", {})"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 905,
+        "bytes": "    if isinstance(wr, dict):"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 914,
+        "bytes": "        _add(\"williams_r_reversal\", \"neutral\", 0.5, 10, 50, \"Williams %R unavailable\")"
+      }
+    ],
+    "findings": [
+      "Degraded literal: williams_r first bound to dict {value:-50.0, signal:neutral} (:544), then rebound to neutral float 0.5 (:557). Python dict literal later-key-wins \u2192 indicators['williams_r'] is float 0.5.",
+      "Non-degraded return also double-binds: williams_r=williams_raw (dict) (:598) then williams_r=_score_williams(williams_raw) (float) (:611). Later key wins \u2192 float.",
+      "Downstream shapes: _compute_technical_score includes 'williams_r' in signal_names (:651) and float(indicators.get(signal_name, 0.5)) (:659) \u2014 expects numeric. Impact builder: wr=indicators.get('williams_r', {}) then isinstance(wr, dict) (:904-905); else marks Williams %R unavailable (:914). After overwrite, impact path takes the else branch. No fix."
+    ],
+    "bytes_read": {
+      "degraded_dup": "535|def _degraded_technical_indicators(hist: Dict[str, Any]) -> Dict[str, Any]:\n536|    \"\"\"Honest-empty technical payload when history is unavailable (SciWeave Q6).\"\"\"\n537|    neutral = 0.5\n538|    return {\n539|        \"rsi\": {\"value\": 50.0, \"signal\": \"neutral\"},\n540|        \"stochastic\": {\"k\": 50.0, \"d\": 50.0, \"signal\": \"neutral\"},\n541|        \"bollinger\": {\"upper\": 0.0, \"middle\": 0.0, \"lower\": 0.0, \"signal\": \"neutral\"},\n542|        \"mfi\": {\"value\": 50.0, \"signal\": \"neutral\"},\n543|        \"cci\": {\"value\": 0.0, \"signal\": \"neutral\"},\n544|        \"williams_r\": {\"value\": -50.0, \"signal\": \"neutral\"},\n545|        \"keltner\": {\"upper\": 0.0, \"middle\": 0.0, \"lower\": 0.0, \"signal\": \"neutral\"},\n546|        \"macd\": {\"macd\": 0.0, \"signal\": 0.0, \"histogram\": 0.0},\n547|        \"ma_cross\": {\"signal\": \"neutral\"},\n548|        \"history_source\": hist.get(\"source\", \"unavailable\"),\n549|        \"history_length\": len(hist.get(\"closes\") or []),\n550|        \"degraded\": True,\n551|        \"rsi_crossover\": neutral,\n552|        \"macd_cross\": neutral,\n553|        \"stochastic_reversal\": neutral,\n554|        \"bollinger_squeeze\": neutral,\n555|        \"mfi_flow\": neutral,\n556|        \"cci_divergence\": neutral,\n557|        \"williams_r\": neutral,\n558|        \"keltner_channel\": neutral,\n559|    }",
+      "fresh_dup": "592|    return {\n593|        \"rsi\": {\"value\": rsi_raw, \"signal\": \"overbought\" if rsi_raw > 70 else \"oversold\" if rsi_raw < 30 else \"neutral\"},\n594|        \"stochastic\": stoch_raw,\n595|        \"bollinger\": boll_raw,\n596|        \"mfi\": mfi_raw,\n597|        \"cci\": cci_raw,\n598|        \"williams_r\": williams_raw,\n599|        \"keltner\": keltner_raw,\n600|        \"macd\": macd_raw,\n601|        \"ma_cross\": _compute_ma_cross(closes),\n602|        \"history_source\": hist.get(\"source\"),\n603|        \"history_length\": len(closes),\n604|        # Per-signal scores for weighted scoring\n605|        \"rsi_crossover\": _score_rsi(rsi_raw),\n606|        \"macd_cross\": _score_macd(macd_raw),\n607|        \"stochastic_reversal\": _score_stochastic(stoch_raw),\n608|        \"bollinger_squeeze\": _score_bollinger(boll_raw),\n609|        \"mfi_flow\": _score_mfi(mfi_raw),\n610|        \"cci_divergence\": _score_cci(cci_raw),\n611|        \"williams_r\": _score_williams(williams_raw),\n612|        \"keltner_channel\": _score_keltner(keltner_raw),\n613|    }",
+      "readers": "648|    signal_names = [\n649|        \"rsi_crossover\", \"macd_cross\", \"stochastic_reversal\",\n650|        \"bollinger_squeeze\", \"mfi_flow\", \"cci_divergence\",\n651|        \"williams_r\", \"keltner_channel\",\n652|    ]\n653|\n654|    weighted_sum = 0.0\n655|    total_weight = 0.0\n656|    contributions: Dict[str, Any] = {}\n657|\n658|    for signal_name in signal_names:\n659|        score = float(indicators.get(signal_name, 0.5))\n660|        weight = float(horizon_weights.get(signal_name, 1.0))\n904|    wr = indicators.get(\"williams_r\", {})\n905|    if isinstance(wr, dict):\n906|        wr_val = float(wr.get(\"value\", -50))\n907|        if wr_val < -80:\n908|            _add(\"williams_r_reversal\", \"bullish\", abs(wr_val + 80) * 0.06, 10, 63, f\"Williams %R {wr_val:.1f} oversold\")\n909|        elif wr_val > -20:\n910|            _add(\"williams_r_reversal\", \"bearish\", (wr_val + 20) * 0.06, 10, 63, f\"Williams %R {wr_val:.1f} overbought\")\n911|        else:\n912|            _add(\"williams_r_reversal\", \"neutral\", 0.5, 10, 50, f\"Williams %R {wr_val:.1f} neutral\")\n913|    else:\n914|        _add(\"williams_r_reversal\", \"neutral\", 0.5, 10, 50, \"Williams %R unavailable\")"
+    },
+    "file_sha256": {
+      "state_vector.py": "7b4e011c1f310672ac2ca3156f92964df795564cba4d000eec25c10e51b8e1cc"
+    },
+    "falsifier": "Re-raw-fetch internal/council/state_vector.py at pin. Refute if either return has only one williams_r key, if later-key-wins does not leave a float, if score path does not float()-read williams_r, if impact path does not isinstance(dict)-gate, or if citation bytes differ from this turn raw tool output.",
+    "produced_by": "Tracer"
+  },
+  "joshua_accepted": true,
+  "joshua_accepted_at": "2026-09-20T13:17Z",
+  "scope_notes": [
+    "UI consumer NOT_OBSERVABLE",
+    "live env NOT_OBSERVABLE"
+  ],
+  "evidence_class": "code-only"
+}

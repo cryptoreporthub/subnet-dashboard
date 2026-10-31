@@ -1,0 +1,9 @@
+{
+  "claim_id": "P-CENSUS-002",
+  "status": "HOLD",
+  "inventory_bundle": "bundles/P-CENSUS-002.tracer.1.json",
+  "category_ab_table": "results/P-CENSUS-002.category_AB.json",
+  "note": "Joshua HOLD: inventory ok; classify A vs B with pin cites before any causal VERIFIED. No fixes.",
+  "updated_at": "2026-09-20T03:07Z",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971"
+}
