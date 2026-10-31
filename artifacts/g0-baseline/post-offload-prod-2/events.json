@@ -1,0 +1,16 @@
+[
+  {
+    "t_s": 0.34,
+    "kind": "request",
+    "id": 1,
+    "path": "/"
+  },
+  {
+    "t_s": 36.573,
+    "kind": "finish",
+    "id": 1,
+    "path": "/",
+    "status": 503,
+    "failure": null
+  }
+]

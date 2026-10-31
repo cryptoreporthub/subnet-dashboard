@@ -1,0 +1,71 @@
+{
+  "run_id": "post-offload-prod-2",
+  "base_url": "https://subnet-dashboard.fly.dev",
+  "captured_at": "2026-08-26T21:56:52.052995Z",
+  "wait_s": 50.0,
+  "hero_budget_s": 10.0,
+  "hero_complete_at_s": null,
+  "stats_parsed_at_s": null,
+  "hero_dom_ready_at_s": null,
+  "hydrates_in_budget": false,
+  "starvation_shape": false,
+  "nav_domcontentloaded_s": 36.239,
+  "navigation_timing": {
+    "type": "navigate",
+    "startTime": 0,
+    "unloadEventEnd": 0,
+    "domInteractive": 36235.79999999888,
+    "domContentLoadedEventEnd": 36235.79999999888,
+    "loadEventEnd": 36236,
+    "responseStart": 36228.699999999255,
+    "responseEnd": 36229.5,
+    "duration": 36236,
+    "transferSize": 300,
+    "encodedBodySize": 0
+  },
+  "final_hero": {
+    "title": null,
+    "verdict": null,
+    "warming": false,
+    "hydrate": null,
+    "graded": null,
+    "accSub": null,
+    "badgeText": null,
+    "placeholderTitle": false,
+    "cold": false,
+    "statsParsed": false,
+    "statsGraded": null,
+    "needsHydrate": false,
+    "heroPresent": false,
+    "t_s": 50.05
+  },
+  "aborted_endpoints": [],
+  "aborted_hero_critical": [],
+  "health": {
+    "n": 6,
+    "ok": 0,
+    "errors": 6,
+    "p50_ms": 8035.98,
+    "p95_ms": 8050.64,
+    "p100_ms": 8054.55,
+    "min_ms": 8031.94,
+    "mean_ms": 8038.22
+  },
+  "health_p95_over_budget": true,
+  "max_concurrent_inflight": 1,
+  "max_concurrent_inflight_api": 0,
+  "pending_api_at_45s": [],
+  "still_open_at_close": [],
+  "api_request_count": 0,
+  "homepage_curl_sanity": {
+    "status": null,
+    "ttfb_ms": 20046.5,
+    "error": "TimeoutError: The read operation timed out",
+    "note": "sanity-only, not a G0 pass/fail gate"
+  },
+  "artifacts": {
+    "har": "artifacts/g0-baseline/post-offload-prod-2/session.har",
+    "screenshot_t10s": "artifacts/g0-baseline/post-offload-prod-2/hero_t10s.png",
+    "screenshot_t45s": "artifacts/g0-baseline/post-offload-prod-2/hero_t45s.png"
+  }
+}
