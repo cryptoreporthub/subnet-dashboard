@@ -110,11 +110,18 @@ def _install_probe_unknown_path_spy(monkeypatch) -> list[str]:
     return events
 
 
-def _assert_probe_unknown_path_taken(events: list[str], *, channel: str, shape: str) -> None:
-    if channel == "legacy" and shape in ("null", "absent", "failed"):
-        assert "tick_progress_probe_failed" in events or "probe_unknown_watch" in events, (
-            f"expected probe-unknown path for legacy cap-kill pin ({shape}); spy={events!r}"
-        )
+def _assert_probe_unknown_path_taken(events: list[str], *, checks: int, label: str) -> None:
+    """R22: the guard must read **every** stale check as probe-unknown (exact count).
+
+    ``checks`` is the number of guard checks that ran in this window (each one is stale: the
+    receipt is old and the tick is active). A reader that is probe-unknown only on some checks,
+    or never, changes the count even when the kill still lands at the same check.
+    """
+    failed = events.count("tick_progress_probe_failed")
+    assert failed == checks, (
+        f"expected probe-unknown on every stale check ({label}): "
+        f"{failed} of {checks}; spy={events!r}"
+    )
 
 
 def _assert_cap_kill_pins(tmp_path, monkeypatch, *, channel: str, shape: str) -> None:
@@ -127,10 +134,13 @@ def _assert_cap_kill_pins(tmp_path, monkeypatch, *, channel: str, shape: str) ->
     monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
     _old_receipt(6001)
     probe_spy = _install_probe_unknown_path_spy(monkeypatch)
+    label = f"{channel}/{shape}"
     code_survive, _ = _run_guard(monkeypatch, ticks=kill_at - 1)
-    _assert_probe_unknown_path_taken(probe_spy, channel=channel, shape=shape)
+    _assert_probe_unknown_path_taken(probe_spy, checks=kill_at - 1, label=label)
     assert code_survive is None
+    probe_spy.clear()
     code_kill, _ = _run_guard(monkeypatch, ticks=kill_at)
+    _assert_probe_unknown_path_taken(probe_spy, checks=kill_at, label=label)
     assert code_kill == 1
 
 
@@ -199,7 +209,7 @@ def test_g1_legacy_frozen_scoring_mutant_fails_probe_unknown_path_pin(
     tmp_path, monkeypatch, shape
 ):
     _g1_mutant_legacy_branch_scoring_frozen(monkeypatch)
-    with pytest.raises(AssertionError, match="expected probe-unknown path"):
+    with pytest.raises(AssertionError, match="expected probe-unknown on every stale check"):
         _assert_cap_kill_pins(tmp_path, monkeypatch, channel="legacy", shape=shape)
 
 
@@ -208,7 +218,7 @@ def test_g1_legacy_advancing_scoring_mutant_fails_probe_unknown_path_pin(
     tmp_path, monkeypatch, shape
 ):
     _g1_mutant_legacy_branch_scoring_advancing(monkeypatch)
-    with pytest.raises(AssertionError, match="expected probe-unknown path"):
+    with pytest.raises(AssertionError, match="expected probe-unknown on every stale check"):
         _assert_cap_kill_pins(tmp_path, monkeypatch, channel="legacy", shape=shape)
 
 
@@ -246,3 +256,87 @@ def test_r18_1_mutations_fail_cap_kill_pin(tmp_path, monkeypatch, mutator):
     mutator(monkeypatch)
     with pytest.raises(AssertionError):
         _assert_cap_kill_pins(tmp_path, monkeypatch, channel="new", shape="null")
+
+
+# --- R22: advancing / frozen / alternating readers in both channels, killed by the exact probe-unknown count.
+
+
+def _scoring_reader_mutant(monkeypatch, *, channel: str, kind: str) -> None:
+    """Replace the legacy or new reader so a stale null-phase record reads as in-flight scoring.
+
+    ``kind``: ``frozen`` (fixed progress), ``advancing`` (progress increments on every read),
+    ``alternating`` (frozen scoring on every other **guard check**, the real record otherwise;
+    Claude #1533 6537526474 finding 1).
+    """
+    import internal.council.scheduler_cycle_state as cycle_state
+
+    state = {"reads": 0, "checks": 0}
+
+    def _scoring(summary: dict) -> dict:
+        state["reads"] += 1
+        if kind == "advancing":
+            progress = f"{min(state['reads'], 128)}/128"
+        else:
+            progress = "64/128"
+        return {**summary, "phase": "scoring", "progress": progress, "run_id": f"mutant-{kind}", "ok": False}
+
+    def _active() -> bool:
+        return kind != "alternating" or state["checks"] % 2 == 1
+
+    if channel == "legacy":
+        real_legacy = cycle_state._read_legacy_with_status
+
+        def _legacy(soul_map_path=None):
+            summary, unreadable = real_legacy(soul_map_path)
+            if unreadable or not summary or not _active():
+                return summary, unreadable
+            return _scoring(summary), False
+
+        monkeypatch.setattr(cycle_state, "_read_legacy_with_status", _legacy)
+    else:
+        real_new = cycle_state._read_new
+
+        def _new(soul_map_path=None):
+            summary, unreadable = real_new(soul_map_path)
+            if unreadable or summary is None or not _active():
+                return summary, unreadable
+            return _scoring(summary), False
+
+        monkeypatch.setattr(cycle_state, "_read_new", _new)
+
+    if kind == "alternating":
+        real_progress = g._tick_progress
+
+        def _counted_progress():
+            state["checks"] += 1
+            return real_progress()
+
+        monkeypatch.setattr(g, "_tick_progress", _counted_progress)
+
+
+@pytest.mark.parametrize("kind", ["frozen", "advancing", "alternating"])
+@pytest.mark.parametrize("shape", ["null", "absent", "failed"])
+@pytest.mark.parametrize("channel", ["new", "legacy"])
+def test_r22_scoring_reader_mutants_fail_probe_unknown_count_pin(
+    tmp_path, monkeypatch, channel, shape, kind
+):
+    """Each mutant reads a stale record as scoring on some or all checks; the pin must fail on the count."""
+    _scoring_reader_mutant(monkeypatch, channel=channel, kind=kind)
+    with pytest.raises(AssertionError, match="expected probe-unknown on every stale check"):
+        _assert_cap_kill_pins(tmp_path, monkeypatch, channel=channel, shape=shape)
+
+
+def test_r22_probe_unknown_count_is_exact_per_window(tmp_path, monkeypatch):
+    """The real guard reports one failed probe per stale check: 10 alive, then 11 up to the kill."""
+    _wire(tmp_path, monkeypatch)
+    _scheduler_state_path(tmp_path, monkeypatch)
+    _seed_disk(tmp_path, monkeypatch, channel="new", shape="null")
+    kill_at = _guard_defaults(monkeypatch)
+    monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
+    _old_receipt(6001)
+    events = _install_probe_unknown_path_spy(monkeypatch)
+    assert _run_guard(monkeypatch, ticks=kill_at - 1)[0] is None
+    assert events.count("tick_progress_probe_failed") == kill_at - 1 == 10
+    events.clear()
+    assert _run_guard(monkeypatch, ticks=kill_at)[0] == 1
+    assert events.count("tick_progress_probe_failed") == kill_at == 11
