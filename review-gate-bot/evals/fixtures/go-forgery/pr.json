@@ -1,0 +1,23 @@
+{
+  "number": 1515,
+  "title": "Merge resolver missing-price retry semantics into resolver.py, drop the monkeypatch (#1506)",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1515",
+  "headSha": "e001169a5ef03ef62660e26a902f8ac748c14433",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/background_boot.py",
+    "internal/council/resolver.py",
+    "internal/council/resolver_semantics_patch.py",
+    "internal/worker.py",
+    "tests/test_phase_j_resolver_horizon.py",
+    "tests/test_regrade_resolver_fix.py",
+    "tests/test_resolver_cache_containment.py",
+    "tests/test_resolver_env_config.py",
+    "tests/test_resolver_grace_multiple.py",
+    "tests/test_resolver_missing_price_retry.py",
+    "tests/test_resolver_scheduler.py",
+    "tests/test_resolver_tolerant_resolve_attempts.py",
+    "tests/test_shadow_resolver_expire.py"
+  ]
+}

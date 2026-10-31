@@ -1,0 +1,365 @@
+/**
+ * JUnit XML, taken from the cloud runner's own artifact for an exact SHA.
+ *
+ * ## Why not from the caller
+ *
+ * `compare_suite_runs` used to accept `baseJunit` / `headJunit` as text. An
+ * empty or truncated string parses to zero failures, so whoever called the tool
+ * decided the result of the suite gate. The XML now comes from GitHub Actions'
+ * artifacts for the SHA being gated, and a head with no artifact is a refusal,
+ * not a pass.
+ *
+ * ## The zip, without a dependency
+ *
+ * An Actions artifact is a zip. Node has `zlib.inflateRawSync`, which is the
+ * only thing a deflate zip actually needs beyond a directory walk, so the
+ * reader here is central-directory + local header + inflate. It handles the two
+ * methods GitHub emits (stored and deflate) and refuses anything else rather
+ * than guessing.
+ */
+
+import { inflateRawSync } from "node:zlib";
+import type { Octokit } from "@octokit/rest";
+import { assertWellFormed } from "./xml.js";
+
+export const SUITE_WORKFLOW = "full-suite-junit.yml";
+export const JUNIT_ARTIFACT = "pytest-junit";
+
+export type ZipEntry = { name: string; data: Uint8Array };
+
+/** The most one report may inflate to. The head's artifact is written by the PR's own code. */
+export const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+/** And the most a whole archive may inflate to, and how many entries it may hold. */
+export const MAX_TOTAL_BYTES = 128 * 1024 * 1024;
+export const MAX_ENTRIES = 512;
+/**
+ * The most a downloaded artifact body may be, as it arrives (compressed bytes). The inflated
+ * limits above cap what the reader keeps; this caps what the download may pull before it
+ * is read at all. A deflated JUnit report is far smaller than its inflated size, so this
+ * is generous for any real suite run.
+ */
+export const MAX_ARCHIVE_BYTES = 32 * 1024 * 1024;
+
+const EOCD = 0x06054b50;
+const CENTRAL = 0x02014b50;
+const LOCAL = 0x04034b50;
+
+/**
+ * Every file in a zip archive. Throws on a truncated or multi-disk archive so a
+ * partial read can never masquerade as a complete one.
+ */
+export function readZip(bytes: Uint8Array): ZipEntry[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= 0 && i >= bytes.length - 22 - 0xffff; i -= 1) {
+    if (view.getUint32(i, true) === EOCD) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd === -1) {
+    throw new Error("zip: end of central directory not found (truncated archive)");
+  }
+
+  const count = view.getUint16(eocd + 10, true);
+  const directorySize = view.getUint32(eocd + 12, true);
+  const directoryOffset = view.getUint32(eocd + 16, true);
+  if (directoryOffset + directorySize > bytes.length) {
+    throw new Error("zip: central directory runs past the end of the archive");
+  }
+
+  if (count > MAX_ENTRIES) {
+    throw new Error(`zip: ${count} entries, too many (limit ${MAX_ENTRIES})`);
+  }
+
+  const entries: ZipEntry[] = [];
+  let totalBytes = 0;
+  let cursor = directoryOffset;
+  for (let index = 0; index < count; index += 1) {
+    if (view.getUint32(cursor, true) !== CENTRAL) {
+      throw new Error(`zip: bad central directory header at entry ${index}`);
+    }
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const declaredSize = view.getUint32(cursor + 24, true);
+    const nameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    const name = new TextDecoder().decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
+
+    if (!name.endsWith("/")) {
+      totalBytes += declaredSize;
+      if (declaredSize > MAX_ENTRY_BYTES || totalBytes > MAX_TOTAL_BYTES) {
+        throw new Error(
+          `zip: ${name} is too large (${declaredSize} bytes declared, ${totalBytes} in total; limits ${MAX_ENTRY_BYTES} per entry and ${MAX_TOTAL_BYTES} in total)`,
+        );
+      }
+      if (view.getUint32(localOffset, true) !== LOCAL) {
+        throw new Error(`zip: bad local header for ${name}`);
+      }
+      const localNameLength = view.getUint16(localOffset + 26, true);
+      const localExtraLength = view.getUint16(localOffset + 28, true);
+      const start = localOffset + 30 + localNameLength + localExtraLength;
+      const raw = bytes.subarray(start, start + compressedSize);
+      let data: Uint8Array;
+      if (method === 0) {
+        data = raw;
+      } else if (method === 8) {
+        // The declared size is only a claim; the per-entry limit is enforced while inflating.
+        data = new Uint8Array(inflateRawSync(raw, { maxOutputLength: MAX_ENTRY_BYTES }));
+      } else {
+        throw new Error(`zip: ${name} uses unsupported compression method ${method}`);
+      }
+      // ...and so is the total. Replace the claim with the bytes actually produced
+      // before the buffer is kept, so a lying entry cannot slip past the cap.
+      totalBytes += data.byteLength - declaredSize;
+      if (data.byteLength > MAX_ENTRY_BYTES || totalBytes > MAX_TOTAL_BYTES) {
+        throw new Error(`zip: ${name} has excessive inflated size (${data.byteLength} bytes; ${totalBytes} in total)`);
+      }
+      entries.push({ name, data });
+    }
+
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+/**
+ * Concatenate every JUnit report in the archive into one document.
+ *
+ * A pytest run with `--junitxml` writes a single file, but `pytest-xdist` and a
+ * sharded job both write several. Every `<testcase>` in the archive belongs to
+ * the same SHA, so folding the roots into one `<testsuites>` keeps the diff
+ * correct either way.
+ */
+export function junitFromEntries(entries: readonly ZipEntry[]): string {
+  const reports = entries.filter((entry) => /(^|\/)(?:junit[^/]*|pytest|report)\.xml$/i.test(entry.name));
+  if (reports.length === 0) {
+    throw new Error(
+      `artifact has no JUnit report (looked for junit*.xml / pytest.xml / report.xml, saw ${entries.map((e) => e.name).join(", ") || "nothing"})`,
+    );
+  }
+  const parts = reports.map((report) => {
+    const text = new TextDecoder().decode(report.data);
+    // Each shard on its own: re-rooting strips the outer tags, which would
+    // quietly repair a shard cut off before its closing `</testsuites>`.
+    try {
+      assertWellFormed(text);
+    } catch (error) {
+      throw new Error(`${report.name}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return text;
+  });
+  return `<?xml version="1.0"?><testsuites>${parts
+    .map((part) => part.replace(/^<\?xml[^>]*\?>/, "").replace(/<\/?testsuites\b[^>]*>/g, ""))
+    .join("")}</testsuites>`;
+}
+
+export type ArtifactRef = { id: number; name: string };
+
+/**
+ * The artifact to read: the one this workflow uploaded, newest first.
+ *
+ * Named rather than positional on purpose. Picking "the only artifact" would
+ * silently read a coverage report as the suite result the day a second upload
+ * appears.
+ */
+export function pickArtifact(artifacts: readonly ArtifactRef[]): ArtifactRef | undefined {
+  return artifacts.find((artifact) => artifact.name === JUNIT_ARTIFACT);
+}
+
+/** Conclusions that mean the suite job ran to its end, whether it passed or not. */
+const FINISHED = new Set(["success", "failure", "neutral"]);
+
+/**
+ * The workflow run to read for one SHA: the newest run that finished.
+ *
+ * A cancelled or timed-out run stopped partway, so its report is a fragment of
+ * the suite and must not stand in for the whole one.
+ */
+export function pickRun(runs: readonly { id: number; conclusion: string | null }[]): { id: number } | undefined {
+  return runs.find((run) => run.conclusion !== null && FINISHED.has(run.conclusion));
+}
+
+export type JunitFetch =
+  | { ok: true; xml: string; runId: number; artifact: string }
+  | { ok: false; reason: "no-run" | "no-artifact" | "unreadable" | "lookup-failed" | "download-failed"; detail: string };
+
+export type RunnerReader = {
+  /** Workflow runs of the suite workflow for one head SHA. */
+  runsForSha(sha: string): Promise<{ id: number; conclusion: string | null }[]>;
+  artifactsForRun(runId: number): Promise<ArtifactRef[]>;
+  /** Raw zip bytes of one artifact. */
+  artifactZip(artifactId: number): Promise<Uint8Array>;
+};
+
+/**
+ * Hosts GitHub redirects an artifact download to. Measured 2026-10-27: the zip
+ * endpoint answers 302 with a signed URL on `productionresultssa<N>.blob.core.windows.net`.
+ * Anything else is refused, so a redirect cannot send the bot to a host of
+ * someone else's choosing, and a hosted egress block shows up as a named host.
+ */
+const ARTIFACT_HOST = /^(?:productionresultssa\d+\.blob\.core\.windows\.net|[a-z0-9-]+\.actions\.githubusercontent\.com)$/;
+
+/**
+ * The artifact zip, fetched by hand so the redirect host is checked before any
+ * byte moves. The signed URL carries its own credential, so no token is sent.
+ */
+export async function downloadViaRedirect(steps: {
+  locate: () => Promise<string | undefined>;
+  fetchBytes: (url: string) => Promise<Uint8Array>;
+}): Promise<Uint8Array> {
+  const location = await steps.locate();
+  if (location === undefined) {
+    throw new Error("artifact download gave no redirect location");
+  }
+  let host: string;
+  try {
+    host = new URL(location).hostname.toLowerCase();
+  } catch {
+    throw new Error("artifact download redirected to an unreadable URL");
+  }
+  if (!ARTIFACT_HOST.test(host)) {
+    throw new Error(`artifact download redirected to ${host}, which is not an Actions storage host; refusing`);
+  }
+  try {
+    return await steps.fetchBytes(location);
+  } catch (error) {
+    throw new Error(
+      `could not fetch the artifact from ${host} (is it in hosting.egressDomains?): ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/**
+ * A response body, read whole but never past `limit` bytes. A declared length over the limit is
+ * refused before any byte moves. Otherwise the stream is read chunk by chunk and cut off the
+ * moment it passes the limit, so an endless or oversized body cannot fill memory first.
+ */
+export async function readCappedBody(response: Response, limit: number): Promise<Uint8Array> {
+  const declared = Number(response.headers.get("content-length"));
+  if (response.headers.has("content-length") && Number.isFinite(declared) && declared > limit) {
+    await response.body?.cancel();
+    throw new Error(`artifact is ${declared} bytes, over the ${limit}-byte download ceiling; refusing`);
+  }
+  if (response.body === null) {
+    return new Uint8Array();
+  }
+  const reader = response.body.getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > limit) {
+      await reader.cancel();
+      throw new Error(`artifact download passed the ${limit}-byte download ceiling; stopped reading`);
+    }
+    parts.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.byteLength;
+  }
+  return bytes;
+}
+
+/** The reader backed by the real GitHub API. */
+export function octokitRunner(octokit: Octokit, ref: { owner: string; repo: string }): RunnerReader {
+  return {
+    async runsForSha(sha) {
+      const { data } = await octokit.rest.actions.listWorkflowRuns({
+        owner: ref.owner,
+        repo: ref.repo,
+        workflow_id: SUITE_WORKFLOW,
+        head_sha: sha,
+        per_page: 20,
+      });
+      return data.workflow_runs.map((run) => ({ id: run.id, conclusion: run.conclusion ?? null }));
+    },
+    async artifactsForRun(runId) {
+      const { data } = await octokit.rest.actions.listWorkflowRunArtifacts({
+        owner: ref.owner,
+        repo: ref.repo,
+        run_id: runId,
+        per_page: 100,
+      });
+      return data.artifacts.map((artifact) => ({ id: artifact.id, name: artifact.name }));
+    },
+    async artifactZip(artifactId) {
+      return downloadViaRedirect({
+        async locate() {
+          const response = await octokit.request("GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}/{archive_format}", {
+            owner: ref.owner,
+            repo: ref.repo,
+            artifact_id: artifactId,
+            archive_format: "zip",
+            request: { redirect: "manual" },
+          });
+          const location = response.headers.location;
+          return typeof location === "string" ? location : undefined;
+        },
+        async fetchBytes(url) {
+          const response = await fetch(url, { redirect: "error" });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return readCappedBody(response, MAX_ARCHIVE_BYTES);
+        },
+      });
+    },
+  };
+}
+
+/**
+ * JUnit XML for one SHA, or a refusal.
+ *
+ * Every failure is a refusal and none of them is an empty report: "no run yet"
+ * and "the artifact expired" must never be read as "no failures", which is what
+ * happened when the XML came in as a tool argument.
+ */
+export async function fetchJunit(reader: RunnerReader, sha: string): Promise<JunitFetch> {
+  // A GitHub error on a lookup is a transient refusal. It must come back as a result, not a thrown error,
+  // and it must not be remembered for the run: the next delivery should ask again.
+  let run: { id: number } | undefined;
+  try {
+    run = pickRun(await reader.runsForSha(sha));
+  } catch (error) {
+    return { ok: false, reason: "lookup-failed", detail: error instanceof Error ? error.message : String(error) };
+  }
+  if (run === undefined) {
+    return { ok: false, reason: "no-run", detail: `no completed ${SUITE_WORKFLOW} run for ${sha}` };
+  }
+  let artifact: ArtifactRef | undefined;
+  try {
+    artifact = pickArtifact(await reader.artifactsForRun(run.id));
+  } catch (error) {
+    return { ok: false, reason: "lookup-failed", detail: error instanceof Error ? error.message : String(error) };
+  }
+  if (artifact === undefined) {
+    return {
+      ok: false,
+      reason: "no-artifact",
+      detail: `run ${run.id} for ${sha} has no "${JUNIT_ARTIFACT}" artifact (expired, or the job did not reach the upload)`,
+    };
+  }
+  let zip: Uint8Array;
+  try {
+    zip = await reader.artifactZip(artifact.id);
+  } catch (error) {
+    return { ok: false, reason: "download-failed", detail: error instanceof Error ? error.message : String(error) };
+  }
+  try {
+    return { ok: true, xml: junitFromEntries(readZip(zip)), runId: run.id, artifact: artifact.name };
+  } catch (error) {
+    // The bytes arrived and cannot be read as a suite: a permanent fact about this run, so it is safe to remember.
+    return { ok: false, reason: "unreadable", detail: error instanceof Error ? error.message : String(error) };
+  }
+}
