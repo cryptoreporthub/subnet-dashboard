@@ -171,9 +171,15 @@ def _mock_judge_scores(monkeypatch):
     )
 
 
-def test_score_subnet_consensus_unchanged_when_judge_weights_absent(
-    monkeypatch, tmp_path, _mock_judge_scores
+@pytest.mark.parametrize("exclude", [None, ""])
+def test_score_subnet_consensus_default_weights_when_judge_weights_absent(
+    monkeypatch, tmp_path, _mock_judge_scores, exclude
 ):
+    # Default excludes Echo from consensus (2026-10-12); JUDGE_CONSENSUS_EXCLUDE="" restores the 3-way blend.
+    if exclude is not None:
+        monkeypatch.setenv("JUDGE_CONSENSUS_EXCLUDE", exclude)
+    else:
+        monkeypatch.delenv("JUDGE_CONSENSUS_EXCLUDE", raising=False)
     soul_path = tmp_path / "soul_map.json"
     monkeypatch.setattr("internal.judges.weights.SOUL_MAP_PATH", str(soul_path))
 
@@ -193,12 +199,14 @@ def test_score_subnet_consensus_unchanged_when_judge_weights_absent(
 
     oracle_score, echo_score, pulse_score = 0.8, 0.5, 0.2
     oracle_conf, echo_conf, pulse_conf = 0.7, 0.6, 0.4
+    w = {"oracle": 0.35, "echo": 0.0 if exclude is None else 0.30, "pulse": 0.35}
+    total = sum(w.values())
     expected_score = (
-        oracle_score * 0.35 + echo_score * 0.30 + pulse_score * 0.35
-    )
+        oracle_score * w["oracle"] + echo_score * w["echo"] + pulse_score * w["pulse"]
+    ) / total
     expected_conf = (
-        oracle_conf * 0.35 + echo_conf * 0.30 + pulse_conf * 0.35
-    )
+        oracle_conf * w["oracle"] + echo_conf * w["echo"] + pulse_conf * w["pulse"]
+    ) / total
     assert result["consensus"]["score"] == pytest.approx(round(expected_score, 4))
     assert result["consensus"]["confidence"] == pytest.approx(round(expected_conf, 4))
 

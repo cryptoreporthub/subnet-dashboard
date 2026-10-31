@@ -41,6 +41,16 @@ _JUDGE_DISPLAY = ("oracle", "echo", "pulse")
 _LONG_VERDICTS = frozenset({"long", "bullish"})
 
 
+
+def _voting_judges() -> str:
+    """Names of the judges whose scores enter the consensus verdict."""
+    from internal.judges.weights import consensus_excluded_judges
+
+    names = [n.capitalize() for n in ("oracle", "echo", "pulse") if n not in consensus_excluded_judges()]
+    if len(names) < 2:
+        return "".join(names)
+    return ", ".join(names[:-1]) + (", and " if len(names) > 2 else " and ") + names[-1]
+
 def judge_split_line(judge_scores: Any) -> Optional[str]:
     """Oracle / Echo / Pulse blend for judge-long peel rows."""
     if not isinstance(judge_scores, dict):
@@ -126,7 +136,7 @@ def _judge_long_rows(
                     "pulse": item.get("pulse"),
                 },
                 "why_not": (
-                    f"Judge consensus {conv}% — Oracle, Echo, and Pulse all above the long bar."
+                    f"Judge consensus {conv}% — {_voting_judges()} all above the long bar."
                 ),
                 "emission": sn.get("emission", 0) if sn else 0,
                 "apy": apy_val or 0,
