@@ -6,6 +6,7 @@ import asyncio
 import concurrent.futures
 import threading
 import time
+from datetime import datetime, timedelta
 
 import httpx
 import pytest
@@ -262,13 +263,29 @@ def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
 
     monkeypatch.setattr(loop_health, "build_learning_loop_health", _build_once)
 
+    import internal.ops.bot_policy as bot_policy
+
+    class _TickingDatetime(datetime):
+        ticks = 0
+
+        @classmethod
+        def now(cls, tz=None):
+            _TickingDatetime.ticks += 1
+            return super().now(tz) + timedelta(seconds=0.5 * _TickingDatetime.ticks)
+
+    monkeypatch.setattr(bot_policy, "datetime", _TickingDatetime)
+
     client = TestClient(app)
     first = client.get("/api/learning/health")
     second = client.get("/api/learning/health")
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json() == second.json()
+    first_body, second_body = first.json(), second.json()
+    first_age = first_body["freshness"].pop("age_seconds")
+    second_age = second_body["freshness"].pop("age_seconds")
+    assert first_body == second_body
+    assert second_age > first_age
     assert calls["n"] == 1
 
 
