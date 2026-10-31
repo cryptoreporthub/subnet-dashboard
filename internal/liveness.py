@@ -11,6 +11,7 @@ Contract (see handoffs/liveness-tracker-spec.md):
 
 from __future__ import annotations
 
+import math
 import os
 import threading
 import time
@@ -33,6 +34,24 @@ _PERSIST_PREFIX = "liveness"
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _iso_or_none(epoch: Optional[float]) -> Optional[str]:
+    """ISO time for an epoch, or None when it is unset or unconvertible
+    (NaN, inf, out of range) so one corrupt persisted value cannot raise."""
+    if epoch is None:
+        return None
+    try:
+        return datetime.fromtimestamp(epoch, timezone.utc).isoformat()
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
+def _usable_epoch(epoch: Optional[float]) -> bool:
+    """True when an epoch can drive status/age (finite and convertible to time)."""
+    if epoch is None or not math.isfinite(epoch):
+        return False
+    return _iso_or_none(epoch) is not None
 
 
 def get_tracker(name: str) -> Optional["LivenessTracker"]:
@@ -282,6 +301,12 @@ class LivenessTracker:
             self._lifecycle = "started"
         self._save()
 
+    def stop(self) -> None:
+        """Mark lifecycle stopped. NEVER touches health."""
+        with self._lock:
+            self._lifecycle = "stopped"
+        self._save()
+
     # -- recording -----------------------------------------------------
 
     def record_skip(self, reason: str) -> None:
@@ -335,7 +360,7 @@ class LivenessTracker:
 
     def _status_locked(self, now: float):
         stale_window = self.interval_seconds * self.staleness_factor
-        if self._last_success_epoch is None:
+        if not _usable_epoch(self._last_success_epoch):
             return "no_success_yet", "no recorded success yet"
         success_age = max(0.0, now - self._last_success_epoch)
         if self._consecutive_skips >= self.skip_limit and success_age > stale_window:
@@ -351,19 +376,12 @@ class LivenessTracker:
         with self._lock:
             status, reason = self._status_locked(now)
             age = None
-            if self._last_success_epoch is not None:
+            if _usable_epoch(self._last_success_epoch):
                 age = round(max(0.0, now - self._last_success_epoch), 3)
-            lsa = None
-            if self._last_success_epoch is not None:
-                lsa = datetime.fromtimestamp(
-                    self._last_success_epoch, timezone.utc
-                ).isoformat()
-            lea = None
+            lsa = _iso_or_none(self._last_success_epoch)
+            lea = _iso_or_none(self._last_event_epoch)
             ea = None
-            if self._last_event_epoch is not None:
-                lea = datetime.fromtimestamp(
-                    self._last_event_epoch, timezone.utc
-                ).isoformat()
+            if _usable_epoch(self._last_event_epoch):
                 ea = round(max(0.0, now - self._last_event_epoch), 3)
             return {
                 "name": self.name,

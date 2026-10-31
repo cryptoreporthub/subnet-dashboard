@@ -457,15 +457,6 @@ def _start_score_snapshot_scheduler() -> None:
     defer_boot("score-snapshots", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
 
 
-def _ensure_complete_snapshot() -> None:
-    def _run() -> None:
-        from internal.council.score_snapshots import ensure_complete_snapshot
-
-        _log_scheduler_start("score_snapshot_ensure", ensure_complete_snapshot())
-
-    defer_boot("score-snapshot-ensure", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
-
-
 def _start_pick_audit_scheduler() -> None:
     """Nightly selection oracle replay (evidence loop — Python only)."""
 
@@ -598,6 +589,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         background_heavy_on_web,
         is_worker_mode,
         live_subnets_sync_owner_enabled,
+        score_snapshot_producer_enabled,
         worker_heavy_feeds_enabled,
     )
 
@@ -670,6 +662,9 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     if is_worker_mode() or heavy:
         _start_pump_desk_snapshot_scheduler()
 
+    if score_snapshot_producer_enabled():
+        _start_score_snapshot_scheduler()
+
     if is_worker_mode():
         try:
             from internal.chain_price.config import forward_record_enabled
@@ -683,13 +678,10 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     # the GIL for long periods and compete with the worker's HTTP health port.
     if heavy:
         _warm_judges_cache()
-        _start_score_snapshot_scheduler()
         _start_pick_audit_scheduler()
         _start_outcome_snapshot_scheduler()
         _start_calibration_snapshot_scheduler()
         _start_dev_radar_github_scheduler()
-    elif is_worker_mode():
-        _ensure_complete_snapshot()
 
     if live_subnets_sync_owner_enabled():
         try:

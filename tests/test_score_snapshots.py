@@ -113,6 +113,8 @@ def test_tick_skips_when_gate_busy_without_blocking(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
 
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
     with heavy_job_slot("other_heavy_job"):
         out = sched._tick(reschedule=False)
@@ -142,6 +144,8 @@ def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
 
     monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write)
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
     out = sched._tick(reschedule=False)
     assert out.get("ok") is True
@@ -395,6 +399,8 @@ def test_timeout_second_tick_skips_second_write(monkeypatch, tmp_path):
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
 
     first = sched.run_once()
@@ -428,6 +434,8 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
+    # Only the registered generation persists liveness.
+    monkeypatch.setattr(snaps, "_scheduler", sched)
     sched._scoring_in_progress = lambda: False
 
     timed_out = sched.run_once()
@@ -470,6 +478,7 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
     )
     sched = snaps.ScoreSnapshotScheduler()
     snaps._scheduler = sched
+    sched._armed = True
     snaps._TICK_ACTIVE = True
     sched._tick_active = True
     with snaps._lock:
@@ -484,8 +493,27 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
         snaps._scheduler = None
 
 
-def test_timeout_deferred_completion_rearms_when_registered(monkeypatch, tmp_path):
-    """Timed-out run_once must still DateTrigger-rearm when the late write finishes."""
+def test_completion_of_stopped_scheduler_does_not_rearm(tmp_path, monkeypatch):
+    """An in-flight write that finishes after stop() must not schedule another tick."""
+    _wire_scheduler_paths(tmp_path, monkeypatch)
+    _reset_write_occupancy()
+    scheduled = []
+    monkeypatch.setattr(
+        snaps,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    sched = snaps.ScoreSnapshotScheduler()
+    snaps._scheduler = sched
+    try:
+        sched._register_write_completion_callback(reschedule=False)
+        assert scheduled == []
+    finally:
+        snaps._scheduler = None
+
+
+def test_timeout_deferred_completion_rearms_when_armed(monkeypatch, tmp_path):
+    """Timed-out run_once must still DateTrigger-rearm an armed scheduler when the late write finishes."""
     path = _wire_scheduler_paths(tmp_path, monkeypatch)
     scheduled = []
     monkeypatch.setattr(
@@ -506,6 +534,7 @@ def test_timeout_deferred_completion_rearms_when_registered(monkeypatch, tmp_pat
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
     snaps._scheduler = sched
+    sched._armed = True
     sched._scoring_in_progress = lambda: False
     try:
         timed_out = sched.run_once()
@@ -557,8 +586,9 @@ def test_start_schedules_when_persisted_lifecycle_started(tmp_path, monkeypatch)
         out = sched.start(immediate=False)
         assert scheduled
         assert scheduled[0][0] == snaps.JOB_ID
-        assert out["started"] is False
-        assert out["reason"] == "already running"
+        assert out["started"] is True
+        assert out["armed"] == "deferred"
+        assert out["resumed_lifecycle"] is True
     finally:
         snaps._scheduler = None
 
@@ -582,8 +612,9 @@ def test_module_start_schedules_when_lifecycle_started(tmp_path, monkeypatch):
         out = snaps.start_score_snapshot_scheduler(immediate=False)
         assert scheduled
         assert scheduled[0][0] == snaps.JOB_ID
-        assert out["started"] is False
-        assert out["reason"] == "already running"
+        assert out["started"] is True
+        assert out["armed"] == "deferred"
+        assert out["resumed_lifecycle"] is True
     finally:
         snaps.stop_score_snapshot_scheduler()
 

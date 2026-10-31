@@ -80,3 +80,22 @@ def live_subnets_sync_owner_enabled() -> bool:
         flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
         return flag not in ("0", "false", "no", "off")
     return background_heavy_on_web()
+
+
+def score_snapshot_producer_enabled() -> bool:
+    """Exactly one process per volume owns score_snapshots.json production.
+
+    The essential worker is the designed owner (MC #1479 D1): WORKER_HEAVY only
+    opts a worker out ("off"), unlike ``worker_heavy_feeds_enabled`` which gates
+    the optional full-universe feeds on ``full``.
+    """
+    if stage2_hop_mode():
+        return False
+    if is_worker_mode():
+        flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
+        return flag not in ("0", "false", "no", "off")
+    return (
+        background_heavy_on_web()
+        and not inline_worker_expected()
+        and not split_worker_v2_enabled()
+    )

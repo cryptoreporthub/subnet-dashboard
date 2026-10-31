@@ -74,6 +74,23 @@ _TICK_ACTIVE = False
 _write_executor: Optional[ThreadPoolExecutor] = None
 _write_future: Optional[Any] = None
 _scheduler: Optional["ScoreSnapshotScheduler"] = None
+# JOB_ID is one process-wide APScheduler slot shared by every scheduler
+# generation. _job_lock makes "check still current + (re)schedule" and
+# "cancel only my own job" atomic; _job_owner is the generation that last
+# scheduled it. Lock order: _job_lock before _lock, never the reverse.
+_job_lock = threading.Lock()
+_job_owner: Optional["ScoreSnapshotScheduler"] = None
+# Every scheduler generation persists the same score_snapshot liveness record
+# (LivenessTracker saves its whole in-memory state), so a generation that is no
+# longer the registered one must never write it. ScoreSnapshotScheduler._persist_liveness
+# is the only path to a liveness write: it checks ownership and writes together
+# under _lifecycle_lock, and registering a replacement (which loads the persisted
+# record) takes the same lock. Lock order: _lifecycle_lock, _job_lock, _lock.
+_lifecycle_lock = threading.Lock()
+# The generation that was registered most recently. An unregistered module
+# (_scheduler is None) is true for every past generation, so only this one may
+# still persist a shutdown or a finishing tick; older generations never may.
+_last_registered: Optional["ScoreSnapshotScheduler"] = None
 
 
 def _write_future_active() -> bool:
@@ -1300,6 +1317,7 @@ class ScoreSnapshotScheduler:
     def __init__(self, refresh_minutes: int = SCORE_SNAPSHOT_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(10, min(int(refresh_minutes), 24 * 60))
         self._tick_active = False
+        self._armed = False
         self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
@@ -1316,24 +1334,130 @@ class ScoreSnapshotScheduler:
         with _lock:
             return _scheduler is self
 
+    def _arm_still_valid(self) -> bool:
+        with _lock:
+            return _scheduler is self and self._armed
+
+    def _stopped_during_arm(self) -> Optional[Dict[str, Any]]:
+        """Fence deferred/immediate arm against concurrent stop/unregister."""
+        if self._arm_still_valid():
+            return None
+        return {"started": False, "reason": "stopped_during_arm"}
+
+    def _schedule_tick(self, seconds: float) -> bool:
+        """(Re)schedule JOB_ID for this generation; refuse once it is stopped."""
+        global _job_owner
+        with _job_lock:
+            if not self._arm_still_valid():
+                return False
+            schedule_in_seconds(JOB_ID, self._scheduled_tick, seconds)
+            _job_owner = self
+            return True
+
+    def _cancel_own_job(self) -> None:
+        """Disarm and cancel JOB_ID unless a replacement generation owns it.
+
+        _armed is cleared under _lock while _job_lock is still held, so a tick
+        that already passed _arm_still_valid() cannot reschedule after failed startup.
+        """
+        global _job_owner
+        with _job_lock:
+            with _lock:
+                self._armed = False
+            if _job_owner is self:
+                _job_owner = None
+                cancel_job(JOB_ID)
+
+    def _persist_liveness(self, write: Callable[[LivenessTracker], None], *, strict: bool = False) -> bool:
+        """The only way this scheduler writes the shared liveness record.
+
+        Ownership check and write are atomic under _lifecycle_lock. A replaced
+        generation is fenced out (returns False). ``strict`` (startup) also
+        requires the registered generation to be armed; the others also accept
+        the most recently registered generation after it was unregistered
+        (clean shutdown, a tick finishing after stop()), never an older one.
+        """
+        global _last_registered
+        with _lifecycle_lock:
+            with _lock:
+                if _scheduler is self:
+                    _last_registered = self
+                    current = self._armed if strict else True
+                else:
+                    current = (
+                        not strict and _scheduler is None and _last_registered is self
+                    )
+            if not current:
+                return False
+            write(self.liveness)
+            return True
+
+    def _start_liveness(self) -> bool:
+        return self._persist_liveness(lambda t: t.start(), strict=True)
+
+    def _stop_liveness_if_current(self) -> bool:
+        """Persist 'stopped' unless a replacement generation is registered."""
+        return self._persist_liveness(lambda t: t.stop())
+
+    def _scheduled_tick(self) -> Dict[str, Any]:
+        """Entry point for scheduled and thread-dispatched ticks."""
+        return self._tick(gate_on_arm=True)
+
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        already = self.liveness.snapshot().get("lifecycle") == "started"
-        self.liveness.start()
-        if immediate:
-            threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
-        else:
-            # After pick schedulers; full score is the heavy job.
-            # Persisted lifecycle=started is not proof a DateTrigger is armed
-            # (new process generation after prior boot).
-            schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
-        if already:
-            return {"started": False, "reason": "already running"}
-        return {"started": True, "refresh_minutes": self.refresh_minutes}
+        with _lock:
+            if self._armed:
+                return {"started": False, "reason": "already_armed"}
+            self._armed = True
+        try:
+            resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
+            armed = "immediate" if immediate else "deferred"
+            if immediate:
+                # A started tick thread cannot be cancelled; a liveness
+                # failure must abort before the thread exists. Deferred mode
+                # stays schedule-first so a failed schedule leaves the
+                # lifecycle unchanged (_cancel_own_job covers that path).
+                if not self._start_liveness():
+                    # Fenced out (replaced or disarmed): no thread, nothing persisted.
+                    self._cancel_own_job()
+                    return {"started": False, "reason": "stopped_during_arm"}
+                try:
+                    threading.Thread(
+                        target=self._scheduled_tick,
+                        daemon=True,
+                        name="score-snap-tick",
+                    ).start()
+                except Exception:
+                    self._stop_liveness_if_current()
+                    raise
+            elif not self._schedule_tick(SCORE_SNAPSHOT_FIRST_DELAY_SECONDS):
+                return {"started": False, "reason": "stopped_during_arm"}
+            elif not self._start_liveness():
+                # Fenced out after scheduling: drop our job, report it, persist nothing.
+                self._cancel_own_job()
+                return {"started": False, "reason": "stopped_during_arm"}
+            aborted = self._stopped_during_arm()
+            if aborted:
+                # Unregistered without stop(): drop our pending job and disarm.
+                self._cancel_own_job()
+                self._stop_liveness_if_current()
+                return aborted
+        except Exception:
+            self._cancel_own_job()
+            raise
+        return {
+            "started": True,
+            "armed": armed,
+            "resumed_lifecycle": resumed_lifecycle,
+            "refresh_minutes": self.refresh_minutes,
+        }
 
     def stop(self) -> Dict[str, Any]:
-        cancel_job(JOB_ID)
+        with _lock:
+            self._armed = False
+        self._cancel_own_job()
+        self._stop_liveness_if_current()
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -1392,12 +1516,15 @@ class ScoreSnapshotScheduler:
             pass
 
     def _record_liveness(self, result: Dict[str, Any]) -> None:
+        self._persist_liveness(lambda t: self._write_liveness_result(t, result))
+
+    def _write_liveness_result(self, tracker: LivenessTracker, result: Dict[str, Any]) -> None:
         skipped = result.get("skipped")
         if skipped:
-            self.liveness.record_skip(str(skipped))
+            tracker.record_skip(str(skipped))
             return
         if result.get("skipped_older"):
-            self.liveness.record_skip("skipped_older")
+            tracker.record_skip("skipped_older")
             return
         if result.get("published"):
             evidence = {
@@ -1411,14 +1538,17 @@ class ScoreSnapshotScheduler:
 
                 evidence["coverage"] = coverage_counts_summary(coverage)
                 evidence["coverage"]["complete"] = coverage.get("complete")
-            self.liveness.record_success(evidence=evidence)
+            tracker.record_success(evidence=evidence)
             return
-        self.liveness.record_failure(
+        tracker.record_failure(
             error=str(result.get("error") or "score_snapshot_unpublished")
         )
 
-    def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
+    def _tick(self, reschedule: bool = True, *, gate_on_arm: bool = False) -> Dict[str, Any]:
         from internal.heavy_job_gate import heavy_job_slot
+
+        if gate_on_arm and not self._arm_still_valid():
+            return {"ok": False, "run_at": _now_iso(), "skipped": "stopped_during_arm"}
 
         if self._scoring_in_progress():
             skipped = {"ok": False, "run_at": _now_iso(), "skipped": "scoring_in_progress"}
@@ -1426,8 +1556,8 @@ class ScoreSnapshotScheduler:
             if not self._tick_active:
                 self._persist_cycle_summary(skipped)
                 self._record_liveness(skipped)
-            if reschedule and self._is_registered():
-                schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
+            if reschedule:
+                self._schedule_tick(min(120, self.refresh_minutes * 60))
             return skipped
 
         with heavy_job_slot("score_snapshot") as acquired:
@@ -1435,11 +1565,11 @@ class ScoreSnapshotScheduler:
                 skipped = {"ok": False, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
                 self._persist_cycle_summary(skipped)
                 self._record_liveness(skipped)
-                if reschedule and self._is_registered():
-                    schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
+                if reschedule:
+                    self._schedule_tick(min(120, self.refresh_minutes * 60))
                 return skipped
         # ponytail: release gate before ~127×2 scoring — holding it wedged resolver for hours
-        return self._tick_body(reschedule=reschedule)
+        return self._tick_body(reschedule=reschedule, gate_on_arm=gate_on_arm)
 
     def _complete_write_future(self, fut: Any, reschedule: bool) -> None:
         global _TICK_ACTIVE, _write_future
@@ -1475,8 +1605,7 @@ class ScoreSnapshotScheduler:
                 self._tick_active = False
             # Deferred path: re-arm even when this tick was run_once/revive
             # (reschedule=False). Sync-complete and occupancy-skip keep the gate.
-            if self._is_registered():
-                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+            self._schedule_tick(self.refresh_minutes * 60)
 
     def _register_write_completion_callback(self, reschedule: bool) -> None:
         global _TICK_ACTIVE
@@ -1487,8 +1616,7 @@ class ScoreSnapshotScheduler:
             with _lock:
                 _TICK_ACTIVE = False
                 self._tick_active = False
-            if self._is_registered():
-                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+            self._schedule_tick(self.refresh_minutes * 60)
             return
         if fut.done():
             self._complete_write_future(fut, reschedule)
@@ -1499,23 +1627,29 @@ class ScoreSnapshotScheduler:
 
         fut.add_done_callback(_on_done)
 
-    def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
+    def _tick_body(
+        self, reschedule: bool = True, *, gate_on_arm: bool = False
+    ) -> Dict[str, Any]:
         global _TICK_ACTIVE
         with _lock:
-            if _TICK_ACTIVE or _write_future_active():
-                skipped = {
-                    "ok": False,
-                    "run_at": _now_iso(),
-                    "skipped": "scoring_in_progress",
-                }
-                self._record_liveness(skipped)
-                if reschedule and self._is_registered():
-                    schedule_in_seconds(
-                        JOB_ID, self._tick, min(120, self.refresh_minutes * 60)
-                    )
-                return skipped
-            _TICK_ACTIVE = True
-            self._tick_active = True
+            # Admission and stop() are linearized on _lock: a gated tick either
+            # claims the active slot before stop, or sees the stop and bails.
+            if gate_on_arm and not (_scheduler is self and self._armed):
+                return {"ok": False, "run_at": _now_iso(), "skipped": "stopped_during_arm"}
+            busy = _TICK_ACTIVE or _write_future_active()
+            if not busy:
+                _TICK_ACTIVE = True
+                self._tick_active = True
+        if busy:
+            skipped = {
+                "ok": False,
+                "run_at": _now_iso(),
+                "skipped": "scoring_in_progress",
+            }
+            self._record_liveness(skipped)
+            if reschedule:
+                self._schedule_tick(min(120, self.refresh_minutes * 60))
+            return skipped
         try:
             self._clear_stuck_scoring()
             started_at = _now_iso()
@@ -1562,8 +1696,8 @@ class ScoreSnapshotScheduler:
                 with _lock:
                     _TICK_ACTIVE = False
                     self._tick_active = False
-                if reschedule and self._is_registered():
-                    schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+                if reschedule:
+                    self._schedule_tick(self.refresh_minutes * 60)
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {
@@ -1602,18 +1736,34 @@ def _enabled() -> bool:
 def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
     if not _enabled():
         return {"started": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"started": False, "reason": "not_owner"}
     global _scheduler
-    with _lock:
-        if _scheduler is None:
-            _scheduler = ScoreSnapshotScheduler()
-    return _scheduler.start(immediate=immediate)
+    global _last_registered
+    # Constructing a scheduler loads the persisted liveness record; do it under
+    # _lifecycle_lock so no outgoing generation can write between load and register.
+    # The global _lock is held only to register, never while reading the file.
+    with _lifecycle_lock:
+        with _lock:
+            sched = _scheduler
+        if sched is None:
+            created = ScoreSnapshotScheduler()
+            with _lock:
+                if _scheduler is None:
+                    _scheduler = _last_registered = created
+                sched = _scheduler
+    return sched.start(immediate=immediate)
 
 
 def stop_score_snapshot_scheduler() -> Dict[str, Any]:
-    global _scheduler
+    global _scheduler, _last_registered
     with _lock:
         sched = _scheduler
         _scheduler = None
+        if sched is not None:
+            _last_registered = sched
     if sched is None:
         return {"stopped": False, "reason": "not running"}
     return sched.stop()
@@ -1638,12 +1788,6 @@ def _stopped_scheduler_state() -> Dict[str, Any]:
         "age_seconds": snapshot_age_seconds(),
         "liveness": snap,
     }
-
-
-def ensure_complete_snapshot() -> Dict[str, Any]:
-    if volume_has_fresh_complete_snapshot():
-        return {"ensured": False, "reason": "fresh_volume_snapshot_present"}
-    return {"ensured": True, **revive_score_snapshot_scheduler()}
 
 
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
@@ -1673,6 +1817,10 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     """
     if not _enabled():
         return {"revived": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"revived": False, "reason": "not_owner"}
 
     age_before = snapshot_age_seconds()
     recycled = False

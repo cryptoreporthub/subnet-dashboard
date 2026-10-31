@@ -29,7 +29,7 @@ import logging
 import os
 import threading
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +70,18 @@ KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 
 
 def _snapshot_age_seconds() -> Optional[float]:
-    """Age in seconds of score_snapshots.json (None if unknown)."""
+    """Age in seconds of score_snapshots.json (None if unknown or not this process's job).
+
+    Only the score-snapshot owner (``score_snapshot_producer_enabled()``, scheduler
+    enabled) can freshen the file, so every other process reports None: the guard
+    resets, never revives and never exits on a snapshot it has no way to refresh.
+    """
     try:
+        from internal.council.score_snapshots import _enabled
+        from internal.run_mode import score_snapshot_producer_enabled
+
+        if not _enabled() or not score_snapshot_producer_enabled():
+            return None
         from internal.learning.loop_health import _snapshot_age_seconds as _age
 
         return _age()
@@ -112,14 +122,16 @@ def _worker_mode() -> bool:
         return True  # assume worker context; guard is otherwise inert
 
 
-def _try_revive() -> None:
+def _try_revive() -> Optional[Dict[str, Any]]:
     try:
         from internal.council.score_snapshots import revive_score_snapshot_scheduler
 
         result = revive_score_snapshot_scheduler()
         logger.warning("loop stall guard: in-place revive attempt -> %s", result)
+        return result
     except Exception as exc:
         logger.warning("loop stall guard: revive attempt failed: %s", exc)
+        return None
 
 
 def _try_revive_resolver() -> None:
@@ -197,7 +209,13 @@ def _guard_loop() -> None:
 
         if consecutive_stale == 1 and not revived:
             revived = True
-            _try_revive()
+            result = _try_revive()
+            if isinstance(result, dict) and result.get("reason") == "not_owner":
+                # Not the producer: nothing here can refresh the file, so this is idle, not wedged.
+                consecutive_stale = 0
+                revived = False  # keep asking: ownership, not a stale file, decides
+                logger.info("loop stall guard: revive says not_owner; staying idle")
+                continue
 
         if consecutive_stale >= CONSECUTIVE_CHECKS:
             logger.critical(
