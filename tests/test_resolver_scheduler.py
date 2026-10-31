@@ -467,6 +467,69 @@ def test_scheduler_run_once_expires_stale_predictions(fresh_scheduler):
     assert sched.state()["last_expired"] == 1
 
 
+def _ledger_row(pred_id: str) -> Dict[str, Any]:
+    with open(resolver.PREDICTIONS_PATH) as f:
+        ledger = json.load(f)
+    rows = [
+        row
+        for key in ("predictions", "resolved")
+        for row in ledger.get(key, [])
+        if row.get("id") == pred_id
+    ]
+    assert len(rows) == 1
+    return rows[0]
+
+
+def test_scheduler_cycles_spend_the_retry_budget_then_expire(fresh_scheduler, monkeypatch):
+    """Resolve and expire run back to back in one cycle. A past-grace row with
+    no price must still get its full lookup budget across real cycles, then be
+    retired: not retired early by the expire stage, and not left pending."""
+    now = datetime.now(timezone.utc)
+    grace = 24.0 * resolver._EXPIRY_GRACE_MULTIPLE
+    _write_predictions({
+        "predictions": [
+            {
+                "id": "pred-combined",
+                "netuid": 999,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24.0,
+                "resolve_at": _iso(now - timedelta(hours=grace + 5)),
+            },
+        ],
+        "resolved": [],
+    })
+    lookups = {"n": 0}
+
+    def _no_price(*_args, **_kwargs):
+        lookups["n"] += 1
+        return ("ungradeable", 0.0, {"candles_in_window": 0, "price_source": None})
+
+    monkeypatch.setattr(resolver, "price_at_resolve_at", _no_price, raising=False)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+
+    cap = resolver._PRICE_RETRY_CAP
+    history = []
+    for _ in range(cap + 2):
+        assert sched.run_once()["ok"] is True
+        status = _ledger_row("pred-combined")["status"]
+        history.append((status, lookups["n"]))
+        if status == "expired":
+            break
+
+    # One lookup per cycle, pending until the cap-th lookup, retired in that
+    # same cycle. Later cycles re-read expired rows through
+    # regrade_expired_predictions, a separate recovery sweep not pinned here.
+    assert history == [("pending", n) for n in range(1, cap)] + [("expired", cap)]
+    row = _ledger_row("pred-combined")
+    assert row["retirement_reason"] == "missing_price_at_horizon"
+    assert row["resolve_attempts"] == cap
+
+
 def test_scheduler_backoff_on_failure(fresh_scheduler):
     """A failing subnet provider triggers exponential backoff, not a crash."""
     def _failing_provider():
