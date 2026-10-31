@@ -373,7 +373,9 @@ def record_cycle_receipt(
         logger.warning("score snapshot cycle receipt write failed: %s", exc)
 
 
-def producer_cycle_age_seconds(path: Optional[str] = None) -> Optional[float]:
+def producer_cycle_age_seconds(path: Optional[str] = None, *, signed: bool = False) -> Optional[float]:
+    """Seconds since the last cycle receipt. ``signed`` keeps a future-dated receipt
+    negative (readers clamp it to 0; the stall guard must see it)."""
     cycle_path = path or _score_snapshot_cycle_path()
     try:
         with open(cycle_path, "r", encoding="utf-8") as handle:
@@ -385,7 +387,8 @@ def producer_cycle_age_seconds(path: Optional[str] = None) -> Optional[float]:
     parsed = _parse_iso(data.get("attempted_at"))
     if parsed is None:
         return None
-    return max(0.0, datetime.now(timezone.utc).timestamp() - parsed.timestamp())
+    age = datetime.now(timezone.utc).timestamp() - parsed.timestamp()
+    return age if signed else max(0.0, age)
 
 
 def snapshot_membership_current(snap: Optional[Dict[str, Any]]) -> Optional[bool]:
@@ -447,14 +450,19 @@ class ServedSnapshot:
         return out
 
 
-def _snapshot_age_for_path(path: str, snap: Optional[Dict[str, Any]]) -> Optional[float]:
+def _snapshot_age_for_path(
+    path: str, snap: Optional[Dict[str, Any]], *, signed: bool = False
+) -> Optional[float]:
+    """Snapshot age in seconds; ``signed`` keeps a future-dated snapshot negative."""
     started = _parse_iso((snap or {}).get("build_started_at")) if snap else None
     if started is not None:
-        return max(0.0, datetime.now(timezone.utc).timestamp() - started.timestamp())
+        age = datetime.now(timezone.utc).timestamp() - started.timestamp()
+        return age if signed else max(0.0, age)
     try:
-        return max(0.0, datetime.now(timezone.utc).timestamp() - os.path.getmtime(path))
+        age = datetime.now(timezone.utc).timestamp() - os.path.getmtime(path)
     except OSError:
         return None
+    return age if signed else max(0.0, age)
 
 
 def read_served_snapshot(
@@ -1504,14 +1512,16 @@ class ScoreSnapshotScheduler:
                 return
             age = max(0.0, (datetime.now(timezone.utc) - tick).total_seconds())
             if age >= SCORE_SNAPSHOT_STUCK_SECONDS:
-                self._persist_cycle_summary(
-                    {
-                        "run_at": _now_iso(),
-                        "ok": False,
-                        "error": "scoring_stuck_timeout",
-                        "phase": "failed",
-                    }
-                )
+                stuck = {
+                    "run_at": _now_iso(),
+                    "ok": False,
+                    "error": "scoring_stuck_timeout",
+                    "phase": "failed",
+                }
+                run_id = last.get("run_id")
+                if run_id:
+                    stuck["run_id"] = run_id
+                self._persist_cycle_summary(stuck)
         except Exception:
             pass
 
@@ -1578,6 +1588,14 @@ class ScoreSnapshotScheduler:
                 result = dict(fut.result())
             except Exception as exc:
                 result = {"ok": False, "error": str(exc)}
+            try:
+                from internal.council.scheduler_cycle_state import read_last_cycle
+
+                last = read_last_cycle()
+            except Exception:
+                last = {}
+            if not result.get("run_id") and last.get("run_id"):
+                result["run_id"] = last["run_id"]
             result["run_at"] = _now_iso()
             with _lock:
                 self._last_tick_at = result["run_at"]
@@ -1653,11 +1671,19 @@ class ScoreSnapshotScheduler:
         try:
             self._clear_stuck_scoring()
             started_at = _now_iso()
-            self._persist_cycle_summary({"run_at": started_at, "ok": False, "phase": "scoring"})
+            run_id = uuid.uuid4().hex
+            # Stall guard reads ``(run_id, progress)`` from this file; the write phase keeps progress
+            # fixed while the snapshot finishes — ``tick_progress_seconds()`` must cover that silence.
+            # R19 G3: tick-start row only — no ``progress`` key until the first ``_progress`` callback (r19 start-record pin).
+            self._persist_cycle_summary(
+                {"run_at": started_at, "run_id": run_id, "ok": False, "phase": "scoring"}
+            )
 
             def _progress(done: int, total: int) -> None:
+                # Heartbeat ``run_at`` only; progress token is what the guard uses for no-progress deadline.
                 self._persist_cycle_summary(
                     {
+                        "run_id": run_id,
                         "run_at": _now_iso(),
                         "ok": False,
                         "phase": "scoring",
@@ -1672,6 +1698,8 @@ class ScoreSnapshotScheduler:
                 logger.warning("score snapshot cycle exception: %s", exc)
                 result = {"ok": False, "error": str(exc)}
             result["run_at"] = _now_iso()
+            if not result.get("run_id"):
+                result["run_id"] = run_id
             with _lock:
                 self._last_tick_at = result["run_at"]
                 self._last_error = result.get("error")
@@ -1701,6 +1729,7 @@ class ScoreSnapshotScheduler:
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {
+            "run_id": result.get("run_id"),
             "run_at": result.get("run_at"),
             "ok": bool(result.get("ok")),
             "published": result.get("published"),
@@ -1718,6 +1747,10 @@ class ScoreSnapshotScheduler:
             from internal.council.snapshot_coverage import coverage_counts_summary
 
             summary["coverage"] = coverage_counts_summary(coverage)
+        if summary.get("phase") is None:
+            summary.pop("phase", None)
+        if summary.get("progress") is None:
+            summary.pop("progress", None)
         # Never the soul_map: a tick must not create or rewrite the file the weights gate reads.
         from internal.council.scheduler_cycle_state import write_last_cycle
 
@@ -1796,6 +1829,50 @@ def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
         if _scheduler is None:
             return {**_stopped_scheduler_state(), "enabled": _enabled()}
         return {**_scheduler.state(), "enabled": _enabled()}
+
+
+def score_snapshot_stuck_seconds() -> int:
+    """The scheduler's no-progress threshold for a scoring tick; the stall guard reads it too."""
+    return SCORE_SNAPSHOT_STUCK_SECONDS
+
+
+def producer_tick_progress() -> Optional[Dict[str, Any]]:
+    """Is a scoring tick running, and what is its progress marker?
+
+    None when no tick is active. Otherwise ``{"token": (run_id, progress)}`` when the
+    persisted summary has ``phase=scoring``. When a tick is active in memory but the on-disk
+    summary is absent, null, or non-scoring, raises ``CycleStateUnreadableError`` (probe-unknown
+    for the stall guard, not known idle). ``run_id`` is written once per tick;
+    ``run_at`` is a heartbeat and must not be used for cap continuity. Records without
+    ``run_id`` use ``(None, progress)`` (legacy deploys: no same-run cap match after
+    probe-unknown).
+    """
+    with _lock:
+        active = (
+            _write_future_active()
+            or _TICK_ACTIVE
+            or bool(_scheduler and _scheduler._tick_active)
+        )
+    if not active:
+        return None
+    try:
+        from internal.council.scheduler_cycle_state import (
+            CycleStateUnreadableError,
+            read_last_cycle_with_status,
+        )
+
+        last, status = read_last_cycle_with_status()
+        if status == "unreadable":
+            raise CycleStateUnreadableError("score snapshot cycle state unreadable")
+        if last.get("phase") == "scoring":
+            return {"token": (last.get("run_id"), last.get("progress"))}
+        raise CycleStateUnreadableError(
+            "active scoring tick but persisted cycle summary is not in scoring phase"
+        )
+    except CycleStateUnreadableError:
+        raise
+    except Exception:
+        raise CycleStateUnreadableError("score snapshot cycle state unreadable")
 
 
 def revive_score_snapshot_scheduler() -> Dict[str, Any]:

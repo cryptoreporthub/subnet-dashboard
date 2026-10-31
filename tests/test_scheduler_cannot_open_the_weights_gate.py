@@ -9,6 +9,7 @@ digested default weights and passed. The summary now has its own file, and a sou
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -106,7 +107,28 @@ def test_the_cycle_summary_has_its_own_file_beside_the_soul_map(tmp_path, monkey
     state = tmp_path / "soul" / "score_snapshot_scheduler.json"
     last = json.loads(state.read_text())["last_cycle"]
     assert last["skipped"] == "weights_unavailable"
-    assert last["phase"] is None  # the final summary replaced the in-flight "scoring" one
+    assert "phase" not in last  # the final summary replaced the in-flight "scoring" one
+
+
+def test_persist_cycle_summary_preserves_run_id(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle, scheduler_state_path
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._persist_cycle_summary(
+        {
+            "run_id": "RID-SHOULD-SURVIVE",
+            "run_at": snaps._now_iso(),
+            "ok": False,
+            "phase": "scoring",
+            "progress": "1/128",
+        }
+    )
+    last = read_last_cycle()
+    assert last.get("run_id") == "RID-SHOULD-SURVIVE"
+    assert Path(scheduler_state_path()).exists()
 
 
 # --- "usable" means real council weights ---
@@ -160,7 +182,7 @@ def test_the_in_flight_marker_is_read_from_the_new_file(tmp_path, monkeypatch):
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     write_last_cycle({"run_at": snaps._now_iso(), "ok": False, "phase": "scoring"})
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is True
-    write_last_cycle({"run_at": snaps._now_iso(), "ok": True, "phase": None})
+    write_last_cycle({"run_at": snaps._now_iso(), "ok": True})
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is False
 
 
@@ -174,7 +196,7 @@ def test_a_legacy_in_flight_marker_is_still_read_until_the_new_file_exists(tmp_p
 
     soul_map_io._cache.clear()
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is True
-    write_last_cycle({"run_at": snaps._now_iso(), "ok": True, "phase": None})  # the new file wins over the old key
+    write_last_cycle({"run_at": snaps._now_iso(), "ok": True})  # the new file wins over the old key
     assert snaps.ScoreSnapshotScheduler()._scoring_in_progress() is False
 
 
@@ -195,13 +217,258 @@ def test_loop_health_reads_the_new_file_and_falls_back_to_the_legacy_key(tmp_pat
 
 
 def test_a_corrupt_cycle_file_is_read_as_absent_and_never_raises(tmp_path, monkeypatch):
-    from internal.council.scheduler_cycle_state import read_last_cycle, scheduler_state_path
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle,
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
 
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     Path(scheduler_state_path()).write_text("{not json")
     assert read_last_cycle() == {}
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_non_utf8_bytes_in_new_cycle_state_file_are_unreadable(tmp_path, monkeypatch):
+    from internal.council import scheduler_cycle_state as scs
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scheduler_state_path()).write_bytes(b"\xff\xfe not-valid-utf8")
+    new, unreadable = scs._read_new(str(soul))
+    assert new is None and unreadable is True
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_mutation_non_utf8_must_not_be_treated_as_missing(tmp_path, monkeypatch):
+    from internal.council import scheduler_cycle_state as scs
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scs.scheduler_state_path()).write_bytes(b"\xff\xfe")
+
+    real_read_new = scs._read_new
+
+    def _unreadable_is_missing(soul_map_path=None):
+        new, unreadable = real_read_new(soul_map_path)
+        if unreadable:
+            return None, False
+        return new, unreadable
+
+    monkeypatch.setattr(scs, "_read_new", _unreadable_is_missing)
+    assert scs.read_last_cycle_with_status() == ({}, "missing")
+
+
+def test_non_utf8_new_cycle_file_with_legacy_read_last_cycle_returns_legacy(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle,
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
+
+    legacy_cycle = {
+        "run_at": "2026-01-01T00:00:00Z",
+        "ok": True,
+        "phase": "scoring",
+        "progress": "2/128",
+    }
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": {"last_cycle": legacy_cycle}}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scheduler_state_path()).write_bytes(b"\xff\xfe")
+    assert read_last_cycle() == legacy_cycle
+    assert read_last_cycle_with_status() == (legacy_cycle, "unreadable")
+
+
+def test_mutation_non_utf8_legacy_fallback_requires_unreadable_flag(tmp_path, monkeypatch):
+    from internal.council import scheduler_cycle_state as scs
+
+    legacy_cycle = {"run_at": "2026-01-01T00:00:00Z", "ok": True}
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": {"last_cycle": legacy_cycle}}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scs.scheduler_state_path()).write_bytes(b"\xff\xfe")
+
+    def _broken_read(soul_map_path=None):
+        new, unreadable = scs._read_new(soul_map_path)
+        if unreadable:
+            return {}
+        if new is not None:
+            return dict(new)
+        return scs._read_legacy(soul_map_path)
+
+    monkeypatch.setattr(scs, "read_last_cycle", _broken_read)
+    assert scs.read_last_cycle() == {}
+
+
+def test_empty_legacy_soul_map_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("   \n")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_whitespace_legacy_soul_map_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("\t\n")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_legacy_non_dict_score_snapshot_scheduler_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": "not-an-object"}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_zero_byte_legacy_soul_map_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_bytes(b"")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+@pytest.mark.skipif(os.environ.get("PR1485_MUTATION") != "1", reason="mutation job only")
+def test_m8_mutation_non_dict_score_snapshot_scheduler_is_unreadable(tmp_path, monkeypatch):
+    from internal.council import scheduler_cycle_state as scs
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": "not-an-object"}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+
+    real = scs._read_legacy_with_status
+
+    def _hide_non_dict_unreadable(soul_map_path=None):
+        summary, unreadable = real(soul_map_path)
+        if unreadable:
+            return {}, False
+        return summary, unreadable
+
+    monkeypatch.setattr(scs, "_read_legacy_with_status", _hide_non_dict_unreadable)
+    assert scs.read_last_cycle_with_status() == ({}, "missing")
+
+
+def test_malformed_legacy_last_cycle_object_is_unreadable(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import read_last_cycle_with_status
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps({"score_snapshot_scheduler": {"last_cycle": "old-string-format"}})
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_unreadable_legacy_soul_map_with_active_tick_is_probe_unknown(
+    tmp_path, monkeypatch
+):
+    from internal.council.scheduler_cycle_state import (
+        CycleStateUnreadableError,
+        read_last_cycle,
+        read_last_cycle_with_status,
+    )
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_bytes(b"\xff\xfe")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
+    assert read_last_cycle() == {}
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+    with pytest.raises(CycleStateUnreadableError):
+        snaps.producer_tick_progress()
+
+
+def test_mutation_unreadable_legacy_must_not_look_like_idle_progress(
+    tmp_path, monkeypatch
+):
+    from internal.council import scheduler_cycle_state as scs
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_bytes(b"\xff\xfe")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+
+    real = scs._read_legacy_with_status
+
+    def _hide_unreadable(soul_map_path=None):
+        summary, unreadable = real(soul_map_path)
+        if unreadable:
+            return {}, False
+        return summary, unreadable
+
+    monkeypatch.setattr(scs, "_read_legacy_with_status", _hide_unreadable)
+    assert scs.read_last_cycle_with_status() == ({}, "missing")
+
+
+def test_empty_new_cycle_state_file_is_unreadable_not_missing(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scheduler_state_path()).write_text("")
+    assert read_last_cycle_with_status() == ({}, "unreadable")
+
+
+def test_corrupt_new_cycle_file_falls_back_to_legacy_last_cycle(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import (
+        read_last_cycle,
+        read_last_cycle_with_status,
+        scheduler_state_path,
+    )
+
+    legacy_cycle = {
+        "run_at": "2026-01-01T00:00:00Z",
+        "ok": True,
+        "phase": "scoring",
+        "progress": "3/128",
+    }
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": {"last_cycle": legacy_cycle}}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scheduler_state_path()).write_text("{not json")
+    assert read_last_cycle() == legacy_cycle
+    assert read_last_cycle_with_status() == (legacy_cycle, "unreadable")
+
+
+def test_mutation_corrupt_new_file_must_still_fallback_to_legacy(tmp_path, monkeypatch):
+    from internal.council import scheduler_cycle_state as scs
+
+    legacy_cycle = {"run_at": "2026-01-01T00:00:00Z", "ok": True}
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"score_snapshot_scheduler": {"last_cycle": legacy_cycle}}))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    Path(scs.scheduler_state_path()).write_text("{not json")
+
+    def _broken_read(soul_map_path=None):
+        new, unreadable = scs._read_new(soul_map_path)
+        if unreadable:
+            return {}
+        if new is not None:
+            return dict(new)
+        return scs._read_legacy(soul_map_path)
+
+    monkeypatch.setattr(scs, "read_last_cycle", _broken_read)
+    assert scs.read_last_cycle() == {}
 
 
 # --- the scheduler's liveness record is the other thing a tick used to write into the soul_map ---

@@ -1,0 +1,1021 @@
+"""PR-C graft (MC design decision on #1479): a missing cycle receipt is a wedge
+signal when the owner's servable snapshot is old, even with no volume file.
+
+Drives the real ``_guard_loop`` against the real ``read_served_snapshot`` and the
+real image seed. Only sleep, os._exit, revive and the resolver probe are stubbed.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+
+from internal import loop_stall_guard as g
+from internal.council import score_snapshots as snaps
+from internal.learning import loop_health
+from tests.score_snapshot_testutil import complete_snapshot_payload
+
+REPO_SEED = str(Path(__file__).resolve().parents[1] / "data_seeds" / "score_snapshots.json")
+
+
+class _Exit(Exception):
+    def __init__(self, code):
+        self.code = code
+
+
+class _Stop(Exception):
+    pass
+
+
+def _aged_real_seed(tmp_path, *, age_seconds=8 * 86400) -> str:
+    snap = json.loads(Path(REPO_SEED).read_text(encoding="utf-8"))
+    stamp = datetime.fromtimestamp(time.time() - age_seconds, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    snap["written_at"] = snap["build_started_at"] = stamp
+    out = tmp_path / "aged_seed.json"
+    out.write_text(json.dumps(snap), encoding="utf-8")
+    return str(out)
+
+
+def _wire(tmp_path, monkeypatch, *, seed=None):
+    seed = seed or _aged_real_seed(tmp_path)
+    vol = tmp_path / "score_snapshots.json"
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(vol))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", seed)
+    monkeypatch.setattr(loop_health, "SCORE_SNAPSHOTS_PATH", str(vol))
+    monkeypatch.setattr(loop_health, "SOUL_MAP_PATH", str(soul), raising=False)
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.delenv("SCORE_SNAPSHOT_CYCLE_PATH", raising=False)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.delenv("STAGE2_HOP", raising=False)
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCHEDULER_ENABLED", raising=False)
+    return vol
+
+
+def _run_guard(
+    monkeypatch, *, ticks=4, revive_writes_receipt=False, on_tick=None, revive=None, real_revive=False
+):
+    """Run the real guard loop for ``ticks`` ticks. Returns (exit_code, revives).
+
+    The monotonic clock is fake: each tick advances it by the guard interval.
+    ``on_tick(n)`` runs before the n-th check; ``revive`` replaces the revive stub.
+    """
+    revives = []
+
+    def _revive():
+        revives.append(1)
+        if revive_writes_receipt:
+            snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")
+        if revive is not None:
+            return revive(len(revives))
+
+    state = {"n": 0, "t": 1000.0}
+
+    def _sleep(_s):
+        state["n"] += 1
+        state["t"] += g.INTERVAL_SECONDS
+        if state["n"] > ticks:
+            raise _Stop()
+        if on_tick is not None:
+            on_tick(state["n"])
+
+    monkeypatch.setattr(g, "_now_mono", lambda: state["t"])
+
+    def _exit(code):
+        raise _Exit(code)
+
+    monkeypatch.setattr(g, "ENABLED", True)
+    monkeypatch.setattr(g, "KILL_ENABLED", True)
+    monkeypatch.setattr(g, "BOOT_GRACE_SECONDS", 0)
+    monkeypatch.setattr(g, "CONSECUTIVE_CHECKS", 3)
+    monkeypatch.setattr(g, "MAX_SNAPSHOT_AGE_SECONDS", 5400)
+    if not real_revive:
+        monkeypatch.setattr(g, "_try_revive", _revive)
+    monkeypatch.setattr(g, "_resolver_tick_age_seconds", lambda: None)
+    monkeypatch.setattr(g.time, "sleep", _sleep)
+    monkeypatch.setattr(g.os, "_exit", _exit)
+    try:
+        g._guard_loop()
+    except _Exit as e:
+        return e.code, len(revives)
+    except _Stop:
+        return None, len(revives)
+    return "returned_idle", len(revives)
+
+
+def _write_volume(vol: Path, *, age_seconds: float) -> None:
+    ts = datetime.fromtimestamp(time.time() - age_seconds, tz=timezone.utc)
+    vol.write_text(
+        json.dumps(complete_snapshot_payload(written_at=ts.strftime("%Y-%m-%dT%H:%M:%SZ"))),
+        encoding="utf-8",
+    )
+
+
+def test_premise_seed_is_servable_and_old_with_no_volume_file(tmp_path, monkeypatch):
+    vol = _wire(tmp_path, monkeypatch)
+    assert not vol.exists()
+    served = snaps.read_served_snapshot()
+    assert served.state is snaps.ServedState.SEED
+    assert served.age_seconds > 5400
+    assert snaps.producer_cycle_age_seconds() is None
+
+
+def test_missing_receipt_and_old_seed_with_no_volume_file_is_a_wedge(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    code, revives = _run_guard(monkeypatch)
+    assert revives == 1
+    assert code == 1
+
+
+def test_missing_receipt_wedge_self_heals_when_revive_writes_a_receipt(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    code, revives = _run_guard(monkeypatch, revive_writes_receipt=True)
+    assert revives == 1
+    assert code is None
+
+
+def test_missing_receipt_and_nothing_servable_is_a_wedge(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch, seed=str(tmp_path / "no_seed.json"))
+    assert not snaps.read_served_snapshot().servable
+    code, revives = _run_guard(monkeypatch)
+    assert (code, revives) == (1, 1)
+
+
+def test_missing_receipt_with_young_complete_volume_does_not_strike(tmp_path, monkeypatch):
+    vol = _wire(tmp_path, monkeypatch)
+    _write_volume(vol, age_seconds=60)
+    code, revives = _run_guard(monkeypatch)
+    assert (code, revives) == (None, 0)
+
+
+def test_missing_receipt_is_not_masked_by_a_young_seed(tmp_path, monkeypatch):
+    """Ditto: a young seed is a static artifact, not proof the producer ran."""
+    young_seed = _aged_real_seed(tmp_path, age_seconds=60)
+    vol = _wire(tmp_path, monkeypatch, seed=young_seed)
+    assert not vol.exists()
+    served = snaps.read_served_snapshot()
+    assert served.origin == "seed" and served.age_seconds < 5400
+    code, revives = _run_guard(monkeypatch)
+    assert (code, revives) == (1, 1)
+
+
+def test_young_seed_wedge_self_heals_when_revive_writes_a_receipt(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch, seed=_aged_real_seed(tmp_path, age_seconds=60))
+    code, revives = _run_guard(monkeypatch, revive_writes_receipt=True)
+    assert (code, revives) == (None, 1)
+
+
+def test_servable_volume_snapshot_of_unknown_age_never_revives_or_exits(tmp_path, monkeypatch):
+    """Ditto: readers still have a snapshot, so an unknown age is not a stale one."""
+    vol = _wire(tmp_path, monkeypatch)
+    _write_volume(vol, age_seconds=60)
+    real = snaps.read_served_snapshot()
+    unknown = snaps.ServedSnapshot(real.state, real.snapshot, None, "volume", None)
+    monkeypatch.setattr(snaps, "read_served_snapshot", lambda *a, **k: unknown)
+    code, revives = _run_guard(monkeypatch, ticks=6)
+    assert (code, revives) == (None, 0)
+
+
+def test_future_dated_receipt_does_not_hide_a_wedged_producer(tmp_path, monkeypatch):
+    """A receipt dated 30 days ahead must not read as fresh forever."""
+    _wire(tmp_path, monkeypatch)
+    snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")
+    path = Path(snaps._score_snapshot_cycle_path())
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["attempted_at"] = datetime.fromtimestamp(time.time() + 30 * 86400, tz=timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    code, revives = _run_guard(monkeypatch)
+    assert (code, revives) == (1, 1)
+
+
+def test_future_dated_receipt_self_heals_when_revive_rewrites_the_receipt(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")
+    path = Path(snaps._score_snapshot_cycle_path())
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["attempted_at"] = datetime.fromtimestamp(time.time() + 30 * 86400, tz=timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+    code, revives = _run_guard(monkeypatch, revive_writes_receipt=True)
+    assert (code, revives) == (None, 1)
+
+
+def _old_receipt(age_seconds: float) -> None:
+    snaps.record_cycle_receipt({"complete": False}, outcome="published")
+    path = Path(snaps._score_snapshot_cycle_path())
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["attempted_at"] = datetime.fromtimestamp(time.time() - age_seconds, tz=timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    path.write_text(json.dumps(receipt), encoding="utf-8")
+
+
+_PROGRESS_CTX = {"run_id": None}
+
+
+def _reset_scoring_progress_run() -> None:
+    _PROGRESS_CTX["run_id"] = None
+
+
+def _scoring_progress(
+    done: int,
+    total: int = 128,
+    *,
+    run_id: str | None = None,
+    run_at: str | None = None,
+) -> str:
+    """Persist like ``ScoreSnapshotScheduler._progress``: stable run_id, fresh run_at heartbeat."""
+    from internal.council.scheduler_cycle_state import write_last_cycle
+
+    if run_id is None:
+        if _PROGRESS_CTX["run_id"] is None:
+            _PROGRESS_CTX["run_id"] = uuid.uuid4().hex
+        run_id = _PROGRESS_CTX["run_id"]
+    else:
+        _PROGRESS_CTX["run_id"] = run_id
+    heartbeat = run_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    write_last_cycle(
+        {
+            "run_id": run_id,
+            "run_at": heartbeat,
+            "ok": False,
+            "phase": "scoring",
+            "progress": f"{done}/{total}",
+        }
+    )
+    return run_id
+
+
+def _active_tick(monkeypatch) -> None:
+    monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
+
+
+def test_premise_active_tick_is_visible_to_the_probe(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    assert snaps.producer_tick_progress() is None
+    _active_tick(monkeypatch)
+    _reset_scoring_progress_run()
+    run_id = _scoring_progress(3)
+    assert snaps.producer_tick_progress() == {"token": (run_id, "3/128")}
+
+
+def test_long_running_advancing_tick_with_an_old_receipt_is_never_killed(tmp_path, monkeypatch):
+    """Replit P2: receipt 6001s old and _TICK_ACTIVE, but the scoring phase keeps advancing."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    # 12 checks = 2880s of fake time: past the 900s progress deadline, inside the 3600s cap.
+    assert 12 * g.INTERVAL_SECONDS < g.tick_max_seconds()
+    code, revives = _run_guard(
+        monkeypatch, ticks=12, on_tick=lambda n: _scoring_progress(n)
+    )
+    assert (code, revives) == (None, 0)
+
+
+def test_hung_active_tick_with_no_progress_is_restarted_after_the_deadline(tmp_path, monkeypatch):
+    """Not exempt forever: an active tick whose progress stopped still gets the restart."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    code, revives = _run_guard(monkeypatch, ticks=20)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_hung_tick_is_not_killed_before_the_progress_deadline(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    deadline_ticks = int(g.tick_progress_seconds() // g.INTERVAL_SECONDS)
+    code, revives = _run_guard(monkeypatch, ticks=deadline_ticks)
+    assert (code, revives) == (None, 0)
+
+
+def test_no_progress_deadline_follows_the_schedulers_configured_threshold(tmp_path, monkeypatch):
+    """Replit/Ditto: with SCORE_SNAPSHOT_STUCK_SECONDS=1800 the guard must not strike at 900."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 1800)
+    assert g.tick_progress_seconds() == 1800
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    # Check k sees 240*(k-1)s of no progress: 8 checks reach 1680s, still inside 1800s.
+    code, revives = _run_guard(monkeypatch, ticks=8)
+    assert (code, revives) == (None, 0)
+
+
+def test_no_progress_past_the_schedulers_threshold_is_restarted(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 1800)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    code, revives = _run_guard(monkeypatch, ticks=20)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_guard_override_may_raise_but_never_undercut_the_scheduler_threshold(monkeypatch):
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 1800)
+    monkeypatch.setattr(g, "TICK_PROGRESS_OVERRIDE_SECONDS", 300)
+    monkeypatch.setattr(g, "_override_clamp_logged", False)
+    assert g.tick_progress_seconds() == 1800
+    monkeypatch.setattr(g, "TICK_PROGRESS_OVERRIDE_SECONDS", 2400)
+    assert g.tick_progress_seconds() == 2400
+    monkeypatch.setattr(g, "TICK_PROGRESS_OVERRIDE_SECONDS", 0)
+    assert g.tick_progress_seconds() == 1800
+
+
+def test_hard_cap_never_undercuts_the_progress_deadline(tmp_path, monkeypatch):
+    """Threshold 3000s: the 3600s base cap alone would kill a tick that is still advancing."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_STUCK_SECONDS", 3000)
+    assert g.tick_max_seconds() == 6000
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    # 20 checks = 4560s of watching: past the 3600s base cap, inside 2x the deadline.
+    code, revives = _run_guard(monkeypatch, ticks=20, on_tick=lambda n: _scoring_progress(n))
+    assert (code, revives) == (None, 0)
+
+
+def test_a_tick_that_advances_forever_still_hits_the_absolute_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    code, _ = _run_guard(monkeypatch, ticks=30, on_tick=lambda n: _scoring_progress(n))
+    assert code == 1
+
+
+def test_cap_is_absolute_from_first_sight_even_after_a_stall_and_resume(tmp_path, monkeypatch):
+    """Claude's probe: advance 14 checks, freeze 2 (480s), resume at check 17.
+
+    The stall never reached the 900s deadline and the tick kept advancing, but the cap counts
+    from when the guard first saw the tick, so it is still restarted once the cap has passed.
+    It is not restarted before the cap, and progress after the stall gives no fresh runway.
+    """
+    _wire(tmp_path, monkeypatch)
+    cap = g.tick_max_seconds()
+    assert cap == 3600
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+
+    def _probe(n):
+        # checks 1-14 advance, 15-16 frozen, 17+ advance again
+        if n <= 14 or n >= 17:
+            _scoring_progress(n)
+
+    # 16 checks watch 3600s (first check at 0s): not past the cap yet, so no restart.
+    assert 16 * g.INTERVAL_SECONDS - g.INTERVAL_SECONDS == cap
+    assert _run_guard(monkeypatch, ticks=16, on_tick=_probe) == (None, 0)
+
+    code, revives = _run_guard(monkeypatch, ticks=30, on_tick=_probe)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_tick_that_finishes_under_the_cap_survives(tmp_path, monkeypatch):
+    """A tick that advances and completes before the cap is never restarted."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+
+    def _finish_at_12(n):
+        if n < 12:
+            _scoring_progress(n)
+        elif n == 12:
+            monkeypatch.setattr(snaps, "_TICK_ACTIVE", False)
+            snaps.record_cycle_receipt({"complete": True}, outcome="published")
+
+    assert 12 * g.INTERVAL_SECONDS < g.tick_max_seconds()
+    assert _run_guard(monkeypatch, ticks=40, on_tick=_finish_at_12) == (None, 0)
+
+
+def test_write_phase_outlasts_a_raised_write_timeout(tmp_path, monkeypatch):
+    """The progress token is constant while the write phase waits: the deadline covers it."""
+    _wire(tmp_path, monkeypatch)
+    assert g.tick_progress_seconds() == 900  # defaults unchanged (write timeout 600s)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1500)
+    assert g.tick_progress_seconds() == 1560
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(128, 128)  # scoring done, the write phase is waiting
+    # 1500s of a healthy, silent write (7 checks reach 1440s) must not strike.
+    assert _run_guard(monkeypatch, ticks=7) == (None, 0)
+    # A write that outlives its timeout is still restarted.
+    code, _ = _run_guard(monkeypatch, ticks=30)
+    assert code == 1
+
+
+def test_tick_in_progress_revive_on_a_hung_tick_is_not_a_success(tmp_path, monkeypatch):
+    """The revive cannot stop a hung tick: it is not marked done, the strikes stand and it retries."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    code, revives = _run_guard(
+        monkeypatch, ticks=20, revive=lambda n: {"revived": False, "reason": "tick_in_progress"}
+    )
+    assert code == 1
+    assert revives == g.CONSECUTIVE_CHECKS
+
+
+def test_real_revive_reports_tick_in_progress_for_an_active_tick(tmp_path, monkeypatch):
+    """Replit's repro, end to end: the real revive says tick_in_progress; an advancing tick survives."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    assert snaps.revive_score_snapshot_scheduler()["reason"] == "tick_in_progress"
+    code, _ = _run_guard(
+        monkeypatch, ticks=12, real_revive=True, on_tick=lambda n: _scoring_progress(n)
+    )
+    assert code is None
+
+
+def test_real_revive_on_a_hung_tick_still_ends_in_a_restart(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    code, _ = _run_guard(monkeypatch, ticks=20, real_revive=True)
+    assert code == 1
+
+
+def test_tick_in_progress_revive_on_a_premature_strike_is_withdrawn(tmp_path, monkeypatch):
+    """A tick that started after the age check: the strike is withdrawn, not counted blindly."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    answers = iter([{"revived": False, "reason": "tick_in_progress"}])
+    code, revives = _run_guard(
+        monkeypatch,
+        ticks=g.CONSECUTIVE_CHECKS,
+        revive=lambda n: next(answers, {"revived": False, "reason": "no_change"}),
+    )
+    assert (code, revives) == (None, 2)
+
+
+def test_withdrawn_strike_cannot_hold_off_the_restart_forever(tmp_path, monkeypatch):
+    """If revive keeps saying tick_in_progress while the probe sees no tick, strikes still count."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    code, _ = _run_guard(
+        monkeypatch,
+        ticks=12,
+        revive=lambda n: {"revived": False, "reason": "tick_in_progress"},
+    )
+    assert code == 1
+
+
+def _flaky_producer_tick_probe(monkeypatch, *, succeed_checks: int = 1) -> None:
+    real = snaps.producer_tick_progress
+    calls = {"n": 0}
+
+    def _probe():
+        calls["n"] += 1
+        if calls["n"] <= succeed_checks:
+            return real()
+        raise RuntimeError("tick progress probe failed")
+
+    monkeypatch.setattr(snaps, "producer_tick_progress", _probe)
+
+
+def _simulate_pre_fix_unknown_is_idle(monkeypatch) -> None:
+    """Reintroduce the bug: probe failure reads as idle (clears watch, strikes accrue)."""
+    real = g._tick_progress
+
+    def _idle_on_unknown():
+        snap = real()
+        if not snap.probe_ok:
+            return g.TickProgressSnapshot(None, True)
+        return snap
+
+    monkeypatch.setattr(g, "_tick_progress", _idle_on_unknown)
+
+
+def _always_fail_producer_tick_probe(monkeypatch) -> None:
+    def _probe():
+        raise RuntimeError("tick progress probe failed")
+
+    monkeypatch.setattr(snaps, "producer_tick_progress", _probe)
+
+
+def _simulate_unbounded_probe_unknown(monkeypatch) -> None:
+    """Mutation: probe-unknown never hits the absolute cap."""
+    orig = g._TickWatch.past_absolute_cap
+
+    def _never_for_unknown(self, now: float) -> bool:
+        if self.probe_unknown:
+            return False
+        return orig(self, now)
+
+    monkeypatch.setattr(g._TickWatch, "past_absolute_cap", _never_for_unknown)
+
+
+def _simulate_fresh_cap_reset_first_seen(monkeypatch) -> None:
+    """Mutation: leaving probe-unknown always replaces the watch (resets first_seen)."""
+    orig = g._watch_active_tick
+
+    def _fresh_watch(watch, token, now):
+        if watch is not None and watch.probe_unknown:
+            return g._TickWatch(token, now)
+        return orig(watch, token, now)
+
+    monkeypatch.setattr(g, "_watch_active_tick", _fresh_watch)
+
+
+def _simulate_inherit_cap_on_new_run(monkeypatch) -> None:
+    """Mutation: resume after probe-unknown always keeps first_seen (ignores run_id)."""
+
+    def _always_preserve(watch, token, now):
+        if watch is not None and watch.probe_unknown:
+            watch.probe_unknown = False
+            watch.token = token
+            watch.last_progress = now
+            watch.run_id = g._token_run_id(token)
+            return watch
+        if watch is None:
+            return g._TickWatch(token, now)
+        watch.observe(token, now)
+        return watch
+
+    monkeypatch.setattr(g, "_watch_active_tick", _always_preserve)
+
+
+def _simulate_malformed_cycle_state_as_missing(monkeypatch) -> None:
+    """Mutation: unreadable cycle state looks like a missing record (Replit bug)."""
+
+    def _missing(*_a, **_k):
+        return {}, "missing"
+
+    monkeypatch.setattr(
+        "internal.council.scheduler_cycle_state.read_last_cycle_with_status", _missing
+    )
+
+
+def test_failed_tick_probe_during_healthy_advancing_tick_never_exits(tmp_path, monkeypatch):
+    """Ditto P2: a live tick must not be killed when the progress probe keeps failing."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    assert 12 * g.INTERVAL_SECONDS < g.tick_max_seconds()
+    code, revives = _run_guard(
+        monkeypatch, ticks=12, on_tick=lambda n: _scoring_progress(n)
+    )
+    assert (code, revives) == (None, 0)
+
+
+def test_failed_tick_probe_on_hung_watched_tick_still_restarts_at_cap(tmp_path, monkeypatch):
+    """Probe failure must not erase the watch; the absolute cap still restarts a hung tick."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    assert g.tick_max_seconds() == 1800  # max(base, 2 * progress deadline)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    # One guard run: establish watch on check 1, probe fails after, cap + 3 strikes in one loop.
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_mutation_healthy_probe_fail_treats_unknown_as_idle(tmp_path, monkeypatch):
+    """If unknown is treated as idle, the healthy-tick probe-fail scenario exits."""
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(0)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    _simulate_pre_fix_unknown_is_idle(monkeypatch)
+    code, _ = _run_guard(
+        monkeypatch, ticks=12, on_tick=lambda n: _scoring_progress(n)
+    )
+    assert code == 1
+
+
+def test_mutation_hung_probe_fail_treats_unknown_as_idle(tmp_path, monkeypatch):
+    """If unknown clears the watch, a hung tick is restarted before the absolute cap."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    _flaky_producer_tick_probe(monkeypatch, succeed_checks=1)
+    _simulate_pre_fix_unknown_is_idle(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=cap_ticks - 1)
+    assert code == 1
+
+
+def test_permanent_probe_failure_without_watch_restarts_after_cap(tmp_path, monkeypatch):
+    """Probe always raises with no prior watch: bounded by the absolute cap, then restart."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _always_fail_producer_tick_probe(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_probe_unknown_then_real_advancing_tick_exits_at_cap_from_first_sight(
+    tmp_path, monkeypatch
+):
+    """Same run_id after probe-unknown keeps the absolute cap from first sight of that run."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    fail_checks = 6
+    calls = {"n": 0}
+    run_id = "same-run-through-outage"
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (run_id, "1/128")}, True)
+        if n <= 1 + fail_checks:
+            return g.TickProgressSnapshot(None, False)
+        step = n - fail_checks - 1
+        return g.TickProgressSnapshot({"token": (run_id, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(
+        monkeypatch, ticks=1 + fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS
+    )
+    assert code == 1
+    assert revives >= 1
+
+
+def test_same_run_changing_run_at_heartbeat_keeps_cap_after_probe_outage(
+    tmp_path, monkeypatch
+):
+    """Real writer shape: run_id stable while run_at heartbeat changes every progress write."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    run_id = _scoring_progress(1)
+    fail_checks = 6
+    calls = {"n": 0}
+    real = g._tick_progress
+
+    def _flaky_then_real():
+        calls["n"] += 1
+        if calls["n"] <= fail_checks:
+            return g.TickProgressSnapshot(None, False)
+        _scoring_progress(calls["n"] - fail_checks, run_id=run_id)
+        return real()
+
+    monkeypatch.setattr(g, "_tick_progress", _flaky_then_real)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(
+        monkeypatch, ticks=fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS + 2
+    )
+    assert code == 1
+
+
+def test_new_run_without_outage_gets_fresh_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    calls = {"n": 0}
+
+    def _controlled():
+        calls["n"] += 1
+        run = "run-a" if calls["n"] <= 4 else "run-b"
+        return g.TickProgressSnapshot({"token": (run, f"{calls['n']}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled)
+    code, _ = _run_guard(monkeypatch, ticks=6)
+    assert code is None
+
+
+def test_new_run_after_age_none_window_gets_fresh_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    calls = {"n": 0}
+    prior_run = "prior-run-id"
+
+    def _tick():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (prior_run, "1/128")}, True)
+        if n in (2, 3):
+            return g.TickProgressSnapshot(None, True)
+        if n <= 7:
+            return g.TickProgressSnapshot({"token": (prior_run, "2/128")}, True)
+        step = n - 7
+        return g.TickProgressSnapshot({"token": ("new-run-after-none", f"{step}/128")}, True)
+
+    def _age():
+        if calls["n"] in (2, 3):
+            return None
+        return float(g.MAX_SNAPSHOT_AGE_SECONDS + 1)
+
+    monkeypatch.setattr(g, "_tick_progress", _tick)
+    monkeypatch.setattr(g, "_snapshot_age_seconds", _age)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=7 + cap_ticks // 2)
+    assert code is None
+
+
+def test_successful_idle_probe_clears_probe_unknown_watch(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    _old_receipt(6001)
+    calls = {"n": 0}
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            return g.TickProgressSnapshot(None, False)
+        return g.TickProgressSnapshot(None, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    code, revives = _run_guard(monkeypatch, ticks=20)
+    assert code == 1
+    assert revives >= 1
+
+
+def test_malformed_cycle_state_file_during_active_tick_restarts_at_cap(
+    tmp_path, monkeypatch
+):
+    """Replit: unreadable cycle state must not look like a stuck token=None progress probe."""
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    Path(scheduler_state_path()).write_text("{not json", encoding="utf-8")
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def _cycle_state_cap_guard_test(tmp_path, monkeypatch, *, seed_state) -> None:
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    seed_state(Path(scheduler_state_path()))
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    assert _run_guard(monkeypatch, ticks=cap_ticks - 1) == (None, 0)
+    code, revives = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code == 1
+    assert revives >= 1
+
+
+def _count_probe_unknown_watch_inits(monkeypatch):
+    inits = []
+    orig = g._TickWatch.__init__
+
+    def wrapped(self, token, now, *, probe_unknown=False):
+        orig(self, token, now, probe_unknown=probe_unknown)
+        if probe_unknown:
+            inits.append(self.first_seen)
+
+    monkeypatch.setattr(g._TickWatch, "__init__", wrapped)
+    return inits
+
+
+def _flapping_snapshot_age_probe(monkeypatch, *, none_at_checks=(2, 3)):
+    calls = {"n": 0}
+
+    def age():
+        calls["n"] += 1
+        if calls["n"] in none_at_checks:
+            return None
+        return float(g.MAX_SNAPSHOT_AGE_SECONDS + 1)
+
+    monkeypatch.setattr(g, "_snapshot_age_seconds", age)
+    return calls
+
+
+def test_snapshot_age_none_does_not_clear_probe_unknown_watch(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    inits = _count_probe_unknown_watch_inits(monkeypatch)
+    _flapping_snapshot_age_probe(monkeypatch)
+    monkeypatch.setattr(
+        g, "_tick_progress", lambda: g.TickProgressSnapshot(None, False)
+    )
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 3)
+    assert len(inits) == 1
+    assert code == 1
+
+
+def test_non_utf8_cycle_state_file_during_active_tick_restarts_at_cap(
+    tmp_path, monkeypatch
+):
+    _cycle_state_cap_guard_test(
+        tmp_path,
+        monkeypatch,
+        seed_state=lambda path: path.write_bytes(b"\xff\xfe not-json"),
+    )
+
+
+def test_empty_cycle_state_file_during_active_tick_restarts_at_cap(tmp_path, monkeypatch):
+    _cycle_state_cap_guard_test(
+        tmp_path, monkeypatch, seed_state=lambda path: path.write_text("")
+    )
+
+
+def test_stat_permission_error_on_cycle_state_is_probe_unknown(tmp_path, monkeypatch):
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    state_path = Path(scheduler_state_path())
+    state_path.write_text('{"last_cycle": {"phase": "scoring", "progress": "1/1"}}')
+    real_stat = os.stat
+
+    def _deny_stat(path, *args, **kwargs):
+        if os.fspath(path) == os.fspath(state_path):
+            raise PermissionError("denied")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", _deny_stat)
+    _cycle_state_cap_guard_test(tmp_path, monkeypatch, seed_state=lambda _p: None)
+
+
+def test_new_run_after_probe_unknown_gets_fresh_absolute_cap(tmp_path, monkeypatch):
+    """A scoring run that starts during probe-unknown must not inherit the old cap."""
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    prior_run = "prior-run-id"
+    new_run = "new-run-id"
+    calls = {"n": 0}
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (prior_run, "1/128")}, True)
+        if n <= 7:
+            return g.TickProgressSnapshot(None, False)
+        step = n - 7
+        return g.TickProgressSnapshot({"token": (new_run, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=7 + cap_ticks + g.CONSECUTIVE_CHECKS)
+    assert code is None
+
+
+def test_mutation_new_run_must_not_inherit_prior_run_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    prior_run = "prior-run-id"
+    new_run = "new-run-id"
+    calls = {"n": 0}
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 1:
+            return g.TickProgressSnapshot({"token": (prior_run, "1/128")}, True)
+        if n <= 7:
+            return g.TickProgressSnapshot(None, False)
+        step = n - 7
+        return g.TickProgressSnapshot({"token": (new_run, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    _simulate_inherit_cap_on_new_run(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=7 + cap_ticks + g.CONSECUTIVE_CHECKS)
+    assert code == 1
+
+
+def test_mutation_malformed_cycle_state_must_not_read_as_idle_progress(
+    tmp_path, monkeypatch
+):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _active_tick(monkeypatch)
+    _scoring_progress(5)
+    from internal.council.scheduler_cycle_state import scheduler_state_path
+
+    Path(scheduler_state_path()).write_text("{not json", encoding="utf-8")
+    _simulate_malformed_cycle_state_as_missing(monkeypatch)
+    code, _ = _run_guard(monkeypatch, ticks=20)
+    assert code == 1
+
+
+def test_mutation_permanent_probe_fail_requires_unknown_cap(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    _always_fail_producer_tick_probe(monkeypatch)
+    _simulate_unbounded_probe_unknown(monkeypatch)
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(monkeypatch, ticks=cap_ticks + g.CONSECUTIVE_CHECKS + 2)
+    assert code is None
+
+
+def test_mutation_unknown_then_real_tick_fresh_cap_resets_first_sight(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
+    _old_receipt(6001)
+    fail_checks = 6
+    calls = {"n": 0}
+    run_id = "same-run-resume"
+
+    def _controlled_tick_progress():
+        calls["n"] += 1
+        if calls["n"] <= fail_checks:
+            return g.TickProgressSnapshot(None, False)
+        step = calls["n"] - fail_checks
+        return g.TickProgressSnapshot({"token": (run_id, f"{step}/128")}, True)
+
+    monkeypatch.setattr(g, "_tick_progress", _controlled_tick_progress)
+    _simulate_fresh_cap_reset_first_seen(monkeypatch)
+
+    cap_ticks = int(g.tick_max_seconds() // g.INTERVAL_SECONDS)
+    code, _ = _run_guard(
+        monkeypatch, ticks=fail_checks + cap_ticks + g.CONSECUTIVE_CHECKS
+    )
+    assert code is None
+
+
+def test_fresh_receipt_beats_old_seed_age(tmp_path, monkeypatch):
+    _wire(tmp_path, monkeypatch)
+    snaps.record_cycle_receipt({"complete": False}, outcome="incomplete")
+    code, revives = _run_guard(monkeypatch)
+    assert (code, revives) == (None, 0)
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"STAGE2_HOP": "1"},
+        {"SCORE_SNAPSHOT_SCHEDULER_ENABLED": "off"},
+        {"WORKER_HEAVY": "off"},
+    ],
+    ids=["hop", "scheduler_off", "worker_heavy_off_not_owner"],
+)
+def test_non_producer_processes_never_strike_on_seed_age(tmp_path, monkeypatch, env):
+    _wire(tmp_path, monkeypatch)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    code, revives = _run_guard(monkeypatch)
+    assert revives == 0
+    assert code in (None, "returned_idle")
+
+
+@pytest.mark.parametrize(
+    "env",
+    [{"STAGE2_HOP": "1"}, {"SCORE_SNAPSHOT_SCHEDULER_ENABLED": "off"}, {"WORKER_HEAVY": "off"}],
+    ids=["hop", "scheduler_off", "worker_heavy_off_not_owner"],
+)
+def test_non_producer_processes_never_strike_on_an_old_volume_file(tmp_path, monkeypatch, env):
+    vol = _wire(tmp_path, monkeypatch)
+    _write_volume(vol, age_seconds=100_000)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    code, revives = _run_guard(monkeypatch)
+    assert revives == 0
+    assert code in (None, "returned_idle")

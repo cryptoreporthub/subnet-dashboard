@@ -289,7 +289,7 @@ async def _lifespan(app: FastAPI):
 
                 threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
 
-                # Loop stall guard: watches pump desk snapshot age and resolver tick
+                # Loop stall guard: watches the score-snapshot producer (owner only) and resolver tick
                 # age; exits the worker process when both stay stale so the Fly
                 # supervisor restarts it fresh (re-runs start_background_workers).
                 try:
