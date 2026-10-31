@@ -3,23 +3,31 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 
 import pytest
 
 from internal import loop_stall_guard as g
 from internal.council import score_snapshots as snaps
 from internal.council import weights
+from internal.council.scheduler_cycle_state import read_last_cycle_with_status
 from tests.test_scheduler_cycle_state_phase_null_r16 import PRE_R15_WRITER_LAST_CYCLE
 from tests.test_stall_guard_missing_receipt_wedge import _old_receipt, _run_guard, _wire
 
 
+def _scheduler_state_path(tmp_path, monkeypatch) -> Path:
+    state = tmp_path / "score_snapshot_scheduler.json"
+    monkeypatch.setenv("SCORE_SNAPSHOT_SCHEDULER_STATE_PATH", str(state))
+    return state
+
+
 def _wire_paths(tmp_path, monkeypatch):
+    """Deprecated alias — prefer ``_wire`` then ``_scheduler_state_path`` (R20 wire-first order)."""
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
-    state = tmp_path / "score_snapshot_scheduler.json"
-    monkeypatch.setenv("SCORE_SNAPSHOT_SCHEDULER_STATE_PATH", str(state))
-    return soul, state
+    return soul, _scheduler_state_path(tmp_path, monkeypatch)
 
 
 def _disk_last_cycle(shape: str) -> dict | None:
@@ -40,8 +48,19 @@ def _disk_last_cycle(shape: str) -> dict | None:
     raise ValueError(shape)
 
 
+def _assert_legacy_cycle_read_ok(*, shape: str) -> None:
+    """In-test guard: legacy null/absent/failed must read as ``status='ok'`` before guard run."""
+    last, status = read_last_cycle_with_status()
+    if shape == "missing":
+        assert status == "missing", (status, last)
+        return
+    assert status == "ok", (status, last)
+
+
 def _seed_disk(tmp_path, monkeypatch, *, channel: str, shape: str) -> None:
-    soul, state = _wire_paths(tmp_path, monkeypatch)
+    """Write cycle disk after ``_wire`` + ``_scheduler_state_path``."""
+    soul = Path(weights.SOUL_MAP_PATH)
+    state = Path(os.environ["SCORE_SNAPSHOT_SCHEDULER_STATE_PATH"])
     payload = _disk_last_cycle(shape)
     if channel == "new":
         if payload is None:
@@ -56,7 +75,7 @@ def _seed_disk(tmp_path, monkeypatch, *, channel: str, shape: str) -> None:
                 json.dumps({"score_snapshot_scheduler": {"last_cycle": payload}}),
                 encoding="utf-8",
             )
-        state.write_text("{}", encoding="utf-8")
+        state.unlink(missing_ok=True)
 
 
 def _guard_defaults(monkeypatch) -> int:
@@ -69,8 +88,11 @@ def _guard_defaults(monkeypatch) -> int:
 
 
 def _assert_cap_kill_pins(tmp_path, monkeypatch, *, channel: str, shape: str) -> None:
-    _seed_disk(tmp_path, monkeypatch, channel=channel, shape=shape)
     _wire(tmp_path, monkeypatch)
+    _scheduler_state_path(tmp_path, monkeypatch)
+    _seed_disk(tmp_path, monkeypatch, channel=channel, shape=shape)
+    if channel == "legacy":
+        _assert_legacy_cycle_read_ok(shape=shape)
     kill_at = _guard_defaults(monkeypatch)
     monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
     _old_receipt(6001)
@@ -87,6 +109,39 @@ def test_null_phase_stale_disk_cap_kill_pins(
 ):
     """Real ``_guard_loop`` via ``_run_guard``: exit at cap + ``CONSECUTIVE_CHECKS``, not before."""
     _assert_cap_kill_pins(tmp_path, monkeypatch, channel=channel, shape=shape)
+
+
+def _g1_mutant_legacy_branch_scoring_advance(monkeypatch) -> None:
+    """Mutate legacy read to return in-flight scoring (must break probe-unknown cap pins)."""
+    import internal.council.scheduler_cycle_state as cycle_state
+
+    real = cycle_state._read_legacy_with_status
+
+    def _scoring_legacy(soul_map_path=None):
+        summary, unreadable = real(soul_map_path)
+        if unreadable or not summary:
+            return summary, unreadable
+        return (
+            {
+                **summary,
+                "phase": "scoring",
+                "progress": "64/128",
+                "run_id": "legacy-mutant-run",
+                "ok": False,
+            },
+            False,
+        )
+
+    monkeypatch.setattr(cycle_state, "_read_legacy_with_status", _scoring_legacy)
+
+
+@pytest.mark.parametrize("shape", ["null", "absent", "failed"])
+def test_g1_legacy_read_scoring_mutant_fails_cap_kill_pin(
+    tmp_path, monkeypatch, shape
+):
+    _g1_mutant_legacy_branch_scoring_advance(monkeypatch)
+    with pytest.raises(AssertionError):
+        _assert_cap_kill_pins(tmp_path, monkeypatch, channel="legacy", shape=shape)
 
 
 def _r1a_past_absolute_cap_if_false(monkeypatch) -> None:

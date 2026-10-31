@@ -132,6 +132,7 @@ def tick_progress_seconds() -> int:
         # The progress token is constant while the write phase waits (up to the write timeout),
         # so the deadline must outlast a healthy write. The default (600s) is below 900s: no change.
         # R18-2 pins: frozen write-phase token must not strike before this deadline (see silent-write tests).
+        # R20: tick-start row (``phase=scoring``, no ``progress``) is silent until the first scored row — no setup heartbeat; this deadline covers it.
         threshold = max(threshold, write_timeout + 60)
     if TICK_PROGRESS_OVERRIDE_SECONDS and TICK_PROGRESS_OVERRIDE_SECONDS < threshold:
         if not _override_clamp_logged:
@@ -361,6 +362,7 @@ def _watch_active_tick(
             # Compare progress components only (Ditto #4429065242 / R17): clobbered ``run_id`` must not
             # refresh ``last_progress`` when ``progress`` is unchanged.
             if _token_progress(token) != _token_progress(watch.token):
+                # R20: placeholder ``_PROBE_UNKNOWN`` → real token refresh is intentional (once per watch); ``first_seen`` / cap unchanged.
                 watch.last_progress = now
             watch.token = token
             resumed = _token_run_id(token)

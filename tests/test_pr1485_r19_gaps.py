@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +20,8 @@ from tests.test_pr1485_r18_cap_kill_null_phase import (
     _r1a_past_absolute_cap_if_false,
     _r1b_cap_branch_not_hung,
     _r1c_age_none_clears_strikes_during_cap,
+    _scheduler_state_path,
+    _seed_disk,
     _wire_paths,
 )
 from tests.test_pr1485_r18_silent_write_deadline import _r2b_bypass_no_progress_deadline
@@ -31,8 +35,11 @@ from tests.test_stall_guard_missing_receipt_wedge import (
 
 
 def _seed_legacy_only(tmp_path, monkeypatch, *, shape: str) -> None:
-    """Legacy soul_map last_cycle only — no sidecar ``score_snapshot_scheduler.json``."""
-    soul, state = _wire_paths(tmp_path, monkeypatch)
+    """Legacy soul_map last_cycle only — sidecar file absent (R20 wire-first)."""
+    _wire(tmp_path, monkeypatch)
+    _scheduler_state_path(tmp_path, monkeypatch)
+    soul = Path(weights.SOUL_MAP_PATH)
+    state = Path(os.environ["SCORE_SNAPSHOT_SCHEDULER_STATE_PATH"])
     payload = _disk_last_cycle(shape)
     if payload is None:
         soul.write_text("{}", encoding="utf-8")
@@ -45,8 +52,6 @@ def _seed_legacy_only(tmp_path, monkeypatch, *, shape: str) -> None:
 
 
 def test_g1_legacy_cap_kill_pins_without_sidecar_file(tmp_path, monkeypatch):
-    _seed_legacy_only(tmp_path, monkeypatch, shape="null")
-    _wire(tmp_path, monkeypatch)
     _assert_cap_kill_pins(tmp_path, monkeypatch, channel="legacy", shape="null")
 
 
@@ -64,33 +69,6 @@ def test_g1_legacy_seed_requires_soul_path_wired_before_write(tmp_path, monkeypa
     _old_receipt(6001)
     assert _run_guard(monkeypatch, ticks=kill_at - 1)[0] is None
     assert _run_guard(monkeypatch, ticks=kill_at)[0] == 1
-
-
-def test_g1_mutant_scoring_sidecar_over_legacy_stale_fails_legacy_cap_kill(
-    tmp_path, monkeypatch
-):
-    _seed_legacy_only(tmp_path, monkeypatch, shape="null")
-    _, state = _wire_paths(tmp_path, monkeypatch)
-    state.write_text(
-        json.dumps(
-            {
-                "last_cycle": {
-                    "phase": "scoring",
-                    "progress": "64/128",
-                    "run_id": "sidecar-run",
-                    "ok": False,
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    _wire(tmp_path, monkeypatch)
-    kill_at = _guard_defaults(monkeypatch)
-    monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
-    _old_receipt(6001)
-    code_survive, _ = _run_guard(monkeypatch, ticks=kill_at - 1)
-    with pytest.raises(AssertionError):
-        assert code_survive is None
 
 
 def test_g2_real_sentinel_token_until_resume():
@@ -114,13 +92,7 @@ def test_g2_probe_unknown_same_progress_does_not_refresh_last_progress():
 
 def test_g2_guard_loop_sentinel_path_cap_kill_check_11(tmp_path, monkeypatch):
     """Active tick + stale legacy null-phase → probe-unknown sentinel → cap kill @ check 11."""
-    _seed_legacy_only(tmp_path, monkeypatch, shape="null")
-    _wire(tmp_path, monkeypatch)
-    kill_at = _guard_defaults(monkeypatch)
-    monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
-    _old_receipt(6001)
-    assert _run_guard(monkeypatch, ticks=kill_at - 1)[0] is None
-    assert _run_guard(monkeypatch, ticks=kill_at)[0] == 1
+    _assert_cap_kill_pins(tmp_path, monkeypatch, channel="legacy", shape="null")
 
 
 def _g2_mutant_drop_probe_unknown_sentinel(monkeypatch) -> None:

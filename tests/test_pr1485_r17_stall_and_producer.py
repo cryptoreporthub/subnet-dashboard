@@ -119,14 +119,13 @@ def test_active_tick_non_scoring_phase_on_disk_is_probe_unknown(tmp_path, monkey
 
 
 def _assert_guard_survives_before_absolute_cap(tmp_path, monkeypatch, *, channel: str) -> None:
-    soul, state = _wire_paths(tmp_path, monkeypatch)
-    payload = PRE_R15_WRITER_LAST_CYCLE
-    if channel == "new":
-        state.write_text(json.dumps({"last_cycle": payload}), encoding="utf-8")
-    else:
-        soul.write_text(json.dumps({"score_snapshot_scheduler": {"last_cycle": payload}}), encoding="utf-8")
-        state.write_text("{}", encoding="utf-8")
     _wire(tmp_path, monkeypatch)
+    from tests.test_pr1485_r18_cap_kill_null_phase import _scheduler_state_path, _seed_disk
+
+    _scheduler_state_path(tmp_path, monkeypatch)
+    _seed_disk(tmp_path, monkeypatch, channel=channel, shape="null")
+    if channel == "legacy":
+        assert read_last_cycle_with_status()[1] == "ok"
     monkeypatch.setattr(g, "TICK_MAX_BASE_SECONDS", 1200)
     monkeypatch.setattr(g, "INTERVAL_SECONDS", 240)
     monkeypatch.setattr(g, "CONSECUTIVE_CHECKS", 3)
