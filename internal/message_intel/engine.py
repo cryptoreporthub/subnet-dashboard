@@ -37,6 +37,11 @@ def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> D
     if not isinstance(payload, dict) or not payload.get("content"):
         return {"status": "error", "error": "Missing required field: content"}
 
+    from internal.message_intel.rollup import is_desk_message_row
+
+    if is_desk_message_row(payload):
+        return {"status": "skipped", "reason": "desk_bot", "sources": source_status()}
+
     nlp, price_tracker = _load_pipeline()
     db = get_db()
 
