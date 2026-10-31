@@ -1674,6 +1674,7 @@ class ScoreSnapshotScheduler:
             run_id = uuid.uuid4().hex
             # Stall guard reads ``(run_id, progress)`` from this file; the write phase keeps progress
             # fixed while the snapshot finishes — ``tick_progress_seconds()`` must cover that silence.
+            # R19 G3: tick-start row only — no ``progress`` key until the first ``_progress`` callback (r19 start-record pin).
             self._persist_cycle_summary(
                 {"run_at": started_at, "run_id": run_id, "ok": False, "phase": "scoring"}
             )

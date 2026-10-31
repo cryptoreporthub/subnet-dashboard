@@ -105,14 +105,19 @@ def _r1b_cap_branch_not_hung(monkeypatch) -> None:
     monkeypatch.setattr(g._TickWatch, "past_absolute_cap", _never_cap_for_unknown)
 
 
-def _r1c_cap_branch_clears_strikes(monkeypatch) -> None:
-    _r1b_cap_branch_not_hung(monkeypatch)
+def _r1c_age_none_clears_strikes_during_cap(monkeypatch) -> None:
+    """Distinct from R1b: ``age is None`` clears strikes each tick (never reaches cap kill)."""
+    monkeypatch.setattr(g, "_snapshot_age_seconds", lambda: None)
 
 
 @pytest.mark.parametrize(
     "mutator",
-    [_r1a_past_absolute_cap_if_false, _r1b_cap_branch_not_hung, _r1c_cap_branch_clears_strikes],
-    ids=["R1a-cap-if-false", "R1b-cap-branch-not-hung", "R1c-consecutive-stale-zero"],
+    [
+        _r1a_past_absolute_cap_if_false,
+        _r1b_cap_branch_not_hung,
+        _r1c_age_none_clears_strikes_during_cap,
+    ],
+    ids=["R1a-cap-if-false", "R1b-cap-branch-not-hung", "R1c-age-none-clears-strikes"],
 )
 def test_r18_1_mutations_fail_cap_kill_pin(tmp_path, monkeypatch, mutator):
     mutator(monkeypatch)

@@ -457,6 +457,7 @@ def _guard_loop() -> None:
         if not progress.probe_ok:
             now = _now_mono()
             if watch is None:
+                # R19 G2: real sentinel — token stays ``_PROBE_UNKNOWN`` until probe resumes (see r19 unit pin).
                 watch = _TickWatch(_PROBE_UNKNOWN, now, probe_unknown=True)
             else:
                 watch.probe_unknown = True
