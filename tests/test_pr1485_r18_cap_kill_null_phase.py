@@ -87,6 +87,36 @@ def _guard_defaults(monkeypatch) -> int:
     return cap_checks + g.CONSECUTIVE_CHECKS + 1
 
 
+def _install_probe_unknown_path_spy(monkeypatch) -> list[str]:
+    """Record guard-loop probe-unknown signals (R21: not kill timing alone)."""
+    events: list[str] = []
+    real_init = g._TickWatch.__init__
+
+    def _init_spy(self, token, now, *, probe_unknown=False):
+        if probe_unknown or token is g._PROBE_UNKNOWN:
+            events.append("probe_unknown_watch")
+        return real_init(self, token, now, probe_unknown=probe_unknown)
+
+    real_progress = g._tick_progress
+
+    def _progress_spy():
+        snap = real_progress()
+        if not snap.probe_ok:
+            events.append("tick_progress_probe_failed")
+        return snap
+
+    monkeypatch.setattr(g._TickWatch, "__init__", _init_spy)
+    monkeypatch.setattr(g, "_tick_progress", _progress_spy)
+    return events
+
+
+def _assert_probe_unknown_path_taken(events: list[str], *, channel: str, shape: str) -> None:
+    if channel == "legacy" and shape in ("null", "absent", "failed"):
+        assert "tick_progress_probe_failed" in events or "probe_unknown_watch" in events, (
+            f"expected probe-unknown path for legacy cap-kill pin ({shape}); spy={events!r}"
+        )
+
+
 def _assert_cap_kill_pins(tmp_path, monkeypatch, *, channel: str, shape: str) -> None:
     _wire(tmp_path, monkeypatch)
     _scheduler_state_path(tmp_path, monkeypatch)
@@ -96,7 +126,9 @@ def _assert_cap_kill_pins(tmp_path, monkeypatch, *, channel: str, shape: str) ->
     kill_at = _guard_defaults(monkeypatch)
     monkeypatch.setattr(snaps, "_TICK_ACTIVE", True)
     _old_receipt(6001)
+    probe_spy = _install_probe_unknown_path_spy(monkeypatch)
     code_survive, _ = _run_guard(monkeypatch, ticks=kill_at - 1)
+    _assert_probe_unknown_path_taken(probe_spy, channel=channel, shape=shape)
     assert code_survive is None
     code_kill, _ = _run_guard(monkeypatch, ticks=kill_at)
     assert code_kill == 1
@@ -111,13 +143,13 @@ def test_null_phase_stale_disk_cap_kill_pins(
     _assert_cap_kill_pins(tmp_path, monkeypatch, channel=channel, shape=shape)
 
 
-def _g1_mutant_legacy_branch_scoring_advance(monkeypatch) -> None:
-    """Mutate legacy read to return in-flight scoring (must break probe-unknown cap pins)."""
+def _g1_mutant_legacy_branch_scoring_frozen(monkeypatch) -> None:
+    """Legacy read returns **fixed** ``64/128`` scoring (active tick, not probe-unknown)."""
     import internal.council.scheduler_cycle_state as cycle_state
 
     real = cycle_state._read_legacy_with_status
 
-    def _scoring_legacy(soul_map_path=None):
+    def _frozen_scoring_legacy(soul_map_path=None):
         summary, unreadable = real(soul_map_path)
         if unreadable or not summary:
             return summary, unreadable
@@ -126,21 +158,57 @@ def _g1_mutant_legacy_branch_scoring_advance(monkeypatch) -> None:
                 **summary,
                 "phase": "scoring",
                 "progress": "64/128",
-                "run_id": "legacy-mutant-run",
+                "run_id": "legacy-mutant-frozen",
                 "ok": False,
             },
             False,
         )
 
-    monkeypatch.setattr(cycle_state, "_read_legacy_with_status", _scoring_legacy)
+    monkeypatch.setattr(cycle_state, "_read_legacy_with_status", _frozen_scoring_legacy)
+
+
+def _g1_mutant_legacy_branch_scoring_advancing(monkeypatch) -> None:
+    """Legacy read returns scoring with **advancing** progress each call (not probe-unknown)."""
+    import internal.council.scheduler_cycle_state as cycle_state
+
+    real = cycle_state._read_legacy_with_status
+    state = {"n": 0}
+
+    def _advancing_scoring_legacy(soul_map_path=None):
+        summary, unreadable = real(soul_map_path)
+        if unreadable or not summary:
+            return summary, unreadable
+        state["n"] += 1
+        done = min(state["n"], 128)
+        return (
+            {
+                **summary,
+                "phase": "scoring",
+                "progress": f"{done}/128",
+                "run_id": "legacy-mutant-advancing",
+                "ok": False,
+            },
+            False,
+        )
+
+    monkeypatch.setattr(cycle_state, "_read_legacy_with_status", _advancing_scoring_legacy)
 
 
 @pytest.mark.parametrize("shape", ["null", "absent", "failed"])
-def test_g1_legacy_read_scoring_mutant_fails_cap_kill_pin(
+def test_g1_legacy_frozen_scoring_mutant_fails_probe_unknown_path_pin(
     tmp_path, monkeypatch, shape
 ):
-    _g1_mutant_legacy_branch_scoring_advance(monkeypatch)
-    with pytest.raises(AssertionError):
+    _g1_mutant_legacy_branch_scoring_frozen(monkeypatch)
+    with pytest.raises(AssertionError, match="expected probe-unknown path"):
+        _assert_cap_kill_pins(tmp_path, monkeypatch, channel="legacy", shape=shape)
+
+
+@pytest.mark.parametrize("shape", ["null", "absent", "failed"])
+def test_g1_legacy_advancing_scoring_mutant_fails_probe_unknown_path_pin(
+    tmp_path, monkeypatch, shape
+):
+    _g1_mutant_legacy_branch_scoring_advancing(monkeypatch)
+    with pytest.raises(AssertionError, match="expected probe-unknown path"):
         _assert_cap_kill_pins(tmp_path, monkeypatch, channel="legacy", shape=shape)
 
 
