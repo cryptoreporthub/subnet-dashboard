@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from fastapi.testclient import TestClient
 
 
@@ -33,17 +31,23 @@ def test_home_hero_context_does_not_call_get_or_create_today_pick(monkeypatch):
     assert "story_path" in hero
 
 
-def test_pick_sections_does_not_call_get_or_create_today_pick(monkeypatch):
+def test_pick_sections_is_read_only(monkeypatch):
+    """Homepage SSR never scores or writes — hour picks come from the cache."""
     import server as srv
 
     def _boom(*_a, **_k):
-        raise AssertionError("get_or_create_today_pick must not run on pick_sections")
+        raise AssertionError("pick_sections must not score or write")
 
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
         _boom,
     )
     monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
+    monkeypatch.setattr(srv, "_ordered_hour_picks", _boom)
+    monkeypatch.setattr("internal.council.hourly_pick.select_hourly_pick", _boom)
+    monkeypatch.setattr("internal.council.score_cache.score_universe", _boom)
+    monkeypatch.setattr(srv, "_record_pick_in_learning_loop", _boom)
+    monkeypatch.setattr("internal.learning.prediction_loop.record_pick_prediction", _boom)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
@@ -54,14 +58,30 @@ def test_pick_sections_does_not_call_get_or_create_today_pick(monkeypatch):
             },
         },
     )
+    monkeypatch.setitem(
+        srv._TOP_PICKS_CACHE,
+        "payload",
+        {"hour_picks": [{"netuid": 3, "name": "Top"}, {"netuid": 5}, {"netuid": 6}, {"netuid": 7}]},
+    )
 
     from internal.learning.dashboard_context import _pick_sections
 
-    with patch("server._ordered_hour_picks", return_value=[]):
-        picks = _pick_sections([], {})
-
+    picks = _pick_sections([], {})
     assert picks["day_picks"]
     assert picks["day_picks"][0]["netuid"] == 9
+    assert [p["netuid"] for p in picks["hour_picks"]] == [3, 5, 6]
+
+
+def test_pick_sections_empty_cache_is_honest(monkeypatch):
+    import server as srv
+
+    monkeypatch.setitem(srv._TOP_PICKS_CACHE, "payload", None)
+    monkeypatch.setitem(srv._TOP_PICKS_CACHE, "at", 0.0)
+
+    from internal.learning.dashboard_context import _pick_sections
+
+    picks = _pick_sections([], {})
+    assert picks["hour_picks"] == []
 
 
 def test_homepage_warm_does_not_call_get_or_create_today_pick(monkeypatch):
