@@ -20,8 +20,14 @@ jobs:
   claude:
     if: >-
       contains(github.event.comment.body, '@claude') &&
-      github.event.comment.performed_via_github_app == null &&
-      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      github.event.comment.user.login != 'claude[bot]' &&
+      (
+        contains(fromJSON('["simi-revision[bot]","simibot[bot]"]'), github.event.comment.user.login) ||
+        (
+          github.event.comment.performed_via_github_app == null &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+        )
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,3 +35,5 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Only our own two GitHub Apps may tag Claude; claude[bot] is never allowed.
+          allowed_bots: simi-revision,simibot
