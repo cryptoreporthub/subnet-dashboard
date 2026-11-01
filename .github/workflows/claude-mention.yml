@@ -36,5 +36,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Joshua chose Sonnet as the main model (no Opus); switch to haiku if quota is too high.
+          claude_args: "--model sonnet"
           # Only our own two GitHub Apps may tag Claude; claude[bot] is never allowed.
           allowed_bots: simi-revision,simibot
