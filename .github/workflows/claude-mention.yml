@@ -14,11 +14,13 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  id-token: write # required by claude-code-action to get its GitHub token
 
 jobs:
   claude:
     if: >-
       contains(github.event.comment.body, '@claude') &&
+      github.event.comment.performed_via_github_app == null &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     steps:
