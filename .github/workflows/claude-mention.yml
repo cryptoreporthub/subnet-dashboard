@@ -11,10 +11,11 @@ on:
     types: [created]
 
 permissions:
-  contents: read
+  contents: write # Joshua chose: Claude may push fixes (Oct 31)
   pull-requests: write
   issues: write
   id-token: write # required by claude-code-action to get its GitHub token
+  actions: read # lets Claude read CI results on PRs
 
 jobs:
   claude:
