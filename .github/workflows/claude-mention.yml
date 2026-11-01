@@ -35,8 +35,9 @@ jobs:
       - name: Run Claude
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Joshua chose Sonnet as the main model (no Opus); switch to haiku if quota is too high.
-          claude_args: "--model sonnet"
+          # Uses Joshua's Claude subscription (no per-token API billing).
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Joshua chose Haiku to save subscription quota (no Opus).
+          claude_args: "--model haiku"
           # Only our own two GitHub Apps may tag Claude; claude[bot] is never allowed.
           allowed_bots: simi-revision,simibot
