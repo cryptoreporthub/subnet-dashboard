@@ -271,7 +271,9 @@ def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
         @classmethod
         def now(cls, tz=None):
             _TickingDatetime.ticks += 1
-            return super().now(tz) + timedelta(seconds=0.5 * _TickingDatetime.ticks)
+            return datetime(2026, 8, 7, 0, 0, 1, tzinfo=tz) + timedelta(
+                seconds=0.5 * _TickingDatetime.ticks
+            )
 
     monkeypatch.setattr(bot_policy, "datetime", _TickingDatetime)
 
@@ -285,7 +287,7 @@ def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
     first_age = first_body["freshness"].pop("age_seconds")
     second_age = second_body["freshness"].pop("age_seconds")
     assert first_body == second_body
-    assert second_age > first_age
+    assert (first_age, second_age) == (1.5, 2.0)
     assert calls["n"] == 1
 
 
