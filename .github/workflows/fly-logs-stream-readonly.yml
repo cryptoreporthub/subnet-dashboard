@@ -1,0 +1,168 @@
+# Read-only live log stream for OOM / RSS incident windows (#1538).
+# workflow_dispatch only; does not deploy, restart, or mutate machines.
+name: Fly logs stream (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration_minutes:
+        description: "Minutes to tail flyctl logs (UTC wall clock on runner)"
+        required: true
+        default: 45
+        type: number
+
+jobs:
+  stream:
+    name: Tail logs, filter, RSS summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Stream, filter, and summarize (read-only)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          DURATION_MINUTES: ${{ inputs.duration_minutes }}
+        run: |
+          set -uo pipefail
+          APP=subnet-dashboard
+          MINUTES="${DURATION_MINUTES:-45}"
+          if [ "$MINUTES" -gt 60 ] 2>/dev/null; then
+            MINUTES=60
+          elif [ "$MINUTES" -lt 1 ] 2>/dev/null; then
+            MINUTES=1
+          fi
+          STREAM_SECS=$((MINUTES * 60))
+          OUT_DIR="$RUNNER_TEMP/fly-logs-stream-${GITHUB_RUN_ID}"
+          mkdir -p "$OUT_DIR"
+          RAW="$OUT_DIR/fly-logs-raw.txt"
+          FILTERED="$OUT_DIR/filtered.txt"
+          SUMMARY="$OUT_DIR/rss-summary.txt"
+          META="$OUT_DIR/stream-meta.txt"
+
+          health_probe() {
+            local label="$1"
+            {
+              echo "=== ${label} $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+              curl -sS --max-time 10 -w "\nHTTP %{http_code} in %{time_total}s\n" "https://${APP}.fly.dev/health" || true
+            }
+          }
+
+          {
+            echo "app=$APP"
+            echo "duration_minutes=$MINUTES"
+            echo "stream_timeout_seconds=$STREAM_SECS"
+            echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "run_id=${GITHUB_RUN_ID}"
+          } > "$META"
+
+          health_probe "health_probe_start" >> "$META" 2>&1
+
+          set +e
+          timeout "${STREAM_SECS}s" flyctl logs -a "$APP" > "$RAW" 2>&1
+          STREAM_EXIT=$?
+          set -e
+          STREAM_DROPPED=false
+          if [ "$STREAM_EXIT" -ne 0 ] && [ "$STREAM_EXIT" -ne 124 ]; then
+            STREAM_DROPPED=true
+          fi
+
+          health_probe "health_probe_end" >> "$META" 2>&1
+
+          {
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "flyctl_logs_exit=$STREAM_EXIT"
+            echo "stream_dropped=$STREAM_DROPPED"
+            echo "raw_bytes=$(wc -c < "$RAW" | tr -d ' ')"
+          } >> "$META"
+
+          python3 - "$RAW" "$FILTERED" <<'PY'
+          import re
+          import sys
+
+          raw_path, filtered_path = sys.argv[1], sys.argv[2]
+          patterns = re.compile(
+              r"(rss-heartbeat|process_memory|heavy_job_slot.*(acquire|release)|"
+              r"live_subnets|pump_ladder|prediction_resolver|resolver.*cycle|"
+              r"stake alert|homepage cache|whale|outcome_snapshot|score_snapshot|listener page SSR|"
+              r"Out of memory|Killed process|oom_killed|exit_code=137|exit code 137|"
+              r"inline worker heartbeat stale|starting inline background worker|"
+              r"Health check|/health|Machine (created and started|started in|start|stop)|"
+              r"Virtual machine exited|Main child exited|Process appears to have been OOM)",
+              re.IGNORECASE,
+          )
+          redact = re.compile(
+              r"(api_key|secret|password|token|bearer|FLY_API_TOKEN=)",
+              re.IGNORECASE,
+          )
+          matched = 0
+          with open(raw_path, errors="replace") as source, open(filtered_path, "w") as target:
+              target.write(f"source={raw_path}\n")
+              for line in source:
+                  if not patterns.search(line):
+                      continue
+                  if redact.search(line):
+                      target.write("[REDACTED]\n")
+                  else:
+                      target.write(line)
+                  matched += 1
+              target.write(f"matched_lines={matched}\n")
+          PY
+
+          python3 - "$FILTERED" "$SUMMARY" <<'PY'
+          import re
+          import sys
+
+          filtered_path, summary_path = sys.argv[1], sys.argv[2]
+          rss_re = re.compile(
+              r"pid=(\d+).*rss_kb=(\d+)|"
+              r"pid=(\d+).*process_memory.*rss_kb=(\d+)|"
+              r"run_mode=\w+ pid=(\d+) .* rss_kb=(\d+)",
+          )
+          alt_re = re.compile(r"pid=(\d+).*rss_kb=(\d+)")
+          stats = {}
+
+          with open(filtered_path, errors="replace") as f:
+              for line in f:
+                  m = rss_re.search(line) or alt_re.search(line)
+                  if not m:
+                      continue
+                  groups = [g for g in m.groups() if g is not None]
+                  if len(groups) < 2:
+                      continue
+                  pid, kb = groups[-2], groups[-1]
+                  try:
+                      kb_i = int(kb)
+                  except ValueError:
+                      continue
+                  rec = stats.setdefault(pid, {"first_kb": kb_i, "last_kb": kb_i, "max_kb": kb_i})
+                  rec["last_kb"] = kb_i
+                  rec["max_kb"] = max(rec["max_kb"], kb_i)
+
+          def mib(kb):
+              return round(kb / 1024.0, 2)
+
+          with open(summary_path, "w") as out:
+              out.write("pid\tfirst_mib\tlast_mib\tmax_mib\n")
+              for pid in sorted(stats, key=lambda p: int(p) if p.isdigit() else 0):
+                  r = stats[pid]
+                  out.write(
+                      f"{pid}\t{mib(r['first_kb'])}\t{mib(r['last_kb'])}\t{mib(r['max_kb'])}\n"
+                  )
+              out.write(f"pids_with_rss_samples={len(stats)}\n")
+          PY
+
+          rm -f "$RAW"
+
+      - name: Upload filtered stream artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-logs-stream-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/fly-logs-stream-${{ github.run_id }}/filtered.txt
+            ${{ runner.temp }}/fly-logs-stream-${{ github.run_id }}/rss-summary.txt
+            ${{ runner.temp }}/fly-logs-stream-${{ github.run_id }}/stream-meta.txt
+          if-no-files-found: error
+          retention-days: 7
