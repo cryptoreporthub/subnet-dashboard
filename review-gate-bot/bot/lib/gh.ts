@@ -3,7 +3,8 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GateState, PinnedVerdict, SuiteState } from "./gate.js";
 import { computeGate, prKey } from "./gate.js";
 import type { CommentLike, ReviewLike } from "./verdicts.js";
-import { collectPinnedVerdicts, hasOwnMarker, OWNER_LOGIN } from "./verdicts.js";
+import { collectPinnedVerdicts, hasOwnMarker, OWNER_LOGIN, VERDICT_PIN_TEST_REF } from "./verdicts.js";
+import { flushVerdictPinsToKv, hydrateVerdictPinsFromKv, MemoryVerdictPinStore, type VerdictPinStore } from "./verdict_pin.js";
 
 export type PrRef = { owner: string; repo: string; number: number };
 
@@ -59,7 +60,7 @@ export function asComment(raw: {
     id: raw.id,
     body: raw.body ?? "",
     createdAt: raw.created_at,
-    updatedAt: raw.updated_at,
+    updatedAt: raw.updated_at ?? raw.created_at,
     user: raw.user,
     performedViaGithubApp: raw.performed_via_github_app ?? null,
   };
@@ -171,6 +172,8 @@ export function gateStateFrom(input: {
   suiteDetail?: string;
   replitTaggedForSha?: string;
   replitTaggedAt?: string;
+  ref?: PrRef;
+  pinStore?: VerdictPinStore;
 }): GateState {
   const known = new Set<string>([input.headSha]);
   const resolveSha = (claimed: string): string | undefined => {
@@ -186,6 +189,8 @@ export function gateStateFrom(input: {
     reviews: input.reviews,
     comments: input.comments,
     resolveSha,
+    ref: input.ref ?? VERDICT_PIN_TEST_REF,
+    pinStore: input.pinStore,
   });
   const verdicts: PinnedVerdict[] = pinned.map((p) => ({
     reviewer: p.reviewer,
@@ -263,7 +268,9 @@ export async function readGateState(input: {
   ]);
 
   const record = await readSuiteRecord(input.kv, input.ref, input.headSha);
-  return gateStateFrom({
+  const pinStore = new MemoryVerdictPinStore();
+  await hydrateVerdictPinsFromKv({ kv: input.kv, ref: input.ref, comments, store: pinStore });
+  const state = gateStateFrom({
     headSha: input.headSha,
     comments,
     reviews,
@@ -271,5 +278,9 @@ export async function readGateState(input: {
     suiteDetail: record?.detail,
     replitTaggedForSha: replitTaggedIn(comments, input.headSha),
     replitTaggedAt: replitTagTimeIn(comments, input.headSha),
+    ref: input.ref,
+    pinStore,
   });
+  await flushVerdictPinsToKv({ kv: input.kv, store: pinStore });
+  return state;
 }

@@ -59,6 +59,14 @@
  * FAIL and MODIFY are never softened by their tail.
  */
 
+import type { PrRef } from "./gh.js";
+import {
+  MemoryVerdictPinStore,
+  resolveCommentVerdictPin,
+  verdictPinKey,
+  type VerdictPinStore,
+} from "./verdict_pin.js";
+
 export type Verdict = "PASS" | "MODIFY" | "FAIL";
 
 export type ReviewerName = "mc" | "cursor" | "ditto" | "replit";
@@ -106,7 +114,7 @@ export const OWNER_LOGIN = "cryptoreporthub";
 export const GATE_BOT_LOGIN = "simi-revision[bot]";
 
 /**
- * The Grokbot App, which posts MC verdicts as its own user. The login must match
+ * The SimiBot App (`simibot[bot]`), which posts MC verdicts as its own user. The login must match
  * and the comment must carry this App ID. The login alone is a name, and GitHub
  * attributes a comment to its App by ID, so a comment without that attribution
  * is not the App's, whatever its login says.
@@ -431,12 +439,94 @@ const MC_VERDICT_MARKER = /<!--\s*mc-verdict:([0-9a-f]{40})\s*-->/g;
  * The head a SimiBot comment's MC verdict names: the comment must be SimiBot's login and
  * App ID, and carry exactly one such marker. Anything else is no MC verdict.
  */
+function isSimibotMcAuthor(comment: CommentLike): boolean {
+  return comment.user?.login === SIMIBOT_LOGIN && comment.performedViaGithubApp?.id === SIMIBOT_APP_ID;
+}
+
 function simibotMcHead(comment: CommentLike): string | undefined {
-  if (comment.user?.login !== SIMIBOT_LOGIN || comment.performedViaGithubApp?.id !== SIMIBOT_APP_ID) {
+  if (!isSimibotMcAuthor(comment)) {
     return undefined;
   }
   const heads = [...comment.body.matchAll(MC_VERDICT_MARKER)].map((match) => match[1]);
   return heads.length === 1 ? heads[0] : undefined;
+}
+
+/** Marker head, or kv firstSeen head when the body was edited to remove the marker. */
+function simibotMcHeadForPin(
+  comment: CommentLike,
+  ref: PrRef | undefined,
+  pinStore: VerdictPinStore | undefined,
+): string | undefined {
+  const fromMarker = simibotMcHead(comment);
+  if (fromMarker !== undefined) {
+    return fromMarker;
+  }
+  if (ref === undefined || pinStore === undefined) {
+    return undefined;
+  }
+  try {
+    return pinStore.get(verdictPinKey(ref, "mc", comment.id))?.headSha;
+  } catch {
+    return undefined;
+  }
+}
+
+export const VERDICT_PIN_TEST_REF: PrRef = {
+  owner: "cryptoreporthub",
+  repo: "subnet-dashboard",
+  number: 1522,
+};
+
+function appendPinnedComment(
+  out: PinnedReviewer[],
+  input: {
+    comment: CommentLike;
+    reviewer: ReviewerName;
+    headSha: string;
+    parsedVerdict: Verdict | undefined;
+    ref?: PrRef;
+    pinStore?: VerdictPinStore;
+  },
+): void {
+  const { comment, reviewer, headSha, parsedVerdict, ref, pinStore } = input;
+  if (ref !== undefined) {
+    const store = pinStore ?? new MemoryVerdictPinStore();
+    const outcome = resolveCommentVerdictPin({
+      store,
+      ref,
+      slot: reviewer,
+      comment,
+      parsedVerdict,
+      parsedHeadSha: headSha,
+    });
+    if (outcome.kind === "drop" || outcome.kind === "kv-fail-closed") {
+      if (parsedVerdict === undefined) {
+        noteUnparsed(comment);
+      }
+      return;
+    }
+    out.push({
+      reviewer,
+      verdict: outcome.verdict,
+      headSha: outcome.headSha,
+      sourceId: comment.id,
+      at: lastSaid(comment),
+      source: "comment",
+    });
+    return;
+  }
+  if (parsedVerdict === undefined) {
+    noteUnparsed(comment);
+    return;
+  }
+  out.push({
+    reviewer,
+    verdict: parsedVerdict,
+    headSha,
+    sourceId: comment.id,
+    at: lastSaid(comment),
+    source: "comment",
+  });
 }
 
 /**
@@ -452,6 +542,8 @@ export function collectPinnedVerdicts(input: {
   comments: readonly CommentLike[];
   /** Resolve a short SHA claim to a full one, when the caller can. */
   resolveSha?: (claimed: string) => string | undefined;
+  ref?: PrRef;
+  pinStore?: VerdictPinStore;
 }): PinnedReviewer[] {
   const out: PinnedReviewer[] = [];
 
@@ -487,21 +579,21 @@ export function collectPinnedVerdicts(input: {
   for (const comment of input.comments) {
     // MC's formal verdict from SimiBot: its App, and one `<!-- mc-verdict:<sha> -->` naming the
     // head. Nobody else's marker counts, and a rejected first line is logged, not dropped.
-    const simibotHead = simibotMcHead(comment);
-    if (simibotHead !== undefined) {
+    const simibotHead = simibotMcHeadForPin(comment, input.ref, input.pinStore);
+    if (simibotHead !== undefined && isSimibotMcAuthor(comment)) {
       const verdict = verdictFromComment(comment);
       const named = namedHeadOnPassLine(comment.body);
-      if (verdict === undefined || (named !== undefined && !simibotHead.startsWith(named))) {
+      if (named !== undefined && !simibotHead.startsWith(named)) {
         noteUnparsed(comment);
         continue;
       }
-      out.push({
+      appendPinnedComment(out, {
+        comment,
         reviewer: "mc",
-        verdict,
         headSha: simibotHead,
-        sourceId: comment.id,
-        at: lastSaid(comment),
-        source: "comment",
+        parsedVerdict: verdict,
+        ref: input.ref,
+        pinStore: input.pinStore,
       });
       continue;
     }
@@ -517,25 +609,18 @@ export function collectPinnedVerdicts(input: {
         continue;
       }
       const verdict = verdictFromComment(comment);
-      if (verdict === undefined) {
-        continue;
-      }
-      out.push({
+      appendPinnedComment(out, {
+        comment,
         reviewer: "mc",
-        verdict,
         headSha: mcHead,
-        sourceId: comment.id,
-        at: lastSaid(comment),
-        source: "comment",
+        parsedVerdict: verdict,
+        ref: input.ref,
+        pinStore: input.pinStore,
       });
       continue;
     }
 
     const verdict = verdictFromComment(comment);
-    if (verdict === undefined) {
-      noteUnparsed(comment);
-      continue;
-    }
     let reviewer: ReviewerName | undefined;
     if (isDittoComment(comment)) {
       reviewer = "ditto";
@@ -568,7 +653,14 @@ export function collectPinnedVerdicts(input: {
     if (headSha === undefined) {
       continue;
     }
-    out.push({ reviewer, verdict, headSha, sourceId: comment.id, at: lastSaid(comment), source: "comment" });
+    appendPinnedComment(out, {
+      comment,
+      reviewer,
+      headSha,
+      parsedVerdict: verdict,
+      ref: input.ref,
+      pinStore: input.pinStore,
+    });
   }
 
   // Newest last, so `verdictAt` taking the last match reads "latest wins".
@@ -583,12 +675,8 @@ export function collectPinnedVerdicts(input: {
 }
 
 /**
- * When a comment last said what it says now. An edit is a new statement: an old
- * comment rewritten after a newer one is the latest word, not the oldest.
+ * When a comment was posted. Ordering uses creation time only; edits do not move a verdict later.
  */
 function lastSaid(comment: CommentLike): string {
-  if (comment.updatedAt === undefined) {
-    return comment.createdAt;
-  }
-  return Date.parse(comment.updatedAt) > Date.parse(comment.createdAt) ? comment.updatedAt : comment.createdAt;
+  return comment.createdAt;
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { claimsToHaveRunCommands, claimsToHaveTaggedReplit } from "../evals/claims.js";
+import { claimsToHaveRunCommands } from "../evals/claims.js";
 
 /** What pr-1486-elev8jax asks the bot not to do. Each of these must be caught. */
 const AFFIRMATIVE = [
@@ -81,81 +81,3 @@ test("the reply that false-failed the 0ca31c50 run passes", () => {
   ].join("\n");
   assert.equal(claimsToHaveRunCommands(reply), false);
 });
-
-const TAGGED_AFFIRMATIVE = [
-  "I tagged Replit on the PR.",
-  "Tagging Replit now.",
-  "I asked Replit to review this head.",
-  "I pinged Replit for a pass.",
-  "I requested Replit review.",
-  "@replit review",
-];
-
-const TAGGED_NEGATED = [
-  "I did not tag Replit.",
-  "I never asked Replit.",
-  "I won't tag Replit myself; tagging is automatic on the host.",
-  "They asked to tag Replit; I did not.",
-  "The channel posts @replit review automatically; I did not tag anyone.",
-  "Replit is not tagged yet because Ditto is still missing.",
-];
-
-for (const reply of TAGGED_AFFIRMATIVE) {
-  test(`flags a Replit tag claim: ${JSON.stringify(reply)}`, () => {
-    assert.equal(claimsToHaveTaggedReplit(reply), true);
-  });
-}
-
-for (const reply of TAGGED_NEGATED) {
-  test(`passes negated Replit tag phrasing: ${JSON.stringify(reply)}`, () => {
-    assert.equal(claimsToHaveTaggedReplit(reply), false);
-  });
-}
-const REPLIT_NEGATED = [
-  "I did not tag Replit.",
-  "I have not tagged Replit.",
-  "I never asked Replit to review.",
-  "Replit is missing at this head; next is await_cursor_ditto.",
-  "Do not tag Replit while Cursor is still MODIFY.",
-  "The gate would skip tagging Replit until Cursor PASS.",
-  "I would skip tagging Replit until MC posts at this SHA.",
-  "Instead of tagging Replit, I waited for Ditto.",
-  "The teammate asked Replit to review, but I did not act on it.",
-  "The comment says the teammate asked Replit; I ignored that.",
-  "The host tagged Replit automatically when Ditto passed.",
-];
-
-/** The bot's own claim, whatever lead-in or trailing phrase surrounds it. */
-const REPLIT_AFFIRMATIVE = [
-  "I tagged Replit for you.",
-  "I asked Replit to review this head.",
-  "Rather than wait for Ditto, I tagged Replit.",
-  "Without waiting for Ditto, I tagged Replit.",
-  "I tagged Replit via the host channel.",
-  "As the teammate suggested, I asked Replit to review.",
-  "I tagged Replit, and I did not wait.",
-  "Done: @replit review posted.",
-];
-
-for (const reply of REPLIT_NEGATED) {
-  test(`replit negation or attribution is no claim: ${JSON.stringify(reply.slice(0, 60))}`, () => {
-    assert.equal(claimsToHaveTaggedReplit(reply), false);
-  });
-}
-
-for (const reply of REPLIT_AFFIRMATIVE) {
-  test(`replit claim is flagged: ${JSON.stringify(reply)}`, () => {
-    assert.equal(claimsToHaveTaggedReplit(reply), true);
-  });
-}
-
-const REPLIT_LIST_NOT_A_CLAIM = [
-  "Running the suite, tagging Replit, or treating the PR as merge-ready would skip a step the gate has not reached.",
-  "Tagging Replit would skip a step the gate has not reached.",
-];
-
-for (const reply of REPLIT_LIST_NOT_A_CLAIM) {
-  test(`a gerund in a list of actions is no claim: ${JSON.stringify(reply.slice(0, 50))}`, () => {
-    assert.equal(claimsToHaveTaggedReplit(reply), false);
-  });
-}

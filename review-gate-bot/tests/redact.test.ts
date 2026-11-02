@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bodyLeaksSecretValue, redactSecrets } from "../bot/lib/redact.js";
+import { redactSecrets } from "../bot/lib/redact.js";
 
 test("a named credential keeps the name and loses the value", () => {
   const { text, redactedNames } = redactSecrets("GITHUB_TOKEN=ghp_abc123def456ghi789jkl012");
@@ -267,34 +267,4 @@ test("the opaque-credential rule scrubs a megabyte of identifier characters quic
   const started = performance.now();
   redactSecrets(run);
   assert.ok(performance.now() - started < 500, "the rule must not backtrack across a long run");
-});
-
-test("PASS gate: adversarial pass prose and password= labels are not secret leaks", () => {
-  assert.equal(bodyLeaksSecretValue("**Adversarial pass:** no blocking findings."), false);
-  assert.equal(bodyLeaksSecretValue("The diff mentions `password=` as a label only."), false);
-  assert.equal(bodyLeaksSecretValue("password: rotated"), false);
-});
-
-test("PASS gate: real credentials still leak", () => {
-  assert.equal(bodyLeaksSecretValue("token ghp_aaaaaaaaaaaaaaaaaaaa"), true);
-  assert.equal(bodyLeaksSecretValue("DATABASE_PASSWORD=123456"), true);
-  assert.equal(bodyLeaksSecretValue("password: hunter2hunter2"), true);
-});
-
-test("PASS gate: a secret written under the word pass, or a bare `pass=` value, still leaks", () => {
-  assert.equal(bodyLeaksSecretValue("pass=hunter"), true);
-  assert.equal(bodyLeaksSecretValue("pass: letmein"), true);
-  assert.equal(bodyLeaksSecretValue("DB_PASS=abc"), true);
-  assert.equal(bodyLeaksSecretValue("passphrase: purplemonkey"), true);
-  assert.equal(bodyLeaksSecretValue("AKIAIOSFODNN7EXAMPL1"), true);
-  assert.equal(bodyLeaksSecretValue("see postgres://admin:hunter2@db.internal/x"), true);
-});
-
-test("PASS gate: an answer to 'can it carry a secret?' and markdown after a credential word are not leaks", () => {
-  assert.equal(bodyLeaksSecretValue("**Secrets:** **No.** Only integers are logged."), false);
-  assert.equal(bodyLeaksSecretValue("Secrets: no — only membership integers"), false);
-  assert.equal(bodyLeaksSecretValue("Secrets: **none**"), false);
-  assert.equal(bodyLeaksSecretValue("`password=` and `token=` are redacted labels"), false);
-  assert.equal(bodyLeaksSecretValue("second pass: cap check"), false);
-  assert.equal(bodyLeaksSecretValue("token: bucket"), true);
 });

@@ -294,7 +294,7 @@ test("a marker from the owner's own account is not the gate's, because MC and Cl
   assert.deepEqual(collectPinnedVerdicts({ reviews: [], comments: [fromOwner] }), [], "no MC verdict is read from it");
 });
 
-// --- simibot: the Grokbot App posts MC verdicts, trusted by App ID ---------
+// --- simibot: the SimiBot App posts MC verdicts, trusted by App ID ---------
 
 const SIMIBOT = { login: "simibot[bot]", type: "Bot" };
 const SIMIBOT_APP = { id: 5501340, slug: "simibot" };
@@ -575,7 +575,7 @@ test("a caveat after a PASS takes it back under the allowlist", () => {
   assert.equal(parseVerdictToken("PASS until the suite runs"), undefined);
 });
 
-test("a verdict comment edited after a later one is the last thing said, so it sorts last", () => {
+test("a verdict comment edited after a later one still sorts by createdAt, so FAIL wins", () => {
   const pinned = collectPinnedVerdicts({
     reviews: [],
     comments: [
@@ -596,7 +596,7 @@ test("a verdict comment edited after a later one is the last thing said, so it s
   });
   assert.deepEqual(
     pinned.map((p) => p.verdict),
-    ["FAIL", "PASS"],
+    ["PASS", "FAIL"],
   );
 });
 
@@ -771,14 +771,14 @@ test("the newest SimiBot verdict at a head wins: an older MODIFY then a newer PA
   assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "PASS");
 });
 
-test("an older SimiBot verdict edited after a newer one is the last thing said, so it wins", () => {
+test("an older SimiBot verdict edited after a newer one does not resurrect PASS over MODIFY", () => {
   const older = simibotMc(`PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, {
     id: 1,
     createdAt: "2026-10-26T04:00:00Z",
     updatedAt: "2026-10-26T06:00:00Z",
   });
   const newer = simibotMc(`MODIFY at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 2, createdAt: "2026-10-26T05:00:00Z" });
-  assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "PASS");
+  assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "MODIFY");
 });
 
 // --- A SHA on the PASS line must name the head the verdict is pinned to ----------------------

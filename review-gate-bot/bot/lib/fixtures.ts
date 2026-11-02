@@ -66,12 +66,7 @@ export function readDiffFixture(workspaceDir: string): Promise<Diff | undefined>
   return readJson<Diff>(workspaceDir, DIFF_FIXTURE);
 }
 
-/**
- * File contents at the pinned head: `{ "files": { "<path>": "<text>" } }`. `baseFiles` holds the base text of each
- * file the diff modifies; a file it does not list reads the same at base.
- */
-export type RepoFixture = { files: Record<string, string>; baseFiles?: Record<string, string> };
-
-export function readRepoFixture(workspaceDir: string): Promise<RepoFixture | undefined> {
-  return readJson<RepoFixture>(workspaceDir, REPO_FIXTURE);
+/** File contents at the pinned head: `{ "files": { "<path>": "<text>" } }`. */
+export function readRepoFixture(workspaceDir: string): Promise<{ files: Record<string, string> } | undefined> {
+  return readJson<{ files: Record<string, string> }>(workspaceDir, REPO_FIXTURE);
 }

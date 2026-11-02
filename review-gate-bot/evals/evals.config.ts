@@ -6,6 +6,7 @@ import { installReasoningCoalescing } from "./coalesce-reasoning.js";
 await installReasoningCoalescing();
 
 export default defineEvalConfig({
-  maxConcurrency: 1,
-  judge: { model: { id: "grok-4.7", params: [{ id: "reasoning_effort", value: "xhigh" }] } },
+  maxConcurrency: 6,
+  // Joshua/MC: Composer NORMAL only — never composer-2.5-fast; fast param false = slow/normal seat.
+  judge: { model: { id: "composer-2.5", params: [{ id: "fast", value: "false" }] } },
 });

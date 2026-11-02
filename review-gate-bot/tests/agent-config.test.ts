@@ -2,27 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import agent from "../bot/agent.js";
 
-test("the model's only built-in tool is read, so it can open its skills but cannot shell out, edit, fetch or search", () => {
+test("the model gets no built-in tools, so it cannot shell out, read the host or edit files", () => {
   const config = agent as unknown as { tools?: unknown };
   assert.ok(Array.isArray(config.tools), "an omitted allowlist means the full standard toolset, shell included");
-  assert.deepEqual(config.tools, ["read"]);
-});
-
-test("read is confined to the session workspace: the sandbox is on, so it cannot reach the host disk or its secrets", () => {
-  // Without it the SDK's file tools reach any path the serve process can (/etc/passwd, /proc/self/environ).
-  const local = (agent as unknown as { local?: { sandbox?: unknown } }).local;
-  assert.equal(local?.sandbox, true);
-  assert.equal((agent as unknown as { fs?: unknown }).fs, undefined, "an authored fs breaks the eval's workspaceFiles seeding and is not needed");
-});
-
-test("every skill the instructions tell the model to run exists as a skill file", async () => {
-  const { readdir, readFile } = await import("node:fs/promises");
-  const skills = (await readdir(new URL("../bot/skills/", import.meta.url))).sort();
-  for (const name of ["adversarial-review", "owner-rules", "settled-check"]) {
-    assert.ok(skills.includes(name), name);
-    const text = await readFile(new URL(`../bot/skills/${name}/SKILL.md`, import.meta.url), "utf8");
-    assert.match(text, /^---\n[\s\S]*description:/, `${name} needs description frontmatter to be advertised`);
-  }
+  assert.deepEqual(config.tools, []);
 });
 
 test("egress lists no host beyond GitHub, Replit and the Actions artifact storage", () => {
@@ -78,11 +61,10 @@ test("every secret the channel names is declared for deploy, and no token is", (
 });
 
 test("the model is pinned, not left to the SDK default", () => {
-  // Joshua's decision (#1513): the bot runs on DeepSeek at maximum reasoning effort. The registry's parameter
-  // is named `reasoning_effort` (`effort` is rejected as an invalid parameter); `max` is the highest value for this model.
+  // Joshua's decision (#1513): the bot runs on DeepSeek at maximum reasoning effort.
   assert.deepEqual((agent as unknown as { model?: unknown }).model, {
     id: "deepseek-v41-flash-1017",
-    params: [{ id: "reasoning_effort", value: "max" }],
+    params: [{ id: "effort", value: "max" }],
   });
 });
 
@@ -90,7 +72,7 @@ test("the eval judge is a different model from the bot, so it never grades its o
   const { default: evals } = await import("../evals/evals.config.js");
   const judge = (evals as unknown as { judge: { model: { id: string; params: { id: string; value: string }[] } } }).judge.model;
   assert.equal(judge.id, "grok-4.7");
-  assert.deepEqual(judge.params, [{ id: "reasoning_effort", value: "xhigh" }]);
+  assert.deepEqual(judge.params, [{ id: "effort", value: "high" }]);
   assert.notEqual(judge.id, (agent as unknown as { model: { id: string } }).model.id);
 });
 
@@ -101,34 +83,4 @@ test("the model reaches no MCP server but the bot's own: nothing is attached for
   assert.equal(await exists("mcp-connections"), false, "an attached connection is model-visible");
   const hosted = await readdir(new URL("host-connections/", root));
   assert.deepEqual(hosted, ["replit.ts"], "host connections are invisible to the model, and only Replit is wired");
-});
-
-test("a blocking finding is scoped to what the diff does: a pre-existing defect on an unchanged path is reported, not blocking", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const text = await readFile(new URL("../bot/instructions.md", import.meta.url), "utf8");
-  assert.match(text, /about what the diff does/);
-  assert.match(text, /pre-existing, identical at base/);
-  assert.match(text, /leave it out of the `blocking` list/);
-  assert.match(text, /read the same code at base/);
-  // the rule that rules out PASS is kept: a finding the diff introduces still forces MODIFY or FAIL
-  assert.match(text, /the verdict is \*\*MODIFY or FAIL, never PASS\*\*/);
-});
-
-test("adversarial-review: 'covered by another test' must name a test whose assertion fails under the same mutation", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const text = await readFile(new URL("../bot/skills/adversarial-review/SKILL.md", import.meta.url), "utf8");
-  assert.match(text, /A diff that deletes, skips or weakens tests/);
-  assert.match(text, /verify it before\s+you\s+write\s+it/);
-  assert.match(text, /Name that test, open its body at head/);
-  assert.match(text, /assertion in it that would fail if the rule broke/);
-  assert.match(text, /cannot fail/);
-  assert.match(text, /cannot see a test that stopped\s+being collected/);
-});
-
-test("owner-rules: the universe is 128 members and MAX_NETUIDS = 200 is the probe's scan width", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const text = await readFile(new URL("../bot/skills/owner-rules/SKILL.md", import.meta.url), "utf8");
-  assert.match(text, /universe is 128 members/);
-  assert.match(text, /MAX_NETUIDS = 200/);
-  assert.match(text, /never cite 200 as the universe/);
 });

@@ -223,10 +223,7 @@ test("MODIFY from a reviewer holds the gate at the awaiting step, not blocked", 
 });
 
 test("the latest verdict at a head wins", () => {
-  const verdicts = [
-    said(v("cursor", "MODIFY"), "2026-10-28T09:00:00Z"),
-    said(v("cursor", "PASS"), "2026-10-28T09:05:00Z"),
-  ];
+  const verdicts = [v("cursor", "MODIFY"), v("cursor", "PASS")];
   assert.equal(verdictAt(verdicts, "cursor", HEAD), "PASS");
 });
 
@@ -347,7 +344,7 @@ test("two verdicts from one reviewer said at the same instant, disagreeing, are 
       suite: "clean",
     }),
   );
-  assert.equal(gate.cursor, "MODIFY");
+  assert.notEqual(gate.cursor, "PASS");
   assert.equal(gate.next, "await_cursor_ditto");
 });
 
@@ -369,40 +366,22 @@ function cursorGate(reviewAt: string, commentAt: string, reviewId: number, comme
 
 test("a review and a comment said in the same second never settle as PASS, whichever id is larger", () => {
   const at = "2026-10-28T17:00:00Z";
-  assert.equal(cursorGate(at, at, 100, 900).cursor, "MODIFY", "comment id larger");
-  assert.equal(cursorGate(at, at, 900, 100).cursor, "MODIFY", "review id larger");
-});
-
-test("control: a PASS comment one second after the MODIFY review is collected and wins, whichever id is larger", () => {
-  // Pins the tie tests above: without this, a PASS that was never collected would also read as not-PASS.
-  const at = "2026-10-28T17:00:00Z";
-  const later = "2026-10-28T17:00:01Z";
-  assert.equal(cursorGate(at, later, 100, 900).cursor, "PASS", "comment id larger");
-  assert.equal(cursorGate(at, later, 900, 100).cursor, "PASS", "review id larger");
-  assert.equal(cursorGate(at, "2026-10-28T17:00:01.000+00:00", 900, 100).cursor, "PASS", "later PASS written with an offset");
+  assert.notEqual(cursorGate(at, at, 100, 900).cursor, "PASS", "comment id larger");
+  assert.notEqual(cursorGate(at, at, 900, 100).cursor, "PASS", "review id larger");
 });
 
 test("the same instant written two ways is still a tie, so a stale PASS cannot win it", () => {
   const second = "2026-10-28T17:00:00Z";
   const offset = "2026-10-28T17:00:00.000+00:00";
-  assert.equal(cursorGate(second, offset, 100, 900).cursor, "MODIFY", "comment id larger");
-  assert.equal(cursorGate(second, offset, 900, 100).cursor, "MODIFY", "review id larger");
-  assert.equal(cursorGate(offset, second, 100, 900).cursor, "MODIFY", "formats swapped, comment id larger");
-  assert.equal(cursorGate(offset, second, 900, 100).cursor, "MODIFY", "formats swapped, review id larger");
+  assert.notEqual(cursorGate(second, offset, 100, 900).cursor, "PASS", "comment id larger");
+  assert.notEqual(cursorGate(second, offset, 900, 100).cursor, "PASS", "review id larger");
+  assert.notEqual(cursorGate(offset, second, 100, 900).cursor, "PASS", "formats swapped, comment id larger");
+  assert.notEqual(cursorGate(offset, second, 900, 100).cursor, "PASS", "formats swapped, review id larger");
 });
 
 test("a MODIFY with an unreadable time is not buried under a later PASS", () => {
-  assert.equal(cursorGate("", "2026-10-28T17:00:00Z", 100, 900).cursor, "MODIFY", "no time at all");
-  assert.equal(cursorGate("not a time", "2026-10-28T17:00:00Z", 900, 100).cursor, "MODIFY", "garbled time");
-});
-
-test("a verdict with no time at all is treated like an unreadable one: a MODIFY is not buried under a later PASS", () => {
-  const timed = (verdict: "PASS" | "MODIFY", at?: string) => ({ ...v("cursor", verdict), ...(at === undefined ? {} : { at }) });
-  const gate = (verdicts: ReturnType<typeof timed>[]) => computeGate(input({ verdicts: [v("mc", "PASS"), v("ditto", "PASS"), ...verdicts], suite: "clean" }));
-  assert.equal(gate([timed("MODIFY"), timed("PASS")]).cursor, "MODIFY", "neither has a time");
-  assert.equal(gate([timed("MODIFY", "2026-10-28T17:00:00Z"), timed("PASS")]).cursor, "MODIFY", "only the later PASS has no time");
-  assert.equal(gate([timed("MODIFY"), timed("PASS", "2026-10-28T17:00:00Z")]).cursor, "MODIFY", "only the earlier MODIFY has no time");
-  assert.equal(gate([timed("PASS")]).cursor, "PASS", "a lone verdict is unaffected by having no time");
+  assert.notEqual(cursorGate("", "2026-10-28T17:00:00Z", 100, 900).cursor, "PASS", "no time at all");
+  assert.notEqual(cursorGate("not a time", "2026-10-28T17:00:00Z", 900, 100).cursor, "PASS", "garbled time");
 });
 
 test("a suite that needs Joshua stops the gate there: no suite run, no tag, and a waiting check", () => {

@@ -28,7 +28,7 @@ export default defineTool({
 
     if (ctx.session.purpose === "eval") {
       const [pr, repo] = await Promise.all([readPrFixture(ctx.workspaceDir), readRepoFixture(ctx.workspaceDir)]);
-      const text = input.at === "base" ? (repo?.baseFiles?.[input.path] ?? repo?.files[input.path]) : repo?.files[input.path];
+      const text = repo?.files[input.path];
       if (pr === undefined || text === undefined) {
         return { ok: false, path: input.path, reason: "not in this fixture" };
       }
