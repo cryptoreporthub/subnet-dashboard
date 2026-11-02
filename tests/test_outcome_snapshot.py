@@ -2,9 +2,44 @@
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
+
+import pytest
+
 import internal.learning.council_health_score as health
 import internal.learning.outcome_snapshot as snap
 import internal.learning.outcome_snapshot_scheduler as sched
+
+
+@pytest.fixture(autouse=True)
+def isolate_liveness_persistence(tmp_path, monkeypatch):
+    """Point internal.liveness soul-map IO at a per-test JSON file (atomic)."""
+    from internal import liveness as _liv_mod
+
+    sm_path = tmp_path / "liveness_soul_map.json"
+
+    def _read():
+        try:
+            return json.loads(sm_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    def _write(mutator):
+        blob = _read() or {}
+        mutator(blob)
+        fd, tmp = tempfile.mkstemp(dir=str(sm_path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(blob, f)
+            os.replace(tmp, sm_path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+
+    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
+    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
 
 
 def test_council_health_score_watch_at_33pct():
@@ -69,12 +104,8 @@ def test_evidence_report_empty():
     assert "pick_audit" in report
 
 
-def test_outcome_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+def test_outcome_snapshot_tracker_is_liveness_compliant():
     from tests.liveness_conformance import assert_liveness_compliant
-
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}")
-    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
 
     def factory():
         return sched.OutcomeSnapshotScheduler().liveness
