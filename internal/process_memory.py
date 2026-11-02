@@ -51,6 +51,37 @@ def log_memory_snapshot(label: str) -> None:
     logger.info("%s pid=%s rss_kb=%d", label, os.getpid(), rss)
 
 
+def log_heavy_job_rss(name: str, phase: str, *, started_at: Optional[float] = None) -> None:
+    """RSS bookends for heavy jobs (#1538 observability)."""
+    from internal.run_mode import get_run_mode
+
+    run_mode = get_run_mode()
+    pid = os.getpid()
+    rss = read_rss_kb()
+    held_ms = 0.0
+    if phase == "end" and started_at is not None:
+        held_ms = (time.perf_counter() - started_at) * 1000.0
+    if rss is None:
+        logger.info(
+            "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown held_ms=%.1f",
+            name,
+            phase,
+            run_mode,
+            pid,
+            held_ms,
+        )
+        return
+    logger.info(
+        "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f",
+        name,
+        phase,
+        run_mode,
+        pid,
+        rss,
+        held_ms,
+    )
+
+
 def _rss_heartbeat_label() -> str:
     if os.environ.get("LIVE_SUBNETS_FETCH_CHILD") == "1":
         return "rss-heartbeat role=live_subnets_fetch_child"

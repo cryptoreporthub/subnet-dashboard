@@ -217,11 +217,17 @@ class PumpLadderScheduler:
         done = threading.Event()
 
         def _body() -> None:
+            from internal.process_memory import log_heavy_job_rss
+
+            _rss_t0 = time.perf_counter()
+            log_heavy_job_rss("pump_ladder", "start", started_at=_rss_t0)
             try:
-                outcome["result"] = self._tick_body()
-            except BaseException as exc:
-                outcome["exc"] = exc
+                try:
+                    outcome["result"] = self._tick_body()
+                except BaseException as exc:
+                    outcome["exc"] = exc
             finally:
+                log_heavy_job_rss("pump_ladder", "end", started_at=_rss_t0)
                 done.set()
 
         threading.Thread(target=_body, daemon=True, name="pump-ladder-body").start()

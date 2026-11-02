@@ -459,6 +459,10 @@ def _sync_once() -> bool:
         logger.debug("live_subnets sync skipped — already in flight")
         return False
     _record_boot_status(phase="sync_start")
+    from internal.process_memory import log_heavy_job_rss
+
+    _rss_t0 = time.perf_counter()
+    log_heavy_job_rss("live_subnets_sync", "start", started_at=_rss_t0)
     try:
         if not _sync_owner_process():
             logger.info("live_subnets sync skipped — not sync owner process")
@@ -542,6 +546,7 @@ def _sync_once() -> bool:
         _record_boot_status(phase="sync_done", ok=False, reason=f"error:{exc}")
         return False
     finally:
+        log_heavy_job_rss("live_subnets_sync", "end", started_at=_rss_t0)
         _sync_lock.release()
 
 

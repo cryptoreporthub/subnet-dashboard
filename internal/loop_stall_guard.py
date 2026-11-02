@@ -279,15 +279,22 @@ def _worker_mode() -> bool:
 
 
 def _try_revive() -> Optional[Dict[str, Any]]:
-    try:
-        from internal.council.score_snapshots import revive_score_snapshot_scheduler
+    from internal.process_memory import log_heavy_job_rss
 
-        result = revive_score_snapshot_scheduler()
-        logger.warning("loop stall guard: in-place revive attempt -> %s", result)
-        return result
-    except Exception as exc:
-        logger.warning("loop stall guard: revive attempt failed: %s", exc)
-        return None
+    _rss_t0 = time.perf_counter()
+    log_heavy_job_rss("loop_stall_guard_revive", "start", started_at=_rss_t0)
+    try:
+        try:
+            from internal.council.score_snapshots import revive_score_snapshot_scheduler
+
+            result = revive_score_snapshot_scheduler()
+            logger.warning("loop stall guard: in-place revive attempt -> %s", result)
+            return result
+        except Exception as exc:
+            logger.warning("loop stall guard: revive attempt failed: %s", exc)
+            return None
+    finally:
+        log_heavy_job_rss("loop_stall_guard_revive", "end", started_at=_rss_t0)
 
 
 class TickProgressSnapshot(NamedTuple):
