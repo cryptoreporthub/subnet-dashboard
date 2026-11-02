@@ -36,7 +36,10 @@ def isolate_liveness_persistence(tmp_path, monkeypatch):
             os.replace(tmp, sm_path)
         finally:
             if os.path.exists(tmp):
-                os.unlink(tmp)
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
     monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
     monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
