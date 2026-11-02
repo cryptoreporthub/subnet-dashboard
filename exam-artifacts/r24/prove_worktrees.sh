@@ -4,7 +4,7 @@ set -euo pipefail
 REPO="${REPO_ROOT:-/tmp/pr-1522-exam-r8-work/repo}"
 PRE_SHA="23bd34f03fb4431ad29726f500f00efc9d1dd82b"
 POST_SHA="a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e"
-TIP_SHA="ac1fc44de3a2b0b6c79f379aaab0be63098454ba"
+TIP_SHA="${TIP_SHA:-$(git -C "$REPO" rev-parse HEAD)}"
 WT="${WT_ROOT:-/tmp/r24-wt-proof-$$}"
 LOG="${1:-$REPO/exam-artifacts/r24/worktree-proof.log}"
 MANIFEST="$REPO/exam-artifacts/r24/sha256-manifest.json"
@@ -86,13 +86,20 @@ echo
 echo "=== unified diff (expect instructions.md only) ==="
 git diff --no-index "$WT/pre/review-gate-bot/bot/instructions.md" "$WT/post/review-gate-bot/bot/instructions.md" || true
 
-ONLY=$(diff -rq "$WT/pre/review-gate-bot" "$WT/post/review-gate-bot" | wc -l)
-if [[ "$ONLY" -ne 1 ]]; then
-  echo "FAIL: expected exactly one differing file, diff lines=$ONLY"
-  diff -rq "$WT/pre/review-gate-bot" "$WT/post/review-gate-bot"
+set +e
+DIFF_LINES=$(diff -rq "$WT/pre/review-gate-bot" "$WT/post/review-gate-bot")
+DIFF_RC=$?
+set -e
+echo "$DIFF_LINES"
+if [[ "$DIFF_RC" -ne 1 ]]; then
+  echo "FAIL: expected diff exit 1 (one file), got $DIFF_RC"
   exit 1
 fi
-if ! diff -rq "$WT/pre/review-gate-bot" "$WT/post/review-gate-bot" | grep -q 'bot/instructions.md'; then
+if [[ "$(echo "$DIFF_LINES" | wc -l)" -ne 1 ]]; then
+  echo "FAIL: expected exactly one differing file"
+  exit 1
+fi
+if ! echo "$DIFF_LINES" | grep -q 'bot/instructions.md'; then
   echo "FAIL: sole diff is not instructions.md"
   exit 1
 fi

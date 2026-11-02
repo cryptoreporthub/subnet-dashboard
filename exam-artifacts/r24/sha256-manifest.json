@@ -11,7 +11,11 @@
   "exam-artifacts/r24/blind/test-deleted-prod-kept.md": "737aeaf60ecf58084e5c098be7175e40043bbee5c49ec653f5725f0c0598e8e0",
   "exam-artifacts/r24/blind/tests-moved-a.md": "59044e3792aaf069964acc0d2d6b27f5a8d0c3f83948290741191fb2a644db59",
   "exam-artifacts/r24/blind/tests-moved-b.md": "e5db0e15095def1740057cddce2242f1bcf6bda3978a28ed7ba0a9e593f20297",
+  "exam-artifacts/r24/dry-run-scorer-output.json": "cd09932acb2bc2d42a858f8f0d60ed73e8123889cf384fb2a2a94aa0dec1b9f3",
+  "exam-artifacts/r24/dry-run-synthetic.json": "8b53a021e54c10763c6a189b04708e5fd4e9248e8afd18973a6d240dc3690e61",
+  "exam-artifacts/r24/run-plan.json": "33ce46380edadbf10056254c5731a447f8378b42cfbf00f585e1f7dfa1f37402",
   "exam-artifacts/r24/stage-a-manifest.json": "f713907f0831df211ecd29472b43688962ed350738607bd2ffae78f9360779b4",
+  "exam-artifacts/r24/worktree-proof.log": "f7ef2e20ccb18132016236f17d010a77140e02c3d1d0d1e4221b58724b7cc06d",
   "review-gate-bot/evals/fixtures/hard-r24-ci-sharding-a-v2/diff.json": "6dd1fdf45e7f25069c4f345297f73fd92bcb164622deb5974e681842f57513af",
   "review-gate-bot/evals/fixtures/hard-r24-ci-sharding-a-v2/gate.json": "42c349d1cf03deafae88a4d2f3d6445a8d7efe4b3ba1d6ccd64590b1374897ed",
   "review-gate-bot/evals/fixtures/hard-r24-ci-sharding-a-v2/oracle.json": "7a5f7d8a8dc6d44189251a04ac6f02c04e5c1586efcfa2d36a70ca5de82b0158",
@@ -102,5 +106,6 @@
   "review-gate-bot/evals/fixtures/hard-r24-tests-moved-b/oracle.json": "53b1590403e400db84a4121d7cbadab055a51dd7234a606600ea7a7208a3d1fd",
   "review-gate-bot/evals/fixtures/hard-r24-tests-moved-b/pr.json": "11fef245b3ab649977278ddc4fb84fd90a26347d177c29e6f45413dcca7abbe9",
   "review-gate-bot/evals/fixtures/hard-r24-tests-moved-b/repo.json": "88effc5342784a54795b4faf4e13ef18049ca77da1bce630fe5f6933b9449063",
+  "review-gate-bot/evals/review-gate-r24.eval.ts": "d18e3d775192d2339ead7146e3b75e62ae065b2c3abad7192a0874c2a1161d01",
   "review-gate-bot/evals/score-r24-first-line.py": "4ab63f6502c54e366977f2ab609164c5abed96aca0d5c2db21a4cdcd61e8fd34"
 }

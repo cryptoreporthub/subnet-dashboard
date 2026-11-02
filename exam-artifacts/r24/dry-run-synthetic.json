@@ -2,6 +2,7 @@
   "results": [
     {
       "id": "review-gate-r24/removal-guarded-a/1",
+      "evalCase": "review-gate-r24/removal-guarded-a",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -15,6 +16,7 @@
     },
     {
       "id": "review-gate-r24/removal-guarded-b-v3/1",
+      "evalCase": "review-gate-r24/removal-guarded-b-v3",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -28,6 +30,7 @@
     },
     {
       "id": "review-gate-r24/tests-moved-a/1",
+      "evalCase": "review-gate-r24/tests-moved-a",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -41,6 +44,7 @@
     },
     {
       "id": "review-gate-r24/tests-moved-b/1",
+      "evalCase": "review-gate-r24/tests-moved-b",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -54,6 +58,7 @@
     },
     {
       "id": "review-gate-r24/ci-sharding-a-v2/1",
+      "evalCase": "review-gate-r24/ci-sharding-a-v2",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -67,6 +72,7 @@
     },
     {
       "id": "review-gate-r24/ci-sharding-b-v3/1",
+      "evalCase": "review-gate-r24/ci-sharding-b-v3",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -80,6 +86,7 @@
     },
     {
       "id": "review-gate-r24/deprecated-flag-a/1",
+      "evalCase": "review-gate-r24/deprecated-flag-a",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -93,6 +100,7 @@
     },
     {
       "id": "review-gate-r24/deprecated-flag-b-v2/1",
+      "evalCase": "review-gate-r24/deprecated-flag-b-v2",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -106,6 +114,7 @@
     },
     {
       "id": "review-gate-r24/ci-skipped-anchor/1",
+      "evalCase": "review-gate-r24/ci-skipped-anchor",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -119,6 +128,7 @@
     },
     {
       "id": "review-gate-r24/test-deleted-prod-kept/1",
+      "evalCase": "review-gate-r24/test-deleted-prod-kept",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -132,6 +142,7 @@
     },
     {
       "id": "review-gate-r24/consolidation-drops-coverage-v2/1",
+      "evalCase": "review-gate-r24/consolidation-drops-coverage-v2",
       "toolCalls": [
         {
           "toolName": "post_verdict",
@@ -145,6 +156,7 @@
     },
     {
       "id": "review-gate-r24/sharding-missing-shard/1",
+      "evalCase": "review-gate-r24/sharding-missing-shard",
       "toolCalls": [
         {
           "toolName": "post_verdict",

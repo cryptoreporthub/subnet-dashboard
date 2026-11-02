@@ -1,6 +1,6 @@
 {
   "seed": 20261102,
-  "contentTip": "ac1fc44de3a2b0b6c79f379aaab0be63098454ba",
+  "contentTip": "ccb498eb2f822b248e2f6977506c6df6752248d5",
   "prePin": "23bd34f03fb4431ad29726f500f00efc9d1dd82b",
   "postPin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
   "harnessParent": "b9ccd6a73295567775ab83761d1db5c2497ac0bc",
@@ -51,6 +51,20 @@
             "review-gate-r24/tests-moved-a/1",
             "review-gate-r24/consolidation-drops-coverage-v2/1",
             "review-gate-r24/deprecated-flag-a/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/deprecated-flag-a"
           ]
         },
         {
@@ -82,6 +96,20 @@
             "review-gate-r24/tests-moved-a/1",
             "review-gate-r24/test-deleted-prod-kept/1",
             "review-gate-r24/tests-moved-b/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/tests-moved-b"
           ]
         }
       ]
@@ -118,6 +146,20 @@
             "review-gate-r24/sharding-missing-shard/1",
             "review-gate-r24/consolidation-drops-coverage-v2/1",
             "review-gate-r24/removal-guarded-b-v3/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/removal-guarded-b-v3"
           ]
         },
         {
@@ -149,6 +191,20 @@
             "review-gate-r24/ci-skipped-anchor/1",
             "review-gate-r24/tests-moved-b/1",
             "review-gate-r24/consolidation-drops-coverage-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/consolidation-drops-coverage-v2"
           ]
         }
       ]
@@ -185,6 +241,20 @@
             "review-gate-r24/ci-sharding-b-v3/1",
             "review-gate-r24/ci-sharding-a-v2/1",
             "review-gate-r24/sharding-missing-shard/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/sharding-missing-shard"
           ]
         },
         {
@@ -216,6 +286,20 @@
             "review-gate-r24/deprecated-flag-a/1",
             "review-gate-r24/ci-skipped-anchor/1",
             "review-gate-r24/ci-sharding-b-v3/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/ci-sharding-b-v3"
           ]
         }
       ]
@@ -252,6 +336,20 @@
             "review-gate-r24/removal-guarded-b-v3/1",
             "review-gate-r24/sharding-missing-shard/1",
             "review-gate-r24/ci-sharding-a-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/ci-sharding-a-v2"
           ]
         },
         {
@@ -283,6 +381,20 @@
             "review-gate-r24/consolidation-drops-coverage-v2/1",
             "review-gate-r24/sharding-missing-shard/1",
             "review-gate-r24/removal-guarded-b-v3/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/removal-guarded-b-v3"
           ]
         }
       ]
@@ -319,6 +431,20 @@
             "review-gate-r24/consolidation-drops-coverage-v2/1",
             "review-gate-r24/ci-sharding-b-v3/1",
             "review-gate-r24/removal-guarded-a/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/ci-sharding-b-v3",
+            "review-gate-r24/removal-guarded-a"
           ]
         },
         {
@@ -350,6 +476,20 @@
             "review-gate-r24/ci-skipped-anchor/1",
             "review-gate-r24/deprecated-flag-a/1",
             "review-gate-r24/ci-sharding-b-v3/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24/consolidation-drops-coverage-v2",
+            "review-gate-r24/tests-moved-a",
+            "review-gate-r24/removal-guarded-b-v3",
+            "review-gate-r24/sharding-missing-shard",
+            "review-gate-r24/ci-sharding-a-v2",
+            "review-gate-r24/removal-guarded-a",
+            "review-gate-r24/tests-moved-b",
+            "review-gate-r24/test-deleted-prod-kept",
+            "review-gate-r24/deprecated-flag-b-v2",
+            "review-gate-r24/ci-skipped-anchor",
+            "review-gate-r24/deprecated-flag-a",
+            "review-gate-r24/ci-sharding-b-v3"
           ]
         }
       ]
