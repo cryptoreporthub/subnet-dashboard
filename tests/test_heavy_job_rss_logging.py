@@ -150,3 +150,88 @@ def test_pump_ladder_run_body_bounded_once(monkeypatch):
     out = sched._run_body_bounded()
 
     assert out.get("ok") is True
+
+
+def test_heavy_job_rss_scope_logs_end_on_success_and_exception(caplog, monkeypatch):
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", lambda pid=None: 2000)
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "web")
+
+    with process_memory_mod.heavy_job_rss_scope("scope_ok"):
+        pass
+    with pytest.raises(RuntimeError):
+        with process_memory_mod.heavy_job_rss_scope("scope_boom"):
+            raise RuntimeError("boom")
+
+    lines = _heavy_lines(caplog)
+    assert [("name=scope_ok" in x, "phase=start" in x) for x in lines[:2]] == [
+        (True, True),
+        (True, False),
+    ]
+    assert "name=scope_ok" in lines[1] and "phase=end" in lines[1]
+    assert "name=scope_boom" in lines[2] and "phase=start" in lines[2]
+    assert "name=scope_boom" in lines[3] and "phase=end" in lines[3]
+
+
+def test_defer_boot_brackets_target_with_boot_target_lines(caplog, monkeypatch):
+    import threading
+
+    from internal.background_boot import defer_boot
+
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", lambda pid=None: 3000)
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
+    ran = threading.Event()
+    defer_boot("rss-unit", ran.set, delay=0)
+    assert ran.wait(5)
+    for t in threading.enumerate():
+        if t.name == "rss-unit":
+            t.join(5)
+
+    lines = _heavy_lines(caplog)
+    assert any("name=boot_scheduler_started:rss-unit" in x for x in lines)
+    assert any("name=boot_target:rss-unit" in x and "phase=start" in x for x in lines)
+    assert any("name=boot_target:rss-unit" in x and "phase=end" in x for x in lines)
+
+
+def test_defer_boot_still_runs_target_when_rss_logging_breaks(monkeypatch):
+    import threading
+
+    from internal.background_boot import defer_boot
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("logging down")
+
+    monkeypatch.setattr("internal.process_memory.log_heavy_job_rss", _boom)
+    ran = threading.Event()
+    defer_boot("rss-unit-broken", ran.set, delay=0)
+    assert ran.wait(5)
+
+
+def test_web_lifespan_logs_milestones_and_web_boot_scopes(caplog, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import server
+
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "web")
+    with TestClient(server.app) as client:
+        assert client.get("/health").status_code == 200
+        import time
+
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            joined = "\n".join(_heavy_lines(caplog))
+            if all(
+                f"name=web_boot:{n} phase=end" in joined
+                for n in ("emergency-prime", "homepage-warm-boot", "registry-name-sync")
+            ):
+                break
+            time.sleep(0.2)
+
+    joined = "\n".join(_heavy_lines(caplog))
+    assert "name=lifespan_start phase=milestone" in joined
+    assert "name=lifespan_ready phase=milestone" in joined
+    for n in ("emergency-prime", "homepage-warm-boot", "registry-name-sync"):
+        assert f"name=web_boot:{n} phase=start" in joined
+        assert f"name=web_boot:{n} phase=end" in joined

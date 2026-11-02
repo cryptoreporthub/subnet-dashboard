@@ -222,9 +222,25 @@ def _registry_name_boot_sync() -> None:
         logger.debug("registry name boot sync skipped: %s", exc)
 
 
+def _rss_scoped(name: str, fn):
+    """Wrap a boot-thread target with heavy_job_rss start/end lines (#1538)."""
+
+    def _run():
+        from internal.process_memory import heavy_job_rss_scope
+
+        with heavy_job_rss_scope(name):
+            return fn()
+
+    return _run
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Boot background workers on web when BACKGROUND_ON_WEB allows; on dedicated worker VM too."""
+    from internal.process_memory import log_heavy_job_rss
+
+    log_heavy_job_rss("lifespan_start", "milestone")
+
     from internal.message_intel.calibration import validate_calibration_config
 
     validate_calibration_config()
@@ -325,22 +341,22 @@ async def _lifespan(app: FastAPI):
 
         # Never block lifespan on Jinja — Fly health checks fail and edge returns 0 bytes.
         threading.Thread(
-            target=_prime_emergency_home_html,
+            target=_rss_scoped("web_boot:emergency-prime", _prime_emergency_home_html),
             daemon=True,
             name="emergency-prime",
         ).start()
         threading.Thread(
-            target=lambda: _warm_homepage_cache(None),
+            target=_rss_scoped("web_boot:homepage-warm-boot", lambda: _warm_homepage_cache(None)),
             daemon=True,
             name="homepage-warm-boot",
         ).start()
         threading.Thread(
-            target=_registry_name_boot_sync,
+            target=_rss_scoped("web_boot:registry-name-sync", _registry_name_boot_sync),
             daemon=True,
             name="registry-name-sync",
         ).start()
         threading.Thread(
-            target=_council_weight_rebalance_boot,
+            target=_rss_scoped("web_boot:council-weight-rebalance", _council_weight_rebalance_boot),
             daemon=True,
             name="council-weight-rebalance",
         ).start()
@@ -357,7 +373,7 @@ async def _lifespan(app: FastAPI):
 
             if not (background_on_web() and background_boot_allowed()):
                 threading.Thread(
-                    target=_cache_coverage_audit_boot,
+                    target=_rss_scoped("web_boot:cache-coverage-audit", _cache_coverage_audit_boot),
                     daemon=True,
                     name="cache-coverage-audit",
                 ).start()
@@ -384,6 +400,7 @@ async def _lifespan(app: FastAPI):
         )
         asyncio.get_running_loop().set_default_executor(aio_pool)
 
+        log_heavy_job_rss("lifespan_ready", "milestone")
         yield
         if background_on_web() and background_boot_allowed():
             from internal.background_boot import stop_background_workers
