@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r24_census_bundle.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 16,
+      "patch": "@@ -1,16 +0,0 @@\n-\"\"\"Census helper removed with its dedicated test module only.\"\"\"\n-from __future__ import annotations\n-\n-\n-def combine_netuid_labels(a: int, b: int) -> str:\n-    return f\"{a}:{b}\"\n-\n-\n-def invert_label_pair(label: str) -> tuple[int, int]:\n-    left, right = label.split(\":\")\n-    return int(left), int(right)\n-\n-\n-def label_pair_sum(label: str) -> int:\n-    a, b = invert_label_pair(label)\n-    return a + b"
+    },
+    {
+      "path": "tests/test_r24_census_bundle.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 29,
+      "patch": "@@ -1,29 +0,0 @@\n-from internal.r24_census_bundle import combine_netuid_labels, invert_label_pair, label_pair_sum\n-\n-\n-def test_combine_labels_formats_pair():\n-    assert combine_netuid_labels(3, 7) == \"3:7\"\n-\n-\n-def test_invert_label_pair_roundtrip():\n-    assert invert_label_pair(\"3:7\") == (3, 7)\n-\n-\n-def test_label_pair_sum():\n-    assert label_pair_sum(\"3:7\") == 10\n-\n-\n-def test_combine_labels_rejects_negative_in_format():\n-    assert combine_netuid_labels(0, 5) == \"0:5\"\n-\n-\n-def test_invert_label_pair_on_zero():\n-    assert invert_label_pair(\"0:5\") == (0, 5)\n-\n-\n-def test_label_pair_sum_on_zero_prefix():\n-    assert label_pair_sum(\"0:5\") == 5\n-\n-\n-def test_combine_labels_large_netuids():\n-    assert combine_netuid_labels(128, 1) == \"128:1\""
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

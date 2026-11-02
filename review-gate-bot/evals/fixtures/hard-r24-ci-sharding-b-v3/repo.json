@@ -1,0 +1,12 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  unit:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q -m \"not integration\"\n  integration:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q -m integration\n",
+    "tests/conftest.py": "import pytest\n\n\ndef pytest_configure(config):\n    config.addinivalue_line(\"markers\", \"integration: cross-service checks\")\n",
+    "tests/test_r24_shard_partition.py": "import pytest\n\n\ndef test_unit_smoke_alpha():\n    assert 2 + 2 == 4\n\n\ndef test_unit_smoke_beta():\n    assert len(\"ab\") == 2\n\n\n@pytest.mark.integration\ndef test_integration_cross_check():\n    assert {1, 2} | {2, 3} == {1, 2, 3}\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/conftest.py": "",
+    "tests/test_r24_shard_partition.py": "def test_unit_smoke_alpha():\n    assert 2 + 2 == 4\n\n\ndef test_unit_smoke_beta():\n    assert len(\"ab\") == 2\n\n\ndef test_integration_cross_check():\n    assert {1, 2} | {2, 3} == {1, 2, 3}\n"
+  }
+}

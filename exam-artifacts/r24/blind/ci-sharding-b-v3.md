@@ -1,15 +1,15 @@
-# Blind package: ci-sharding-b-v2
+# Blind package: ci-sharding-b-v3
 
 ## PR title
-ci: split unit vs integration jobs
+ci: split unit and integration pytest jobs
 
 ## PR body
-(no PR body in fixture)
+Adds an integration marker to one existing test and runs unit vs integration jobs so both partitions stay non-empty.
 
 ## Gate data
 ```json
 {
-  "headSha": "c890b0e51bf38fab26cc119a9d5bd73458c8399c",
+  "headSha": "44cf06bfa785eb657a89249c7b885f18c3716d18",
   "mc": "missing",
   "cursor": "missing",
   "ditto": "missing",
@@ -47,4 +47,22 @@ ci: split unit vs integration jobs
 +
 +def pytest_configure(config):
 +    config.addinivalue_line("markers", "integration: cross-service checks")
+```
+
+### `tests/test_r24_shard_partition.py`
+```diff
+@@ -1,3 +1,6 @@
++import pytest
++
++
+ def test_unit_smoke_alpha():
+     assert 2 + 2 == 4
+ 
+@@ -6,5 +9,6 @@
+     assert len("ab") == 2
+ 
+ 
++@pytest.mark.integration
+ def test_integration_cross_check():
+     assert {1, 2} | {2, 3} == {1, 2, 3}
 ```
