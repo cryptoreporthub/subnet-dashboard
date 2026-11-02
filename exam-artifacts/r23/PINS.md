@@ -31,3 +31,36 @@ Copied @ harness pin:
 
 - Path: `review-gate-bot/evals/capture-eval-system-prompt.ts` (on POST commit)
 - SHA-256 of composed instructions: `6637087582c794c1011219dd51951b4a9e829d3f24507a037a15c0570557d1fe`
+- Lock-6 log line (`internal/handoff-2026-10-31/pr-1522-r23/progress.log` on this branch):
+  `LOCK6_POST live=6637087582c794c1011219dd51951b4a9e829d3f24507a037a15c0570557d1fe helper=6637087582c794c1011219dd51951b4a9e829d3f24507a037a15c0570557d1fe MATCH`
+- Live eval artifact: `internal/handoff-2026-10-31/pr-1522-r23/exams/s13b-live-ci-skipped-1-post-lock6.json`
+
+## One POST_SHA live eval (`ci-skipped-tests-clean-comparison/1`)
+
+Same command as PR comment **r23-cursor-status-2** (exam machine paths):
+
+```bash
+cd /tmp/pr-1522-exam-r8-work/repo \
+  && git checkout a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e --quiet \
+  && cd review-gate-bot \
+  && DUMP=$(node --input-type=module -e "import {createHash} from 'crypto'; import {capture_eval_system_prompt} from './evals/capture-eval-system-prompt.ts'; const s=await capture_eval_system_prompt('.'); console.log(createHash('sha256').update(s).digest('hex');") \
+  && echo "HELPER_DUMP=$DUMP" \
+  && STATE=/tmp/r23-lock6-post-live && rm -rf "$STATE" && mkdir -p "$STATE" \
+  && OUT=/cursor/stores/self/internal/handoff-2026-10-31/pr-1522-r23/exams/s13b-live-ci-skipped-1-post-lock6.json \
+  && env -i HOME="$HOME" PATH="$PATH" USER="${USER:-}" CURSOR_API_KEY="$CURSOR_API_KEY" \
+       npm run eval -- review-gate-hard/ci-skipped-tests-clean-comparison/1 --json --no-stream --max-concurrency 1 \
+       --state-root "$STATE" --out "$OUT"
+```
+
+Portable checkout from this branch:
+
+```bash
+git fetch origin exam-artifacts/r23
+git checkout a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e
+cd review-gate-bot && npm ci
+export CURSOR_API_KEY=…
+env -i HOME="$HOME" PATH="$PATH" USER="${USER:-}" CURSOR_API_KEY="$CURSOR_API_KEY" \
+  npm run eval -- review-gate-hard/ci-skipped-tests-clean-comparison/1 \
+  --json --no-stream --max-concurrency 1 \
+  --state-root /tmp/r23-post-live --out /tmp/ci-skipped-1-post.json
+```
