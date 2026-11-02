@@ -1,9 +1,8 @@
 {
   "seed": 20261102,
-  "contentTip": "0fb30bd1d628f386871263208560d045d6bc6eee",
+  "harnessParent": "b9ccd6a73295567775ab83761d1db5c2497ac0bc",
   "prePin": "23bd34f03fb4431ad29726f500f00efc9d1dd82b",
   "postPin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
-  "harnessParent": "b9ccd6a73295567775ab83761d1db5c2497ac0bc",
   "slugs": [
     "removal-guarded-a",
     "removal-guarded-b-v3",
@@ -23,6 +22,7 @@
       "block": 1,
       "invocations": [
         {
+          "invocationIndex": 1,
           "pin": "POST",
           "fixtureOrder": [
             "deprecated-flag-b-v2",
@@ -65,9 +65,12 @@
             "review-gate-r24/tests-moved-a",
             "review-gate-r24/consolidation-drops-coverage-v2",
             "review-gate-r24/deprecated-flag-a"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-01-POST-block1.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-01-sysprompt.sha256"
         },
         {
+          "invocationIndex": 2,
           "pin": "PRE",
           "fixtureOrder": [
             "removal-guarded-b-v3",
@@ -110,7 +113,9 @@
             "review-gate-r24/tests-moved-a",
             "review-gate-r24/test-deleted-prod-kept",
             "review-gate-r24/tests-moved-b"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-02-PRE-block1.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-02-sysprompt.sha256"
         }
       ]
     },
@@ -118,6 +123,7 @@
       "block": 2,
       "invocations": [
         {
+          "invocationIndex": 3,
           "pin": "POST",
           "fixtureOrder": [
             "ci-sharding-a-v2",
@@ -160,9 +166,12 @@
             "review-gate-r24/sharding-missing-shard",
             "review-gate-r24/consolidation-drops-coverage-v2",
             "review-gate-r24/removal-guarded-b-v3"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-03-POST-block2.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-03-sysprompt.sha256"
         },
         {
+          "invocationIndex": 4,
           "pin": "PRE",
           "fixtureOrder": [
             "tests-moved-a",
@@ -205,7 +214,9 @@
             "review-gate-r24/ci-skipped-anchor",
             "review-gate-r24/tests-moved-b",
             "review-gate-r24/consolidation-drops-coverage-v2"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-04-PRE-block2.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-04-sysprompt.sha256"
         }
       ]
     },
@@ -213,6 +224,7 @@
       "block": 3,
       "invocations": [
         {
+          "invocationIndex": 5,
           "pin": "POST",
           "fixtureOrder": [
             "deprecated-flag-a",
@@ -255,9 +267,12 @@
             "review-gate-r24/ci-sharding-b-v3",
             "review-gate-r24/ci-sharding-a-v2",
             "review-gate-r24/sharding-missing-shard"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-05-POST-block3.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-05-sysprompt.sha256"
         },
         {
+          "invocationIndex": 6,
           "pin": "PRE",
           "fixtureOrder": [
             "deprecated-flag-b-v2",
@@ -300,7 +315,9 @@
             "review-gate-r24/deprecated-flag-a",
             "review-gate-r24/ci-skipped-anchor",
             "review-gate-r24/ci-sharding-b-v3"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-06-PRE-block3.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-06-sysprompt.sha256"
         }
       ]
     },
@@ -308,6 +325,7 @@
       "block": 4,
       "invocations": [
         {
+          "invocationIndex": 7,
           "pin": "POST",
           "fixtureOrder": [
             "removal-guarded-a",
@@ -350,9 +368,12 @@
             "review-gate-r24/removal-guarded-b-v3",
             "review-gate-r24/sharding-missing-shard",
             "review-gate-r24/ci-sharding-a-v2"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-07-POST-block4.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-07-sysprompt.sha256"
         },
         {
+          "invocationIndex": 8,
           "pin": "PRE",
           "fixtureOrder": [
             "ci-sharding-a-v2",
@@ -395,7 +416,9 @@
             "review-gate-r24/consolidation-drops-coverage-v2",
             "review-gate-r24/sharding-missing-shard",
             "review-gate-r24/removal-guarded-b-v3"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-08-PRE-block4.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-08-sysprompt.sha256"
         }
       ]
     },
@@ -403,6 +426,7 @@
       "block": 5,
       "invocations": [
         {
+          "invocationIndex": 9,
           "pin": "PRE",
           "fixtureOrder": [
             "sharding-missing-shard",
@@ -445,9 +469,12 @@
             "review-gate-r24/consolidation-drops-coverage-v2",
             "review-gate-r24/ci-sharding-b-v3",
             "review-gate-r24/removal-guarded-a"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-09-PRE-block5.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-09-sysprompt.sha256"
         },
         {
+          "invocationIndex": 10,
           "pin": "POST",
           "fixtureOrder": [
             "consolidation-drops-coverage-v2",
@@ -490,7 +517,9 @@
             "review-gate-r24/ci-skipped-anchor",
             "review-gate-r24/deprecated-flag-a",
             "review-gate-r24/ci-sharding-b-v3"
-          ]
+          ],
+          "outputJson": "exam-artifacts/r24/runs/inv-10-POST-block5.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs/inv-10-sysprompt.sha256"
         }
       ]
     }

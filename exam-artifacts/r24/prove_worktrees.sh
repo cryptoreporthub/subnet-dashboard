@@ -13,7 +13,7 @@ exec > >(tee "$LOG") 2>&1
 
 echo "=== r24 worktree overlay proof $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 echo "REPO=$REPO"
-echo "PRE=$PRE_SHA POST=$POST_SHA overlay_tip=$TIP_SHA"
+echo "overlay_source=$(git -C "$REPO" rev-parse HEAD) (TIP_SHA=$TIP_SHA for git show paths)"
 echo "Only bot/instructions.md should differ between PRE and POST worktrees after overlay."
 echo
 
@@ -37,6 +37,7 @@ for path in sorted(doc):
         print(path)
 PY
   echo "review-gate-bot/evals/review-gate-r24.eval.ts"
+  echo "review-gate-bot/evals/r24-prompts.ts"
 }
 
 mapfile -t OVERLAY < <(overlay_paths)

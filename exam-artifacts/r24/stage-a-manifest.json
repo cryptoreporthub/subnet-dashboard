@@ -3,19 +3,75 @@
   "prePin": "23bd34f03fb4431ad29726f500f00efc9d1dd82b",
   "postPin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
   "scorer": "review-gate-bot/evals/score-r24-first-line.py",
-  "harnessTip": "0fb30bd1d628f386871263208560d045d6bc6eee",
   "stageA": [
-    {"slug": "removal-guarded-a", "fixture": "hard-r24-removal-guarded-a", "oracle": "PASS"},
-    {"slug": "removal-guarded-b-v3", "fixture": "hard-r24-removal-guarded-b-v3", "oracle": "PASS"},
-    {"slug": "tests-moved-a", "fixture": "hard-r24-tests-moved-a", "oracle": "PASS"},
-    {"slug": "tests-moved-b", "fixture": "hard-r24-tests-moved-b", "oracle": "PASS"},
-    {"slug": "ci-sharding-a-v2", "fixture": "hard-r24-ci-sharding-a-v2", "oracle": "PASS"},
-    {"slug": "ci-sharding-b-v3", "fixture": "hard-r24-ci-sharding-b-v3", "oracle": "PASS"},
-    {"slug": "deprecated-flag-a", "fixture": "hard-r24-deprecated-flag-a", "oracle": "PASS"},
-    {"slug": "deprecated-flag-b-v2", "fixture": "hard-r24-deprecated-flag-b-v2", "oracle": "PASS"},
-    {"slug": "ci-skipped-anchor", "fixture": "hard-ci-skipped-tests", "oracle": "MODIFY"},
-    {"slug": "test-deleted-prod-kept", "fixture": "hard-r24-test-deleted-prod-kept", "oracle": "MODIFY"},
-    {"slug": "consolidation-drops-coverage-v2", "fixture": "hard-r24-consolidation-drops-coverage-v2", "oracle": "MODIFY"},
-    {"slug": "sharding-missing-shard", "fixture": "hard-r24-sharding-missing-shard", "oracle": "MODIFY"}
-  ]
+    {
+      "slug": "removal-guarded-a",
+      "fixture": "hard-r24-removal-guarded-a",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "removal-guarded-b-v3",
+      "fixture": "hard-r24-removal-guarded-b-v3",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "tests-moved-a",
+      "fixture": "hard-r24-tests-moved-a",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "tests-moved-b",
+      "fixture": "hard-r24-tests-moved-b",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "ci-sharding-a-v2",
+      "fixture": "hard-r24-ci-sharding-a-v2",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "ci-sharding-b-v3",
+      "fixture": "hard-r24-ci-sharding-b-v3",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "deprecated-flag-a",
+      "fixture": "hard-r24-deprecated-flag-a",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "deprecated-flag-b-v2",
+      "fixture": "hard-r24-deprecated-flag-b-v2",
+      "oracle": "PASS"
+    },
+    {
+      "slug": "ci-skipped-anchor",
+      "fixture": "hard-ci-skipped-tests",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "test-deleted-prod-kept",
+      "fixture": "hard-r24-test-deleted-prod-kept",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "consolidation-drops-coverage-v2",
+      "fixture": "hard-r24-consolidation-drops-coverage-v2",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "sharding-missing-shard",
+      "fixture": "hard-r24-sharding-missing-shard",
+      "oracle": "MODIFY"
+    }
+  ],
+  "runner": "review-gate-bot/evals/review-gate-r24.eval.ts",
+  "prompts": "review-gate-bot/evals/r24-prompts.ts",
+  "contentPins": {
+    "stageAManifest": "91d6296c9bb41c7fe9bd834c513c9fcd7d0194c90b8bd014ababb3ca8e7aa9c7",
+    "runPlan": "be3a48581d8c1ca9f0b47bef442c2d9194dfb1deda37f3da455699609dd11d5f",
+    "runner": "d8e25d136574e6511483cecf41cd512761a4da0d92391a24cb922f81385ce99a",
+    "prompts": "7fc69b1b05f8d511e070bf73ad55d2c136852493893d41e36bc74d097f05c946",
+    "scorer": "cd7bcd95a5b8ef4f9dd08b25c21f7bbf4de35ef11eae7129a629a46a79277506"
+  }
 }

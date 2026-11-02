@@ -6,6 +6,7 @@ import { loadJson } from "@grok/agent-sdk/evals/loaders";
 import type { GateState } from "../bot/lib/gate.js";
 import { sendWithRetry } from "./eval-turn.js";
 import { TURN_TIMEOUT_MS } from "./hard-specs.js";
+import { promptForSlug } from "./r24-prompts.js";
 
 /**
  * r24 Stage A: one eval case per slug in `exam-artifacts/r24/stage-a-manifest.json`.
@@ -39,13 +40,9 @@ async function seeded(fixture: string): Promise<{ p: PrFixture; files: Record<st
   };
 }
 
-function reviewPrompt(number: number, headSha: string): string {
-  return [`Review PR ${number} at the pinned head ${headSha}.`, "", "Post your verdict with post_verdict."].join("\n");
-}
-
-async function runCase(t: EvalTestContext, fixture: string): Promise<void> {
+async function runCase(t: EvalTestContext, slug: string, fixture: string): Promise<void> {
   const { p, files } = await seeded(fixture);
-  await sendWithRetry(t, reviewPrompt(p.number, p.headSha), { workspaceFiles: files });
+  await sendWithRetry(t, promptForSlug(slug, p.number, p.headSha), { workspaceFiles: files });
   t.succeeded();
 }
 
@@ -56,6 +53,6 @@ export default defineEval({
     description: `r24 Stage A ${row.fixture} (oracle ${row.oracle})`,
     iterations: 1,
     timeoutMs: TURN_TIMEOUT_MS,
-    test: (t) => runCase(t, row.fixture),
+    test: (t) => runCase(t, row.slug, row.fixture),
   })),
 });

@@ -42,7 +42,7 @@ def classify_run(r: dict) -> str:
         return "FAIL" if v.upper() in ("FAIL", "BLOCK") else v.upper()
     body = posts[0].get("body") or r.get("finalText") or ""
     tok = first_line_token(body)
-    return tok if tok in ("PASS", "MODIFY", "FAIL") else "FAIL"
+    return tok if tok in ("PASS", "MODIFY", "FAIL") else "NO_POST"
 
 
 def score_file(path: Path, expected: str | None = None) -> dict:
