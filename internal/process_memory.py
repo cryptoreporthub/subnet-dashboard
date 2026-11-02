@@ -11,6 +11,12 @@ from typing import Optional
 logger = logging.getLogger("process_memory")
 
 _HEARTBEAT_STARTED = False
+_PROCESS_START_PERF = time.perf_counter()
+
+
+def process_uptime_seconds() -> float:
+    """Seconds since this process loaded ``process_memory`` (monotonic)."""
+    return time.perf_counter() - _PROCESS_START_PERF
 
 
 def set_linux_process_comm(name: str) -> None:
@@ -51,35 +57,74 @@ def log_memory_snapshot(label: str) -> None:
     logger.info("%s pid=%s rss_kb=%d", label, os.getpid(), rss)
 
 
-def log_heavy_job_rss(name: str, phase: str, *, started_at: Optional[float] = None) -> None:
+def log_heavy_job_rss(
+    name: str,
+    phase: str,
+    *,
+    started_at: Optional[float] = None,
+    process_uptime_s: Optional[float] = None,
+) -> None:
     """RSS bookends for heavy jobs (#1538 observability)."""
-    from internal.run_mode import get_run_mode
+    try:
+        from internal.run_mode import get_run_mode
 
-    run_mode = get_run_mode()
-    pid = os.getpid()
-    rss = read_rss_kb()
-    held_ms = 0.0
-    if phase == "end" and started_at is not None:
-        held_ms = (time.perf_counter() - started_at) * 1000.0
-    if rss is None:
+        run_mode = get_run_mode()
+        pid = os.getpid()
+        rss = read_rss_kb()
+        held_ms = 0.0
+        if phase == "end" and started_at is not None:
+            held_ms = (time.perf_counter() - started_at) * 1000.0
+        uptime_s = (
+            process_uptime_s
+            if process_uptime_s is not None
+            else None
+        )
+        if rss is None:
+            if uptime_s is not None:
+                logger.info(
+                    "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown "
+                    "held_ms=%.1f process_uptime_s=%.3f",
+                    name,
+                    phase,
+                    run_mode,
+                    pid,
+                    held_ms,
+                    uptime_s,
+                )
+            else:
+                logger.info(
+                    "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown held_ms=%.1f",
+                    name,
+                    phase,
+                    run_mode,
+                    pid,
+                    held_ms,
+                )
+            return
+        if uptime_s is not None:
+            logger.info(
+                "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f "
+                "process_uptime_s=%.3f",
+                name,
+                phase,
+                run_mode,
+                pid,
+                rss,
+                held_ms,
+                uptime_s,
+            )
+            return
         logger.info(
-            "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown held_ms=%.1f",
+            "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f",
             name,
             phase,
             run_mode,
             pid,
+            rss,
             held_ms,
         )
-        return
-    logger.info(
-        "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f",
-        name,
-        phase,
-        run_mode,
-        pid,
-        rss,
-        held_ms,
-    )
+    except Exception as exc:
+        logger.debug("heavy_job_rss log failed: %s", exc)
 
 
 def _rss_heartbeat_label() -> str:

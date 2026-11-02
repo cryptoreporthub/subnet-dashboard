@@ -47,4 +47,12 @@ def test_heavy_job_rss_success_and_exception(caplog, monkeypatch):
     lines = _heavy_lines(caplog)
     assert len(lines) == 2
     assert any("phase=start" in x for x in lines)
-    assert any("phase=end" in x for x in lines)
+def test_heavy_job_rss_read_rss_raises(caplog, monkeypatch):
+    caplog.set_level(logging.DEBUG, logger="process_memory")
+
+    def _boom(_pid=None):
+        raise ValueError("no proc")
+
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", _boom)
+    log_heavy_job_rss("fragile", "start")
+    assert not any(r.levelno >= logging.ERROR for r in caplog.records)

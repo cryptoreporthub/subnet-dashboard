@@ -241,6 +241,14 @@ async def _lifespan(app: FastAPI):
         worker_heavy_feeds_enabled,
     )
 
+    if is_worker_mode():
+        try:
+            from internal.process_memory import log_heavy_job_rss
+
+            log_heavy_job_rss("boot_import_done", "milestone")
+        except Exception:
+            pass
+
     try:
         if is_worker_mode():
             if stage2_hop_mode():

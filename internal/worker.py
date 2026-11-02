@@ -95,7 +95,10 @@ def main() -> None:
         start_background_workers,
         stop_background_workers,
     )
+    from internal.process_memory import log_heavy_job_rss
     from internal.worker_heartbeat import touch_heartbeat
+
+    log_heavy_job_rss("boot_import_done", "milestone")
 
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
