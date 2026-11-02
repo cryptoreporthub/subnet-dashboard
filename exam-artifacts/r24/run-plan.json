@@ -1,0 +1,358 @@
+{
+  "seed": 20261102,
+  "contentTip": "ac1fc44de3a2b0b6c79f379aaab0be63098454ba",
+  "prePin": "23bd34f03fb4431ad29726f500f00efc9d1dd82b",
+  "postPin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
+  "harnessParent": "b9ccd6a73295567775ab83761d1db5c2497ac0bc",
+  "slugs": [
+    "removal-guarded-a",
+    "removal-guarded-b-v3",
+    "tests-moved-a",
+    "tests-moved-b",
+    "ci-sharding-a-v2",
+    "ci-sharding-b-v3",
+    "deprecated-flag-a",
+    "deprecated-flag-b-v2",
+    "ci-skipped-anchor",
+    "test-deleted-prod-kept",
+    "consolidation-drops-coverage-v2",
+    "sharding-missing-shard"
+  ],
+  "blocks": [
+    {
+      "block": 1,
+      "invocations": [
+        {
+          "pin": "POST",
+          "fixtureOrder": [
+            "deprecated-flag-b-v2",
+            "ci-sharding-a-v2",
+            "test-deleted-prod-kept",
+            "tests-moved-b",
+            "ci-skipped-anchor",
+            "ci-sharding-b-v3",
+            "removal-guarded-a",
+            "sharding-missing-shard",
+            "removal-guarded-b-v3",
+            "tests-moved-a",
+            "consolidation-drops-coverage-v2",
+            "deprecated-flag-a"
+          ],
+          "caseIds": [
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/deprecated-flag-a/1"
+          ]
+        },
+        {
+          "pin": "PRE",
+          "fixtureOrder": [
+            "removal-guarded-b-v3",
+            "ci-sharding-b-v3",
+            "removal-guarded-a",
+            "consolidation-drops-coverage-v2",
+            "deprecated-flag-b-v2",
+            "sharding-missing-shard",
+            "ci-sharding-a-v2",
+            "deprecated-flag-a",
+            "ci-skipped-anchor",
+            "tests-moved-a",
+            "test-deleted-prod-kept",
+            "tests-moved-b"
+          ],
+          "caseIds": [
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/tests-moved-b/1"
+          ]
+        }
+      ]
+    },
+    {
+      "block": 2,
+      "invocations": [
+        {
+          "pin": "POST",
+          "fixtureOrder": [
+            "ci-sharding-a-v2",
+            "ci-sharding-b-v3",
+            "test-deleted-prod-kept",
+            "deprecated-flag-a",
+            "tests-moved-a",
+            "tests-moved-b",
+            "deprecated-flag-b-v2",
+            "removal-guarded-a",
+            "ci-skipped-anchor",
+            "sharding-missing-shard",
+            "consolidation-drops-coverage-v2",
+            "removal-guarded-b-v3"
+          ],
+          "caseIds": [
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/removal-guarded-b-v3/1"
+          ]
+        },
+        {
+          "pin": "PRE",
+          "fixtureOrder": [
+            "tests-moved-a",
+            "test-deleted-prod-kept",
+            "removal-guarded-a",
+            "sharding-missing-shard",
+            "ci-sharding-b-v3",
+            "deprecated-flag-a",
+            "deprecated-flag-b-v2",
+            "ci-sharding-a-v2",
+            "removal-guarded-b-v3",
+            "ci-skipped-anchor",
+            "tests-moved-b",
+            "consolidation-drops-coverage-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1"
+          ]
+        }
+      ]
+    },
+    {
+      "block": 3,
+      "invocations": [
+        {
+          "pin": "POST",
+          "fixtureOrder": [
+            "deprecated-flag-a",
+            "consolidation-drops-coverage-v2",
+            "tests-moved-a",
+            "ci-skipped-anchor",
+            "tests-moved-b",
+            "removal-guarded-a",
+            "test-deleted-prod-kept",
+            "deprecated-flag-b-v2",
+            "removal-guarded-b-v3",
+            "ci-sharding-b-v3",
+            "ci-sharding-a-v2",
+            "sharding-missing-shard"
+          ],
+          "caseIds": [
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/sharding-missing-shard/1"
+          ]
+        },
+        {
+          "pin": "PRE",
+          "fixtureOrder": [
+            "deprecated-flag-b-v2",
+            "consolidation-drops-coverage-v2",
+            "sharding-missing-shard",
+            "ci-sharding-a-v2",
+            "tests-moved-b",
+            "removal-guarded-b-v3",
+            "removal-guarded-a",
+            "test-deleted-prod-kept",
+            "tests-moved-a",
+            "deprecated-flag-a",
+            "ci-skipped-anchor",
+            "ci-sharding-b-v3"
+          ],
+          "caseIds": [
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/ci-sharding-b-v3/1"
+          ]
+        }
+      ]
+    },
+    {
+      "block": 4,
+      "invocations": [
+        {
+          "pin": "POST",
+          "fixtureOrder": [
+            "removal-guarded-a",
+            "deprecated-flag-b-v2",
+            "deprecated-flag-a",
+            "tests-moved-b",
+            "ci-skipped-anchor",
+            "test-deleted-prod-kept",
+            "ci-sharding-b-v3",
+            "consolidation-drops-coverage-v2",
+            "tests-moved-a",
+            "removal-guarded-b-v3",
+            "sharding-missing-shard",
+            "ci-sharding-a-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/ci-sharding-a-v2/1"
+          ]
+        },
+        {
+          "pin": "PRE",
+          "fixtureOrder": [
+            "ci-sharding-a-v2",
+            "deprecated-flag-b-v2",
+            "removal-guarded-a",
+            "ci-sharding-b-v3",
+            "ci-skipped-anchor",
+            "deprecated-flag-a",
+            "test-deleted-prod-kept",
+            "tests-moved-b",
+            "tests-moved-a",
+            "consolidation-drops-coverage-v2",
+            "sharding-missing-shard",
+            "removal-guarded-b-v3"
+          ],
+          "caseIds": [
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/removal-guarded-b-v3/1"
+          ]
+        }
+      ]
+    },
+    {
+      "block": 5,
+      "invocations": [
+        {
+          "pin": "PRE",
+          "fixtureOrder": [
+            "sharding-missing-shard",
+            "deprecated-flag-a",
+            "removal-guarded-b-v3",
+            "ci-skipped-anchor",
+            "tests-moved-b",
+            "test-deleted-prod-kept",
+            "deprecated-flag-b-v2",
+            "ci-sharding-a-v2",
+            "tests-moved-a",
+            "consolidation-drops-coverage-v2",
+            "ci-sharding-b-v3",
+            "removal-guarded-a"
+          ],
+          "caseIds": [
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/ci-sharding-b-v3/1",
+            "review-gate-r24/removal-guarded-a/1"
+          ]
+        },
+        {
+          "pin": "POST",
+          "fixtureOrder": [
+            "consolidation-drops-coverage-v2",
+            "tests-moved-a",
+            "removal-guarded-b-v3",
+            "sharding-missing-shard",
+            "ci-sharding-a-v2",
+            "removal-guarded-a",
+            "tests-moved-b",
+            "test-deleted-prod-kept",
+            "deprecated-flag-b-v2",
+            "ci-skipped-anchor",
+            "deprecated-flag-a",
+            "ci-sharding-b-v3"
+          ],
+          "caseIds": [
+            "review-gate-r24/consolidation-drops-coverage-v2/1",
+            "review-gate-r24/tests-moved-a/1",
+            "review-gate-r24/removal-guarded-b-v3/1",
+            "review-gate-r24/sharding-missing-shard/1",
+            "review-gate-r24/ci-sharding-a-v2/1",
+            "review-gate-r24/removal-guarded-a/1",
+            "review-gate-r24/tests-moved-b/1",
+            "review-gate-r24/test-deleted-prod-kept/1",
+            "review-gate-r24/deprecated-flag-b-v2/1",
+            "review-gate-r24/ci-skipped-anchor/1",
+            "review-gate-r24/deprecated-flag-a/1",
+            "review-gate-r24/ci-sharding-b-v3/1"
+          ]
+        }
+      ]
+    }
+  ]
+}
