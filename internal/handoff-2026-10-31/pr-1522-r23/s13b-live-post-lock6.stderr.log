@@ -1,0 +1,50 @@
+[bdk] GitHub auth: gh auth token
+[bdk] cursor account: minted a fresh access token
+
+╭──────────────────────────────────────────────────────────╮
+│  MCP authorization needed                                │
+│                                                          │
+│  user-Replit             13 tools                        │
+│  user-Replit--account-2  13 tools                        │
+│  user-Finance-xai        Connect                         │
+│                                                          │
+│  Then press Enter to restart this serve.                 │
+│                                                          │
+│  Or reconnect at:                                        │
+│    cursor://anysphere.cursor-deeplink/customize?tab=mcp  │
+│    https://cursor.com/dashboard/integrations             │
+╰──────────────────────────────────────────────────────────╯
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[session] tool get_pr_diff start
+[session] tool get_pr_diff done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (5ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (2ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (0ms)
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[bdk:otel] error: writeInitialRequest da5190a83a3eb737366027ac96b2b735-de9128cd7a9f28ec - You can only call end() on a span once.
+results: /cursor/stores/bc-f3a85586-c0bb-5511-9afd-331ef41061b9/internal/handoff-2026-10-31/pr-1522-r23/exams/s13b-live-ci-skipped-1-post-lock6.json

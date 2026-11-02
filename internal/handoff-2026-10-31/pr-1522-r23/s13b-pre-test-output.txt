@@ -1,0 +1,66 @@
+TAP version 13
+# Subtest: sanity PRE — MARKER absent
+ok 1 - sanity PRE — MARKER absent
+  ---
+  duration_ms: 96.315707
+  type: 'test'
+  ...
+# Subtest: target — MARKER present count==1
+not ok 2 - target — MARKER present count==1
+  ---
+  duration_ms: 5.159498
+  type: 'test'
+  location: '/tmp/pr-1522-exam-r8-work/repo/review-gate-bot/tests/r23-repro-prompt-parity.test.ts:44:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    MARKER count must be 1
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/pr-1522-exam-r8-work/repo/review-gate-bot/tests/r23-repro-prompt-parity.test.ts:46:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: target — §1a rule appears once
+not ok 3 - target — §1a rule appears once
+  ---
+  duration_ms: 7.771653
+  type: 'test'
+  location: '/tmp/pr-1522-exam-r8-work/repo/review-gate-bot/tests/r23-repro-prompt-parity.test.ts:49:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    §1a rule sentence must appear once
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/tmp/pr-1522-exam-r8-work/repo/review-gate-bot/tests/r23-repro-prompt-parity.test.ts:51:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: target — dump hash logged for parity
+ok 4 - target — dump hash logged for parity
+  ---
+  duration_ms: 4.046515
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1483.921273

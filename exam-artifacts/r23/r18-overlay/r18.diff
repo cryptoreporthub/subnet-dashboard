@@ -1,0 +1,1031 @@
+diff --git a/review-gate-bot/bot/lib/gh.ts b/review-gate-bot/bot/lib/gh.ts
+index 876aec71..92a6abdd 100644
+--- a/review-gate-bot/bot/lib/gh.ts
++++ b/review-gate-bot/bot/lib/gh.ts
+@@ -3,7 +3,8 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
+ import type { GateState, PinnedVerdict, SuiteState } from "./gate.js";
+ import { computeGate, prKey } from "./gate.js";
+ import type { CommentLike, ReviewLike } from "./verdicts.js";
+-import { collectPinnedVerdicts, hasOwnMarker, OWNER_LOGIN } from "./verdicts.js";
++import { collectPinnedVerdicts, hasOwnMarker, OWNER_LOGIN, VERDICT_PIN_TEST_REF } from "./verdicts.js";
++import { flushVerdictPinsToKv, hydrateVerdictPinsFromKv, MemoryVerdictPinStore, type VerdictPinStore } from "./verdict_pin.js";
+ 
+ export type PrRef = { owner: string; repo: string; number: number };
+ 
+@@ -59,7 +60,7 @@ export function asComment(raw: {
+     id: raw.id,
+     body: raw.body ?? "",
+     createdAt: raw.created_at,
+-    updatedAt: raw.updated_at,
++    updatedAt: raw.updated_at ?? raw.created_at,
+     user: raw.user,
+     performedViaGithubApp: raw.performed_via_github_app ?? null,
+   };
+@@ -171,6 +172,8 @@ export function gateStateFrom(input: {
+   suiteDetail?: string;
+   replitTaggedForSha?: string;
+   replitTaggedAt?: string;
++  ref?: PrRef;
++  pinStore?: VerdictPinStore;
+ }): GateState {
+   const known = new Set<string>([input.headSha]);
+   const resolveSha = (claimed: string): string | undefined => {
+@@ -186,6 +189,8 @@ export function gateStateFrom(input: {
+     reviews: input.reviews,
+     comments: input.comments,
+     resolveSha,
++    ref: input.ref ?? VERDICT_PIN_TEST_REF,
++    pinStore: input.pinStore,
+   });
+   const verdicts: PinnedVerdict[] = pinned.map((p) => ({
+     reviewer: p.reviewer,
+@@ -263,7 +268,9 @@ export async function readGateState(input: {
+   ]);
+ 
+   const record = await readSuiteRecord(input.kv, input.ref, input.headSha);
+-  return gateStateFrom({
++  const pinStore = new MemoryVerdictPinStore();
++  await hydrateVerdictPinsFromKv({ kv: input.kv, ref: input.ref, comments, store: pinStore });
++  const state = gateStateFrom({
+     headSha: input.headSha,
+     comments,
+     reviews,
+@@ -271,5 +278,9 @@ export async function readGateState(input: {
+     suiteDetail: record?.detail,
+     replitTaggedForSha: replitTaggedIn(comments, input.headSha),
+     replitTaggedAt: replitTagTimeIn(comments, input.headSha),
++    ref: input.ref,
++    pinStore,
+   });
++  await flushVerdictPinsToKv({ kv: input.kv, store: pinStore });
++  return state;
+ }
+diff --git a/review-gate-bot/bot/lib/verdict_pin.ts b/review-gate-bot/bot/lib/verdict_pin.ts
+new file mode 100644
+index 00000000..c98ecc78
+--- /dev/null
++++ b/review-gate-bot/bot/lib/verdict_pin.ts
+@@ -0,0 +1,238 @@
++import { createHash } from "node:crypto";
++import type { HostKvApi } from "@grok/agent-sdk/kv";
++import type { PrRef } from "./gh.js";
++import type { CommentLike, ReviewerName, Verdict } from "./verdicts.js";
++
++/** What the gate recorded the first time it trusted this comment id. */
++export type VerdictFirstSeen = {
++  verdict: Verdict;
++  headSha: string;
++  bodyHash: string;
++  recordedAt: string;
++  /** Latest FAIL/MODIFY seen on an edit at the same head as firstSeen (blocks PASS re-edit). */
++  lastNonPassVerdict?: Verdict;
++  lastNonPassHeadSha?: string;
++};
++
++export function commentBodyHash(body: string): string {
++  return createHash("sha256").update(body).digest("hex");
++}
++
++export function verdictPinKey(ref: PrRef, slot: ReviewerName, commentId: number): string {
++  return `review-gate:verdict-pin:v1:${ref.owner}/${ref.repo}#${ref.number}:${slot}:${commentId}`;
++}
++
++export interface VerdictPinStore {
++  get(key: string): VerdictFirstSeen | undefined;
++  put(key: string, value: VerdictFirstSeen): void;
++  /** Set when hydrate could not read this key from kv (resolve fail-closed for PASS). */
++  noteHydrateGetFailed?(key: string): void;
++  hydrateGetFailed?(key: string): boolean;
++}
++
++export class MemoryVerdictPinStore implements VerdictPinStore {
++  private readonly map = new Map<string, VerdictFirstSeen>();
++  private readonly hydrateFailed = new Set<string>();
++
++  get(key: string): VerdictFirstSeen | undefined {
++    return this.map.get(key);
++  }
++
++  put(key: string, value: VerdictFirstSeen): void {
++    this.map.set(key, value);
++  }
++
++  noteHydrateGetFailed(key: string): void {
++    this.hydrateFailed.add(key);
++  }
++
++  hydrateGetFailed(key: string): boolean {
++    return this.hydrateFailed.has(key);
++  }
++
++  entries(): Iterable<[string, VerdictFirstSeen]> {
++    return this.map.entries();
++  }
++}
++
++export type PinOutcome =
++  | { kind: "pin"; verdict: Verdict; headSha: string }
++  | { kind: "drop" }
++  | { kind: "kv-fail-closed" };
++
++function isEditedByTimestamp(comment: CommentLike): boolean {
++  if (comment.updatedAt === undefined) {
++    return false;
++  }
++  const created = Date.parse(comment.createdAt);
++  const updated = Date.parse(comment.updatedAt);
++  return !Number.isNaN(created) && !Number.isNaN(updated) && updated > created;
++}
++
++function tryPut(store: VerdictPinStore, key: string, record: VerdictFirstSeen, parsedVerdict: Verdict): boolean {
++  try {
++    store.put(key, record);
++    return true;
++  } catch {
++    return parsedVerdict !== "PASS";
++  }
++}
++
++function pinnedFromStored(stored: VerdictFirstSeen): { verdict: Verdict; headSha: string } {
++  if (stored.lastNonPassVerdict !== undefined && stored.lastNonPassHeadSha === stored.headSha) {
++    return { verdict: stored.lastNonPassVerdict, headSha: stored.lastNonPassHeadSha };
++  }
++  return { verdict: stored.verdict, headSha: stored.headSha };
++}
++
++function recordLastNonPass(stored: VerdictFirstSeen, parsedVerdict: Verdict, parsedHeadSha: string, hash: string): VerdictFirstSeen {
++  if (parsedHeadSha !== stored.headSha) {
++    return { ...stored, bodyHash: hash };
++  }
++  return {
++    ...stored,
++    bodyHash: hash,
++    lastNonPassVerdict: parsedVerdict,
++    lastNonPassHeadSha: parsedHeadSha,
++  };
++}
++
++/**
++ * Apply r18 edit + firstSeen policy for one pinned comment (all reviewer slots).
++ */
++export function resolveCommentVerdictPin(input: {
++  store: VerdictPinStore;
++  ref: PrRef;
++  slot: ReviewerName;
++  comment: CommentLike;
++  parsedVerdict: Verdict | undefined;
++  parsedHeadSha: string;
++}): PinOutcome {
++  const { store, ref, slot, comment, parsedHeadSha } = input;
++  const key = verdictPinKey(ref, slot, comment.id);
++  const hash = commentBodyHash(comment.body);
++  const editedByTime = isEditedByTimestamp(comment);
++
++  if (store.hydrateGetFailed?.(key)) {
++    if (input.parsedVerdict === "PASS" || input.parsedVerdict === undefined) {
++      return { kind: "kv-fail-closed" };
++    }
++  }
++
++  let stored: VerdictFirstSeen | undefined;
++  try {
++    stored = store.get(key);
++  } catch {
++    if (input.parsedVerdict === "PASS" || input.parsedVerdict === undefined) {
++      return { kind: "kv-fail-closed" };
++    }
++    return { kind: "pin", verdict: input.parsedVerdict, headSha: parsedHeadSha };
++  }
++
++  const parsedVerdict = input.parsedVerdict;
++
++  if (parsedVerdict === undefined) {
++    if (stored !== undefined) {
++      const pin = pinnedFromStored(stored);
++      return { kind: "pin", verdict: pin.verdict, headSha: pin.headSha };
++    }
++    return { kind: "drop" };
++  }
++
++  if (stored === undefined && editedByTime && parsedVerdict === "PASS") {
++    return { kind: "drop" };
++  }
++
++  const editedByHash = stored !== undefined && stored.bodyHash !== hash;
++  const treatAsEdited = editedByTime || editedByHash;
++
++  if (stored === undefined && !treatAsEdited) {
++    const record: VerdictFirstSeen = {
++      verdict: parsedVerdict,
++      headSha: parsedHeadSha,
++      bodyHash: hash,
++      recordedAt: comment.createdAt,
++    };
++    if (!tryPut(store, key, record, parsedVerdict)) {
++      return { kind: "kv-fail-closed" };
++    }
++    return { kind: "pin", verdict: parsedVerdict, headSha: parsedHeadSha };
++  }
++
++  if (stored === undefined && treatAsEdited && parsedVerdict !== "PASS") {
++    const record: VerdictFirstSeen = {
++      verdict: parsedVerdict,
++      headSha: parsedHeadSha,
++      bodyHash: hash,
++      recordedAt: comment.createdAt,
++    };
++    tryPut(store, key, record, parsedVerdict);
++    return { kind: "pin", verdict: parsedVerdict, headSha: parsedHeadSha };
++  }
++
++  if (stored === undefined) {
++    return { kind: "drop" };
++  }
++
++  if (treatAsEdited) {
++    if (parsedHeadSha !== stored.headSha) {
++      return { kind: "pin", verdict: stored.verdict, headSha: stored.headSha };
++    }
++    if (parsedVerdict === "PASS") {
++      const pin = pinnedFromStored(stored);
++      return { kind: "pin", verdict: pin.verdict, headSha: pin.headSha };
++    }
++    const updated = recordLastNonPass(stored, parsedVerdict, parsedHeadSha, hash);
++    tryPut(store, key, updated, parsedVerdict);
++    return { kind: "pin", verdict: parsedVerdict, headSha: parsedHeadSha };
++  }
++
++  if (hash !== stored.bodyHash) {
++    const record: VerdictFirstSeen = {
++      verdict: parsedVerdict,
++      headSha: parsedHeadSha,
++      bodyHash: hash,
++      recordedAt: stored.recordedAt,
++    };
++    if (!tryPut(store, key, record, parsedVerdict)) {
++      return { kind: "kv-fail-closed" };
++    }
++  }
++
++  return { kind: "pin", verdict: parsedVerdict, headSha: parsedHeadSha };
++}
++
++export async function hydrateVerdictPinsFromKv(input: {
++  kv: HostKvApi;
++  ref: PrRef;
++  comments: readonly CommentLike[];
++  store: MemoryVerdictPinStore;
++}): Promise<void> {
++  const slots: ReviewerName[] = ["mc", "cursor", "ditto", "replit"];
++  for (const comment of input.comments) {
++    for (const slot of slots) {
++      const key = verdictPinKey(input.ref, slot, comment.id);
++      try {
++        const value = (await input.kv.get(key)) as VerdictFirstSeen | undefined;
++        if (value !== undefined) {
++          input.store.put(key, value);
++        }
++      } catch {
++        input.store.noteHydrateGetFailed?.(key);
++      }
++    }
++  }
++}
++
++export async function flushVerdictPinsToKv(input: {
++  kv: HostKvApi;
++  store: MemoryVerdictPinStore;
++}): Promise<void> {
++  for (const [key, value] of input.store.entries()) {
++    try {
++      await input.kv.put(key, value);
++    } catch {
++      // best effort; next read may re-record
++    }
++  }
++}
+diff --git a/review-gate-bot/bot/lib/verdicts.ts b/review-gate-bot/bot/lib/verdicts.ts
+index 30398936..cfa48fbb 100644
+--- a/review-gate-bot/bot/lib/verdicts.ts
++++ b/review-gate-bot/bot/lib/verdicts.ts
+@@ -59,6 +59,14 @@
+  * FAIL and MODIFY are never softened by their tail.
+  */
+ 
++import type { PrRef } from "./gh.js";
++import {
++  MemoryVerdictPinStore,
++  resolveCommentVerdictPin,
++  verdictPinKey,
++  type VerdictPinStore,
++} from "./verdict_pin.js";
++
+ export type Verdict = "PASS" | "MODIFY" | "FAIL";
+ 
+ export type ReviewerName = "mc" | "cursor" | "ditto" | "replit";
+@@ -106,7 +114,7 @@ export const OWNER_LOGIN = "cryptoreporthub";
+ export const GATE_BOT_LOGIN = "simi-revision[bot]";
+ 
+ /**
+- * The Grokbot App, which posts MC verdicts as its own user. The login must match
++ * The SimiBot App (`simibot[bot]`), which posts MC verdicts as its own user. The login must match
+  * and the comment must carry this App ID. The login alone is a name, and GitHub
+  * attributes a comment to its App by ID, so a comment without that attribution
+  * is not the App's, whatever its login says.
+@@ -431,14 +439,96 @@ const MC_VERDICT_MARKER = /<!--\s*mc-verdict:([0-9a-f]{40})\s*-->/g;
+  * The head a SimiBot comment's MC verdict names: the comment must be SimiBot's login and
+  * App ID, and carry exactly one such marker. Anything else is no MC verdict.
+  */
++function isSimibotMcAuthor(comment: CommentLike): boolean {
++  return comment.user?.login === SIMIBOT_LOGIN && comment.performedViaGithubApp?.id === SIMIBOT_APP_ID;
++}
++
+ function simibotMcHead(comment: CommentLike): string | undefined {
+-  if (comment.user?.login !== SIMIBOT_LOGIN || comment.performedViaGithubApp?.id !== SIMIBOT_APP_ID) {
++  if (!isSimibotMcAuthor(comment)) {
+     return undefined;
+   }
+   const heads = [...comment.body.matchAll(MC_VERDICT_MARKER)].map((match) => match[1]);
+   return heads.length === 1 ? heads[0] : undefined;
+ }
+ 
++/** Marker head, or kv firstSeen head when the body was edited to remove the marker. */
++function simibotMcHeadForPin(
++  comment: CommentLike,
++  ref: PrRef | undefined,
++  pinStore: VerdictPinStore | undefined,
++): string | undefined {
++  const fromMarker = simibotMcHead(comment);
++  if (fromMarker !== undefined) {
++    return fromMarker;
++  }
++  if (ref === undefined || pinStore === undefined) {
++    return undefined;
++  }
++  try {
++    return pinStore.get(verdictPinKey(ref, "mc", comment.id))?.headSha;
++  } catch {
++    return undefined;
++  }
++}
++
++export const VERDICT_PIN_TEST_REF: PrRef = {
++  owner: "cryptoreporthub",
++  repo: "subnet-dashboard",
++  number: 1522,
++};
++
++function appendPinnedComment(
++  out: PinnedReviewer[],
++  input: {
++    comment: CommentLike;
++    reviewer: ReviewerName;
++    headSha: string;
++    parsedVerdict: Verdict | undefined;
++    ref?: PrRef;
++    pinStore?: VerdictPinStore;
++  },
++): void {
++  const { comment, reviewer, headSha, parsedVerdict, ref, pinStore } = input;
++  if (ref !== undefined) {
++    const store = pinStore ?? new MemoryVerdictPinStore();
++    const outcome = resolveCommentVerdictPin({
++      store,
++      ref,
++      slot: reviewer,
++      comment,
++      parsedVerdict,
++      parsedHeadSha: headSha,
++    });
++    if (outcome.kind === "drop" || outcome.kind === "kv-fail-closed") {
++      if (parsedVerdict === undefined) {
++        noteUnparsed(comment);
++      }
++      return;
++    }
++    out.push({
++      reviewer,
++      verdict: outcome.verdict,
++      headSha: outcome.headSha,
++      sourceId: comment.id,
++      at: lastSaid(comment),
++      source: "comment",
++    });
++    return;
++  }
++  if (parsedVerdict === undefined) {
++    noteUnparsed(comment);
++    return;
++  }
++  out.push({
++    reviewer,
++    verdict: parsedVerdict,
++    headSha,
++    sourceId: comment.id,
++    at: lastSaid(comment),
++    source: "comment",
++  });
++}
++
+ /**
+  * Formal reviewer verdicts, each pinned to a head SHA.
+  *
+@@ -452,6 +542,8 @@ export function collectPinnedVerdicts(input: {
+   comments: readonly CommentLike[];
+   /** Resolve a short SHA claim to a full one, when the caller can. */
+   resolveSha?: (claimed: string) => string | undefined;
++  ref?: PrRef;
++  pinStore?: VerdictPinStore;
+ }): PinnedReviewer[] {
+   const out: PinnedReviewer[] = [];
+ 
+@@ -487,21 +579,21 @@ export function collectPinnedVerdicts(input: {
+   for (const comment of input.comments) {
+     // MC's formal verdict from SimiBot: its App, and one `<!-- mc-verdict:<sha> -->` naming the
+     // head. Nobody else's marker counts, and a rejected first line is logged, not dropped.
+-    const simibotHead = simibotMcHead(comment);
+-    if (simibotHead !== undefined) {
++    const simibotHead = simibotMcHeadForPin(comment, input.ref, input.pinStore);
++    if (simibotHead !== undefined && isSimibotMcAuthor(comment)) {
+       const verdict = verdictFromComment(comment);
+       const named = namedHeadOnPassLine(comment.body);
+-      if (verdict === undefined || (named !== undefined && !simibotHead.startsWith(named))) {
++      if (named !== undefined && !simibotHead.startsWith(named)) {
+         noteUnparsed(comment);
+         continue;
+       }
+-      out.push({
++      appendPinnedComment(out, {
++        comment,
+         reviewer: "mc",
+-        verdict,
+         headSha: simibotHead,
+-        sourceId: comment.id,
+-        at: lastSaid(comment),
+-        source: "comment",
++        parsedVerdict: verdict,
++        ref: input.ref,
++        pinStore: input.pinStore,
+       });
+       continue;
+     }
+@@ -517,25 +609,18 @@ export function collectPinnedVerdicts(input: {
+         continue;
+       }
+       const verdict = verdictFromComment(comment);
+-      if (verdict === undefined) {
+-        continue;
+-      }
+-      out.push({
++      appendPinnedComment(out, {
++        comment,
+         reviewer: "mc",
+-        verdict,
+         headSha: mcHead,
+-        sourceId: comment.id,
+-        at: lastSaid(comment),
+-        source: "comment",
++        parsedVerdict: verdict,
++        ref: input.ref,
++        pinStore: input.pinStore,
+       });
+       continue;
+     }
+ 
+     const verdict = verdictFromComment(comment);
+-    if (verdict === undefined) {
+-      noteUnparsed(comment);
+-      continue;
+-    }
+     let reviewer: ReviewerName | undefined;
+     if (isDittoComment(comment)) {
+       reviewer = "ditto";
+@@ -568,7 +653,14 @@ export function collectPinnedVerdicts(input: {
+     if (headSha === undefined) {
+       continue;
+     }
+-    out.push({ reviewer, verdict, headSha, sourceId: comment.id, at: lastSaid(comment), source: "comment" });
++    appendPinnedComment(out, {
++      comment,
++      reviewer,
++      headSha,
++      parsedVerdict: verdict,
++      ref: input.ref,
++      pinStore: input.pinStore,
++    });
+   }
+ 
+   // Newest last, so `verdictAt` taking the last match reads "latest wins".
+@@ -583,12 +675,8 @@ export function collectPinnedVerdicts(input: {
+ }
+ 
+ /**
+- * When a comment last said what it says now. An edit is a new statement: an old
+- * comment rewritten after a newer one is the latest word, not the oldest.
++ * When a comment was posted. Ordering uses creation time only; edits do not move a verdict later.
+  */
+ function lastSaid(comment: CommentLike): string {
+-  if (comment.updatedAt === undefined) {
+-    return comment.createdAt;
+-  }
+-  return Date.parse(comment.updatedAt) > Date.parse(comment.createdAt) ? comment.updatedAt : comment.createdAt;
++  return comment.createdAt;
+ }
+diff --git a/review-gate-bot/tests/r17-gate-order.test.ts b/review-gate-bot/tests/r17-gate-order.test.ts
+new file mode 100644
+index 00000000..c7865706
+--- /dev/null
++++ b/review-gate-bot/tests/r17-gate-order.test.ts
+@@ -0,0 +1,214 @@
++import assert from "node:assert/strict";
++import test from "node:test";
++import { computeGate, verdictAt, type PinnedVerdict } from "../bot/lib/gate.js";
++import { asComment, gateStateFrom } from "../bot/lib/gh.js";
++import { collectPinnedVerdicts, GATE_BOT_LOGIN, SIMIBOT_APP_ID, VERDICT_PIN_TEST_REF, type CommentLike } from "../bot/lib/verdicts.js";
++import { composeVerdictBody } from "../bot/tools/post_verdict.js";
++import { marker } from "../bot/lib/tag.js";
++
++const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
++const SIMIBOT = { login: "simibot[bot]", type: "Bot" as const };
++const SIMIBOT_APP = { id: SIMIBOT_APP_ID, slug: "simibot" };
++
++function mcBotComment(
++  id: number,
++  verdict: "PASS" | "MODIFY" | "FAIL",
++  createdAt: string,
++  updatedAt?: string,
++): CommentLike {
++  const body = `${marker("mc-verdict", HEAD)}\n${composeVerdictBody({
++    verdict,
++    headSha: HEAD,
++    body: "Review notes.",
++    skills: [{ skill: "adversarial-review", used: true, note: "ran" }],
++  })}`;
++  return {
++    id,
++    body,
++    createdAt,
++    updatedAt,
++    user: { login: `${GATE_BOT_LOGIN}`, type: "Bot" },
++    performedViaGithubApp: { slug: "simi-revision" },
++  };
++}
++
++function simibotMcComment(
++  id: number,
++  verdict: "PASS" | "MODIFY" | "FAIL",
++  createdAt: string,
++  updatedAt?: string,
++): CommentLike {
++  const body = `${verdict} at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`;
++  return {
++    id,
++    body,
++    createdAt,
++    updatedAt,
++    user: SIMIBOT,
++    performedViaGithubApp: SIMIBOT_APP,
++  };
++}
++
++function gateWithMcComments(comments: CommentLike[]) {
++  return gateStateFrom({
++    headSha: HEAD,
++    comments,
++    reviews: [],
++    suite: "clean",
++    replitTaggedForSha: HEAD,
++    replitTaggedAt: "2026-10-26T04:00:00Z",
++  });
++}
++
++test("ordering uses createdAt only: edited PASS after later FAIL still leaves FAIL at the slot", () => {
++  const pinned = collectPinnedVerdicts({
++    reviews: [],
++    comments: [
++      {
++        id: 1,
++        body: `PASS at \`${HEAD}\``,
++        createdAt: "2026-10-26T04:00:00Z",
++        updatedAt: "2026-10-26T04:10:00Z",
++        user: { login: "cursor[bot]", type: "Bot" },
++        performedViaGithubApp: null,
++      },
++      {
++        id: 2,
++        body: `FAIL at \`${HEAD}\``,
++        createdAt: "2026-10-26T04:05:00Z",
++        user: { login: "cursor[bot]", type: "Bot" },
++        performedViaGithubApp: null,
++      },
++    ],
++    resolveSha: () => HEAD,
++  });
++  assert.deepEqual(
++    pinned.map((p) => p.verdict),
++    ["PASS", "FAIL"],
++  );
++  assert.equal(verdictAt(pinned, "cursor", HEAD), "FAIL");
++});
++
++test("two verdicts at the same createdAt disagreeing fail closed to FAIL", () => {
++  const t = "2026-10-26T04:00:00.000Z";
++  const pinned: PinnedVerdict[] = [
++    { reviewer: "mc", verdict: "PASS", headSha: HEAD, at: t },
++    { reviewer: "mc", verdict: "FAIL", headSha: HEAD, at: t },
++  ];
++  assert.equal(verdictAt(pinned, "mc", HEAD), "FAIL");
++});
++
++test("MC edited comment cannot supply PASS (gate bot marker form)", () => {
++  const passThenEdited = mcBotComment(1, "PASS", "2026-10-26T04:00:00Z", "2026-10-26T06:00:00Z");
++  const failNewer = mcBotComment(2, "FAIL", "2026-10-26T04:05:00Z");
++  const gate = gateWithMcComments([passThenEdited, failNewer]);
++  assert.equal(gate.mc, "FAIL");
++  assert.equal(gate.next, "blocked");
++});
++
++test("MC FAIL edited to PASS in place does not pin MC PASS", () => {
++  const failEditedToPass = simibotMcComment(1, "FAIL", "2026-10-26T04:00:00Z", "2026-10-26T06:00:00Z");
++  failEditedToPass.body = `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`;
++  const pinned = collectPinnedVerdicts({ reviews: [], comments: [failEditedToPass], ref: VERDICT_PIN_TEST_REF }).filter((p) => p.reviewer === "mc");
++  assert.deepEqual(pinned, []);
++});
++
++test("later new MC PASS replaces an earlier FAIL on the same head (no sticky FAIL)", () => {
++  const fail = simibotMcComment(1, "FAIL", "2026-10-26T04:00:00Z");
++  const pass = simibotMcComment(2, "PASS", "2026-10-26T05:00:00Z");
++  const pinned = collectPinnedVerdicts({ reviews: [], comments: [fail, pass] }).filter((p) => p.reviewer === "mc");
++  assert.equal(pinned.at(-1)?.verdict, "PASS");
++  assert.equal(verdictAt(pinned, "mc", HEAD), "PASS");
++});
++
++test("owner Replit PASS still pins when the report comment was edited", () => {
++  const pinned = collectPinnedVerdicts({
++    reviews: [],
++    comments: [
++      {
++        id: 10,
++        body: `Replit: PASS at ${HEAD}`,
++        createdAt: "2026-10-26T04:00:00Z",
++        updatedAt: "2026-10-26T05:00:00Z",
++        user: { login: "cryptoreporthub", type: "User" },
++        performedViaGithubApp: null,
++      },
++    ],
++    resolveSha: () => HEAD,
++  });
++  assert.equal(pinned[0]?.reviewer, "replit");
++  assert.equal(pinned[0]?.verdict, "PASS");
++});
++
++test("gate replay case A (G2): edited MC PASS after FAIL must stay blocked", () => {
++  const raw = [
++    {
++      id: 1,
++      body: `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`,
++      created_at: "2026-10-26T04:00:00Z",
++      updated_at: "2026-10-26T06:00:00Z",
++      user: SIMIBOT,
++      performed_via_github_app: SIMIBOT_APP,
++    },
++    {
++      id: 2,
++      body: `FAIL at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`,
++      created_at: "2026-10-26T04:05:00Z",
++      user: SIMIBOT,
++      performed_via_github_app: SIMIBOT_APP,
++    },
++  ];
++  const gate = gateStateFrom({
++    headSha: HEAD,
++    comments: raw.map((c) => asComment(c)),
++    reviews: [],
++    suite: "clean",
++  });
++  assert.equal(gate.mc, "FAIL");
++  assert.equal(gate.next, "blocked");
++});
++
++test("gate replay case B (G4): edited PASS then newer FAIL stays blocked", () => {
++  const raw = [
++    {
++      id: 1,
++      body: `PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`,
++      created_at: "2026-10-26T04:00:00Z",
++      updated_at: "2026-10-26T04:02:00Z",
++      user: SIMIBOT,
++      performed_via_github_app: SIMIBOT_APP,
++    },
++    {
++      id: 2,
++      body: `FAIL at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`,
++      created_at: "2026-10-26T04:05:00Z",
++      user: SIMIBOT,
++      performed_via_github_app: SIMIBOT_APP,
++    },
++  ];
++  const gate = gateStateFrom({
++    headSha: HEAD,
++    comments: raw.map((c) => asComment(c)),
++    reviews: [],
++    suite: "clean",
++  });
++  assert.equal(gate.mc, "FAIL");
++  assert.equal(gate.next, "blocked");
++});
++
++test("a newer MC PASS comment replaces an older FAIL on the same head in computeGate", () => {
++  const state = computeGate({
++    headSha: HEAD,
++    suite: "clean",
++    verdicts: [
++      { reviewer: "mc", verdict: "FAIL", headSha: HEAD, at: "2026-10-26T04:00:00Z" },
++      { reviewer: "mc", verdict: "PASS", headSha: HEAD, at: "2026-10-26T05:00:00Z" },
++      { reviewer: "cursor", verdict: "PASS", headSha: HEAD, at: "2026-10-26T04:10:00Z" },
++      { reviewer: "ditto", verdict: "PASS", headSha: HEAD, at: "2026-10-26T04:11:00Z" },
++    ],
++    replitTaggedForSha: HEAD,
++    replitTaggedAt: "2026-10-26T04:00:00Z",
++  });
++  assert.equal(state.mc, "PASS");
++  assert.notEqual(state.next, "blocked");
++});
+diff --git a/review-gate-bot/tests/r18-verdict-pin.test.ts b/review-gate-bot/tests/r18-verdict-pin.test.ts
+new file mode 100644
+index 00000000..f17d159a
+--- /dev/null
++++ b/review-gate-bot/tests/r18-verdict-pin.test.ts
+@@ -0,0 +1,224 @@
++import assert from "node:assert/strict";
++import test from "node:test";
++import { computeGate, verdictAt } from "../bot/lib/gate.js";
++import { gateStateFrom } from "../bot/lib/gh.js";
++import { hydrateVerdictPinsFromKv, MemoryVerdictPinStore } from "../bot/lib/verdict_pin.js";
++import postVerdict from "../bot/tools/post_verdict.js";
++import { collectPinnedVerdicts, CURSOR_BOT_LOGIN, VERDICT_PIN_TEST_REF, type CommentLike } from "../bot/lib/verdicts.js";
++
++const H1 = "a".repeat(40);
++const H2 = "b".repeat(40);
++const REF = VERDICT_PIN_TEST_REF;
++
++function cursorComment(id: number, body: string, createdAt: string, updatedAt?: string): CommentLike {
++  return {
++    id,
++    body,
++    createdAt,
++    updatedAt,
++    user: { login: CURSOR_BOT_LOGIN, type: "Bot" },
++    performedViaGithubApp: null,
++  };
++}
++
++function gateAt(head: string, comments: CommentLike[], store = new MemoryVerdictPinStore()) {
++  return gateStateFrom({
++    headSha: head,
++    comments,
++    reviews: [],
++    suite: "clean",
++    ref: REF,
++    pinStore: store,
++  });
++}
++
++test("row 1: Cursor PASS @ H1 edited to PASS @ H2 does not merge on H2", () => {
++  const store = new MemoryVerdictPinStore();
++  const first = cursorComment(1, `PASS at \`${H1}\``, "2026-10-26T04:00:00Z", "2026-10-26T04:00:00Z");
++  collectPinnedVerdicts({ reviews: [], comments: [first], ref: REF, pinStore: store, resolveSha: () => H1 });
++  const edited = cursorComment(1, `PASS at \`${H2}\``, "2026-10-26T04:00:00Z", "2026-10-26T06:00:00Z");
++  const gate = gateAt(H2, [edited], store);
++  assert.notEqual(gate.cursor, "PASS");
++  assert.notEqual(gate.next, "mergeable");
++});
++
++test("row 2: Ditto FAIL edited to PASS stays blocked", () => {
++  const store = new MemoryVerdictPinStore();
++  const fail = {
++    id: 2,
++    body: `FAIL at \`${H1}\``,
++    createdAt: "2026-10-26T04:00:00Z",
++    updatedAt: "2026-10-26T04:00:00Z",
++    user: { login: "cryptoreporthub", type: "User" as const },
++    performedViaGithubApp: { slug: "ditto-code", id: 3889634 },
++  } satisfies CommentLike;
++  collectPinnedVerdicts({ reviews: [], comments: [fail], ref: REF, pinStore: store, resolveSha: () => H1 });
++  const edited = { ...fail, body: `PASS at \`${H1}\``, updatedAt: "2026-10-26T05:00:00Z" };
++  const gate = gateAt(H1, [edited], store);
++  assert.equal(gate.ditto, "FAIL");
++  assert.equal(gate.next, "blocked");
++});
++
++test("row 3: MC firstSeen FAIL survives edit to junk", () => {
++  const store = new MemoryVerdictPinStore();
++  const fail = {
++    id: 3,
++    body: `FAIL at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    createdAt: "2026-10-26T04:00:00Z",
++    updatedAt: "2026-10-26T04:00:00Z",
++    user: { login: "simibot[bot]", type: "Bot" as const },
++    performedViaGithubApp: { id: 5501340, slug: "simibot" },
++  } satisfies CommentLike;
++  collectPinnedVerdicts({ reviews: [], comments: [fail], ref: REF, pinStore: store });
++  const junk = { ...fail, body: "Thanks, updated.", updatedAt: "2026-10-26T05:00:00Z" };
++  const gate = gateAt(H1, [junk], store);
++  assert.equal(gate.mc, "FAIL");
++  assert.equal(gate.next, "blocked");
++});
++
++test("row 4: edited MODIFY→PASS ignored; newer MODIFY comment wins", () => {
++  const store = new MemoryVerdictPinStore();
++  const modify = {
++    id: 4,
++    body: `MODIFY at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    createdAt: "2026-10-26T04:00:00Z",
++    updatedAt: "2026-10-26T04:00:00Z",
++    user: { login: "simibot[bot]", type: "Bot" as const },
++    performedViaGithubApp: { id: 5501340, slug: "simibot" },
++  } satisfies CommentLike;
++  const passNew = {
++    id: 5,
++    body: `PASS at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    createdAt: "2026-10-26T05:00:00Z",
++    user: { login: "simibot[bot]", type: "Bot" as const },
++    performedViaGithubApp: { id: 5501340, slug: "simibot" },
++  } satisfies CommentLike;
++  collectPinnedVerdicts({ reviews: [], comments: [modify, passNew], ref: REF, pinStore: store });
++  const edited = { ...modify, body: `PASS at ${H1}\n<!-- mc-verdict:${H1} -->`, updatedAt: "2026-10-26T06:00:00Z" };
++  const pinned = collectPinnedVerdicts({ reviews: [], comments: [edited, passNew], ref: REF, pinStore: store }).filter((p) => p.reviewer === "mc");
++  assert.equal(verdictAt(pinned, "mc", H1), "PASS");
++});
++
++test("row 5: same-second body hash change without timestamp bump fails closed on PASS upgrade", () => {
++  const store = new MemoryVerdictPinStore();
++  const fail = cursorComment(10, `FAIL at \`${H1}\``, "2026-10-26T04:00:00.000Z", "2026-10-26T04:00:00.000Z");
++  collectPinnedVerdicts({ reviews: [], comments: [fail], ref: REF, pinStore: store, resolveSha: () => H1 });
++  const passSameSecond = cursorComment(10, `PASS at \`${H1}\``, "2026-10-26T04:00:00.000Z", "2026-10-26T04:00:00.000Z");
++  const pinned = collectPinnedVerdicts({ reviews: [], comments: [passSameSecond], ref: REF, pinStore: store, resolveSha: () => H1 });
++  assert.equal(pinned.at(-1)?.verdict, "FAIL");
++});
++
++test("row 6: first sight already edited never records PASS", () => {
++  const editedPass = {
++    id: 11,
++    body: `PASS at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    createdAt: "2026-10-26T04:00:00Z",
++    updatedAt: "2026-10-26T05:00:00Z",
++    user: { login: "simibot[bot]", type: "Bot" as const },
++    performedViaGithubApp: { id: 5501340, slug: "simibot" },
++  } satisfies CommentLike;
++  const pinned = collectPinnedVerdicts({ reviews: [], comments: [editedPass], ref: REF, pinStore: new MemoryVerdictPinStore() });
++  assert.deepEqual(pinned.filter((p) => p.reviewer === "mc"), []);
++});
++
++test("row 3b: firstSeen PASS @ H1 kept when body edited to junk", () => {
++  const store = new MemoryVerdictPinStore();
++  const pass = {
++    id: 12,
++    body: `PASS at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    createdAt: "2026-10-26T04:00:00Z",
++    updatedAt: "2026-10-26T04:00:00Z",
++    user: { login: "simibot[bot]", type: "Bot" as const },
++    performedViaGithubApp: { id: 5501340, slug: "simibot" },
++  } satisfies CommentLike;
++  collectPinnedVerdicts({ reviews: [], comments: [pass], ref: REF, pinStore: store });
++  const junk = { ...pass, body: "noise", updatedAt: "2026-10-26T05:00:00Z" };
++  const gate = gateAt(H1, [junk], store);
++  assert.equal(gate.mc, "PASS");
++});
++
++test("T2: PASS without blocking field is allowed again (r10 schema)", async () => {
++  const execute = postVerdict.execute as unknown as (input: unknown, ctx: unknown) => Promise<unknown>;
++  const result = await execute(
++    {
++      headSha: H1,
++      verdict: "PASS",
++      body: "ok",
++      skills: [{ skill: "adversarial-review", used: true, note: "ran" }],
++    },
++    {
++      session: { purpose: "eval", continuationKey: undefined },
++      host: { github: { getOctokit: async () => { throw new Error("no"); } } },
++    },
++  );
++  assert.deepEqual(result, { posted: false, reason: "eval", verdict: "PASS" });
++});
++
++test("kv read failure is fail-closed for PASS", () => {
++  class FailStore extends MemoryVerdictPinStore {
++    override get(): undefined {
++      throw new Error("kv down");
++    }
++  }
++  const comment = cursorComment(20, `PASS at \`${H1}\``, "2026-10-26T04:00:00Z", "2026-10-26T04:00:00Z");
++  const pinned = collectPinnedVerdicts({
++    reviews: [],
++    comments: [comment],
++    ref: REF,
++    pinStore: new FailStore(),
++    resolveSha: () => H1,
++  });
++  assert.deepEqual(pinned, []);
++});
++
++test("MC fix A: PASS @ H1 then edit FAIL @ H1 then edit PASS @ H1 stays blocked", () => {
++  const store = new MemoryVerdictPinStore();
++  const pass = {
++    id: 30,
++    body: `PASS at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    createdAt: "2026-10-26T04:00:00Z",
++    updatedAt: "2026-10-26T04:00:00Z",
++    user: { login: "simibot[bot]", type: "Bot" as const },
++    performedViaGithubApp: { id: 5501340, slug: "simibot" },
++  } satisfies CommentLike;
++  collectPinnedVerdicts({ reviews: [], comments: [pass], ref: REF, pinStore: store });
++  const fail = {
++    ...pass,
++    body: `FAIL at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    updatedAt: "2026-10-26T05:00:00Z",
++  };
++  collectPinnedVerdicts({ reviews: [], comments: [fail], ref: REF, pinStore: store });
++  const passAgain = {
++    ...fail,
++    body: `PASS at ${H1}\n<!-- mc-verdict:${H1} -->`,
++    updatedAt: "2026-10-26T06:00:00Z",
++  };
++  const gate = gateAt(H1, [passAgain], store);
++  assert.equal(gate.mc, "FAIL");
++  assert.equal(gate.next, "blocked");
++});
++
++test("MC fix B: hydrate kv.get failure is fail-closed for PASS", async () => {
++  const store = new MemoryVerdictPinStore();
++  const comment = cursorComment(21, `PASS at \`${H1}\``, "2026-10-26T04:00:00Z", "2026-10-26T04:00:00Z");
++  await hydrateVerdictPinsFromKv({
++    kv: {
++      get: async () => {
++        throw new Error("kv down");
++      },
++      put: async () => {},
++      delete: async () => {},
++    },
++    ref: REF,
++    comments: [comment],
++    store,
++  });
++  const pinned = collectPinnedVerdicts({
++    reviews: [],
++    comments: [comment],
++    ref: REF,
++    pinStore: store,
++    resolveSha: () => H1,
++  });
++  assert.deepEqual(pinned, []);
++});
+diff --git a/review-gate-bot/tests/verdicts.test.ts b/review-gate-bot/tests/verdicts.test.ts
+index 3f554951..3524e66e 100644
+--- a/review-gate-bot/tests/verdicts.test.ts
++++ b/review-gate-bot/tests/verdicts.test.ts
+@@ -294,7 +294,7 @@ test("a marker from the owner's own account is not the gate's, because MC and Cl
+   assert.deepEqual(collectPinnedVerdicts({ reviews: [], comments: [fromOwner] }), [], "no MC verdict is read from it");
+ });
+ 
+-// --- simibot: the Grokbot App posts MC verdicts, trusted by App ID ---------
++// --- simibot: the SimiBot App posts MC verdicts, trusted by App ID ---------
+ 
+ const SIMIBOT = { login: "simibot[bot]", type: "Bot" };
+ const SIMIBOT_APP = { id: 5501340, slug: "simibot" };
+@@ -575,7 +575,7 @@ test("a caveat after a PASS takes it back under the allowlist", () => {
+   assert.equal(parseVerdictToken("PASS until the suite runs"), undefined);
+ });
+ 
+-test("a verdict comment edited after a later one is the last thing said, so it sorts last", () => {
++test("a verdict comment edited after a later one still sorts by createdAt, so FAIL wins", () => {
+   const pinned = collectPinnedVerdicts({
+     reviews: [],
+     comments: [
+@@ -596,7 +596,7 @@ test("a verdict comment edited after a later one is the last thing said, so it s
+   });
+   assert.deepEqual(
+     pinned.map((p) => p.verdict),
+-    ["FAIL", "PASS"],
++    ["PASS", "FAIL"],
+   );
+ });
+ 
+@@ -771,14 +771,14 @@ test("the newest SimiBot verdict at a head wins: an older MODIFY then a newer PA
+   assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "PASS");
+ });
+ 
+-test("an older SimiBot verdict edited after a newer one is the last thing said, so it wins", () => {
++test("an older SimiBot verdict edited after a newer one does not resurrect PASS over MODIFY", () => {
+   const older = simibotMc(`PASS at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, {
+     id: 1,
+     createdAt: "2026-10-26T04:00:00Z",
+     updatedAt: "2026-10-26T06:00:00Z",
+   });
+   const newer = simibotMc(`MODIFY at ${HEAD}\n<!-- mc-verdict:${HEAD} -->`, { id: 2, createdAt: "2026-10-26T05:00:00Z" });
+-  assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "PASS");
++  assert.equal(mcEntries([older, newer]).at(-1)?.verdict, "MODIFY");
+ });
+ 
+ // --- A SHA on the PASS line must name the head the verdict is pinned to ----------------------

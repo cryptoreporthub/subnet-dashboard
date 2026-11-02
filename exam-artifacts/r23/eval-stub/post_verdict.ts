@@ -1,0 +1,263 @@
+import { defineTool } from "@grok/agent-sdk/tools";
+import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
+import { z } from "zod";
+import { readPr } from "../lib/gh.js";
+import { bodyLeaksSecretValue, redactSecrets } from "../lib/redact.js";
+import { unreadSkills } from "../lib/skill-reads.js";
+import { postVerdictComment } from "../lib/tag.js";
+
+const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
+
+/**
+ * Findings that rule out a PASS whatever severity the review gave them. The
+ * model declares them; the tool enforces the consequence, because a verdict is
+ * a side effect and the code owns side-effect gates.
+ */
+const BLOCKING_KINDS = ["never-expires", "overflow", "aborts-cycle", "poisons-later-row"] as const;
+
+const SkillsTable = z
+  .array(
+    z.object({
+      skill: z.string().min(1),
+      used: z.boolean(),
+      note: z.string().describe("What it found or changed, or `skipped: <reason>`."),
+    }),
+  )
+  .min(1);
+
+/** Every review must account for all three on-demand skills, even when skipped. */
+const REQUIRED_SKILLS = ["adversarial-review", "owner-rules", "settled-check"] as const;
+
+function missingRequiredSkills(skills: { skill: string }[]): string[] {
+  const names = new Set(skills.map((s) => s.skill.trim()));
+  return REQUIRED_SKILLS.filter((name) => !names.has(name));
+}
+
+/** A PASS must not ship prose that still carries a real secret value. */
+function passLeaksCredential(text: string): boolean {
+  return bodyLeaksSecretValue(text);
+}
+
+const PLACEHOLDER_VERDICT_BODY =
+  /^(?:test|full body here|logging change only\.?\s*(?:see gate\.?)?|see gate\.?)$/i;
+
+export function isPlaceholderVerdictBody(body: string): boolean {
+  const trimmed = body.trim();
+  return PLACEHOLDER_VERDICT_BODY.test(trimmed);
+}
+
+/**
+ * PASS must not cite JWT/redact timing in ms without a measured label (no shell here).
+ *
+ * Checked per line, not per body: a review that opens `measured (negative): no other defect` or says "so the gate has
+ * measured numbers next round" must not excuse `~10-20 ms` on another line. A line is excused only by an affirmative
+ * `measured` on that same line (`not measured`, `no measured`, `never measured` do not count).
+ */
+export function passClaimsUnmeasuredJwtPerf(body: string): boolean {
+  if (!/\b(?:jwt|eyj|redact(?:secrets?)?|scrub(?:ber)?)\b/i.test(body)) {
+    return false;
+  }
+  const msFigure = /\d\s*(?:ms|milliseconds?)\b/i;
+  const negatedMeasured = /\b(?:not|no|never|nor|cannot|can't|without|un)[\s-]{0,3}(?:\w+\s+){0,2}measured\b/gi;
+  return body.split("\n").some((line) => {
+    if (!msFigure.test(line)) {
+      return false;
+    }
+    return !/\bmeasured\b/i.test(line.replace(negatedMeasured, ""));
+  });
+}
+
+export function skillsIncomplete(skills: { skill: string; used: boolean; note: string }[]): string | undefined {
+  const missing = missingRequiredSkills(skills);
+  if (missing.length > 0) {
+    return missing.join(", ");
+  }
+  for (const row of skills) {
+    const note = row.note.trim();
+    if (!row.used) {
+      if (note.length === 0) {
+        return row.skill;
+      }
+      if (/^skipped:/i.test(note)) {
+        continue;
+      }
+      if (note.length < 8) {
+        return row.skill;
+      }
+      continue;
+    }
+    if (note.length < 8) {
+      return row.skill;
+    }
+    if (/^skipped:/i.test(note)) {
+      return row.skill;
+    }
+  }
+  return undefined;
+}
+
+function renderTable(skills: { skill: string; used: boolean; note: string }[]): string {
+  const rows = skills.map((s) => `| \`${s.skill}\` | ${s.used ? "yes" : "no"} | ${s.note} |`);
+  return ["| Skill | Used | Found / changed |", "| --- | --- | --- |", ...rows].join("\n");
+}
+
+/**
+ * The body a reader — and the gate itself — sees. Exported so the gate's
+ * read-back test starts from exactly the text this tool posts.
+ *
+ * The first line is the verdict token. `parseVerdictToken` reads the first
+ * line only, so this line is the verdict and nothing above it is prose.
+ */
+/**
+ * Model-written text with every gate marker defused.
+ *
+ * The poster adds the one marker a verdict comment carries. A marker the model
+ * wrote (it can come from a PR body or a comment it was asked to review) would
+ * be read back as a tag for another slot, so Cursor and Ditto would never be
+ * tagged, or as a second mc-verdict marker, which makes the comment unreadable.
+ */
+function withoutMarkers(text: string): string {
+  return text.replace(/<!--\s*subnet-review-gate:/gi, "[marker removed]<!-- ");
+}
+
+export function composeVerdictBody(input: {
+  verdict: "PASS" | "MODIFY" | "FAIL";
+  headSha: string;
+  body: string;
+  skills: { skill: string; used: boolean; note: string }[];
+}): string {
+  return [
+    `MC: **${input.verdict}** at \`${input.headSha}\``,
+    "",
+    withoutMarkers(input.body),
+    "",
+    "### Skills",
+    "",
+    renderTable(input.skills.map((s) => ({ ...s, skill: withoutMarkers(s.skill), note: withoutMarkers(s.note) }))),
+    "",
+    "---",
+    "",
+    "_Posted by the subnet-dashboard review gate. Review only: this bot never merges, deploys, restarts, sets secrets or labels._",
+  ].join("\n");
+}
+
+/**
+ * Post MC's formal verdict for one head. At most once per head, best effort.
+ *
+ * Refuses a PASS that declares a blocking finding, refuses a Skills table that claims a skill the session never opened,
+ * refuses a stale head, stays
+ * silent in an eval session, and redacts before anything leaves the process. The signature is fixed here rather than taken
+ * from the model, so a post always says who posted it.
+ *
+ */
+export default defineTool({
+  description:
+    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head with the full review body (findings, severities, measured/inferred labels) — never probe with placeholder text like \"test\" or \"full body here\" after a refusal. Refuses when the PR head has moved, refuses a PASS while any blocking finding is declared (resubmit as MODIFY or FAIL), refuses a PASS that still carries a secret value or an unmeasured JWT/redact timing claim in ms, refuses empty Skills rows, and refuses a Skills row marked used for a skill whose SKILL.md you never opened (read it or mark it used: false with `skipped: <reason>`). The Skills table is required and must list adversarial-review, owner-rules and settled-check.",
+  inputSchema: z.object({
+    headSha: Sha,
+    verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
+    body: z.string().min(1).describe("The review body: findings, severities, and measured/inferred labels."),
+    skills: SkillsTable,
+    blocking: z
+      .array(z.enum(BLOCKING_KINDS))
+      .optional()
+      .describe(
+        "Every finding that makes rows never expire (`never-expires`), lets a value overflow to inf or NaN (`overflow`), lets a cycle or a later row abort (`aborts-cycle`), or writes bad state that later cycles read back (`poisons-later-row`). Declare each one whatever its severity. PASS is refused while any is declared.",
+      ),
+  }),
+  effect: "write",
+  dryRunResult: (input) => ({ posted: false, reason: "dry-run", verdict: input.verdict }),
+  async execute(input, ctx) {
+    const blocking = input.blocking ?? [];
+    if (input.verdict === "PASS" && blocking.length > 0) {
+      return { posted: false, reason: "pass-with-blocking-finding", verdict: input.verdict, blocking };
+    }
+
+    if (isPlaceholderVerdictBody(input.body)) {
+      return {
+        posted: false,
+        reason: "placeholder-verdict-body",
+        verdict: input.verdict,
+        hint: "Write the full review once; do not resubmit stub text after a refusal.",
+      };
+    }
+
+    // The Skills table is a claim about what the review did. A skill marked `used` whose SKILL.md this session
+    // never opened is refused before anything is written, so the model reads it or says `skipped`.
+    const unread = await unreadSkills(ctx.host.kv, ctx.session.id, input.skills);
+    if (unread.length > 0) {
+      return {
+        posted: false,
+        reason: "skill-not-read",
+        verdict: input.verdict,
+        unread,
+        next: "Open each listed skill's SKILL.md with read, or mark it `used: false` with `skipped: <reason>`, then call post_verdict once more.",
+      };
+    }
+
+    const incompleteSkill = skillsIncomplete(input.skills);
+    if (incompleteSkill !== undefined) {
+      return { posted: false, reason: "incomplete-skills-table", verdict: input.verdict, skill: incompleteSkill };
+    }
+
+    const composed = composeVerdictBody({
+      verdict: input.verdict,
+      headSha: input.headSha,
+      body: input.body,
+      skills: input.skills,
+    });
+    if (input.verdict === "PASS" && passLeaksCredential(composed)) {
+      return {
+        posted: false,
+        reason: "pass-with-credential-value",
+        verdict: input.verdict,
+        hint: "Remove secret values from the body (name variables only). Do not retry with placeholder text.",
+      };
+    }
+    if (input.verdict === "PASS" && passClaimsUnmeasuredJwtPerf(`${input.body}\n${input.skills.map((skill) => skill.note).join("\n")}`)) {
+      return {
+        posted: false,
+        reason: "pass-with-unmeasured-perf-claim",
+        verdict: input.verdict,
+        hint: "A JWT/redact timing in ms is accepted in a PASS only on the same line as a `measured` label for a figure a tool returned. Otherwise post MODIFY or FAIL with a performance finding; do not relabel a guess.",
+      };
+    }
+
+    if (ctx.session.purpose === "eval") {
+      // `posted: true`: an eval writes nothing, but `posted: false` read to the model as a failed post and it
+      // called again (15 of 35 runs). The reason still says nothing reached GitHub.
+      return { posted: true, reason: "eval", verdict: input.verdict };
+    }
+
+    const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
+    if (ref === undefined) {
+      throw new Error("post_verdict needs a GitHub pull request session");
+    }
+
+    const octokit = await ctx.host.github.getOctokit();
+    // Re-read immediately before posting: this is the head the guard compares
+    // against, not one read earlier in the turn.
+    const pr = await readPr(octokit, ref);
+    if (pr.headSha !== input.headSha) {
+      return { posted: false, reason: "stale-head", current: pr.headSha };
+    }
+
+    const { text, redactedNames } = redactSecrets(composed);
+
+    const result = await postVerdictComment({
+      octokit,
+      kv: ctx.host.kv,
+      ref,
+      headSha: input.headSha,
+      currentHeadSha: pr.headSha,
+      body: text,
+    });
+
+    return {
+      posted: result.posted,
+      reason: result.reason,
+      commentId: result.commentId ?? null,
+      redactedNames,
+    };
+  },
+});

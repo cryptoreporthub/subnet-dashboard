@@ -1,0 +1,168 @@
+[bdk] GitHub auth: gh auth token
+[bdk] cursor account: minted a fresh access token
+
+╭──────────────────────────────────────────────────────────╮
+│  MCP authorization needed                                │
+│                                                          │
+│  user-Replit             13 tools                        │
+│  user-Replit--account-2  13 tools                        │
+│  user-Finance-xai        Connect                         │
+│                                                          │
+│  Then press Enter to restart this serve.                 │
+│                                                          │
+│  Or reconnect at:                                        │
+│    cursor://anysphere.cursor-deeplink/customize?tab=mcp  │
+│    https://cursor.com/dashboard/integrations             │
+╰──────────────────────────────────────────────────────────╯
+[session] tool check_gate_state start
+[session] tool check_gate_state done (2ms)
+[session] tool get_pr_diff start
+[session] tool get_pr_diff done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (4ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (6ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (1ms)
+[session] tool check_gate_state start
+[session] tool check_gate_state done (2ms)
+[bdk:otel] error: writeInitialRequest 562437cad6df84938e11e81d41135833-f114593834a2e427 - You can only call end() on a span once.
+[bdk:otel] error: writeInitialRequest 1f187c357430124553db92716d5d8295-1e5380c5d2d3618e - You can only call end() on a span once.
+[session] tool check_gate_state start
+[session] tool check_gate_state done (0ms)
+[session] tool get_pr_diff start
+[session] tool get_pr_diff done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (2ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (4ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (0ms)
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[bdk:otel] error: writeInitialRequest 67279015e0e70db1ba5f487b16dac298-c0b777b771050f42 - You can only call end() on a span once.
+[bdk:otel] error: writeInitialRequest 1b62a19c0e1377512d848a71210ad605-990122e4465afa13 - You can only call end() on a span once.
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[session] tool get_pr_diff start
+[session] tool get_pr_diff done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (1ms)
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[bdk:otel] error: writeInitialRequest bb93724edd61576d5e3aa4718ff82619-bb4d1417051acc61 - You can only call end() on a span once.
+[bdk:otel] error: writeInitialRequest e339661059bb7be202424971461d043b-497fd921d319dcf5 - You can only call end() on a span once.
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[session] tool get_pr_diff start
+[session] tool get_pr_diff done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (3ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (1ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (0ms)
+[session] tool check_gate_state start
+[session] tool check_gate_state done (2ms)
+[bdk:otel] error: writeInitialRequest d5fe27e074d451ff734387a4c895cf9e-32a4559f396c4fed - You can only call end() on a span once.
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[session] tool get_pr_diff start
+[session] tool get_pr_diff done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file start
+[session] tool read_repo_file done (4ms)
+[session] tool read_repo_file done (5ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool list_repo_files start
+[session] tool list_repo_files done (3ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (2ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (0ms)
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[bdk:otel] error: writeInitialRequest e26387a890f0f4ee5abea250434a6b12-8eff682914f403f5 - You can only call end() on a span once.
+[session] tool check_gate_state start
+[session] tool check_gate_state done (1ms)
+[session] tool get_pr_diff start
+[session] tool get_pr_diff done (2ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (3ms)
+[session] tool read_repo_file start
+[session] tool read_repo_file done (1ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (0ms)
+[session] tool post_verdict start
+[session] tool post_verdict done (1ms)
+[session] tool check_gate_state start
+[session] tool check_gate_state done (3ms)
+[bdk:otel] error: writeInitialRequest 75fd00a9dc30de16c94ccec1678ed6e5-b0b36eb72dca0bf4 - You can only call end() on a span once.
+results: /cursor/stores/self/internal/handoff-2026-10-31/pr-1522-r23/exams/post-pack-4.json

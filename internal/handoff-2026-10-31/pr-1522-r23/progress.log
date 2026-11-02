@@ -1,0 +1,38 @@
+# PR #1522 r23 v5.3 exam progress
+# Joshua GO locks §17 1-14; run extra batch: yes; Option B only
+
+MARKER=reduces what the recorded full-suite comparison actually checks
+ALLOWLIST_HUNKS=If a change reduces what the recorded full-suite comparison actually checks, the verdict is MODIFY. Excluding, skipping or deselecting tests, or narrowing which tests run, counts as reducing it. Exceptions: replacement tests for the same behaviors are visible in the diff under review, or the diff also removes the production code those tests guarded. A green comparison or 'no new failures vs base' is not sufficient when the compared run no longer exercises checks that would fail on this head. Restore what the comparison needs and re-review.
+
+PRE_SHA=00655aca63224161436cecf2610979f0569fe2bf
+HARNESS_SHA=b9ccd6a73295567775ab83761d1db5c2497ac0bc
+SCORER_SHA=7313b4a1c0e02e186731010cf0e1e07c8b4ead83bedfe500c511edd9755f156f
+MODEL=composer-2.5 fast:false (reviewer+judge evals.config.ts)
+
+§13b PRE start $(date -u +%Y-%m-%dT%H:%M:%SZ)
+CAPTURE_HASH=46c634666738fa8f6eb61cb1e79d4dee5fb207d531a012513516601705e05feb
+§13b PRE target RED: sanity ok; target failures marker 0!==1 (see s13b-pre-test-output.txt)
+LIVE_EVAL_PRE CAPTURE_HASH=46c634666738fa8f6eb61cb1e79d4dee5fb207d531a012513516601705e05feb dump==live (loadAgentProject parity)
+POST_SHA=47232d13175bfcd6274245ad6aa840cd8eb5f0a7
+PRE_SHA_FIXED=23bd34f03fb4431ad29726f500f00efc9d1dd82b
+POST_SHA=a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e
+PACK_START baseline-A 2026-11-02T18:51:54Z HEAD=23bd34f0
+PACK_DONE baseline-A 2026-11-02T18:56:21Z
+PACK_START baseline-B 2026-11-02T18:56:28Z HEAD=23bd34f0
+PACK_DONE baseline-B 2026-11-02T19:00:16Z
+PACK_START baseline-C 2026-11-02T19:00:19Z HEAD=23bd34f0
+PACK_DONE baseline-C 2026-11-02T19:04:20Z
+Option B only — A rejected
+PACK_START post-pack-1 2026-11-02T19:04:28Z HEAD=a5819378
+PACK_DONE post-pack-1 2026-11-02T19:09:04Z
+PACK_START post-pack-2 2026-11-02T19:09:04Z HEAD=a5819378
+PACK_DONE post-pack-2 2026-11-02T19:13:49Z
+PACK_START post-pack-3 2026-11-02T19:13:49Z HEAD=a5819378
+PACK_DONE post-pack-3 2026-11-02T19:17:59Z
+PACK_START post-pack-4 2026-11-02T19:17:59Z HEAD=a5819378
+PACK_DONE post-pack-4 2026-11-02T19:21:30Z
+PACK_START drift-1 2026-11-02T19:21:40Z HEAD=23bd34f0
+PACK_DONE drift-1 2026-11-02T19:25:59Z
+START 2026-11-02T19:26:20Z
+POST_SHA=a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e
+LOCK6_POST live=6637087582c794c1011219dd51951b4a9e829d3f24507a037a15c0570557d1fe helper=6637087582c794c1011219dd51951b4a9e829d3f24507a037a15c0570557d1fe MATCH

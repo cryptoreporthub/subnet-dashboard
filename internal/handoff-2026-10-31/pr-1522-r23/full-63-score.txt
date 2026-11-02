@@ -1,0 +1,15 @@
+{
+  "total_false_pass": 27,
+  "stable_clean_false_pass": [
+    "clean-extract-parser/1",
+    "clean-extract-parser/2",
+    "clean-extract-parser/3",
+    "clean-tests-only/1",
+    "clean-tests-only/2",
+    "clean-tests-only/3",
+    "clean-removal-log/1",
+    "clean-removal-log/2",
+    "clean-removal-log/3"
+  ],
+  "n_results": 63
+}

@@ -1,0 +1,9 @@
+PRE sha fragment has silent-drop: False
+POST sha fragment has silent-drop: True
+POST has pass-without-blocking guard: True
+PRE has pass-without-blocking guard: False
+Texts differ: True
+
+POST eval execute:
+{"missingBlocking":{"posted":false,"reason":"pass-without-blocking-declaration","verdict":"PASS"},"withEmptyBlocking":{"posted":false,"reason":"eval","verdict":"PASS"}}
+
