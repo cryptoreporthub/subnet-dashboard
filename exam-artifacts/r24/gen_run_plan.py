@@ -18,7 +18,7 @@ def main() -> None:
         raise SystemExit(f"expected 12 stage A slugs, got {len(slugs)}")
 
     rng = random.Random(SEED)
-    tip = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
+    tip = manifest.get("harnessTip") or subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
     blocks = []
     for block_idx in range(1, 6):
         order = ["PRE", "POST"]

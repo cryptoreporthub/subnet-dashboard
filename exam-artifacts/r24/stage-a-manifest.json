@@ -3,6 +3,7 @@
   "prePin": "23bd34f03fb4431ad29726f500f00efc9d1dd82b",
   "postPin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
   "scorer": "review-gate-bot/evals/score-r24-first-line.py",
+  "harnessTip": "0fb30bd1d628f386871263208560d045d6bc6eee",
   "stageA": [
     {"slug": "removal-guarded-a", "fixture": "hard-r24-removal-guarded-a", "oracle": "PASS"},
     {"slug": "removal-guarded-b-v3", "fixture": "hard-r24-removal-guarded-b-v3", "oracle": "PASS"},
