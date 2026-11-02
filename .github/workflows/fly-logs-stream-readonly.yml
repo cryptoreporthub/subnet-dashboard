@@ -83,14 +83,19 @@ jobs:
           import sys
 
           raw_path, filtered_path = sys.argv[1], sys.argv[2]
+          # #1538 capture 41460406497: keep stall-guard, worker lifecycle, score/pump job lines.
           patterns = re.compile(
-              r"(rss-heartbeat|process_memory|heavy_job_slot.*(acquire|release)|"
-              r"live_subnets|pump_ladder|prediction_resolver|resolver.*cycle|"
+              r"(rss-heartbeat|process_memory|heavy_job_slot.*(acquire|release|reject)|"
+              r"live_subnets|pump[_ ]?ladder|prediction_resolver|resolver.*cycle|"
+              r"score snapshot (cycle|build|write|receipt)|"
+              r"loop stall guard|exiting for supervisor restart|"
               r"stake alert|homepage cache|whale|outcome_snapshot|score_snapshot|listener page SSR|"
               r"Out of memory|Killed process|oom_killed|exit_code=137|exit code 137|"
               r"inline worker heartbeat stale|starting inline background worker|"
+              r"restarting inline|worker schedulers appear wedged|"
               r"Health check|/health|Machine (created and started|started in|start|stop)|"
-              r"Virtual machine exited|Main child exited|Process appears to have been OOM)",
+              r"Virtual machine exited|Main child exited|Process appears to have been OOM|"
+              r"flyd\[|app\[.*\].*exited|signal 9|SIGKILL)",
               re.IGNORECASE,
           )
           redact = re.compile(
