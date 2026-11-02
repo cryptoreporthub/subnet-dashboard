@@ -192,12 +192,24 @@
       ]
     },
     {
-      "id": "dry-run/FIRST_LINE",
+      "id": "dry-run/UNPARSEABLE",
       "toolCalls": [
         {
           "toolName": "post_verdict",
           "input": {
-            "body": "FAIL\n\nbody token ignored when verdict set separately"
+            "body": "Looks good to me, ship it."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "dry-run/FIRST_LINE_FAIL",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "body": "FAIL\n\nfirst-line token without verdict field"
           },
           "output": "{}"
         }
