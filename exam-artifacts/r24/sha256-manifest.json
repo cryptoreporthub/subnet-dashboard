@@ -13,7 +13,7 @@
   "exam-artifacts/r24/blind/tests-moved-b.md": "e5db0e15095def1740057cddce2242f1bcf6bda3978a28ed7ba0a9e593f20297",
   "exam-artifacts/r24/dry-run-scorer-output.json": "cd09932acb2bc2d42a858f8f0d60ed73e8123889cf384fb2a2a94aa0dec1b9f3",
   "exam-artifacts/r24/dry-run-synthetic.json": "8b53a021e54c10763c6a189b04708e5fd4e9248e8afd18973a6d240dc3690e61",
-  "exam-artifacts/r24/run-plan.json": "d078490c0a15f0c33391d500aeed3229e7d7b1bb889161cba5e0ad4d19313e62",
+  "exam-artifacts/r24/run-plan.json": "2716a23a0f3b1bbcaee595642de732f819433a46212a7b14bc915a7422c42fcc",
   "exam-artifacts/r24/stage-a-manifest.json": "f713907f0831df211ecd29472b43688962ed350738607bd2ffae78f9360779b4",
   "exam-artifacts/r24/worktree-proof.log": "f7ef2e20ccb18132016236f17d010a77140e02c3d1d0d1e4221b58724b7cc06d",
   "review-gate-bot/evals/fixtures/hard-r24-ci-sharding-a-v2/diff.json": "6dd1fdf45e7f25069c4f345297f73fd92bcb164622deb5974e681842f57513af",
