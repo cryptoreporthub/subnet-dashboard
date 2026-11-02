@@ -1,0 +1,20 @@
+{
+  "fixture": "hard-r24-ci-sharding-b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a38d6ea789a333bc2318a7f5b80d0dee3f133675b5af7fb8038ad78dfe48b6a0",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Marker-based parallel jobs; combined coverage matches monolithic run."
+  }
+}

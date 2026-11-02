@@ -1,0 +1,21 @@
+{
+  "fixture": "hard-r24-deprecated-flag-a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "c7896cde1be972662bbedc1bbea8433823710e76cb8f6941388d47e5e5976476",
+  "changedPaths": [
+    "internal/subnet_universe_flags.py",
+    "tests/test_subnet_universe_flags.py"
+  ],
+  "pytest": {
+    "summary": "55 passed",
+    "passed": 55,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Flag constant and its tests removed together."
+  }
+}

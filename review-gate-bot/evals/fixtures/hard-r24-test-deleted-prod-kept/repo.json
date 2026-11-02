@@ -1,0 +1,8 @@
+{
+  "files": {
+    "tests/test_subnet_universe_stale_regression.py": ""
+  },
+  "baseFiles": {
+    "tests/test_subnet_universe_stale_regression.py": "def test_stale_regression_placeholder():\n    from internal.subnet_universe import STALE_GRACE_SECONDS\n    assert STALE_GRACE_SECONDS > 0\n"
+  }
+}

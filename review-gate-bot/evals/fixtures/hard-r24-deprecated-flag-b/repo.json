@@ -1,0 +1,10 @@
+{
+  "files": {
+    "config/experimental_refresh.toml": "",
+    "tests/test_experimental_refresh_config.py": ""
+  },
+  "baseFiles": {
+    "config/experimental_refresh.toml": "enabled = true\n",
+    "tests/test_experimental_refresh_config.py": "def test_refresh_toggle_enabled():\n    assert True\n"
+  }
+}

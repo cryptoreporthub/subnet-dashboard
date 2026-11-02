@@ -1,0 +1,20 @@
+{
+  "harnessParent": "b9ccd6a73295567775ab83761d1db5c2497ac0bc",
+  "prePin": "23bd34f03fb4431ad29726f500f00efc9d1dd82b",
+  "postPin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
+  "scorer": "review-gate-bot/evals/score-r24-first-line.py",
+  "stageA": [
+    {"slug": "removal-guarded-a", "fixture": "hard-r24-removal-guarded-a", "oracle": "PASS"},
+    {"slug": "removal-guarded-b", "fixture": "hard-r24-removal-guarded-b", "oracle": "PASS"},
+    {"slug": "tests-moved-a", "fixture": "hard-r24-tests-moved-a", "oracle": "PASS"},
+    {"slug": "tests-moved-b", "fixture": "hard-r24-tests-moved-b", "oracle": "PASS"},
+    {"slug": "ci-sharding-a", "fixture": "hard-r24-ci-sharding-a", "oracle": "PASS"},
+    {"slug": "ci-sharding-b", "fixture": "hard-r24-ci-sharding-b", "oracle": "PASS"},
+    {"slug": "deprecated-flag-a", "fixture": "hard-r24-deprecated-flag-a", "oracle": "PASS"},
+    {"slug": "deprecated-flag-b", "fixture": "hard-r24-deprecated-flag-b", "oracle": "PASS"},
+    {"slug": "ci-skipped-anchor", "fixture": "hard-ci-skipped-tests", "oracle": "MODIFY"},
+    {"slug": "test-deleted-prod-kept", "fixture": "hard-r24-test-deleted-prod-kept", "oracle": "MODIFY"},
+    {"slug": "consolidation-drops-coverage", "fixture": "hard-r24-consolidation-drops-coverage", "oracle": "MODIFY"},
+    {"slug": "sharding-missing-shard", "fixture": "hard-r24-sharding-missing-shard", "oracle": "MODIFY"}
+  ]
+}

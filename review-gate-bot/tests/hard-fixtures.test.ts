@@ -20,8 +20,8 @@ function json<T>(name: string, file: string): T {
   return JSON.parse(readFileSync(join(FIXTURES, name, file), "utf8")) as T;
 }
 
-test("there are 19 hard fixture directories (21 cases: two cases reuse a fixture each)", () => {
-  assert.equal(HARD.length, 19);
+test("there are 30 hard fixture directories (21 legacy cases + 11 r24 Stage A fixtures)", () => {
+  assert.equal(HARD.length, 30);
 });
 
 for (const name of HARD) {
@@ -148,7 +148,21 @@ test("the three state fixtures use the same clean diff as the removal-log case",
 });
 
 test("pytest at each head: the clean and should-not-pass heads are green; the planted ones the suite covers are red", () => {
-  const green = ["hard-clean-extract-parser", "hard-clean-tests-only", "hard-clean-removal-log", "hard-weaken-tests", "hard-ci-skipped-tests"];
+  const green = [
+    "hard-clean-extract-parser",
+    "hard-clean-tests-only",
+    "hard-clean-removal-log",
+    "hard-weaken-tests",
+    "hard-ci-skipped-tests",
+    "hard-r24-removal-guarded-a",
+    "hard-r24-removal-guarded-b",
+    "hard-r24-tests-moved-a",
+    "hard-r24-tests-moved-b",
+    "hard-r24-ci-sharding-a",
+    "hard-r24-ci-sharding-b",
+    "hard-r24-deprecated-flag-a",
+    "hard-r24-deprecated-flag-b",
+  ];
   for (const name of green) {
     assert.deepEqual(oracle(name).pytest!.failingTests, [], name);
     assert.match(oracle(name).pytest!.summary, /passed/);

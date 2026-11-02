@@ -1,0 +1,11 @@
+{
+  "number": 9406,
+  "title": "ci: parallelize unit and integration markers",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9406",
+  "headSha": "b7526a683c4222641812e474973b96b23663c14a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "files": {
+    "tests/test_subnet_sanity.py": "",
+    "tests/sanity/test_core.py": "def test_moved_happy_path():\n    assert 2 + 2 == 4\n"
+  },
+  "baseFiles": {
+    "tests/test_subnet_sanity.py": "def test_moved_happy_path():\n    assert 2 + 2 == 4\n"
+  }
+}

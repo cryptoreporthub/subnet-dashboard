@@ -1,0 +1,12 @@
+{
+  "number": 9407,
+  "title": "chore: remove legacy universe parser flag",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9407",
+  "headSha": "99db8657c62c2631718b8e18e05171e054b3877f",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe_flags.py",
+    "tests/test_subnet_universe_flags.py"
+  ]
+}

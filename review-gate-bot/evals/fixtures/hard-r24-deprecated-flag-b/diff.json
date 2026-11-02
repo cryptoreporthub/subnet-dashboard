@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "config/experimental_refresh.toml",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 1,
+      "patch": "@@ -1 +0,0 @@\n-enabled = true"
+    },
+    {
+      "path": "tests/test_experimental_refresh_config.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 2,
+      "patch": "@@ -1,2 +0,0 @@\n-def test_refresh_toggle_enabled():\n-    assert True"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

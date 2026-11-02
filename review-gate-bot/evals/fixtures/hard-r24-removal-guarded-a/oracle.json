@@ -1,0 +1,21 @@
+{
+  "fixture": "hard-r24-removal-guarded-a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "dd9a70417fc133d6fc235dc54478fa2593b4e7afe355aba0bca721b859f1ef8b",
+  "changedPaths": [
+    "internal/legacy_subnet_probe.py",
+    "tests/test_legacy_subnet_probe.py"
+  ],
+  "pytest": {
+    "summary": "55 passed",
+    "passed": 55,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Production helper and its dedicated tests removed in the same diff; full suite stays green."
+  }
+}
