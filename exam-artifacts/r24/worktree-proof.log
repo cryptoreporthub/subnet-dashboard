@@ -1,6 +1,14 @@
-=== r24 worktree overlay proof 2026-11-02T23:04:11Z ===
+=== r24 worktree overlay proof 2026-11-02T23:04:15Z ===
 REPO=/tmp/pr-1522-exam-r8-work/repo
-overlay_source=54a54c31399287200f475764fe97749cb615356a (TIP_SHA=54a54c31399287200f475764fe97749cb615356a for git show paths)
+overlay_source=c9284c2b1fdb91e9d8a432fb2ea66a2df406ad20 (TIP_SHA=c9284c2b1fdb91e9d8a432fb2ea66a2df406ad20 for git show paths)
 Only bot/instructions.md should differ between PRE and POST worktrees after overlay.
 
-fatal: path 'review-gate-bot/evals/r24-prompts.ts' exists on disk, but not in '54a54c31399287200f475764fe97749cb615356a'
+=== SHA256 overlay check (manifest) ===
+FAIL
+pre:review-gate-bot/evals/review-gate-r24.eval.ts got d8e25d136574e6511483cecf41cd512761a4da0d92391a24cb922f81385ce99a want d18e3d775192d2339ead7146e3b75e62ae065b2c3abad7192a0874c2a1161d01
+post:review-gate-bot/evals/review-gate-r24.eval.ts got d8e25d136574e6511483cecf41cd512761a4da0d92391a24cb922f81385ce99a want d18e3d775192d2339ead7146e3b75e62ae065b2c3abad7192a0874c2a1161d01
+pre:review-gate-bot/evals/score-r24-first-line.py got cd7bcd95a5b8ef4f9dd08b25c21f7bbf4de35ef11eae7129a629a46a79277506 want 4ab63f6502c54e366977f2ab609164c5abed96aca0d5c2db21a4cdcd61e8fd34
+post:review-gate-bot/evals/score-r24-first-line.py got cd7bcd95a5b8ef4f9dd08b25c21f7bbf4de35ef11eae7129a629a46a79277506 want 4ab63f6502c54e366977f2ab609164c5abed96aca0d5c2db21a4cdcd61e8fd34
+pre:review-gate-bot/evals/review-gate-r24.eval.ts got d8e25d136574e6511483cecf41cd512761a4da0d92391a24cb922f81385ce99a want d18e3d775192d2339ead7146e3b75e62ae065b2c3abad7192a0874c2a1161d01
+post:review-gate-bot/evals/review-gate-r24.eval.ts got d8e25d136574e6511483cecf41cd512761a4da0d92391a24cb922f81385ce99a want d18e3d775192d2339ead7146e3b75e62ae065b2c3abad7192a0874c2a1161d01
+missing from manifest: review-gate-bot/evals/r24-prompts.ts

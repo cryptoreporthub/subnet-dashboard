@@ -40,7 +40,7 @@ PY
   echo "review-gate-bot/evals/r24-prompts.ts"
 }
 
-mapfile -t OVERLAY < <(overlay_paths)
+mapfile -t OVERLAY < <(overlay_paths | sort -u)
 for path in "${OVERLAY[@]}"; do
   [[ -z "$path" ]] && continue
   for wt in pre post; do

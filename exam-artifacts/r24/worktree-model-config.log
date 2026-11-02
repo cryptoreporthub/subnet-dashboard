@@ -1,4 +1,4 @@
-=== r24 worktree model config 2026-11-02T23:04:11Z ===
+=== r24 worktree model config 2026-11-02T23:04:15Z ===
 --- PRE (23bd34f03fb4431ad29726f500f00efc9d1dd82b) bot/agent.ts model ---
 id=composer-2.5 params=[('fast', 'false')]
 --- POST (a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e) bot/agent.ts model ---
