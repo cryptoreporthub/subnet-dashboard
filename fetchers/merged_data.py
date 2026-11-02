@@ -232,6 +232,22 @@ def get_merged_subnet_data():
     cached = _get_cached("all_merged")
     if cached:
         return cached.get("subnets", [])
+    try:
+        from internal.live_subnets import live_subnets_sync_in_progress
+
+        if live_subnets_sync_in_progress():
+            # ponytail: overlap with live_subnets chain batch duplicates RPC rows
+            # and large dict graphs in the same worker; use quick rows only.
+            quick = get_merged_subnet_rows_quick()
+            if quick:
+                logger.info(
+                    "Merged: skipped full merge during live_subnets sync (%d quick rows)",
+                    len(quick),
+                )
+                return quick
+            return []
+    except Exception:
+        pass
     # Layer 1: Blockmachine
     bm_subnets = []
     bm_by_netuid = {}
