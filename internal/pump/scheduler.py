@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -215,13 +216,26 @@ class PumpLadderScheduler:
         # Ceiling: an abandoned body keeps running and can finish late; _scan_lock stops overlap.
         outcome: Dict[str, Any] = {}
         done = threading.Event()
+        body_meta: Dict[str, bool] = {"stalled": False}
 
         def _body() -> None:
+            from internal.process_memory import log_heavy_job_rss
+
+            _rss_t0 = time.perf_counter()
+            log_heavy_job_rss("pump_ladder", "start", started_at=_rss_t0)
             try:
-                outcome["result"] = self._tick_body()
-            except BaseException as exc:
-                outcome["exc"] = exc
+                try:
+                    outcome["result"] = self._tick_body()
+                except BaseException as exc:
+                    outcome["exc"] = exc
             finally:
+                log_heavy_job_rss("pump_ladder", "end", started_at=_rss_t0)
+                if body_meta["stalled"]:
+                    log_heavy_job_rss(
+                        "pump_ladder_abandoned_body",
+                        "end",
+                        started_at=_rss_t0,
+                    )
                 done.set()
 
         threading.Thread(target=_body, daemon=True, name="pump-ladder-body").start()
@@ -229,6 +243,10 @@ class PumpLadderScheduler:
             if "exc" in outcome:
                 raise outcome["exc"]
             return outcome["result"]
+        body_meta["stalled"] = True
+        from internal.process_memory import log_heavy_job_rss
+
+        log_heavy_job_rss("pump_ladder_stall_release", "milestone")
         logger.warning(
             "pump ladder tick body stalled >%.0fs; releasing heavy_job_slot",
             PUMP_LADDER_BODY_STALL_SECONDS,
@@ -239,14 +257,21 @@ class PumpLadderScheduler:
         return result
 
     def _tick_body(self) -> Dict[str, Any]:
+        from internal.process_memory import log_heavy_job_rss
+
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
+        _scan_t0 = time.perf_counter()
+        log_heavy_job_rss("pump_ladder_scan", "start", started_at=_scan_t0)
         try:
-            scan = scan_all_subnets()
-            result.update(scan)
-            result["ok"] = bool(scan.get("ok"))
-        except Exception as exc:
-            result["error"] = str(exc)
-            logger.warning("Pump ladder scan failed: %s", exc)
+            try:
+                scan = scan_all_subnets()
+                result.update(scan)
+                result["ok"] = bool(scan.get("ok"))
+            except Exception as exc:
+                result["error"] = str(exc)
+                logger.warning("Pump ladder scan failed: %s", exc)
+        finally:
+            log_heavy_job_rss("pump_ladder_scan", "end", started_at=_scan_t0)
 
         record_ladder_scan_run(result, sched=self)
         self._schedule_next(result)

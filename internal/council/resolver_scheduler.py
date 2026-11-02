@@ -616,7 +616,25 @@ class PredictionResolverScheduler:
                     # Retry sooner so pending_past_grace doesn't rot behind long snapshots.
                     self._schedule_next(min(2, max(1, self.refresh_minutes)))
                 return skipped
-            result = self._run_refresh_cycle_with_timeout()
+            from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
+
+            _rss_t0 = time.perf_counter()
+            _uptime = process_uptime_seconds() if first_tick else None
+            log_heavy_job_rss(
+                "prediction_resolver",
+                "start",
+                started_at=_rss_t0,
+                process_uptime_s=_uptime,
+            )
+            try:
+                result = self._run_refresh_cycle_with_timeout()
+            finally:
+                log_heavy_job_rss(
+                    "prediction_resolver",
+                    "end",
+                    started_at=_rss_t0,
+                    process_uptime_s=process_uptime_seconds() if first_tick else None,
+                )
 
         if result.get("ok"):
             self.liveness.record_success(

@@ -11,6 +11,41 @@ from typing import Optional
 logger = logging.getLogger("process_memory")
 
 _HEARTBEAT_STARTED = False
+_PROCESS_START_PERF = time.perf_counter()
+
+
+def _process_uptime_from_proc() -> Optional[float]:
+    """Process age from Linux /proc (None if unreadable)."""
+    try:
+        clk_tck = os.sysconf("SC_CLK_TCK")
+        if clk_tck <= 0:
+            return None
+        with open("/proc/uptime", encoding="utf-8") as handle:
+            system_uptime = float(handle.read().split()[0])
+        with open("/proc/self/stat", encoding="utf-8") as handle:
+            stat = handle.read()
+        rparen = stat.rfind(")")
+        if rparen < 0:
+            return None
+        fields = stat[rparen + 2 :].split()
+        if len(fields) <= 19:
+            return None
+        starttime = int(fields[19])
+        return max(0.0, system_uptime - starttime / clk_tck)
+    except (AttributeError, OSError, ValueError, IndexError):
+        return None
+
+
+def process_uptime_seconds() -> float:
+    """Seconds since this process started (from /proc when available).
+
+    Falls back to monotonic time since ``process_memory`` was first imported when
+    /proc is unreadable (e.g. non-Linux).
+    """
+    proc_age = _process_uptime_from_proc()
+    if proc_age is not None:
+        return proc_age
+    return time.perf_counter() - _PROCESS_START_PERF
 
 
 def set_linux_process_comm(name: str) -> None:
@@ -49,6 +84,74 @@ def log_memory_snapshot(label: str) -> None:
         logger.info("%s pid=%s rss_kb=unknown", label, os.getpid())
         return
     logger.info("%s pid=%s rss_kb=%d", label, os.getpid(), rss)
+
+
+def log_heavy_job_rss(
+    name: str,
+    phase: str,
+    *,
+    started_at: Optional[float] = None,
+    process_uptime_s: Optional[float] = None,
+) -> None:
+    """RSS bookends for heavy jobs (#1538 observability)."""
+    try:
+        from internal.run_mode import get_run_mode
+
+        run_mode = get_run_mode()
+        pid = os.getpid()
+        rss = read_rss_kb()
+        if phase == "milestone" and process_uptime_s is None:
+            process_uptime_s = process_uptime_seconds()
+        held_ms = 0.0
+        if phase == "end" and started_at is not None:
+            held_ms = (time.perf_counter() - started_at) * 1000.0
+        uptime_s = process_uptime_s
+        if rss is None:
+            if uptime_s is not None:
+                logger.info(
+                    "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown "
+                    "held_ms=%.1f process_uptime_s=%.3f",
+                    name,
+                    phase,
+                    run_mode,
+                    pid,
+                    held_ms,
+                    uptime_s,
+                )
+            else:
+                logger.info(
+                    "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown held_ms=%.1f",
+                    name,
+                    phase,
+                    run_mode,
+                    pid,
+                    held_ms,
+                )
+            return
+        if uptime_s is not None:
+            logger.info(
+                "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f "
+                "process_uptime_s=%.3f",
+                name,
+                phase,
+                run_mode,
+                pid,
+                rss,
+                held_ms,
+                uptime_s,
+            )
+            return
+        logger.info(
+            "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f",
+            name,
+            phase,
+            run_mode,
+            pid,
+            rss,
+            held_ms,
+        )
+    except Exception as exc:
+        logger.debug("heavy_job_rss log failed: %s", exc)
 
 
 def _rss_heartbeat_label() -> str:

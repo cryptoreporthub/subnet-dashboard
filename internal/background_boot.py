@@ -39,6 +39,12 @@ def defer_boot(name: str, target: Callable[[], None], delay: Optional[int] = Non
         if wait > 0:
             time.sleep(wait)
         try:
+            from internal.process_memory import log_heavy_job_rss
+
+            log_heavy_job_rss(f"boot_scheduler_started:{name}", "milestone")
+        except Exception:
+            pass
+        try:
             target()
         except Exception as exc:
             logger.warning("%s boot task failed: %s", name, exc)
@@ -640,6 +646,12 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
             "yes",
             "on",
         )
+        try:
+            from internal.process_memory import log_heavy_job_rss
+
+            log_heavy_job_rss("boot_scheduler_started:registry_freshness_sync", "milestone")
+        except Exception:
+            pass
         start_background_sync(immediate=boot_sync)
         logger.info("Registry freshness background sync started")
     except Exception as exc:

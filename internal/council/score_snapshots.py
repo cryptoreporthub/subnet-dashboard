@@ -1692,11 +1692,18 @@ class ScoreSnapshotScheduler:
                 )
 
             logger.info("score snapshot cycle started")
+            from internal.process_memory import log_heavy_job_rss
+
+            _rss_t0 = time.perf_counter()
+            log_heavy_job_rss("score_snapshot", "start", started_at=_rss_t0)
             try:
-                result = write_full_universe_snapshot(progress_cb=_progress)
-            except Exception as exc:
-                logger.warning("score snapshot cycle exception: %s", exc)
-                result = {"ok": False, "error": str(exc)}
+                try:
+                    result = write_full_universe_snapshot(progress_cb=_progress)
+                except Exception as exc:
+                    logger.warning("score snapshot cycle exception: %s", exc)
+                    result = {"ok": False, "error": str(exc)}
+            finally:
+                log_heavy_job_rss("score_snapshot", "end", started_at=_rss_t0)
             result["run_at"] = _now_iso()
             if not result.get("run_id"):
                 result["run_id"] = run_id
