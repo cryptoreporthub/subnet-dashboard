@@ -106,6 +106,17 @@ def test_process_uptime_uses_proc_when_older_than_import(monkeypatch):
     assert abs(age - 150.0) < 0.01
 
 
+def test_process_uptime_falls_back_when_sysconf_missing(monkeypatch):
+    def _no_sysconf(_name):
+        raise AttributeError("no sysconf")
+
+    monkeypatch.setattr(process_memory_mod.os, "sysconf", _no_sysconf)
+
+    age = process_uptime_seconds()
+    assert isinstance(age, float)
+    assert age >= 0.0
+
+
 def test_pump_ladder_tick_body_with_scan_mocked(monkeypatch):
     calls: list[dict] = []
 

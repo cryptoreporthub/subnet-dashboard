@@ -32,7 +32,7 @@ def _process_uptime_from_proc() -> Optional[float]:
             return None
         starttime = int(fields[19])
         return max(0.0, system_uptime - starttime / clk_tck)
-    except (OSError, ValueError, IndexError):
+    except (AttributeError, OSError, ValueError, IndexError):
         return None
 
 
