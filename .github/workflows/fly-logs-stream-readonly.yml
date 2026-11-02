@@ -8,7 +8,7 @@ on:
       duration_minutes:
         description: "Minutes to tail flyctl logs (UTC wall clock on runner)"
         required: true
-        default: "45"
+        default: 45
         type: number
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           elif [ "$MINUTES" -lt 1 ] 2>/dev/null; then
             MINUTES=1
           fi
-          SECONDS=$((MINUTES * 60))
+          STREAM_SECS=$((MINUTES * 60))
           OUT_DIR="$RUNNER_TEMP/fly-logs-stream-${GITHUB_RUN_ID}"
           mkdir -p "$OUT_DIR"
           RAW="$OUT_DIR/fly-logs-raw.txt"
@@ -53,7 +53,7 @@ jobs:
           {
             echo "app=$APP"
             echo "duration_minutes=$MINUTES"
-            echo "stream_timeout_seconds=$SECONDS"
+            echo "stream_timeout_seconds=$STREAM_SECS"
             echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "run_id=${GITHUB_RUN_ID}"
           } > "$META"
@@ -61,11 +61,11 @@ jobs:
           health_probe "health_probe_start" >> "$META" 2>&1
 
           set +e
-          timeout "${SECONDS}s" flyctl logs -a "$APP" > "$RAW" 2>&1
+          timeout "${STREAM_SECS}s" flyctl logs -a "$APP" > "$RAW" 2>&1
           STREAM_EXIT=$?
           set -e
           STREAM_DROPPED=false
-          if [ "$STREAM_EXIT" -ne 0 ]; then
+          if [ "$STREAM_EXIT" -ne 0 ] && [ "$STREAM_EXIT" -ne 124 ]; then
             STREAM_DROPPED=true
           fi
 
@@ -86,7 +86,8 @@ jobs:
           patterns = re.compile(
               r"(rss-heartbeat|process_memory|heavy_job_slot.*(acquire|release)|"
               r"live_subnets|pump_ladder|prediction_resolver|resolver.*cycle|"
-              r"Out of memory|Killed process|oom_killed|\b137\b|"
+              r"stake alert|homepage cache|whale|outcome_snapshot|score_snapshot|listener page SSR|"
+              r"Out of memory|Killed process|oom_killed|exit_code=137|exit code 137|"
               r"inline worker heartbeat stale|starting inline background worker|"
               r"Health check|/health|Machine (created and started|started in|start|stop)|"
               r"Virtual machine exited|Main child exited|Process appears to have been OOM)",
