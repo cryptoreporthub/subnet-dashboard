@@ -1,0 +1,13 @@
+{
+  "number": 9414,
+  "title": "refactor: remove census helper and dependent tests",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9414",
+  "headSha": "3d68261e5d848273ca3b2fc59f33fa565f1de843",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r24_census_helper.py",
+    "tests/test_r24_census_helper.py",
+    "tests/test_subnet_universe_misc.py"
+  ]
+}

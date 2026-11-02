@@ -1,0 +1,21 @@
+{
+  "fixture": "hard-r24-deprecated-flag-b-v2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "55ce343a53f4f2c7af79e2bdd1471aced3ac6e34dd36d257e4bcfcf9e0935b88",
+  "changedPaths": [
+    "config/experimental_refresh.toml",
+    "tests/test_experimental_refresh_config.py"
+  ],
+  "pytest": {
+    "summary": "55 passed",
+    "passed": 55,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Toggle config and its test removed together; deleted test had a real tomllib assertion (not vacuous)."
+  }
+}

@@ -1,4 +1,4 @@
-# Blind package: deprecated-flag-b
+# Blind package: deprecated-flag-b-v2
 
 ## PR title
 chore: drop experimental refresh toggle
@@ -9,7 +9,7 @@ chore: drop experimental refresh toggle
 ## Gate data
 ```json
 {
-  "headSha": "3e548e03120c4571a16fb1fb2eb6bf2c0f4b658c",
+  "headSha": "ca7d91c5030154ea210ecaa64ee5649cb3110899",
   "mc": "missing",
   "cursor": "missing",
   "ditto": "missing",
@@ -29,7 +29,10 @@ chore: drop experimental refresh toggle
 
 ### `tests/test_experimental_refresh_config.py`
 ```diff
-@@ -1,2 +0,0 @@
+@@ -1,5 +0,0 @@
 -def test_refresh_toggle_enabled():
--    assert True
+-    import tomllib
+-    from pathlib import Path
+-    data = tomllib.loads(Path("config/experimental_refresh.toml").read_bytes())
+-    assert data["enabled"] is True
 ```

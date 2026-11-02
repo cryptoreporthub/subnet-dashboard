@@ -20,8 +20,8 @@ function json<T>(name: string, file: string): T {
   return JSON.parse(readFileSync(join(FIXTURES, name, file), "utf8")) as T;
 }
 
-test("there are 30 hard fixture directories (21 legacy cases + 11 r24 Stage A fixtures)", () => {
-  assert.equal(HARD.length, 30);
+test("there are 35 hard fixture directories (21 legacy + 11 r24 + 5 r24 v2 replacements)", () => {
+  assert.equal(HARD.length, 35);
 });
 
 for (const name of HARD) {
@@ -162,6 +162,10 @@ test("pytest at each head: the clean and should-not-pass heads are green; the pl
     "hard-r24-ci-sharding-b",
     "hard-r24-deprecated-flag-a",
     "hard-r24-deprecated-flag-b",
+    "hard-r24-ci-sharding-a-v2",
+    "hard-r24-ci-sharding-b-v2",
+    "hard-r24-removal-guarded-b-v2",
+    "hard-r24-deprecated-flag-b-v2",
   ];
   for (const name of green) {
     assert.deepEqual(oracle(name).pytest!.failingTests, [], name);
