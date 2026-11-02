@@ -6,7 +6,9 @@ DO NOT MERGE. This draft PR exists only so comments wake the agents. Close it wh
 A good review agent: the `review-gate-bot` gives correct verdicts on hard fixtures without over-blocking legitimate changes. Done = fix proven on locked bars, over-block risk measured on a new oracle-PASS pack, outside review passed, and PR #1522 is ready for Joshua's merge GO.
 
 ## Owner
-Claude (planner, reviewer, implementer, project owner). Cursor implements and runs exams when asked. Joshua gives final merge GO only.
+Claude = project lead: plans each round, locks bars, reviews adversarially, sets the GATE line, decides next steps. Claude does NOT implement fixes or run exams (no SDK/harness access).
+Cursor = implementer and exam runner: code changes, live eval calls, scoring, artifact publishing. Cursor does not self-GO and does not change locked bars.
+Joshua = final merge/deploy GO only.
 
 ## Protocol
 1. Read the newest `ROUND` comment on this PR first. Obey its `GATE` line.
