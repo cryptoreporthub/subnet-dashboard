@@ -265,6 +265,7 @@ async def _lifespan(app: FastAPI):
                 touch_heartbeat()
                 start_heartbeat_thread()
                 logger.info("Stage 2 hop worker lifespan — HTTP + heartbeat thread")
+                log_heavy_job_rss("lifespan_ready", "milestone")
                 yield
                 return
 
@@ -332,6 +333,7 @@ async def _lifespan(app: FastAPI):
                     logger.warning("resolver scheduler state unavailable at boot: %s", _rs_exc)
 
                 logger.info("dedicated worker lifespan boot (heavy=%s)", heavy)
+            log_heavy_job_rss("lifespan_ready", "milestone")
             yield
             if background_boot_allowed():
                 from internal.background_boot import stop_background_workers

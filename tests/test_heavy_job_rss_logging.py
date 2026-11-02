@@ -235,3 +235,25 @@ def test_web_lifespan_logs_milestones_and_web_boot_scopes(caplog, monkeypatch):
     for n in ("emergency-prime", "homepage-warm-boot", "registry-name-sync"):
         assert f"name=web_boot:{n} phase=start" in joined
         assert f"name=web_boot:{n} phase=end" in joined
+
+
+@pytest.mark.parametrize("stage2", [True, False])
+def test_worker_lifespan_logs_start_and_ready(caplog, monkeypatch, stage2):
+    from fastapi.testclient import TestClient
+
+    import server
+
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
+    monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
+    monkeypatch.setattr("internal.run_mode.stage2_hop_mode", lambda: stage2)
+    monkeypatch.setattr("internal.run_mode.background_boot_allowed", lambda: stage2)
+    monkeypatch.setattr("internal.worker_heartbeat.touch_heartbeat", lambda: None)
+    monkeypatch.setattr("internal.worker_heartbeat.start_heartbeat_thread", lambda: None)
+
+    with TestClient(server.app):
+        pass
+
+    joined = "\n".join(_heavy_lines(caplog))
+    assert joined.count("name=lifespan_start phase=milestone") == 1
+    assert joined.count("name=lifespan_ready phase=milestone") == 1
