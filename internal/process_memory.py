@@ -6,7 +6,8 @@ import logging
 import os
 import threading
 import time
-from typing import Optional
+from contextlib import contextmanager
+from typing import Iterator, Optional
 
 logger = logging.getLogger("process_memory")
 
@@ -152,6 +153,17 @@ def log_heavy_job_rss(
         )
     except Exception as exc:
         logger.debug("heavy_job_rss log failed: %s", exc)
+
+
+@contextmanager
+def heavy_job_rss_scope(name: str) -> Iterator[None]:
+    """RSS start/end bookends around a block; the end line is logged even if the block raises."""
+    t0 = time.perf_counter()
+    log_heavy_job_rss(name, "start")
+    try:
+        yield
+    finally:
+        log_heavy_job_rss(name, "end", started_at=t0)
 
 
 def _rss_heartbeat_label() -> str:

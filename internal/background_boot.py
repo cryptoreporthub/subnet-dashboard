@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import threading
 import time
-from typing import Callable, Optional
+from typing import Callable, ContextManager, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,17 @@ def defer_boot(name: str, target: Callable[[], None], delay: Optional[int] = Non
     def _run() -> None:
         if wait > 0:
             time.sleep(wait)
+        scope: ContextManager[None] = contextlib.nullcontext()
         try:
-            from internal.process_memory import log_heavy_job_rss
+            from internal.process_memory import heavy_job_rss_scope, log_heavy_job_rss
 
             log_heavy_job_rss(f"boot_scheduler_started:{name}", "milestone")
+            scope = heavy_job_rss_scope(f"boot_target:{name}")
         except Exception:
             pass
         try:
-            target()
+            with scope:
+                target()
         except Exception as exc:
             logger.warning("%s boot task failed: %s", name, exc)
 
