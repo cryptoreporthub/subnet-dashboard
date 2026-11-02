@@ -246,7 +246,7 @@ class PumpLadderScheduler:
         body_meta["stalled"] = True
         from internal.process_memory import log_heavy_job_rss
 
-        log_heavy_job_rss("pump_ladder_stall_release", "end")
+        log_heavy_job_rss("pump_ladder_stall_release", "milestone")
         logger.warning(
             "pump ladder tick body stalled >%.0fs; releasing heavy_job_slot",
             PUMP_LADDER_BODY_STALL_SECONDS,
