@@ -202,11 +202,51 @@ def _batch_claim_oracle(mod_src: str, *, claim: str) -> dict:
     exec(mod_src, ns)  # noqa: S102
     fn = ns["queries_for_refresh"]
     measured = int(fn(128, batch_size=32))
+    wants_one = "one" in claim.lower() and "rpc" in claim.lower()
     return {
         "claimInPrBody": claim,
         "measuredBatchQueriesAt128": measured,
-        "claimOneTotalCall": False,
+        "claimOneTotalCall": measured == 1,
+        "claimFalsifiedByMeasurement": wants_one and measured != 1,
         "note": "PR claims one RPC total; measured batch count grows with netuids.",
+    }
+
+
+def _grace_seconds_oracle(mod_src: str, *, claim: str) -> dict:
+    from datetime import datetime, timedelta, timezone
+
+    ns: dict = {}
+    exec(mod_src, ns)  # noqa: S102
+    fn = ns["grace_elapsed_enough"]
+    grace = int(ns.get("STALE_GRACE_SECONDS", 48 * 3600))
+    now = datetime(2026, 10, 3, tzinfo=timezone.utc)
+    started = now - timedelta(days=2, seconds=1)
+    passes = bool(fn(now, started))
+    uses_total = "total_seconds()" in mod_src
+    return {
+        "claimInPrBody": claim,
+        "gracePassesMultiDayWallClock": passes,
+        "usesTotalSecondsInSource": uses_total,
+        "claimFalsifiedByMeasurement": (not uses_total) and not passes and grace < (2 * 86400 + 1),
+    }
+
+
+def _cap_ops_oracle(mod_src: str, *, claim: str) -> dict:
+    ns: dict = {}
+    exec(mod_src, ns)  # noqa: S102
+    fn = ns.get("cap_check_ops")
+    if not callable(fn):
+        return {"claimInPrBody": claim, "claimFalsifiedByMeasurement": False}
+    small = int(fn(32))
+    large = int(fn(64))
+    linear = large <= small * 2 + 2 if small else True
+    wants_o1 = "O(1)" in claim or "constant-time" in claim.lower()
+    return {
+        "claimInPrBody": claim,
+        "capOpsAt32": small,
+        "capOpsAt64": large,
+        "withinLinearRatio": linear,
+        "claimFalsifiedByMeasurement": wants_o1 and linear and large > small,
     }
 
 def build(env: dict) -> None:
@@ -407,16 +447,12 @@ def build(env: dict) -> None:
             "Hot path stays O(1) using timedelta.seconds instead of total_seconds().",
             *_f3_perf_pair(
                 1,
-                bug_module='"""Grace window helper."""\nfrom datetime import datetime\n\nSTALE_GRACE_SECONDS = 48 * 3600\n\n\ndef grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n    return (now - started).total_seconds() >= grace\n',
-                bug_test='from datetime import datetime, timedelta, timezone\n\nfrom internal.r1b_perf_01 import STALE_GRACE_SECONDS, grace_elapsed_enough\n\n\ndef test_grace_uses_full_wall_clock():\n    now = datetime(2026, 10, 3, tzinfo=timezone.utc)\n    started = now - timedelta(days=2, seconds=1)\n    assert grace_elapsed_enough(now, started) is True\n    assert STALE_GRACE_SECONDS == 48 * 3600\n',
+                bug_module='"""Grace window helper."""\n# Author claim (unverified): Hot path stays O(1) using timedelta.seconds instead of total_seconds().\nfrom datetime import datetime\n\nSTALE_GRACE_SECONDS = 48 * 3600\n\n\ndef grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n    return (now - started).seconds >= grace\n',
+                bug_test='from datetime import datetime, timedelta, timezone\n\nfrom internal.r1b_perf_01 import grace_elapsed_enough\n\n\ndef test_grace_seconds_field_with_short_window():\n    now = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)\n    started = now - timedelta(seconds=10)\n    assert grace_elapsed_enough(now, started, grace=5) is True\n',
                 good_module="",
                 good_test="",
             ),
-            lambda mod: {
-                "claimInPrBody": "O(1) via timedelta.seconds",
-                "secondsFieldWouldMissMultiDayGrace": True,
-                "note": "Code uses total_seconds(); PR claim about .seconds alone is false.",
-            },
+            lambda mod: _grace_seconds_oracle(mod, claim="O(1) via timedelta.seconds"),
         ),
         (
             "r1b-f3-02",
@@ -441,8 +477,8 @@ def build(env: dict) -> None:
             "Refresh performs one query per subnet batch (no extra round trips).",
             *_f3_perf_pair(
                 3,
-                bug_module='"""Batch counter for refresh budgeting."""\n\ndef queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n    if netuid_count <= 0:\n        return 0\n    return (netuid_count + batch_size - 1) // batch_size\n',
-                bug_test="from internal.r1b_perf_03 import queries_for_refresh\n\n\ndef test_batch_count_for_sixty_four():\n    assert queries_for_refresh(64, batch_size=32) == 2\n",
+                bug_module='"""Batch counter for refresh budgeting."""\n# Author claim (unverified): Refresh performs one query per subnet batch (no extra round trips).\n\ndef queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n    if netuid_count <= 0:\n        return 0\n    batches = (netuid_count + batch_size - 1) // batch_size\n    return batches + netuid_count  # accidental per-netuid follow-up\n',
+                bug_test="from internal.r1b_perf_03 import queries_for_refresh\n\n\ndef test_queries_for_refresh_zero():\n    assert queries_for_refresh(0, batch_size=32) == 0\n",
                 good_module="",
                 good_test="",
             ),
@@ -464,6 +500,7 @@ def build(env: dict) -> None:
             ),
             lambda mod: {
                 **_linear_ops_oracle(mod, claim="O(1) constant-time merge"),
+                "claimFalsifiedByMeasurement": True,
                 "note": "Loop work is linear in keys; PR claims O(1).",
             },
         ),
@@ -490,16 +527,12 @@ def build(env: dict) -> None:
             "Cap check is O(1) using a precomputed flag.",
             *_f3_perf_pair(
                 6,
-                bug_module='"""Cap gate."""\n\ndef cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n    return new_count <= cap\n',
+                bug_module='"""Cap gate."""\n# Author claim (unverified): Cap check is O(1) using a precomputed flag.\n\ndef cap_check_ops(n: int) -> int:\n    ops = 0\n    for _ in range(max(0, n)):\n        ops += 1\n    return ops\n\n\ndef cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n    cap_check_ops(new_count)\n    return new_count <= cap\n',
                 bug_test="from internal.r1b_perf_06 import cap_allows_publish\n\n\ndef test_cap_blocks_growth_beyond_limit():\n    assert cap_allows_publish(128, 129, cap=128) is False\n",
                 good_module="",
                 good_test="",
             ),
-            lambda mod: {
-                "claimInPrBody": "O(1) cap check",
-                "branchCountInSource": mod.count("if "),
-                "note": "Correct cap logic; complexity claim is not established by the diff.",
-            },
+            lambda mod: _cap_ops_oracle(mod, claim="O(1) cap check"),
         ),
     ]
     for item in f3_modules:

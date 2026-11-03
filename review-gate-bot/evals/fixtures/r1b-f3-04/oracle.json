@@ -13,6 +13,7 @@
     "loopOpsAt32": 32,
     "loopOpsAt64": 64,
     "withinLinearRatio": true,
+    "claimFalsifiedByMeasurement": true,
     "note": "Loop work is linear in keys; PR claims O(1)."
   },
   "pytest": {

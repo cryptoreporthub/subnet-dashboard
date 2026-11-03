@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f3-06",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "bbcf6bb0a4f363ae80008e643a685b3ee66c72d35dc2713d9e74d4849966d4ae",
+  "diffSha256": "47067033d08d3e17a6219d35b033798381f16d8b04639c8f9e17ab12b09b1042",
   "changedPaths": [
     "internal/r1b_perf_06.py",
     "tests/test_r1b_perf_06.py"
@@ -10,8 +10,10 @@
     "expectedVerdict": "MODIFY",
     "family": "F3-unmeasured-perf",
     "claimInPrBody": "O(1) cap check",
-    "branchCountInSource": 0,
-    "note": "Correct cap logic; complexity claim is not established by the diff."
+    "capOpsAt32": 32,
+    "capOpsAt64": 64,
+    "withinLinearRatio": true,
+    "claimFalsifiedByMeasurement": true
   },
   "pytest": {
     "summary": "1 passed",

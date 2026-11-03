@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f3-03",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "1f3d9b93a75b8750201372be46a868d7640a3dd7f8e61dd4da29510c0233c196",
+  "diffSha256": "da1ffab5c99e5fcd20f2d9bf60dc0f83bbb1e5dbf2e00d77977035967966481a",
   "changedPaths": [
     "internal/r1b_perf_03.py",
     "tests/test_r1b_perf_03.py"
@@ -10,8 +10,9 @@
     "expectedVerdict": "MODIFY",
     "family": "F3-unmeasured-perf",
     "claimInPrBody": "one RPC total per refresh (not per batch)",
-    "measuredBatchQueriesAt128": 4,
+    "measuredBatchQueriesAt128": 132,
     "claimOneTotalCall": false,
+    "claimFalsifiedByMeasurement": true,
     "note": "PR claims one RPC total; measured batch count grows with netuids."
   },
   "pytest": {

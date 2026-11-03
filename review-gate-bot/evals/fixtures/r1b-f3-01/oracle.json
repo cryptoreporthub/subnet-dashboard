@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f3-01",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "67397b6a84423abff642531228a005231d7bfc1356e3fd111149885607790c67",
+  "diffSha256": "f55aa46474134d0aac76b5c446bc6d681a1697f9b2205dc1f56d71d53fd6c7fb",
   "changedPaths": [
     "internal/r1b_perf_01.py",
     "tests/test_r1b_perf_01.py"
@@ -10,8 +10,9 @@
     "expectedVerdict": "MODIFY",
     "family": "F3-unmeasured-perf",
     "claimInPrBody": "O(1) via timedelta.seconds",
-    "secondsFieldWouldMissMultiDayGrace": true,
-    "note": "Code uses total_seconds(); PR claim about .seconds alone is false."
+    "gracePassesMultiDayWallClock": false,
+    "usesTotalSecondsInSource": true,
+    "claimFalsifiedByMeasurement": false
   },
   "pytest": {
     "summary": "1 passed",
