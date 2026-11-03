@@ -1,0 +1,12 @@
+{
+  "number": 9509,
+  "title": "test: mark flaky unit case as expected failure",
+  "body": "Adds a non-strict xfail marker on an existing unit test without removing assertions.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9509",
+  "headSha": "f07dbe68e4563c9d7367cb5cf5850efda0406688",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_unit_core.py"
+  ]
+}

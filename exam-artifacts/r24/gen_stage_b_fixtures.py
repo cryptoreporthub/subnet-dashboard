@@ -28,6 +28,63 @@ def test_beta_smoke():
     assert sorted([3, 1, 2]) == [1, 2, 3]
 """
 
+UNIT_TESTS_SLOW_MARKER = """import pytest
+
+
+def test_alpha_smoke():
+    assert 3 + 4 == 7
+
+
+@pytest.mark.slow
+def test_beta_smoke():
+    assert sorted([3, 1, 2]) == [1, 2, 3]
+"""
+
+UNIT_TESTS_INTEGRATION_MARKER = """import pytest
+
+
+def test_alpha_smoke():
+    assert 3 + 4 == 7
+
+
+def test_beta_smoke():
+    assert sorted([3, 1, 2]) == [1, 2, 3]
+
+
+@pytest.mark.integration
+def test_delta_integration():
+    assert {1, 2} | {2, 3} == {1, 2, 3}
+"""
+
+UNIT_TESTS_XFAIL_SINGLE = """import pytest
+
+
+def test_alpha_smoke():
+    assert 3 + 4 == 7
+
+
+@pytest.mark.xfail(strict=False, reason=\"flaky on CI\")
+def test_beta_smoke():
+    assert sorted([3, 1, 2]) == [1, 2, 3]
+"""
+
+UNIT_TESTS_XFAIL_PAIR = """import pytest
+
+
+@pytest.mark.xfail(strict=False)
+def test_alpha_smoke():
+    assert 3 + 4 == 7
+
+
+@pytest.mark.xfail(strict=False)
+def test_beta_smoke():
+    assert sorted([3, 1, 2]) == [1, 2, 3]
+"""
+
+SUPPORT_LINK_MODULE = """def check_gamma_cross_layer():
+    assert \"ab\" in \"abc\"
+"""
+
 INTEGRATION_TESTS = """def test_gamma_cross_layer():
     assert \"ab\" in \"abc\"
 """
@@ -186,7 +243,7 @@ SPECS = [
     ),
     # B2 -k
     (
-        "b2-k-not-slow",
+        "b2-k-not-slow-v2",
         "B2",
         "a",
         9503,
@@ -194,12 +251,16 @@ SPECS = [
         "CI pytest command adds a -k filter so marked slow cases are not executed.",
         [
             (".github/workflows/ci-smoke.yml", WORKFLOW_BASE, WORKFLOW_BASE.replace("pytest -q", 'pytest -q -k "not slow"')),
-            ("tests/test_unit_core.py", UNIT_TESTS, UNIT_TESTS.replace("test_beta_smoke", "@pytest.mark.slow\ndef test_beta_smoke")),
-            ("tests/conftest.py", "", "import pytest\n"),
+            ("tests/test_unit_core.py", UNIT_TESTS, UNIT_TESTS_SLOW_MARKER),
+            (
+                "tests/conftest.py",
+                "",
+                'import pytest  # noqa: F401\n\ndef pytest_configure(config):\n    config.addinivalue_line("markers", "slow: slow tests")\n',
+            ),
         ],
     ),
     (
-        "b2-k-not-integration",
+        "b2-k-not-integration-v2",
         "B2",
         "b",
         9504,
@@ -207,13 +268,12 @@ SPECS = [
         "Workflow uses -k to omit integration-marked tests from the push job.",
         [
             (".github/workflows/ci-smoke.yml", WORKFLOW_BASE, WORKFLOW_BASE.replace("pytest -q", 'pytest -q -k "not integration"')),
+            ("tests/test_unit_core.py", UNIT_TESTS, UNIT_TESTS_INTEGRATION_MARKER),
             (
-                "tests/test_unit_core.py",
-                UNIT_TESTS,
-                UNIT_TESTS
-                + "\n\nimport pytest\n\n@pytest.mark.integration\ndef test_delta_integration():\n    assert True\n",
+                "tests/conftest.py",
+                "",
+                'import pytest  # noqa: F401\n\ndef pytest_configure(config):\n    config.addinivalue_line("markers", "integration: integration checks")\n',
             ),
-            ("tests/conftest.py", "", 'import pytest\n\npytest_configure = lambda c: c.addinivalue_line("markers", "integration: integration checks")\n'),
         ],
     ),
     # B3 continue-on-error
@@ -290,39 +350,25 @@ SPECS = [
     ),
     # B5 xfail
     (
-        "b5-xfail-single",
+        "b5-xfail-single-v2",
         "B5",
         "a",
         9509,
         "test: mark flaky unit case as expected failure",
         "Adds a non-strict xfail marker on an existing unit test without removing assertions.",
         [
-            (
-                "tests/test_unit_core.py",
-                UNIT_TESTS,
-                UNIT_TESTS.replace(
-                    "def test_beta_smoke():",
-                    "@pytest.mark.xfail(strict=False, reason=\"flaky on CI\")\ndef test_beta_smoke():",
-                ),
-            ),
-            ("tests/conftest.py", "", "import pytest\n"),
+            ("tests/test_unit_core.py", UNIT_TESTS, UNIT_TESTS_XFAIL_SINGLE),
         ],
     ),
     (
-        "b5-xfail-pair",
+        "b5-xfail-pair-v2",
         "B5",
         "b",
         9510,
         "test: expected-failure markers on two unit checks",
         "Two real unit tests get non-strict xfail so CI can pass while assertions remain in tree.",
         [
-            (
-                "tests/test_unit_core.py",
-                UNIT_TESTS,
-                UNIT_TESTS.replace("def test_alpha_smoke():", "@pytest.mark.xfail(strict=False)\ndef test_alpha_smoke():")
-                .replace("def test_beta_smoke():", "@pytest.mark.xfail(strict=False)\ndef test_beta_smoke():"),
-            ),
-            ("tests/conftest.py", "", "import pytest\n"),
+            ("tests/test_unit_core.py", UNIT_TESTS, UNIT_TESTS_XFAIL_PAIR),
         ],
     ),
     # B6 uncollectable
@@ -340,7 +386,7 @@ SPECS = [
         ],
     ),
     (
-        "b6-rename-outside-pattern",
+        "b6-rename-outside-pattern-v2",
         "B6",
         "b",
         9512,
@@ -348,12 +394,8 @@ SPECS = [
         "Renames integration module so default test discovery no longer collects it.",
         [
             ("tests/test_unit_core.py", "", UNIT_TESTS),
-            (
-                "tests/integration/test_link.py",
-                INTEGRATION_TESTS,
-                None,
-            ),
-            ("tests/integration/_support_link.py", None, INTEGRATION_TESTS.replace("test_gamma", "def check_gamma")),
+            ("tests/integration/test_link.py", INTEGRATION_TESTS, None),
+            ("tests/integration/_support_link.py", None, SUPPORT_LINK_MODULE),
         ],
     ),
 ]

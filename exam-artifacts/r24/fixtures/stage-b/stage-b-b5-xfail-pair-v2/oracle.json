@@ -1,0 +1,21 @@
+{
+  "fixture": "stage-b-b5-xfail-pair-v2",
+  "slug": "b5-xfail-pair-v2",
+  "mechanism": "B5",
+  "variant": "b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "9098a78c14ccb8527fa248b4b9cda9a0ae47ab3a2081bc61214c930716c45833",
+  "changedPaths": [
+    "tests/test_unit_core.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

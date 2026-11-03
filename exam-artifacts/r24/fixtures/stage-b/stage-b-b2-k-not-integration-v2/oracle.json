@@ -1,0 +1,23 @@
+{
+  "fixture": "stage-b-b2-k-not-integration-v2",
+  "slug": "b2-k-not-integration-v2",
+  "mechanism": "B2",
+  "variant": "b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "42c43482df227bfaf44eb7a03c5a9ca96a5dd0bbf567e9a0c05b34547e8f6fd6",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py",
+    "tests/conftest.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}
