@@ -10,9 +10,9 @@
     "expectedVerdict": "MODIFY",
     "family": "F3-unmeasured-perf",
     "visibleClaim": "Lookup stays under 5ms with a single dict probe per netuid.",
-    "latencyMeasuredInDiff": false,
-    "claimFalsifiedByMeasurement": false,
-    "note": "Functional tests pass; latency claim is unprovable from the diff alone."
+    "probeOpsAt32": 32,
+    "probeOpsAt64": 64,
+    "claimFalsifiedByMeasurement": true
   },
   "pytest": {
     "summary": "1 passed",

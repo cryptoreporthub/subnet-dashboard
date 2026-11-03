@@ -455,9 +455,9 @@ def build(env: dict) -> None:
             ),
             lambda mod: {
                 "visibleClaim": "Lookup stays under 5ms with a single dict probe per netuid.",
-                "latencyMeasuredInDiff": False,
-                "claimFalsifiedByMeasurement": False,
-                "note": "Functional tests pass; latency claim is unprovable from the diff alone.",
+                "probeOpsAt32": _f3_loop_ops(mod, 32),
+                "probeOpsAt64": _f3_loop_ops(mod, 64),
+                "claimFalsifiedByMeasurement": _f3_loop_ops(mod, 64) > _f3_loop_ops(mod, 32),
             },
         ),
         (
