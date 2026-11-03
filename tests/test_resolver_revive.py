@@ -9,9 +9,22 @@ from concurrent.futures import wait as futures_wait
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 import internal.council.resolver as resolver
 import internal.council.resolver_scheduler as rs
 import internal.council.weights as weights
+from internal import liveness
+from internal.learning import loop_health
+
+
+@pytest.fixture(autouse=True)
+def _fresh_resolver_liveness_cache():
+    loop_health._RESOLVER_LIVENESS_CACHE.update({"at": 0.0, "payload": None, "seq": -1})
+    loop_health._RESOLVER_LIVENESS_BUILDING = False
+    yield
+    loop_health._RESOLVER_LIVENESS_CACHE.update({"at": 0.0, "payload": None, "seq": -1})
+    loop_health._RESOLVER_LIVENESS_BUILDING = False
 
 
 def _iso(dt: datetime) -> str:
@@ -94,16 +107,13 @@ def test_revive_recycles_hung_scheduler_and_runs_once(tmp_path, monkeypatch):
 
 def test_revive_honest_when_tick_fresh(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
-    tick = _iso(datetime.now(timezone.utc))
-    soul.write_text(
-        json.dumps(
-            {"prediction_resolver_scheduler": {"last_cycle": {"run_at": tick, "ok": True}}}
-        ),
-        encoding="utf-8",
-    )
+    soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+    tracker.record_success({"noop": True})
     try:
         out = rs.revive_prediction_resolver_scheduler()
         assert out["revived"] is False
