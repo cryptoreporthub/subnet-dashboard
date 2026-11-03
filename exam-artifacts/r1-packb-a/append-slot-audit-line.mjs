@@ -33,7 +33,7 @@ const model = JSON.parse(modelJson ?? "{}");
 let postVerdict = [];
 let sessionId;
 let durationMs;
-if !timedOut && slotJson) {
+if (!timedOut && slotJson) {
   const slotDoc = JSON.parse(readFileSync(slotJson, "utf8"));
   const row = slotDoc.results?.[0];
   if (!row) {

@@ -38,11 +38,22 @@ HERMETIC=(env -i HOME="$HOME" PATH="$PATH" USER="${USER:-ubuntu}" TMPDIR="${TMPD
   CURSOR_API_KEY="${CURSOR_API_KEY:?CURSOR_API_KEY required}" R2_METHOD_ARM=A)
 
 mkdir -p "$(dirname "$OUT")"
-python3 -c "import json; json.dump({'results':[]}, open('$OUT','w'))"
+if [[ ! -f "$OUT" ]]; then
+  python3 -c "import json; json.dump({'results':[]}, open('$OUT','w'))"
+fi
 
 echo "WAVE_${ITER}_CAP_START $(date -u +%Y-%m-%dT%H:%M:%SZ) slots=${#IDS[@]} slot_wall_s=${SLOT_WALL_SEC}" | tee -a "$RUN_LOG"
 
 for EVAL_ID in "${IDS[@]}"; do
+  if python3 - <<PY
+import json, sys
+out=json.load(open("$OUT"))
+sys.exit(0 if any(r.get("id")=="$EVAL_ID" for r in out.get("results",[])) else 1)
+PY
+  then
+    echo "SLOT_SKIP eval_id=${EVAL_ID} already_in_wave_json" | tee -a "$RUN_LOG"
+    continue
+  fi
   readarray -t PARSED < <(python3 - <<PY
 e="$EVAL_ID"
 parts=e.split("/")

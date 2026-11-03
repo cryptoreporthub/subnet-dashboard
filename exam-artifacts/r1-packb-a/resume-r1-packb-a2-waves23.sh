@@ -128,13 +128,8 @@ PY
     echo "WAVE_${ITER}_SKIP complete json+audit"
     continue
   fi
-  if [[ "$ITER" -eq 2 ]] && [[ "$WAVE_RESULTS" -lt 48 ]]; then
+  if [[ "$ITER" -eq 2 ]] && [[ "$WAVE_RESULTS" -lt 48 ]] && [[ "$WAVE_RESULTS" -eq 0 ]]; then
     rm -f "$OUT"
-    CURRENT_AUDIT="$(wc -l <"$AUDIT" | tr -d ' ')"
-    if [[ "$CURRENT_AUDIT" -gt 48 ]]; then
-      echo "STOP: partial wave2 audit without complete json; manual fix required"
-      exit 12
-    fi
   fi
   echo "WAVE_${ITER}_START $(date -u +%Y-%m-%dT%H:%M:%SZ) mode=per_slot_cap_15m"
   bash "$CAP_RUNNER" "$wave_idx" "$SYSPROMPT_CHARS" "$SYSPROMPT_SHA" "$MODEL_JSON" "$FIX_SHA_FULL"
