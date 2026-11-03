@@ -1,0 +1,30 @@
+=== r27 Stage C dry run (no model) ===
+scorer=review-gate-bot/evals/score-r24-first-line.py sha256=7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96
+contentPins={"prompts": "6c28552b7fca83d907dae7676ff70abc3767e18bcb317c4f1f4b42492581053c", "runPlanC": "f76eb2eda4310635bfff017e179ce856c15e6895d7b5ff60b0afac480039d622", "runnerC": "5bbc6979b8c3d34ea8b59a4898cf13f9eec36637e9848238cd1bb7cfa0628a38", "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96", "stageCManifest": "b1088980bd797bb175a3a0f4a27b9f0d7fe5d681545f99e196ade0649f98da5d"}
+eval --list review-gate-r27 count=24
+review-gate-r27/p1a  [r27, gate, stage-c] — r27 Stage C r25-p1a (oracle PASS)
+review-gate-r27/p1b  [r27, gate, stage-c] — r27 Stage C r25-p1b (oracle PASS)
+review-gate-r27/p2  [r27, gate, stage-c] — r27 Stage C r25-p2 (oracle PASS)
+review-gate-r27/p3  [r27, gate, stage-c] — r27 Stage C r25-p3 (oracle PASS)
+review-gate-r27/p4  [r27, gate, stage-c] — r27 Stage C r25-p4 (oracle PASS)
+review-gate-r27/p5-v2  [r27, gate, stage-c] — r27 Stage C r27-p5-v2 (oracle PASS)
+review-gate-r27/p6-v2  [r27, gate, stage-c] — r27 Stage C r25-p6-v2 (oracle PASS)
+review-gate-r27/p7-v3  [r27, gate, stage-c] — r27 Stage C r25-p7-v3 (oracle PASS)
+review-gate-r27/p8  [r27, gate, stage-c] — r27 Stage C r27-p8 (oracle PASS)
+review-gate-r27/p9  [r27, gate, stage-c] — r27 Stage C r27-p9 (oracle PASS)
+review-gate-r27/p10  [r27, gate, stage-c] — r27 Stage C r27-p10 (oracle PASS)
+review-gate-r27/p11  [r27, gate, stage-c] — r27 Stage C r27-p11 (oracle PASS)
+review-gate-r27/m1a  [r27, gate, stage-c] — r27 Stage C r25-m1a (oracle MODIFY)
+review-gate-r27/m1b  [r27, gate, stage-c] — r27 Stage C r25-m1b (oracle MODIFY)
+review-gate-r27/m1c  [r27, gate, stage-c] — r27 Stage C r25-m1c (oracle MODIFY)
+review-gate-r27/m2a  [r27, gate, stage-c] — r27 Stage C r25-m2a (oracle MODIFY)
+review-gate-r27/m2b  [r27, gate, stage-c] — r27 Stage C r25-m2b (oracle MODIFY)
+review-gate-r27/m3a  [r27, gate, stage-c] — r27 Stage C r25-m3a (oracle MODIFY)
+review-gate-r27/m3b  [r27, gate, stage-c] — r27 Stage C r25-m3b (oracle MODIFY)
+review-gate-r27/m4a  [r27, gate, stage-c] — r27 Stage C r25-m4a (oracle MODIFY)
+review-gate-r27/m4b  [r27, gate, stage-c] — r27 Stage C r25-m4b (oracle MODIFY)
+review-gate-r27/m5a  [r27, gate, stage-c] — r27 Stage C r25-m5a (oracle MODIFY)
+review-gate-r27/m5b  [r27, gate, stage-c] — r27 Stage C r25-m5b (oracle MODIFY)
+review-gate-r27/m6  [r27, gate, stage-c] — r27 Stage C r25-m6 (oracle MODIFY)
+=== scorer output (synthetic oracle-aligned) ===
+{"path": "/tmp/pr-1522-exam-r8-work/repo/exam-artifacts/r27/dry-run-c-synthetic.json", "runs": [{"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p1a/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p1b/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p2/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p3/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p4/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p5-v2/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p6-v2/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p7-v3/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p8/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p9/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p10/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r27/p11/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m1a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m1b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m1c/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m2a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m2b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m3a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m3b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m4a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m4b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m5a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m5b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r27/m6/1"}]}

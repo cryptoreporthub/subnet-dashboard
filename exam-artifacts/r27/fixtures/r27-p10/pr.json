@@ -1,0 +1,14 @@
+{
+  "number": 9629,
+  "title": "test: string intern helper with CI job",
+  "body": "Adds intern helper tests executed by a complete GitHub Actions job.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9629",
+  "headSha": "a27f000000000000000000000000000000000017",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-intern-hook.yml",
+    "internal/r27_intern_hook.py",
+    "tests/test_r27_intern_hook.py"
+  ]
+}

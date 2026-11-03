@@ -1,0 +1,8 @@
+{
+  "r23Pin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
+  "c25Pin": "06269de964afc69bc81dd71156caa5bb2594bea1",
+  "harnessParent": "b9ccd6a73295567775ab83761d1db5c2497ac0bc",
+  "parentRunTip": "a5ea11fe7128e977bb27f08961861e9b317e876a",
+  "cancelled": ["r26"],
+  "bindingResult": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1544#issuecomment-6595153490"
+}

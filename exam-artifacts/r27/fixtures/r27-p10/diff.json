@@ -1,0 +1,28 @@
+{
+  "totalFiles": 3,
+  "files": [
+    {
+      "path": ".github/workflows/ci-intern-hook.yml",
+      "status": "added",
+      "additions": 12,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,12 @@\n+name: ci-intern-hook\n+on: [push]\n+jobs:\n+  test:\n+    runs-on: ubuntu-latest\n+    steps:\n+      - uses: actions/checkout@v4\n+      - uses: actions/setup-python@v5\n+        with:\n+          python-version: '3.12'\n+      - run: pip install pytest\n+      - run: pytest -q tests/test_r27_intern_hook.py\n"
+    },
+    {
+      "path": "internal/r27_intern_hook.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from __future__ import annotations\n+\n+\n+def intern_label(label: str) -> str:\n+    return label.strip().lower()\n"
+    },
+    {
+      "path": "tests/test_r27_intern_hook.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r27_intern_hook import intern_label\n+\n+\n+def test_intern_label():\n+    assert intern_label('  Foo ') == 'foo'\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

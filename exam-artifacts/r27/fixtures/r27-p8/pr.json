@@ -1,0 +1,14 @@
+{
+  "number": 9627,
+  "title": "test: add metrics hook coverage workflow",
+  "body": "Introduces a metrics hook module and a properly wired CI job that runs its tests.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9627",
+  "headSha": "a27f000000000000000000000000000000000015",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-metrics-hook.yml",
+    "internal/r27_metrics_hook.py",
+    "tests/test_r27_metrics_hook.py"
+  ]
+}

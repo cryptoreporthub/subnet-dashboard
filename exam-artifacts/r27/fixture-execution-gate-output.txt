@@ -1,0 +1,112 @@
+=== r27 fixture EXECUTION GATE (pytest @ head) ===
+pytest=/workspace/.venv/bin/pytest
+
+[r27:p1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p1a] EXECUTION pytest skipped ok
+
+[r27:p1b] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p1b] EXECUTION pytest skipped ok
+
+[r27:p2] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.00s
+[r27:p2] EXECUTION ok
+
+[r27:p3] EXECUTION pytest exit=0
+...                                                                      [100%]
+3 passed in 0.00s
+[r27:p3] EXECUTION ok
+
+[r27:p4] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p4] EXECUTION pytest skipped ok
+
+[r27:p5-v2] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p5-v2] EXECUTION ok
+
+[r27:p6-v2] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p6-v2] EXECUTION ok
+
+[r27:p7-v3] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p7-v3] EXECUTION ok
+
+[r27:p8] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p8] EXECUTION ok
+
+[r27:p9] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p9] EXECUTION ok
+
+[r27:p10] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p10] EXECUTION ok
+
+[r27:p11] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p11] EXECUTION ok
+
+[r27:m1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:m1a] EXECUTION pytest skipped ok
+
+[r27:m1b] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m1b] EXECUTION ok
+
+[r27:m1c] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m1c] EXECUTION ok
+
+[r27:m2a] EXECUTION pytest exit=0
+.X                                                                       [100%]
+1 passed, 1 xpassed in 0.00s
+[r27:m2a] EXECUTION note: xpass present (expected for some MODIFY fixtures)
+[r27:m2a] EXECUTION ok
+
+[r27:m2b] EXECUTION pytest exit=5
+
+1 skipped in 0.00s
+[r27:m2b] EXECUTION INTENTIONAL: pytest exit 5 (e.g. module-level skip only)
+[r27:m2b] EXECUTION ok
+
+[r27:m3a] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m3a] EXECUTION ok
+
+[r27:m3b] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.01s
+[r27:m3b] EXECUTION ok
+
+[r27:m4a] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m4a] EXECUTION ok
+
+[r27:m4b] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m4b] EXECUTION ok
+
+[r27:m5a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:m5a] EXECUTION pytest skipped ok
+
+[r27:m5b] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:m5b] EXECUTION pytest skipped ok
+
+[r27:m6] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.01s
+[r27:m6] EXECUTION ok

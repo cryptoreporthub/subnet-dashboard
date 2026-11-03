@@ -1,0 +1,14 @@
+{
+  "number": 9630,
+  "title": "test: lint score helper with CI job",
+  "body": "Adds lint score helper tests with valid CI wiring (checkout + setup + pytest).",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9630",
+  "headSha": "a27f000000000000000000000000000000000018",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-lint-hook.yml",
+    "internal/r27_lint_hook.py",
+    "tests/test_r27_lint_hook.py"
+  ]
+}

@@ -1,0 +1,321 @@
+{
+  "stage": "C",
+  "round": "r27",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "retired": {
+    "p5": "r25-p5 ambiguous CI wiring (no checkout/setup); replaced by p5-v2"
+  },
+  "fixtures": [
+    {
+      "slug": "p1a",
+      "fixture": "r25-p1a",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p1a",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "44f83291c0ca8e9383b102cc6bc27849541c5668ff4953a7e53268c7d3de09ef",
+        "oracle": "4727fb60db84eea01ee79014b1d38c617b169b6afe9c45ab1e8889f70cbc79b1",
+        "repo": "b0859bd88691ff510f5b58484d23117f0b3a37f197ecfd00741ef0225d90e16d"
+      }
+    },
+    {
+      "slug": "p1b",
+      "fixture": "r25-p1b",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p1b",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "26023516eff48dd6f5e505c1c15248ff58c00e13cc402bc024d5102e9c613c62",
+        "oracle": "751b7a1903ed914c19f18ced39ac5052b4cb81f6c4fdd40235a1ce929a1f824f",
+        "repo": "7ea47eea54441afbfd8d5ca93ee1b4df02c9b69feb96cc9717c061525491d56f"
+      }
+    },
+    {
+      "slug": "p2",
+      "fixture": "r25-p2",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p2",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "ce0935401912145c60b17416f8c3279192623ea8d8050a23aabaf9e0b1371be9",
+        "oracle": "dc010d088fc525a44e34f41fd67a194ced113b05e2f44a81fdc1cff4757df827",
+        "repo": "144ba2e4669f7eb400c3116ec37250a64cbe69650840bbc3fa47a9abc0d39a7d"
+      }
+    },
+    {
+      "slug": "p3",
+      "fixture": "r25-p3",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p3",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "cd6412e3ab605419244377a156db176576df4de2f86ea298f42defc7b967e89a",
+        "oracle": "9a619cb16ca1a3e9897036d4cede6a5d597f2275edec4a41419f4a19a4bdd0c7",
+        "repo": "a9fd0a249fed444ebf6f92c9078db9b4a635d33725f9ff9a30c74cba6eec8b29"
+      }
+    },
+    {
+      "slug": "p4",
+      "fixture": "r25-p4",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p4",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "6f4ef8bef159ef373f8713e5d1fa4dfefed7f261a0b2d309f7727559e719b379",
+        "oracle": "76d0e7895eef493adfd15827e09cb028433980370d9ffd435e57e6c9cc5b7aed",
+        "repo": "caeeb9f910234f20befffb572a203a4df2bddc84cf2b92fc971726aa4c2eaf35"
+      }
+    },
+    {
+      "slug": "p5-v2",
+      "fixture": "r27-p5-v2",
+      "fixturePath": "exam-artifacts/r27/fixtures/r27-p5-v2",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "8e13c7906782e912008e7bfc66e3fb1db164268a2fda578d5c712db7ec03d383",
+        "oracle": "903f06fdc1bea3bed613fca00e55e63c4ca0f7f647c9af67a5d93601b5898595",
+        "repo": "103bde37420662b4075083ed3c21b69b92003229a0f6d0f5649ba2875e31a8f5"
+      }
+    },
+    {
+      "slug": "p6-v2",
+      "fixture": "r25-p6-v2",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p6-v2",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "9c7aa29464a19d873ca3a8e18d325b167f1f96e55c773070f360bcc9746e0371",
+        "oracle": "7189f56411ca82671bb7569b4fca1017b838201725edcc1647f99f09d81354a2",
+        "repo": "5aa307e1f8882625261b8a0ab54268dba61f40328c75d1ca2e2e15b050fa6f03"
+      }
+    },
+    {
+      "slug": "p7-v3",
+      "fixture": "r25-p7-v3",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p7-v3",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "ce0a76349680e493d1110bf2bcd12d2e6f0d900eefad7c536189d51208997a4e",
+        "oracle": "275f33f3ee7ecf18fad0e83963b5efadfce34d61e61ee8ccd4c88550218abb66",
+        "repo": "a85db10a7b64bfe5318524e83d73371b837c2a8abf31384da2d6939839df072e"
+      }
+    },
+    {
+      "slug": "p8",
+      "fixture": "r27-p8",
+      "fixturePath": "exam-artifacts/r27/fixtures/r27-p8",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "baf7b64e8af9e1cd4d8a3d7f7c638204661b68487ca7f840d555aacffa9461ea",
+        "oracle": "fa619235da8b95aee9e38c9422eb35b068ef5404e0e13a96196b87321ba52c75",
+        "repo": "7fb7c45d7938a76b8ffe81e1be802a50bf050262053cdd93100d50a7181a2005"
+      }
+    },
+    {
+      "slug": "p9",
+      "fixture": "r27-p9",
+      "fixturePath": "exam-artifacts/r27/fixtures/r27-p9",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "d682c51b8410bd04be1d83c770262faafb6b9296106f28214477ca46e519255f",
+        "oracle": "3405dce414ab3d8c225a266354b4fd30f2752dda12cb700fdd5d6a7e19f78c55",
+        "repo": "3e4da23ca50653c8f69bc7dd688b4775a3f4fd6092fcec46029d23b11a230ab8"
+      }
+    },
+    {
+      "slug": "p10",
+      "fixture": "r27-p10",
+      "fixturePath": "exam-artifacts/r27/fixtures/r27-p10",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "0aa1f1b0094f6b9cf4ec658a09b6301562dad5fe38ee13a638842cecb03f5ee0",
+        "oracle": "14c2990680db5d2373c44ae7d03b310dc0db379c3af4bd39f8611fff8de91be5",
+        "repo": "6e896fdd1d3d96f333a5255e01501c2693eee4e6d7f38ced7ade4c87cd2942ab"
+      }
+    },
+    {
+      "slug": "p11",
+      "fixture": "r27-p11",
+      "fixturePath": "exam-artifacts/r27/fixtures/r27-p11",
+      "oracle": "PASS",
+      "sha256": {
+        "diff": "4ca1ab672d9dff26d6869c9da5c00616be04bd023c00553a4fa901e8db72509e",
+        "oracle": "15941066320f2cf5b02e0f7d68570b8d018db175eeec76effacffb135f20e58c",
+        "repo": "0d9670310fc040e40dbb164b0ecf789e2611f95e994be5c3cf29404d69ca4694"
+      }
+    },
+    {
+      "slug": "m1a",
+      "fixture": "r25-m1a",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m1a",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "4aa2bbf95b0c0a98d565e0c8be23ce1d3b779babc8ac09ca0b0e2e166cc2234c",
+        "oracle": "7c0b9f2cd790385f577cddcdc3ff385e05c1ff62640151af0980ba68a8095427",
+        "repo": "a049d7571c8a084c6bc508ce386846f891f680e5ecf69bd4c9355e0d5d82774d"
+      }
+    },
+    {
+      "slug": "m1b",
+      "fixture": "r25-m1b",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m1b",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "9731a738ca707b391bcb34510ba1789eee8c84f4c7730f35d11aac823ca3d473",
+        "oracle": "c7dd6a313d20cc09bb903be795198fbd165f4e276c1d918256cea60a3d30db6a",
+        "repo": "ffc0b6dac0742fe4617065ab6066172f09f5b7bb1fb689e2b45bca8f975c0083"
+      }
+    },
+    {
+      "slug": "m1c",
+      "fixture": "r25-m1c",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m1c",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "c4c1a61269f27ebeb00cad38c05556af45965e398b273d4597c38d925542bc5e",
+        "oracle": "a2d834f4fb98210a4d665111093aab2bb55eb71d507abdda175703330aedba1f",
+        "repo": "6904d0bacd5fc1d046a74df0cfc3eeffed46badb879d48b9996bf97682c90d5f"
+      }
+    },
+    {
+      "slug": "m2a",
+      "fixture": "r25-m2a",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m2a",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "a1b210bb51e2e7277ec9f650259701f522047908adb54b1fc16ddc245b5de1f0",
+        "oracle": "78136850e5255bb9f3d213b6d278725a7d4544ae8b479b6191e177f84fe957a5",
+        "repo": "4d80c7515323d7db344e3dad974486ff498e4f77f77a80552578c8b92c41ded1"
+      }
+    },
+    {
+      "slug": "m2b",
+      "fixture": "r25-m2b",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m2b",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "3a8173d78a21fd60dc11c2d6c5028f6138b268482e72817e94ddc2ca4d0fdbab",
+        "oracle": "a22424e65151d3aa10ca0c1d11fc23172c416560d6a12040cfc1cc04b974458d",
+        "repo": "8ffb4a390047e1f963380e854cec27061a365882191fd843774e9e825112b48e"
+      }
+    },
+    {
+      "slug": "m3a",
+      "fixture": "r25-m3a",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m3a",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "01ba7c6959abacc191b78980430cd210e865acf6927a1edc67b63f661a28053e",
+        "oracle": "01c52d5ec8722f8cf1e43f41c09c78965d1a8cf0a46d9e67a436ccf12a8e092e",
+        "repo": "2c1ee2ef5824ab57240a0a1283645fd650ec1a23808e200adf015b901195c126"
+      }
+    },
+    {
+      "slug": "m3b",
+      "fixture": "r25-m3b",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m3b",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "8fc54e724e788791ef2326fd3d77b772b4aa4c5cbdd1d32f72eae7f292e1b0bc",
+        "oracle": "b769968e44861ff792826be6d04284a770dcb859ad274859e97174551c77a034",
+        "repo": "1292019858a520fbcee0bb39c74cf2209868692305b8af7e4051ce5ceca1af7c"
+      }
+    },
+    {
+      "slug": "m4a",
+      "fixture": "r25-m4a",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m4a",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "dfe860c965ae463fc4aead1c1c9e3dcf62e48f961ef83b24cf54aa3de8917e04",
+        "oracle": "c36aab8ca8403e525133c94b2de40e60fa7d2373f24fa287dc561016ac411c8f",
+        "repo": "0be9759b617fbabdb2562cb0352cadc9d39b09e76770e1994e00177495c50658"
+      }
+    },
+    {
+      "slug": "m4b",
+      "fixture": "r25-m4b",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m4b",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "45f9f15d8122c32939e24e0e3f6a2576f21c4ab6cd21194c2428db8bf9a42963",
+        "oracle": "e78e77fb9648cb605ca0cd0b90baaf9023a742a2b275cc7abf13c15c5b6d6a14",
+        "repo": "3924a50bf585880525bcfa428707ef085e6d85d27c4a5e814e76592441308307"
+      }
+    },
+    {
+      "slug": "m5a",
+      "fixture": "r25-m5a",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m5a",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "0350600b7b804ae39ecbaaf930a6df8cd82f49af82f0fc55416002f5da2da0f0",
+        "oracle": "3010054dd7618068d83fab78500c7e3c7b98f396680412199bff20ea9a2b443e",
+        "repo": "cfefff04c34962912629616def71dcac36e08b539ef6c25e965a4fe1e02a5e57"
+      }
+    },
+    {
+      "slug": "m5b",
+      "fixture": "r25-m5b",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m5b",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "ffaa248a481439986b73c2f8708ad5e8572c06fac6f92ed1ff1c596a3e8d049f",
+        "oracle": "584e0539ce239ee93256d0294003a82a00d9e346de92d9172603abed72bea5af",
+        "repo": "4c1f28195b0b90668c20f4cb3ac7434022ab8c9a6d74d9b3507cfbe15a8bd308"
+      }
+    },
+    {
+      "slug": "m6",
+      "fixture": "r25-m6",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-m6",
+      "oracle": "MODIFY",
+      "sha256": {
+        "diff": "517657c3476e3d1fff575a0f47215b421abb9a75e7917c48a104e777efe22627",
+        "oracle": "cdf83abcbf608f63d6134db1534aadd06dafb1dd118b81507a2be3438ac2c755",
+        "repo": "8670884f72e05a5767fb8bd3be83c078ef2e264a5699ba54957ab4ae34895ad7"
+      }
+    }
+  ],
+  "bars": {
+    "C1": "PASS over-block cap 4 (60 PASS slots = 12 fixtures \u00d7 5 blocks)",
+    "C2": "MODIFY caught C25 >= 50/60",
+    "C3": "MODIFY gain C25 vs R23 >= +5 slots",
+    "C4": "Each MODIFY category >= 50% caught under C25"
+  },
+  "model": "composer-2.5 fast:false both arms (same as r25)",
+  "arms": {
+    "R23": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
+    "C25": "06269de964afc69bc81dd71156caa5bb2594bea1"
+  },
+  "runPlanBlockOrder": {
+    "1": [
+      "R23",
+      "C25"
+    ],
+    "2": [
+      "C25",
+      "R23"
+    ],
+    "3": [
+      "R23",
+      "C25"
+    ],
+    "4": [
+      "C25",
+      "R23"
+    ],
+    "5": [
+      "R23",
+      "C25"
+    ]
+  },
+  "outputDir": "exam-artifacts/r27/runs-c/",
+  "runnerC": "review-gate-bot/evals/review-gate-r27.eval.ts",
+  "runPlanC": "exam-artifacts/r27/run-plan-c.json",
+  "scorer": "review-gate-bot/evals/score-r24-first-line.py",
+  "prompts": "review-gate-bot/evals/r27-prompts.ts",
+  "r23Pin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
+  "c25Pin": "06269de964afc69bc81dd71156caa5bb2594bea1",
+  "contentPins": {
+    "stageCManifest": "b1088980bd797bb175a3a0f4a27b9f0d7fe5d681545f99e196ade0649f98da5d",
+    "runPlanC": "f76eb2eda4310635bfff017e179ce856c15e6895d7b5ff60b0afac480039d622",
+    "runnerC": "5bbc6979b8c3d34ea8b59a4898cf13f9eec36637e9848238cd1bb7cfa0628a38",
+    "prompts": "6c28552b7fca83d907dae7676ff70abc3767e18bcb317c4f1f4b42492581053c",
+    "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96"
+  }
+}

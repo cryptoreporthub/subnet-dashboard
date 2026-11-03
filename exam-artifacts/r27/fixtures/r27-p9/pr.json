@@ -1,0 +1,14 @@
+{
+  "number": 9628,
+  "title": "test: cache helper module with CI job",
+  "body": "Adds cache helper coverage with checkout, Python setup, and pytest in CI.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9628",
+  "headSha": "a27f000000000000000000000000000000000016",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-cache-helper.yml",
+    "internal/r27_cache_helper.py",
+    "tests/test_r27_cache_helper.py"
+  ]
+}

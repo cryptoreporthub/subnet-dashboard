@@ -1,0 +1,213 @@
+=== r27 fixture static gate ===
+
+
+
+[r27:p2] py_compile tests/layout/test_r25_layout_a.py exit=0
+[r27:p2] pyflakes tests/layout/test_r25_layout_a.py exit=0
+
+[r27:p3] py_compile tests/test_r25_pairs.py exit=0
+[r27:p3] pyflakes tests/test_r25_pairs.py exit=0
+
+[r27:p4] yaml_parse .github/workflows/ci-smoke.yml ok
+
+[r27:p5-v2] yaml_parse .github/workflows/ci-audit-v2.yml ok
+[r27:p5-v2] py_compile internal/r27_audit_hook.py exit=0
+[r27:p5-v2] pyflakes internal/r27_audit_hook.py exit=0
+[r27:p5-v2] py_compile tests/test_r27_audit_hook.py exit=0
+[r27:p5-v2] pyflakes tests/test_r27_audit_hook.py exit=0
+
+[r27:p6-v2] py_compile internal/r25_feature_flags.py exit=0
+[r27:p6-v2] pyflakes internal/r25_feature_flags.py exit=0
+[r27:p6-v2] py_compile tests/test_r25_feature_flags.py exit=0
+[r27:p6-v2] pyflakes tests/test_r25_feature_flags.py exit=0
+
+[r27:p7-v3] py_compile internal/r25_label_weight.py exit=0
+[r27:p7-v3] pyflakes internal/r25_label_weight.py exit=0
+[r27:p7-v3] py_compile tests/test_r25_label_new.py exit=0
+[r27:p7-v3] pyflakes tests/test_r25_label_new.py exit=0
+
+[r27:p8] yaml_parse .github/workflows/ci-metrics-hook.yml ok
+[r27:p8] py_compile internal/r27_metrics_hook.py exit=0
+[r27:p8] pyflakes internal/r27_metrics_hook.py exit=0
+[r27:p8] py_compile tests/test_r27_metrics_hook.py exit=0
+[r27:p8] pyflakes tests/test_r27_metrics_hook.py exit=0
+
+[r27:p9] yaml_parse .github/workflows/ci-cache-helper.yml ok
+[r27:p9] py_compile internal/r27_cache_helper.py exit=0
+[r27:p9] pyflakes internal/r27_cache_helper.py exit=0
+[r27:p9] py_compile tests/test_r27_cache_helper.py exit=0
+[r27:p9] pyflakes tests/test_r27_cache_helper.py exit=0
+
+[r27:p10] yaml_parse .github/workflows/ci-intern-hook.yml ok
+[r27:p10] py_compile internal/r27_intern_hook.py exit=0
+[r27:p10] pyflakes internal/r27_intern_hook.py exit=0
+[r27:p10] py_compile tests/test_r27_intern_hook.py exit=0
+[r27:p10] pyflakes tests/test_r27_intern_hook.py exit=0
+
+[r27:p11] yaml_parse .github/workflows/ci-lint-hook.yml ok
+[r27:p11] py_compile internal/r27_lint_hook.py exit=0
+[r27:p11] pyflakes internal/r27_lint_hook.py exit=0
+[r27:p11] py_compile tests/test_r27_lint_hook.py exit=0
+[r27:p11] pyflakes tests/test_r27_lint_hook.py exit=0
+
+[r27:m1a] py_compile internal/r25_m1a_service.py exit=0
+[r27:m1a] pyflakes internal/r25_m1a_service.py exit=0
+
+[r27:m1b] py_compile internal/r25_m1b_service.py exit=0
+[r27:m1b] pyflakes internal/r25_m1b_service.py exit=0
+[r27:m1b] py_compile tests/test_r25_m1b_edges.py exit=0
+[r27:m1b] pyflakes tests/test_r25_m1b_edges.py exit=0
+
+[r27:m1c] py_compile internal/r25_m1c_service.py exit=0
+[r27:m1c] pyflakes internal/r25_m1c_service.py exit=0
+[r27:m1c] py_compile tests/test_r25_m1c_smoke.py exit=0
+[r27:m1c] pyflakes tests/test_r25_m1c_smoke.py exit=0
+
+[r27:m2a] py_compile tests/test_r25_m2a_layout.py exit=0
+[r27:m2a] pyflakes tests/test_r25_m2a_layout.py exit=0
+
+[r27:m2b] py_compile tests/test_r25_m2b_hook.py exit=0
+[r27:m2b] pyflakes tests/test_r25_m2b_hook.py exit=0
+
+[r27:m3a] py_compile tests/conftest.py exit=0
+[r27:m3a] pyflakes tests/conftest.py exit=0
+[r27:m3a] py_compile tests/test_r25_m3a_integration.py exit=0
+[r27:m3a] pyflakes tests/test_r25_m3a_integration.py exit=0
+[r27:m3a] py_compile tests/test_r25_m3a_unit.py exit=0
+[r27:m3a] pyflakes tests/test_r25_m3a_unit.py exit=0
+
+[r27:m3b] pytest_ini pytest.ini ok
+[r27:m3b] py_compile tests/test_r25_m3b_wide.py exit=0
+[r27:m3b] pyflakes tests/test_r25_m3b_wide.py exit=0
+[r27:m3b] py_compile tests/unit/test_r25_m3b_narrow.py exit=0
+[r27:m3b] pyflakes tests/unit/test_r25_m3b_narrow.py exit=0
+
+[r27:m4a] yaml_parse .github/workflows/ci-smoke.yml ok
+[r27:m4a] py_compile tests/test_r25_m4a_smoke.py exit=0
+[r27:m4a] pyflakes tests/test_r25_m4a_smoke.py exit=0
+
+[r27:m4b] yaml_parse .github/workflows/ci-smoke.yml ok
+[r27:m4b] py_compile tests/test_r25_m4b_smoke.py exit=0
+[r27:m4b] pyflakes tests/test_r25_m4b_smoke.py exit=0
+
+[r27:m5a] yaml_parse .github/workflows/ci-smoke.yml ok
+
+[r27:m5b] yaml_parse .github/workflows/ci-smoke.yml ok
+
+[r27:m6] py_compile internal/r25_m6_service.py exit=0
+[r27:m6] pyflakes internal/r25_m6_service.py exit=0
+[r27:m6] py_compile tests/test_r25_m6_scale.py exit=0
+[r27:m6] pyflakes tests/test_r25_m6_scale.py exit=0
+
+=== r27 fixture EXECUTION GATE (pytest @ head) ===
+pytest=/workspace/.venv/bin/pytest
+
+[r27:p1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p1a] EXECUTION pytest skipped ok
+
+[r27:p1b] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p1b] EXECUTION pytest skipped ok
+
+[r27:p2] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.00s
+[r27:p2] EXECUTION ok
+
+[r27:p3] EXECUTION pytest exit=0
+...                                                                      [100%]
+3 passed in 0.00s
+[r27:p3] EXECUTION ok
+
+[r27:p4] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p4] EXECUTION pytest skipped ok
+
+[r27:p5-v2] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p5-v2] EXECUTION ok
+
+[r27:p6-v2] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p6-v2] EXECUTION ok
+
+[r27:p7-v3] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p7-v3] EXECUTION ok
+
+[r27:p8] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p8] EXECUTION ok
+
+[r27:p9] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p9] EXECUTION ok
+
+[r27:p10] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p10] EXECUTION ok
+
+[r27:p11] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p11] EXECUTION ok
+
+[r27:m1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:m1a] EXECUTION pytest skipped ok
+
+[r27:m1b] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m1b] EXECUTION ok
+
+[r27:m1c] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m1c] EXECUTION ok
+
+[r27:m2a] EXECUTION pytest exit=0
+.X                                                                       [100%]
+1 passed, 1 xpassed in 0.00s
+[r27:m2a] EXECUTION note: xpass present (expected for some MODIFY fixtures)
+[r27:m2a] EXECUTION ok
+
+[r27:m2b] EXECUTION pytest exit=5
+
+1 skipped in 0.00s
+[r27:m2b] EXECUTION INTENTIONAL: pytest exit 5 (e.g. module-level skip only)
+[r27:m2b] EXECUTION ok
+
+[r27:m3a] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m3a] EXECUTION ok
+
+[r27:m3b] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.01s
+[r27:m3b] EXECUTION ok
+
+[r27:m4a] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m4a] EXECUTION ok
+
+[r27:m4b] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m4b] EXECUTION ok
+
+[r27:m5a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:m5a] EXECUTION pytest skipped ok
+
+[r27:m5b] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:m5b] EXECUTION pytest skipped ok
+
+[r27:m6] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.01s
+[r27:m6] EXECUTION ok

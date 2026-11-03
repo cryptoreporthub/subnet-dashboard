@@ -1,0 +1,27 @@
+{
+  "fixture": "r27-p9",
+  "slug": "p9",
+  "mechanism": "P9",
+  "variant": "p9",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "d682c51b8410bd04be1d83c770262faafb6b9296106f28214477ca46e519255f",
+  "changedPaths": [
+    ".github/workflows/ci-cache-helper.yml",
+    "internal/r27_cache_helper.py",
+    "tests/test_r27_cache_helper.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "labeling": {
+    "consensus": "PASS",
+    "note": "Cursor build; Claude label pending RUN-READY-27"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

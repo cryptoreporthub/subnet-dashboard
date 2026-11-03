@@ -1,0 +1,5 @@
+=== r27 worktree overlay proof 2026-11-03T04:06:54Z ===
+REPO=/tmp/pr-1522-exam-r8-work/repo R23_SHA=a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e C25_SHA=06269de964afc69bc81dd71156caa5bb2594bea1 TIP_SHA=f2c1ad1a62f37b9658773d7902ed57983e45b50e
+OK overlay sha256 match (98 paths)
+Files /tmp/r27-wt-proof-46707/r23/review-gate-bot/bot/instructions.md and /tmp/r27-wt-proof-46707/c25/review-gate-bot/bot/instructions.md differ
+PASS worktree proof

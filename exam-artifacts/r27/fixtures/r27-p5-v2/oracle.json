@@ -1,0 +1,27 @@
+{
+  "fixture": "r27-p5-v2",
+  "slug": "p5-v2",
+  "mechanism": "P5",
+  "variant": "p5-v2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "8e13c7906782e912008e7bfc66e3fb1db164268a2fda578d5c712db7ec03d383",
+  "changedPaths": [
+    ".github/workflows/ci-audit-v2.yml",
+    "internal/r27_audit_hook.py",
+    "tests/test_r27_audit_hook.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "labeling": {
+    "consensus": "PASS",
+    "note": "Cursor build; Claude label pending RUN-READY-27"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

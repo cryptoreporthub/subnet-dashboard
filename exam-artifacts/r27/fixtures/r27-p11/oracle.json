@@ -1,0 +1,27 @@
+{
+  "fixture": "r27-p11",
+  "slug": "p11",
+  "mechanism": "P1",
+  "variant": "p11",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "4ca1ab672d9dff26d6869c9da5c00616be04bd023c00553a4fa901e8db72509e",
+  "changedPaths": [
+    ".github/workflows/ci-lint-hook.yml",
+    "internal/r27_lint_hook.py",
+    "tests/test_r27_lint_hook.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "labeling": {
+    "consensus": "PASS",
+    "note": "Cursor build; Claude label pending RUN-READY-27"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

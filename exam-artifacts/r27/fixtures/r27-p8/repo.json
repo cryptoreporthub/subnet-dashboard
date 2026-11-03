@@ -1,0 +1,8 @@
+{
+  "files": {
+    ".github/workflows/ci-metrics-hook.yml": "name: ci-metrics-hook\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.12'\n      - run: pip install pytest\n      - run: pytest -q tests/test_r27_metrics_hook.py\n",
+    "internal/r27_metrics_hook.py": "from __future__ import annotations\n\n\ndef metrics_tick(n: int) -> int:\n    return n + 3\n",
+    "tests/test_r27_metrics_hook.py": "from internal.r27_metrics_hook import metrics_tick\n\n\ndef test_metrics_tick():\n    assert metrics_tick(2) == 5\n"
+  },
+  "baseFiles": {}
+}

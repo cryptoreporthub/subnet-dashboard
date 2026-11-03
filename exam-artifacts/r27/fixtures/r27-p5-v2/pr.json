@@ -1,0 +1,14 @@
+{
+  "number": 9626,
+  "title": "test: audit hook job with checkout and python setup",
+  "body": "Adds audit hook tests and a workflow with checkout plus setup-python before pytest.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9626",
+  "headSha": "a27f000000000000000000000000000000000006",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-audit-v2.yml",
+    "internal/r27_audit_hook.py",
+    "tests/test_r27_audit_hook.py"
+  ]
+}

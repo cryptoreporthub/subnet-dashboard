@@ -1,0 +1,8 @@
+{
+  "files": {
+    ".github/workflows/ci-intern-hook.yml": "name: ci-intern-hook\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.12'\n      - run: pip install pytest\n      - run: pytest -q tests/test_r27_intern_hook.py\n",
+    "internal/r27_intern_hook.py": "from __future__ import annotations\n\n\ndef intern_label(label: str) -> str:\n    return label.strip().lower()\n",
+    "tests/test_r27_intern_hook.py": "from internal.r27_intern_hook import intern_label\n\n\ndef test_intern_label():\n    assert intern_label('  Foo ') == 'foo'\n"
+  },
+  "baseFiles": {}
+}

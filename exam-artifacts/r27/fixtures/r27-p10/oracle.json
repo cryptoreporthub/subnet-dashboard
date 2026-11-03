@@ -1,0 +1,27 @@
+{
+  "fixture": "r27-p10",
+  "slug": "p10",
+  "mechanism": "P1",
+  "variant": "p10",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "0aa1f1b0094f6b9cf4ec658a09b6301562dad5fe38ee13a638842cecb03f5ee0",
+  "changedPaths": [
+    ".github/workflows/ci-intern-hook.yml",
+    "internal/r27_intern_hook.py",
+    "tests/test_r27_intern_hook.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "labeling": {
+    "consensus": "PASS",
+    "note": "Cursor build; Claude label pending RUN-READY-27"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}
