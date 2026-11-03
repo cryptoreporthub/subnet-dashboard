@@ -37,6 +37,7 @@ for path in sorted(doc):
         print(path)
 PY
   echo "review-gate-bot/evals/review-gate-r24.eval.ts"
+  echo "review-gate-bot/evals/review-gate-r24b.eval.ts"
   echo "review-gate-bot/evals/r24-prompts.ts"
 }
 
