@@ -143,6 +143,31 @@ test("a PASS that declares no blocking finding is accepted in eval", async () =>
   });
 });
 
+test("R1 arm H: a PASS with an unmeasured duration claim is refused in eval", async () => {
+  const result = (await execute(
+    {
+      ...VERDICT,
+      body: "Scrub path is ~12 ms on typical payloads.",
+      skills: [{ skill: "adversarial-review", used: true, note: "No blocking findings." }],
+    },
+    contextFor("eval", "eval-unmeasured-perf"),
+  )) as { posted: boolean; reason: string };
+  assert.equal(result.posted, false);
+  assert.equal(result.reason, "pass-with-unmeasured-perf-claim");
+});
+
+test("R1 arm H: measured on the same line allows PASS in eval", async () => {
+  const result = await execute(
+    {
+      ...VERDICT,
+      body: "measured: compare_suite_runs reported 12 ms median for scrub.",
+      skills: [{ skill: "adversarial-review", used: true, note: "Clean." }],
+    },
+    contextFor("eval", "eval-measured-perf"),
+  );
+  assert.deepEqual(result, { posted: true, reason: "eval", verdict: "PASS" });
+});
+
 test("Joshua's own PASS is never read as a Replit verdict", () => {
   const pinned = collectPinnedVerdicts({
     reviews: [],
