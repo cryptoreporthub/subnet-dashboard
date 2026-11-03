@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-11-03T09:30:13.015Z",
+  "arms": {
+    "none": {
+      "sha256": "95d5d7fe35366607cf07f3d4edc30b39433a53bfabe8b7f05ab7437afbebdd20",
+      "composedChars": 15140,
+      "methodChars": 0
+    },
+    "owner-adv5": {
+      "sha256": "500efc156068f062f77aad66fc625080de09c1e3f6ad809e77ecc9af39e2e30a",
+      "composedChars": 18382,
+      "methodChars": 3240
+    },
+    "all-three": {
+      "sha256": "416cfbbc7a6fd5dd4cb09540c772a3bfb6cdc9f1dc7178068305b716183f5321",
+      "composedChars": 25840,
+      "methodChars": 10698
+    }
+  }
+}

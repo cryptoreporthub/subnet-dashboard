@@ -454,7 +454,13 @@ def compare(generated, committed):
             if a != b:
                 bad.append(f"{name}/{f}: differs")
     for name in sorted(os.listdir(committed)):
-        if name.startswith("hard-") and not os.path.isdir(os.path.join(generated, name)):
+        if not name.startswith("hard-"):
+            continue
+        # r24 Stage-A exam fixtures live under evals/fixtures for harness runs but are built by
+        # evals/oracle-gen/r24_stage_a*.py, not this generator.
+        if name.startswith("hard-r24-"):
+            continue
+        if not os.path.isdir(os.path.join(generated, name)):
             bad.append(f"{name}: committed but not generated")
     return bad
 

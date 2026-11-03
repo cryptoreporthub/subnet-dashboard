@@ -24,9 +24,11 @@ test("instructions.md plus instructions.ts matches what the SDK serves as the sy
 });
 
 test("agent-sdk manifest reports a longer instructions block after inlining (no model)", () => {
-  const r = spawnSync("npx", ["--yes", "@grok/agent-sdk@0.5.0", "info", "--dir", ".", "--view", "manifest", "--json"], {
+  const sdk = new URL("../node_modules/.bin/agent-sdk", import.meta.url).pathname;
+  const r = spawnSync(sdk, ["info", "--dir", ".", "--view", "manifest", "--json"], {
     encoding: "utf8",
     timeout: 120_000,
+    env: { ...process.env, npm_config_yes: "false" },
   });
   assert.equal(r.status, 0, r.stderr);
   const doc = JSON.parse(r.stdout) as { info?: { instructions?: { chars?: number; preview?: string } } };
@@ -35,9 +37,11 @@ test("agent-sdk manifest reports a longer instructions block after inlining (no 
 });
 
 test("SDK skills remain on-demand metadata only; delivery path for exam is inline instructions", () => {
-  const r = spawnSync("npx", ["--yes", "@grok/agent-sdk@0.5.0", "info", "--dir", ".", "--view", "manifest", "--json"], {
+  const sdk = new URL("../node_modules/.bin/agent-sdk", import.meta.url).pathname;
+  const r = spawnSync(sdk, ["info", "--dir", ".", "--view", "manifest", "--json"], {
     encoding: "utf8",
     timeout: 120_000,
+    env: { ...process.env, npm_config_yes: "false" },
   });
   assert.equal(r.status, 0, r.stderr);
   const skills = (JSON.parse(r.stdout) as { info?: { skills?: { name: string }[] } }).info?.skills ?? [];

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
@@ -25,9 +25,7 @@ test("fixture gate: structural pytest module (oracle pins, no tautologies)", () 
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
-test("fixture gate: npm oracle:check:fast is the executed-oracle regen entry (optional in CI)", () => {
-  const pkg = JSON.parse(
-    spawnSync("cat", [`${BOT_ROOT}/package.json`], { encoding: "utf8" }).stdout,
-  ) as { scripts: Record<string, string> };
-  assert.equal(pkg.scripts["oracle:check:fast"], "python3 evals/oracle-gen/gen.py --check --skip-behavior");
+test("fixture gate: ONE fail-closed npm script exists", () => {
+  const pkg = JSON.parse(readFileSync(`${BOT_ROOT}/package.json`, "utf8")) as { scripts: Record<string, string> };
+  assert.equal(pkg.scripts["fixture-gate"], "python3 evals/fixture-gate/run_gate.py");
 });

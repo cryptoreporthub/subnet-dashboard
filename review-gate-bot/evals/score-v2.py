@@ -18,7 +18,24 @@ VERDICTS = ("PASS", "MODIFY", "FAIL", "NO_POST")
 
 def load_expected() -> dict[str, dict]:
     doc = json.loads(EXPECTED_PATH.read_text())
-    return doc["cases"]
+    cases = dict(doc["cases"])
+    manifest_path = ROOT.parent / "exam-artifacts/r27/stage-c-manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text())
+        for row in manifest.get("fixtures") or []:
+            slug = row.get("slug")
+            fixture = row.get("fixture") or slug
+            oracle = row.get("oracle") or "MODIFY"
+            key = f"review-gate-r27/{slug}"
+            cases.setdefault(
+                key,
+                {
+                    "expected": oracle,
+                    "family": fixture.split("-")[0] if fixture else slug,
+                    "semantic": True,
+                },
+            )
+    return cases
 
 
 def first_line_token(text: str) -> str | None:
@@ -103,6 +120,9 @@ def score_results(doc: dict, expected: dict[str, dict]) -> dict:
         expected_verdict = (exp_row or {}).get("expected")
         family = (exp_row or {}).get("family") or fixture.split("-")[0]
         semantic = (exp_row or {}).get("semantic", True)
+        state_family = family == "state" or (isinstance(family, str) and family.startswith("state-"))
+        if state_family:
+            semantic = False
         stack, arm = parse_arm_stack(case_id, r.get("meta") if isinstance(r.get("meta"), dict) else None)
         actual = classify_run(r)
         row = {

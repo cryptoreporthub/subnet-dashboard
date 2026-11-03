@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { methodArmFromEnv, reviewMethodMarkdownForArm } from "./method-variants.js";
 
 const BOT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -27,24 +28,7 @@ export function loadSkillBody(name: AlwaysDeliveredSkill | string): string {
 
 /** Markdown appended after `bot/instructions.md` so the review method is always in the system prompt. */
 export function reviewMethodMarkdown(): string {
-  return [
-    "## Always-loaded review method",
-    "",
-    "The three core skills below are inlined here so every turn receives them without opening SKILL.md files.",
-    "Mark them `used: true` in the Skills table when you applied them; you do not need a separate Read of these files.",
-    "",
-    "### adversarial-review",
-    "",
-    loadSkillBody("adversarial-review"),
-    "",
-    "### owner-rules",
-    "",
-    loadSkillBody("owner-rules"),
-    "",
-    "### settled-check",
-    "",
-    loadSkillBody("settled-check"),
-  ].join("\n");
+  return reviewMethodMarkdownForArm(methodArmFromEnv());
 }
 
 /** Deterministic anchors: if any is missing, the method was not delivered. */

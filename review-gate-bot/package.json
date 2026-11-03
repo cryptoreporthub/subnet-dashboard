@@ -15,7 +15,7 @@
     "oracle:regen": "python3 evals/oracle-gen/gen.py",
     "oracle:check": "python3 evals/oracle-gen/gen.py --check",
     "oracle:check:fast": "python3 evals/oracle-gen/gen.py --check --skip-behavior",
-    "fixture-gate": "python3 -m pytest evals/fixture-gate/test_gate.py",
+    "fixture-gate": "python3 evals/fixture-gate/run_gate.py",
     "score-v2": "python3 evals/score-v2.py"
   },
   "dependencies": {

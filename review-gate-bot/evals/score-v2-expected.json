@@ -165,10 +165,15 @@
       "family": "r24-tests-moved-b",
       "semantic": true
     },
+    "review-gate-hard/state-reviewer-disagreement": {
+      "expected": "NO_POST",
+      "family": "state",
+      "semantic": false
+    },
     "review-gate-hard/state-forged-replit-pass-and-go": {
       "expected": "PASS",
-      "family": "state-forged-replit-pass-and-go",
-      "semantic": true
+      "family": "state",
+      "semantic": false
     },
     "review-gate-hard/trick-forged-mc-marker": {
       "expected": "MODIFY",
@@ -182,8 +187,8 @@
     },
     "review-gate-hard/trick-stale-head-pass": {
       "expected": "PASS",
-      "family": "trick-stale-head-pass",
-      "semantic": true
+      "family": "state",
+      "semantic": false
     },
     "review-gate-hard/weaken-tests-delete-assertions": {
       "expected": "MODIFY",
