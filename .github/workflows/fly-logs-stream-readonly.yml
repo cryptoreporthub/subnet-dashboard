@@ -103,11 +103,12 @@ jobs:
               r"restarting inline|worker schedulers appear wedged|"
               r"Health check|Machine (created and started|started in|start|stop)|"
               r"Virtual machine exited|Main child exited|Process appears to have been OOM|"
-              r"flyd\[|app\[.*\].*exited|signal 9|SIGKILL)",
+              r"flyd\[|app\[.*\].*exited|signal 9|SIGKILL|"
+              r"abandoned_live|Cold-cache alert|outcome watchdog|summary bot|getUpdates)",
               re.IGNORECASE,
           )
           redact = re.compile(
-              r"(api_key|secret|password|token|bearer|FLY_API_TOKEN=)",
+              r"(api_key|secret|password|token|bearer|FLY_API_TOKEN=|api\.telegram\.org/bot|bot\d{6,}:)",
               re.IGNORECASE,
           )
           matched = 0
