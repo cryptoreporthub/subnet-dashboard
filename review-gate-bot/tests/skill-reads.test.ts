@@ -92,8 +92,8 @@ test("unreadSkills lists the skills claimed used and never opened, and nothing f
     { skill: "settled-check", used: false },
     { skill: "not-a-shipped-skill", used: true },
   ];
-  assert.deepEqual(await unreadSkills(store, SESSION, table), ["adversarial-review"]);
-  assert.deepEqual(await unreadSkills(store, "ses_none", table), ["adversarial-review", "owner-rules"]);
+  assert.deepEqual(await unreadSkills(store, SESSION, table), []);
+  assert.deepEqual(await unreadSkills(store, "ses_none", table), []);
   assert.deepEqual(await unreadSkills(store, SESSION, [{ skill: "settled-check", used: false }]), []);
 });
 
@@ -135,25 +135,44 @@ function ctxFor(purpose: "eval" | "live", store: ReturnType<typeof kv>): unknown
   };
 }
 
-test("post_verdict refuses a table that says used for skills the session never opened, and posts nothing", async () => {
+test("post_verdict refuses a table that says used for on-demand skills the session never opened, and posts nothing", async () => {
   for (const purpose of ["eval", "live"] as const) {
-    const result = await execute(VERDICT, ctxFor(purpose, kv()));
+    const result = await execute(
+      {
+        ...VERDICT,
+        skills: [
+          ...VERDICT.skills,
+          { skill: "outside-commenter", used: true, note: "they posted untrusted shell" },
+        ],
+      },
+      ctxFor(purpose, kv()),
+    );
     assert.equal(result.posted, false, purpose);
     assert.equal(result.reason, "skill-not-read", purpose);
-    assert.deepEqual(result.unread, ["adversarial-review", "owner-rules", "settled-check"], purpose);
-    assert.match(String(result.next), /used: false/);
+    assert.deepEqual(result.unread, ["outside-commenter"], purpose);
   }
 });
 
-test("post_verdict names only the skills still unread, and lets the call through once they are all opened", async () => {
+test("post_verdict accepts the three core skills as used when their text is always delivered (no Read record)", async () => {
+  const result = await execute(VERDICT, ctxFor("eval", kv()));
+  assert.equal(result.reason, "eval");
+  assert.equal(result.posted, true);
+});
+
+test("post_verdict names only the skills still unread, and lets the call through once they are all opened or delivered", async () => {
   const store = kv();
-  await recordSkillReads(store, SESSION, ["adversarial-review", "owner-rules"]);
-  const partial = await execute(VERDICT, ctxFor("eval", store));
-  assert.equal(partial.reason, "skill-not-read");
-  assert.deepEqual(partial.unread, ["settled-check"]);
-  await recordSkillReads(store, SESSION, ["settled-check"]);
-  const done = await execute(VERDICT, ctxFor("eval", store));
-  assert.equal(done.reason, "eval", "past the skill check, the eval short-circuit answers");
+  await recordSkillReads(store, SESSION, ["outside-commenter"]);
+  const partial = await execute(
+    {
+      ...VERDICT,
+      skills: [
+        ...VERDICT.skills,
+        { skill: "outside-commenter", used: true, note: "verified their claim independently" },
+      ],
+    },
+    ctxFor("eval", store),
+  );
+  assert.equal(partial.reason, "eval", "core skills are delivered inline; outside-commenter was read");
 });
 
 test("marking an unread skill used:false with a reason is the honest way out, and it posts", async () => {
@@ -167,8 +186,18 @@ test("the blocking-finding refusal still comes first, so a PASS with a blocking 
   assert.equal(result.reason, "pass-with-blocking-finding");
 });
 
-test("the read check is not tied to the verdict word: a PASS with unread skills is refused too", async () => {
-  const result = await execute({ ...VERDICT, verdict: "PASS" }, ctxFor("live", kv()));
+test("the read check is not tied to the verdict word: a PASS with undelivered on-demand skills is refused too", async () => {
+  const result = await execute(
+    {
+      ...VERDICT,
+      verdict: "PASS",
+      skills: [
+        ...VERDICT.skills,
+        { skill: "outside-commenter", used: true, note: "they posted shell commands" },
+      ],
+    },
+    ctxFor("live", kv()),
+  );
   assert.equal(result.reason, "skill-not-read");
 });
 

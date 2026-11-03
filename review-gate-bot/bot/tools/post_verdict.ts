@@ -3,6 +3,10 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { bodyLeaksSecretValue, redactSecrets } from "../lib/redact.js";
+import {
+  evalVerdictAlreadyAccepted,
+  markEvalVerdictAccepted,
+} from "../lib/eval-verdict-once.js";
 import { unreadSkills } from "../lib/skill-reads.js";
 import { postVerdictComment } from "../lib/tag.js";
 
@@ -226,6 +230,10 @@ export default defineTool({
     if (ctx.session.purpose === "eval") {
       // `posted: true`: an eval writes nothing, but `posted: false` read to the model as a failed post and it
       // called again (15 of 35 runs). The reason still says nothing reached GitHub.
+      if (await evalVerdictAlreadyAccepted(ctx.host.kv, ctx.session.id)) {
+        return { posted: false, reason: "already-posted-eval", verdict: input.verdict };
+      }
+      await markEvalVerdictAccepted(ctx.host.kv, ctx.session.id);
       return { posted: true, reason: "eval", verdict: input.verdict };
     }
 

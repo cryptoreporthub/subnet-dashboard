@@ -88,9 +88,19 @@ const execute = postVerdict.execute as unknown as (input: unknown, ctx: unknown)
 
 /** A tool context that fails the test if the tool reaches for GitHub. */
 function contextFor(purpose: "eval" | "live"): unknown {
+  const store = new Map<string, unknown>();
+  const kv = {
+    async get(key: string) {
+      return store.get(key);
+    },
+    async put(key: string, value: unknown) {
+      store.set(key, value);
+    },
+  };
   return {
-    session: { purpose, continuationKey: undefined },
+    session: { id: "eval-path-test", purpose, continuationKey: undefined },
     host: {
+      kv,
       github: {
         getOctokit: async () => {
           throw new Error("reached GitHub");

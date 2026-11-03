@@ -1,4 +1,5 @@
 import type { HostKvApi } from "@grok/agent-sdk/kv";
+import { isAlwaysDeliveredSkill } from "./review-method.js";
 
 /**
  * Which of the bot's own skills a session actually opened.
@@ -94,5 +95,5 @@ export async function unreadSkills(
   } catch {
     return [];
   }
-  return [...claimed].filter((name) => !seen.has(name));
+  return [...claimed].filter((name) => !seen.has(name) && !isAlwaysDeliveredSkill(name));
 }
