@@ -74,8 +74,8 @@ export function reviewMethodMarkdownForArm(arm: MethodArm): string {
 }
 
 export function methodArmFromEnv(): MethodArm {
-  const raw = (process.env.R2_METHOD_ARM ?? "C").trim();
-  return ARM_ENV[raw] ?? "C";
+  const raw = (process.env.R2_METHOD_ARM ?? "A").trim();
+  return ARM_ENV[raw] ?? "A";
 }
 
 export function instructionsVariantManifest(): Record<

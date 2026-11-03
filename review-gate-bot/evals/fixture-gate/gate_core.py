@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,111 @@ from pathlib import Path
 
 TAUTOLOGY = re.compile(r"assert\s+True\b")
 BARE_PYTEST = re.compile(r"^\s*-\s*run:\s*pytest\s", re.M)
+
+
+class GateExecutorError(RuntimeError):
+    """Fail-closed: pytest executor (python + pytest + pytest-shard) unavailable."""
+
+
+def _python_candidates(repo_root: Path) -> list[str]:
+    out: list[str] = []
+    venv = repo_root / ".venv/bin/python"
+    if venv.is_file():
+        out.append(str(venv))
+    for name in (sys.executable, shutil.which("python3"), shutil.which("python")):
+        if name and name not in out:
+            out.append(name)
+    return out
+
+
+def executor_probe(python: str) -> list[str]:
+    """Return human-readable defects; empty list means OK for shard workflow checks."""
+    problems: list[str] = []
+    if not python or not Path(python).exists():
+        return ["python interpreter not found"]
+    ver = subprocess.run([python, "-m", "pytest", "--version"], capture_output=True, text=True)
+    if ver.returncode != 0:
+        problems.append(f"pytest not runnable via {python!r} (-m pytest --version exit {ver.returncode})")
+    shard = subprocess.run(
+        [python, "-c", "import pytest_shard"],
+        capture_output=True,
+        text=True,
+    )
+    if shard.returncode != 0:
+        problems.append(f"pytest-shard plugin missing for {python!r} (import pytest_shard failed)")
+    return problems
+
+
+def _gate_pytest_venv_dir() -> Path:
+    return Path(__file__).resolve().parent / ".gate-pytest-venv"
+
+
+def bootstrap_pytest(python: str) -> tuple[str, list[str]]:
+    """Install pytest + pytest-shard for gate runs (clean checkout, no repo .venv).
+
+    Uses a dedicated venv beside gate_core.py so PEP-668 system Pythons do not block pip.
+    Returns (python_to_use, probe_errors).
+    """
+    venv_dir = _gate_pytest_venv_dir()
+    venv_py = venv_dir / "bin" / "python"
+    if not venv_py.is_file():
+        venv_dir.parent.mkdir(parents=True, exist_ok=True)
+        created = subprocess.run([python, "-m", "venv", str(venv_dir)], capture_output=True, text=True)
+        if created.returncode != 0:
+            tail = (created.stderr or created.stdout or "")[-400:]
+            return python, [f"python -m venv failed for gate executor: {tail}"]
+    target = str(venv_py if venv_py.is_file() else python)
+    proc = subprocess.run(
+        [target, "-m", "pip", "install", "pytest", "pytest-shard", "-q"],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "")[-400:]
+        return target, [f"pip install pytest pytest-shard failed: {tail}"]
+    return target, executor_probe(target)
+
+
+def bootstrap_oracle_deps(python: str, repo_root: Path) -> list[str]:
+    """App deps for oracle-gen executed behavior (subnet_universe pytest in archive tree)."""
+    req = repo_root / "requirements.txt"
+    if not req.is_file():
+        return []
+    proc = subprocess.run(
+        [python, "-m", "pip", "install", "-r", str(req), "-q"],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "")[-400:]
+        return [f"pip install -r requirements.txt for oracle failed: {tail}"]
+    return []
+
+
+def resolve_gate_python(repo_root: Path, *, bootstrap: bool = True) -> tuple[str, list[str]]:
+    """Locate a python that can run `python -m pytest` with pytest-shard. Fail-closed errors if none."""
+    for py in _python_candidates(repo_root):
+        problems = executor_probe(py)
+        if not problems:
+            return py, []
+    if not bootstrap:
+        return "", ["executor unavailable: no python with pytest and pytest-shard on PATH"]
+    base = _python_candidates(repo_root)[0] if _python_candidates(repo_root) else sys.executable
+    py, problems = bootstrap_pytest(base)
+    if problems:
+        return py, [f"executor unavailable: {p}" for p in problems]
+    if str(_gate_pytest_venv_dir()) in py:
+        dep_errors = bootstrap_oracle_deps(py, repo_root)
+        if dep_errors:
+            return py, [f"executor unavailable: {e}" for e in dep_errors]
+    return py, []
+
+
+def require_gate_python(repo_root: Path) -> str:
+    py, errors = resolve_gate_python(repo_root)
+    if errors:
+        raise GateExecutorError("; ".join(errors))
+    return py
 
 
 def repo_files(repo_doc: dict) -> dict[str, str]:
@@ -87,6 +193,12 @@ def check_shard_collects_nothing(repo_doc: dict, python: str) -> list[str]:
                 steps.append(line.strip().split("run:", 1)[1].strip())
     if not steps:
         return []
+    shard_steps = [s for s in steps if "pytest-shard" in s or "--shard-id" in s]
+    if not shard_steps:
+        return []
+    exec_errors = executor_probe(python)
+    if exec_errors:
+        return [f"executor unavailable: {exec_errors[0]}"]
     errors: list[str] = []
     with tempfile.TemporaryDirectory() as td:
         tdp = Path(td)
@@ -99,18 +211,19 @@ def check_shard_collects_nothing(repo_doc: dict, python: str) -> list[str]:
         env = {"PATH": str(Path(python).parent) + ":" + os.environ.get("PATH", "")}
         for raw in steps:
             cmd = raw.replace("${{ matrix.shard-index }}", "1").replace("${{matrix.shard-index}}", "1")
-            if "pytest-shard" in cmd or "--shard-id" in cmd:
-                proc = subprocess.run(
-                    cmd,
-                    cwd=str(tdp),
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    env=env,
-                )
-                combined = (proc.stdout or "") + (proc.stderr or "")
-                if proc.returncode == 5 or "no tests ran" in combined.lower():
-                    errors.append(f"shard matrix index 1 collects nothing: exit={proc.returncode}")
+            if "pytest-shard" not in cmd and "--shard-id" not in cmd:
+                continue
+            proc = subprocess.run(
+                cmd,
+                cwd=str(tdp),
+                shell=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            combined = (proc.stdout or "") + (proc.stderr or "")
+            if proc.returncode == 5 or "no tests ran" in combined.lower():
+                errors.append(f"shard matrix index 1 collects nothing: exit={proc.returncode}")
     return errors
 
 
@@ -133,7 +246,7 @@ def validate_oracle_json(oracle_doc: dict) -> list[str]:
     return check_planted_oracle_semantics(oracle_doc)
 
 
-def validate_repo_doc(repo_doc: dict, *, python: str | None = None) -> list[str]:
+def validate_repo_doc(repo_doc: dict, *, python: str) -> list[str]:
     oracle = (repo_doc.get("oracle") or "MODIFY") if isinstance(repo_doc.get("oracle"), str) else "MODIFY"
     if isinstance(repo_doc.get("gate"), dict):
         oracle = repo_doc["gate"].get("oracle") or oracle
@@ -142,8 +255,7 @@ def validate_repo_doc(repo_doc: dict, *, python: str | None = None) -> list[str]
     errors.extend(check_ci_pytest_invocation(repo_doc))
     errors.extend(check_label_weight_assertion(repo_doc))
     errors.extend(check_r25_p6_behavior(repo_doc))
-    if python:
-        errors.extend(check_shard_collects_nothing(repo_doc, python))
+    errors.extend(check_shard_collects_nothing(repo_doc, python))
     return errors
 
 
@@ -163,9 +275,12 @@ def historical_rejection(
     label: str,
     doc: dict,
     *,
-    python: str | None = None,
+    python: str,
 ) -> list[str]:
     """Rules that must fire on known-bad snapshots from git history (R0.2 acceptance)."""
+    exec_errors = executor_probe(python)
+    if exec_errors:
+        return [f"executor unavailable: {exec_errors[0]}"]
     errors: list[str] = []
     errors.extend(validate_repo_doc(doc, python=python))
     files = repo_files(doc)

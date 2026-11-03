@@ -1,0 +1,411 @@
+
+=== fixture-gate: gate executor probe ===
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.37s
+fixture-gate ok: gate executor probe
+
+=== fixture-gate: structural pytest ===
+Running 3 items in this shard
+...                                                                      [100%]
+3 passed in 0.01s
+fixture-gate ok: structural pytest
+
+=== fixture-gate: known-bad rejection (7 cases) ===
+Running 7 items in this shard
+.......                                                                  [100%]
+7 passed in 5.85s
+fixture-gate ok: known-bad rejection (7 cases)
+
+=== fixture-gate: oracle-gen --check (executed oracle ON; ORACLE_PYTHON=/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python) ===
+Error fetching page 1: No module named 'httpx'
+No cache available, returning static fallback
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (128 -> 128) removed=[0]
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (128 -> 127) removed=[0]
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (5 -> 0) removed=[0, 1, 2, 3, 4]
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (5 -> 0) removed=[0, 1, 2, 3, 4]
+baseline pytest: 56 passed
+jwt oracle: {"at44ce7ea5": {"pattern": "/\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b/g", "withinDoublingRatio": false, "ratioEvaluated": true, "withinAbsoluteCap": null, "meetsBudget": false}, "atD578603e": {"pattern": "/(?<![A-Za-z0-9_])eyJ[A-Za-z0-9_-]{8,2048}\\.[A-Za-z0-9_-]{8,2048}\\.
+concurrency oracle: {"base": {"duplicateVerdict": {"results": [{"posted": true, "reason": "posted"}, {"posted": false, "reason": "already-posted"}], "commentsOnPr": 1, "verdictsInOrder": ["PASS"], "gateReadsLatest": "PASS"}, "headPushDuringTag": {"prHeadAtWrite": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "outcome": {"posted": false, "reason": "gate-not-ready"}, "tagCommentsFor": []}}, "planted": {"duplicateVerdict": {"results": [{"posted": true, "reason": "posted"}, {"posted": true, "reason": "posted"}], "commentsOnPr": 2, "verdictsInOrder": ["PASS", "MODIFY"], "gateReadsLatest": "MODIFY"}, "headPushDuringTag": {"prHeadAtWrite": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "outcome": {"posted": true, "reason": "posted"}, "tagCommentsFor": ["old-head"]}}}
+oracle-gen --check: ok (every fixture file, oracle.json included)
+fixture-gate ok: oracle-gen --check (executed oracle ON; ORACLE_PYTHON=/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python)
+
+=== fixture-gate: r27 stage-C workflow execution gate ===
+=== r27 fixture static gate ===
+
+
+
+[r27:p2] py_compile tests/layout/test_r25_layout_a.py exit=0
+[r27:p2] pyflakes tests/layout/test_r25_layout_a.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p3] py_compile tests/test_r25_pairs.py exit=0
+[r27:p3] pyflakes tests/test_r25_pairs.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p4-v2] yaml_parse .github/workflows/ci-smoke.yml ok
+[r27:p4-v2] py_compile internal/r27_suite_anchor.py exit=0
+[r27:p4-v2] pyflakes internal/r27_suite_anchor.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p4-v2] py_compile tests/test_r27_suite_anchor.py exit=0
+[r27:p4-v2] pyflakes tests/test_r27_suite_anchor.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p5-v2] yaml_parse .github/workflows/ci-audit-v2.yml ok
+[r27:p5-v2] py_compile internal/r27_audit_hook.py exit=0
+[r27:p5-v2] pyflakes internal/r27_audit_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p5-v2] py_compile tests/test_r27_audit_hook.py exit=0
+[r27:p5-v2] pyflakes tests/test_r27_audit_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p6-v2] py_compile internal/r25_feature_flags.py exit=0
+[r27:p6-v2] pyflakes internal/r25_feature_flags.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p6-v2] py_compile tests/test_r25_feature_flags.py exit=0
+[r27:p6-v2] pyflakes tests/test_r25_feature_flags.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p7-v3] py_compile internal/r25_label_weight.py exit=0
+[r27:p7-v3] pyflakes internal/r25_label_weight.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p7-v3] py_compile tests/test_r25_label_new.py exit=0
+[r27:p7-v3] pyflakes tests/test_r25_label_new.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p8] yaml_parse .github/workflows/ci-metrics-hook.yml ok
+[r27:p8] py_compile internal/r27_metrics_hook.py exit=0
+[r27:p8] pyflakes internal/r27_metrics_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p8] py_compile tests/test_r27_metrics_hook.py exit=0
+[r27:p8] pyflakes tests/test_r27_metrics_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p9] yaml_parse .github/workflows/ci-cache-helper.yml ok
+[r27:p9] py_compile internal/r27_cache_helper.py exit=0
+[r27:p9] pyflakes internal/r27_cache_helper.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p9] py_compile tests/test_r27_cache_helper.py exit=0
+[r27:p9] pyflakes tests/test_r27_cache_helper.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p10] yaml_parse .github/workflows/ci-intern-hook.yml ok
+[r27:p10] py_compile internal/r27_intern_hook.py exit=0
+[r27:p10] pyflakes internal/r27_intern_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p10] py_compile tests/test_r27_intern_hook.py exit=0
+[r27:p10] pyflakes tests/test_r27_intern_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:p11] yaml_parse .github/workflows/ci-lint-hook.yml ok
+[r27:p11] py_compile internal/r27_lint_hook.py exit=0
+[r27:p11] pyflakes internal/r27_lint_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:p11] py_compile tests/test_r27_lint_hook.py exit=0
+[r27:p11] pyflakes tests/test_r27_lint_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m1a] py_compile internal/r25_m1a_service.py exit=0
+[r27:m1a] pyflakes internal/r25_m1a_service.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m1b] py_compile internal/r25_m1b_service.py exit=0
+[r27:m1b] pyflakes internal/r25_m1b_service.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:m1b] py_compile tests/test_r25_m1b_edges.py exit=0
+[r27:m1b] pyflakes tests/test_r25_m1b_edges.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m1c] py_compile internal/r25_m1c_service.py exit=0
+[r27:m1c] pyflakes internal/r25_m1c_service.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:m1c] py_compile tests/test_r25_m1c_smoke.py exit=0
+[r27:m1c] pyflakes tests/test_r25_m1c_smoke.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m2a] py_compile tests/test_r25_m2a_layout.py exit=0
+[r27:m2a] pyflakes tests/test_r25_m2a_layout.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m2b] py_compile tests/test_r25_m2b_hook.py exit=0
+[r27:m2b] pyflakes tests/test_r25_m2b_hook.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m3a] py_compile tests/conftest.py exit=0
+[r27:m3a] pyflakes tests/conftest.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:m3a] py_compile tests/test_r25_m3a_integration.py exit=0
+[r27:m3a] pyflakes tests/test_r25_m3a_integration.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:m3a] py_compile tests/test_r25_m3a_unit.py exit=0
+[r27:m3a] pyflakes tests/test_r25_m3a_unit.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m3b] pytest_ini pytest.ini ok
+[r27:m3b] py_compile tests/test_r25_m3b_wide.py exit=0
+[r27:m3b] pyflakes tests/test_r25_m3b_wide.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:m3b] py_compile tests/unit/test_r25_m3b_narrow.py exit=0
+[r27:m3b] pyflakes tests/unit/test_r25_m3b_narrow.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m4a] yaml_parse .github/workflows/ci-smoke.yml ok
+[r27:m4a] py_compile tests/test_r25_m4a_smoke.py exit=0
+[r27:m4a] pyflakes tests/test_r25_m4a_smoke.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m4b] yaml_parse .github/workflows/ci-smoke.yml ok
+[r27:m4b] py_compile tests/test_r25_m4b_smoke.py exit=0
+[r27:m4b] pyflakes tests/test_r25_m4b_smoke.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+[r27:m5a] yaml_parse .github/workflows/ci-smoke.yml ok
+
+[r27:m5b] yaml_parse .github/workflows/ci-smoke.yml ok
+
+[r27:m6] py_compile internal/r25_m6_service.py exit=0
+[r27:m6] pyflakes internal/r25_m6_service.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+[r27:m6] py_compile tests/test_r25_m6_scale.py exit=0
+[r27:m6] pyflakes tests/test_r25_m6_scale.py exit=1
+/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python: No module named pyflakes
+
+=== r27 fixture EXECUTION GATE (exact workflow run steps, repo root, no PYTHONPATH) ===
+fixtures=24 (expect 24)
+venv_python=/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python
+PASS: job lines unrewritten; matrix shard-index expanded to every matrix value
+
+[r27:p1a] EXECUTION INTENTIONAL: PASS deletion (no tests at head)
+[r27:p1a] EXECUTION skipped ok
+
+[r27:p1b] EXECUTION INTENTIONAL: PASS deletion (no tests at head)
+[r27:p1b] EXECUTION skipped ok
+
+[r27:p2] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:p2] EXECUTION exit=0
+Running 2 items in this shard
+..                                                                       [100%]
+2 passed in 0.00s
+[r27:p2] EXECUTION ok
+
+[r27:p3] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:p3] EXECUTION exit=0
+Running 3 items in this shard
+...                                                                      [100%]
+3 passed in 0.00s
+[r27:p3] EXECUTION ok
+
+[r27:p4-v2] EXECUTION workflow run: pip install pytest pytest-shard
+[r27:p4-v2] EXECUTION exit=0
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: pytest-shard in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (0.1.2)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+[r27:p4-v2] EXECUTION workflow run: python -m pytest -q tests/ --shard-id=0 --num-shards=3
+[r27:p4-v2] EXECUTION exit=0
+Running 2 items in this shard
+..                                                                       [100%]
+2 passed in 0.01s
+[r27:p4-v2] EXECUTION workflow run: python -m pytest -q tests/ --shard-id=1 --num-shards=3
+[r27:p4-v2] EXECUTION exit=0
+Running 5 items in this shard
+.....                                                                    [100%]
+5 passed in 0.01s
+[r27:p4-v2] EXECUTION workflow run: python -m pytest -q tests/ --shard-id=2 --num-shards=3
+[r27:p4-v2] EXECUTION exit=0
+Running 3 items in this shard
+...                                                                      [100%]
+3 passed in 0.00s
+[r27:p4-v2] EXECUTION ok
+
+[r27:p5-v2] EXECUTION workflow run: pip install pytest
+[r27:p5-v2] EXECUTION exit=0
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+[r27:p5-v2] EXECUTION workflow run: python -m pytest -q tests/test_r27_audit_hook.py
+[r27:p5-v2] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p5-v2] EXECUTION ok
+
+[r27:p6-v2] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:p6-v2] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p6-v2] EXECUTION ok
+
+[r27:p7-v3] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:p7-v3] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p7-v3] EXECUTION ok
+
+[r27:p8] EXECUTION workflow run: pip install pytest
+[r27:p8] EXECUTION exit=0
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+[r27:p8] EXECUTION workflow run: python -m pytest -q tests/test_r27_metrics_hook.py
+[r27:p8] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p8] EXECUTION ok
+
+[r27:p9] EXECUTION workflow run: pip install pytest
+[r27:p9] EXECUTION exit=0
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+[r27:p9] EXECUTION workflow run: python -m pytest -q tests/test_r27_cache_helper.py
+[r27:p9] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p9] EXECUTION ok
+
+[r27:p10] EXECUTION workflow run: pip install pytest
+[r27:p10] EXECUTION exit=0
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+[r27:p10] EXECUTION workflow run: python -m pytest -q tests/test_r27_intern_hook.py
+[r27:p10] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p10] EXECUTION ok
+
+[r27:p11] EXECUTION workflow run: pip install pytest
+[r27:p11] EXECUTION exit=0
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+[r27:p11] EXECUTION workflow run: python -m pytest -q tests/test_r27_lint_hook.py
+[r27:p11] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:p11] EXECUTION ok
+
+[r27:m1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:m1a] EXECUTION skipped ok
+
+[r27:m1b] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m1b] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m1b] EXECUTION ok
+
+[r27:m1c] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m1c] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m1c] EXECUTION ok
+
+[r27:m2a] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m2a] EXECUTION exit=0
+Running 2 items in this shard
+.X                                                                       [100%]
+1 passed, 1 xpassed in 0.00s
+[r27:m2a] EXECUTION note: xpass present (expected for some MODIFY fixtures)
+[r27:m2a] EXECUTION ok
+
+[r27:m2b] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m2b] EXECUTION exit=5
+Running 0 items in this shard
+
+1 skipped in 0.00s
+[r27:m2b] EXECUTION INTENTIONAL: pytest exit 5 (e.g. module-level skip only)
+[r27:m2b] EXECUTION ok
+
+[r27:m3a] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m3a] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m3a] EXECUTION ok
+
+[r27:m3b] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m3b] EXECUTION exit=0
+Running 2 items in this shard
+..                                                                       [100%]
+2 passed in 0.01s
+[r27:m3b] EXECUTION ok
+
+[r27:m4a] EXECUTION workflow run (MODIFY local shim): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m4a] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m4a] EXECUTION ok
+
+[r27:m4b] EXECUTION workflow run (MODIFY local shim): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m4b] EXECUTION exit=0
+Running 1 items in this shard
+.                                                                        [100%]
+1 passed in 0.00s
+[r27:m4b] EXECUTION ok
+
+[r27:m5a] EXECUTION workflow run (MODIFY local shim): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m5a] EXECUTION exit=4
+Running 0 items in this shard
+
+no tests ran in 0.00s
+ERROR: file or directory not found: tests
+[r27:m5a] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)
+[r27:m5a] EXECUTION ok
+
+[r27:m5b] EXECUTION workflow run (MODIFY local shim): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m5b] EXECUTION exit=4
+Running 0 items in this shard
+
+no tests ran in 0.00s
+ERROR: file or directory not found: tests
+[r27:m5b] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)
+[r27:m5b] EXECUTION workflow run (MODIFY local shim): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m5b] EXECUTION exit=4
+Running 0 items in this shard
+
+no tests ran in 0.00s
+ERROR: file or directory not found: tests
+[r27:m5b] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)
+[r27:m5b] EXECUTION ok
+
+[r27:m6] EXECUTION (no workflow run steps): /agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python -m pytest -q tests
+[r27:m6] EXECUTION exit=0
+Running 2 items in this shard
+..                                                                       [100%]
+2 passed in 0.01s
+[r27:m6] EXECUTION ok
+fixture-gate ok: r27 stage-C workflow execution gate
+
+fixture-gate: all steps ok (gate python=/agent/repos/subnet-dashboard/review-gate-bot/evals/fixture-gate/.gate-pytest-venv/bin/python)

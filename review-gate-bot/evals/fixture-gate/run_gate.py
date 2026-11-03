@@ -11,10 +11,9 @@ BOT = Path(__file__).resolve().parents[2]
 REPO = BOT.parents[0]
 GATE = BOT / "evals/fixture-gate"
 
-
-def venv_python() -> str:
-    cand = REPO / ".venv/bin/python"
-    return str(cand) if cand.is_file() else sys.executable
+# Import after path setup when run as script
+sys.path.insert(0, str(GATE))
+from gate_core import resolve_gate_python  # noqa: E402
 
 
 def run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None) -> int:
@@ -27,14 +26,21 @@ def run(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None) -> 
 
 
 def main() -> int:
-    py = venv_python()
+    py, exec_errors = resolve_gate_python(REPO, bootstrap=True)
+    if exec_errors:
+        print("fixture-gate FAILED: executor unavailable", flush=True)
+        for line in exec_errors:
+            print(f"  {line}", flush=True)
+        return 1
+
     env = os.environ.copy()
     env.setdefault("PYTHONPATH", str(REPO))
     env["ORACLE_PYTHON"] = py
 
     steps: list[tuple[str, list[str], Path]] = [
+        ("gate executor probe", [py, "-m", "pytest", "-q", str(GATE / "test_gate_executor.py")], REPO),
         ("structural pytest", [py, "-m", "pytest", "-q", str(GATE / "test_gate.py")], REPO),
-        ("known-bad rejection", [py, "-m", "pytest", "-q", str(GATE / "test_known_bad.py")], REPO),
+        ("known-bad rejection (7 cases)", [py, "-m", "pytest", "-q", str(GATE / "test_known_bad.py")], REPO),
         (
             "oracle-gen --check (executed oracle ON; ORACLE_PYTHON=%s)" % py,
             ["python3", "evals/oracle-gen/gen.py", "--check", "--python", py],
@@ -64,7 +70,7 @@ def main() -> int:
 
     if failed:
         return 1
-    print("\nfixture-gate: all steps ok", flush=True)
+    print(f"\nfixture-gate: all steps ok (gate python={py})", flush=True)
     return 0
 
 

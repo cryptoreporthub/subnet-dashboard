@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gate_core import historical_rejection, load_repo_json_at
+from gate_core import historical_rejection, load_repo_json_at, resolve_gate_python
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -52,6 +52,8 @@ def test_known_bad_fixture_is_rejected(rev: str, path: str, label: str) -> None:
         return
     doc = load_repo_json_at(REPO, rev, path)
     assert doc is not None, f"missing {rev}:{path}"
-    py = str(REPO / ".venv/bin/python") if (REPO / ".venv/bin/python").is_file() else None
+    py, exec_errs = resolve_gate_python(REPO, bootstrap=True)
+    assert not exec_errs, exec_errs
     errors = historical_rejection(REPO, rev, path, label, doc, python=py)
     assert errors, f"expected gate to reject {label} @ {rev} but got no errors"
+    assert not any(e.startswith("executor unavailable") for e in errors), errors
