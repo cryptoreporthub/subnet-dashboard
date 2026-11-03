@@ -1,6 +1,6 @@
 {
   "number": 9414,
-  "title": "perf: bounded 5ms lookup table for netuid membership",
+  "title": "perf: lookup stays under 5ms with a single dict probe per netuid",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9414",
   "headSha": "e5fb689d959bd048fb3e2ca9d0fac0bb452df15c",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",

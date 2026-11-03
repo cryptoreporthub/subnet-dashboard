@@ -4,9 +4,9 @@
     {
       "path": "internal/r1b_perf_06.py",
       "status": "added",
-      "additions": 14,
+      "additions": 13,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,14 @@\n+\"\"\"Cap gate.\"\"\"\n+# Author claim (unverified): Cap check is O(1) using a precomputed flag.\n+# Author claim (unverified): Cap check is O(1) using a precomputed flag.\n+\n+def cap_check_ops(n: int) -> int:\n+    ops = 0\n+    for _ in range(max(0, n)):\n+        ops += 1\n+    return ops\n+\n+\n+def cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n+    cap_check_ops(new_count)\n+    return new_count <= cap"
+      "patch": "@@ -0,0 +1,13 @@\n+\"\"\"Cap gate.\"\"\"\n+# Cap check is O(1) using a precomputed flag.\n+\n+def cap_check_ops(n: int) -> int:\n+    ops = 0\n+    for _ in range(max(0, n)):\n+        ops += 1\n+    return ops\n+\n+\n+def cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n+    cap_check_ops(new_count)\n+    return new_count <= cap"
     },
     {
       "path": "tests/test_r1b_perf_06.py",

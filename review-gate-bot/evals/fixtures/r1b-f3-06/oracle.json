@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f3-06",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "47067033d08d3e17a6219d35b033798381f16d8b04639c8f9e17ab12b09b1042",
+  "diffSha256": "9ce254270091a34732b23f70968d710cd0fd792dab81cc346ca5fdba2b69cc31",
   "changedPaths": [
     "internal/r1b_perf_06.py",
     "tests/test_r1b_perf_06.py"
@@ -9,7 +9,7 @@
   "behavior": {
     "expectedVerdict": "MODIFY",
     "family": "F3-unmeasured-perf",
-    "claimInPrBody": "O(1) cap check",
+    "visibleClaim": "Cap check is O(1) using a precomputed flag.",
     "capOpsAt32": 32,
     "capOpsAt64": 64,
     "withinLinearRatio": true,

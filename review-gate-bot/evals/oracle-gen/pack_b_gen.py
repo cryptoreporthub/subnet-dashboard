@@ -12,11 +12,11 @@ def sha_for(name: str) -> str:
     return hashlib.sha1(("evals-r1b:" + name).encode()).hexdigest()
 
 
-def _with_claim_comment(mod: str, claim: str) -> str:
-    """Embed F3 false/unprovable perf narrative in the diff (comment), not gate.json."""
-    if not claim:
+def _embed_visible_claim(mod: str, claim: str) -> str:
+    """One author-voice comment in the diff; skip if claim already appears in the module."""
+    if not claim or claim in mod:
         return mod
-    line = f"# Author claim (unverified): {claim}\n"
+    line = f"# {claim}\n"
     if mod.startswith('"""'):
         close = mod.find('"""\n', 3)
         if close == -1:
@@ -183,7 +183,7 @@ def _f3_loop_ops(mod_src: str, n: int) -> int:
         return 0
     ns: dict = {}
     exec(mod_src, ns)  # noqa: S102 — fixture generator only
-    fn = ns.get("merge_loop_ops") or ns.get("scan_loop_ops") or ns.get("probe_loop_ops")
+    fn = ns.get("merge_loop_ops") or ns.get("grace_scan_ops") or ns.get("scan_loop_ops") or ns.get("probe_loop_ops")
     if not callable(fn):
         return 0
     m = {str(i): {} for i in range(n)}
@@ -194,7 +194,14 @@ def _linear_ops_oracle(mod_src: str, *, claim: str) -> dict:
     small = _f3_loop_ops(mod_src, 32)
     large = _f3_loop_ops(mod_src, 64)
     linear = large <= small * 2 + 2 if small else True
-    return {"claimInPrBody": claim, "loopOpsAt32": small, "loopOpsAt64": large, "withinLinearRatio": linear}
+    wants_o1 = "O(1)" in claim or "constant-time" in claim.lower()
+    return {
+        "visibleClaim": claim,
+        "loopOpsAt32": small,
+        "loopOpsAt64": large,
+        "withinLinearRatio": linear,
+        "claimFalsifiedByMeasurement": wants_o1 and linear and large > small,
+    }
 
 
 def _batch_claim_oracle(mod_src: str, *, claim: str) -> dict:
@@ -202,32 +209,13 @@ def _batch_claim_oracle(mod_src: str, *, claim: str) -> dict:
     exec(mod_src, ns)  # noqa: S102
     fn = ns["queries_for_refresh"]
     measured = int(fn(128, batch_size=32))
-    wants_one = "one" in claim.lower() and "rpc" in claim.lower()
+    wants_one = "one query per subnet batch" in claim.lower()
     return {
-        "claimInPrBody": claim,
+        "visibleClaim": claim,
         "measuredBatchQueriesAt128": measured,
         "claimOneTotalCall": measured == 1,
         "claimFalsifiedByMeasurement": wants_one and measured != 1,
         "note": "PR claims one RPC total; measured batch count grows with netuids.",
-    }
-
-
-def _grace_seconds_oracle(mod_src: str, *, claim: str) -> dict:
-    from datetime import datetime, timedelta, timezone
-
-    ns: dict = {}
-    exec(mod_src, ns)  # noqa: S102
-    fn = ns["grace_elapsed_enough"]
-    grace = int(ns.get("STALE_GRACE_SECONDS", 48 * 3600))
-    now = datetime(2026, 10, 3, tzinfo=timezone.utc)
-    started = now - timedelta(days=2, seconds=1)
-    passes = bool(fn(now, started))
-    uses_total = "total_seconds()" in mod_src
-    return {
-        "claimInPrBody": claim,
-        "gracePassesMultiDayWallClock": passes,
-        "usesTotalSecondsInSource": uses_total,
-        "claimFalsifiedByMeasurement": (not uses_total) and not passes and grace < (2 * 86400 + 1),
     }
 
 
@@ -236,13 +224,13 @@ def _cap_ops_oracle(mod_src: str, *, claim: str) -> dict:
     exec(mod_src, ns)  # noqa: S102
     fn = ns.get("cap_check_ops")
     if not callable(fn):
-        return {"claimInPrBody": claim, "claimFalsifiedByMeasurement": False}
+        return {"visibleClaim": claim, "claimFalsifiedByMeasurement": False}
     small = int(fn(32))
     large = int(fn(64))
     linear = large <= small * 2 + 2 if small else True
     wants_o1 = "O(1)" in claim or "constant-time" in claim.lower()
     return {
-        "claimInPrBody": claim,
+        "visibleClaim": claim,
         "capOpsAt32": small,
         "capOpsAt64": large,
         "withinLinearRatio": linear,
@@ -443,20 +431,20 @@ def build(env: dict) -> None:
     f3_modules = [
         (
             "r1b-f3-01",
-            "perf: O(1) grace elapsed via timedelta fields",
-            "Hot path stays O(1) using timedelta.seconds instead of total_seconds().",
+            "perf: O(1) grace eligibility scan",
+            "O(1) grace eligibility scan",
             *_f3_perf_pair(
                 1,
-                bug_module='"""Grace window helper."""\n# Author claim (unverified): Hot path stays O(1) using timedelta.seconds instead of total_seconds().\nfrom datetime import datetime\n\nSTALE_GRACE_SECONDS = 48 * 3600\n\n\ndef grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n    return (now - started).seconds >= grace\n',
-                bug_test='from datetime import datetime, timedelta, timezone\n\nfrom internal.r1b_perf_01 import grace_elapsed_enough\n\n\ndef test_grace_seconds_field_with_short_window():\n    now = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)\n    started = now - timedelta(seconds=10)\n    assert grace_elapsed_enough(now, started, grace=5) is True\n',
+                bug_module='"""Grace window helper."""\nfrom datetime import datetime\n\nSTALE_GRACE_SECONDS = 48 * 3600\n\n\ndef grace_scan_ops(validity_map: dict) -> int:\n    ops = 0\n    for _k in validity_map.keys():\n        ops += 1\n    return ops\n\n\ndef grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n    grace_scan_ops({str(i): {} for i in range(128)})\n    return (now - started).total_seconds() >= grace\n',
+                bug_test='from datetime import datetime, timedelta, timezone\n\nfrom internal.r1b_perf_01 import grace_elapsed_enough\n\n\ndef test_grace_with_short_window():\n    now = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)\n    started = now - timedelta(seconds=10)\n    assert grace_elapsed_enough(now, started, grace=5) is True\n',
                 good_module="",
                 good_test="",
             ),
-            lambda mod: _grace_seconds_oracle(mod, claim="O(1) via timedelta.seconds"),
+            lambda mod: _linear_ops_oracle(mod, claim="O(1) grace eligibility scan"),
         ),
         (
             "r1b-f3-02",
-            "perf: bounded 5ms lookup table for netuid membership",
+            "perf: lookup stays under 5ms with a single dict probe per netuid",
             "Lookup stays under 5ms with a single dict probe per netuid.",
             *_f3_perf_pair(
                 2,
@@ -466,7 +454,7 @@ def build(env: dict) -> None:
                 good_test="",
             ),
             lambda mod: {
-                "claimInPrBody": "under 5ms per lookup",
+                "visibleClaim": "Lookup stays under 5ms with a single dict probe per netuid.",
                 "latencyMeasuredInDiff": False,
                 "note": "Functional tests pass; latency claim is unprovable from the diff alone.",
             },
@@ -477,20 +465,20 @@ def build(env: dict) -> None:
             "Refresh performs one query per subnet batch (no extra round trips).",
             *_f3_perf_pair(
                 3,
-                bug_module='"""Batch counter for refresh budgeting."""\n# Author claim (unverified): Refresh performs one query per subnet batch (no extra round trips).\n\ndef queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n    if netuid_count <= 0:\n        return 0\n    batches = (netuid_count + batch_size - 1) // batch_size\n    return batches + netuid_count  # accidental per-netuid follow-up\n',
+                bug_module='"""Batch counter for refresh budgeting."""\n\ndef queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n    if netuid_count <= 0:\n        return 0\n    batches = (netuid_count + batch_size - 1) // batch_size\n    return batches + netuid_count  # accidental per-netuid follow-up\n',
                 bug_test="from internal.r1b_perf_03 import queries_for_refresh\n\n\ndef test_queries_for_refresh_zero():\n    assert queries_for_refresh(0, batch_size=32) == 0\n",
                 good_module="",
                 good_test="",
             ),
             lambda mod: _batch_claim_oracle(
                 mod,
-                claim="one RPC total per refresh (not per batch)",
+                claim="Refresh performs one query per subnet batch (no extra round trips).",
             ),
         ),
         (
             "r1b-f3-04",
-            "perf: linear O(n) merge of validity rows",
-            "Merge stays O(n) with a single pass over validity_map keys.",
+            "perf: O(1) constant-time merge of validity rows",
+            "O(1) constant-time merge",
             *_f3_perf_pair(
                 4,
                 bug_module='"""Merge validity keys."""\n\ndef merged_netuids(validity_map: dict) -> list[int]:\n    out = []\n    for k in validity_map.keys():\n        out.append(int(k))\n    out.sort()\n    return out\n\ndef merge_loop_ops(validity_map: dict) -> int:\n    ops = 0\n    for _k in validity_map.keys():\n        ops += 1\n    return ops\n',
@@ -498,11 +486,7 @@ def build(env: dict) -> None:
                 good_module="",
                 good_test="",
             ),
-            lambda mod: {
-                **_linear_ops_oracle(mod, claim="O(1) constant-time merge"),
-                "claimFalsifiedByMeasurement": True,
-                "note": "Loop work is linear in keys; PR claims O(1).",
-            },
+            lambda mod: _linear_ops_oracle(mod, claim="O(1) constant-time merge"),
         ),
         (
             "r1b-f3-05",
@@ -516,8 +500,9 @@ def build(env: dict) -> None:
                 good_test="",
             ),
             lambda mod: {
-                "claimInPrBody": "O(1) memoized answers",
+                "visibleClaim": "Repeated scans reuse a memo table for O(1) answers.",
                 "scanLoopOpsAt64": _f3_loop_ops(mod, 64),
+                "claimFalsifiedByMeasurement": _f3_loop_ops(mod, 64) > 0,
                 "note": "Scan still walks netuids once per call; memo does not make work O(1).",
             },
         ),
@@ -527,18 +512,18 @@ def build(env: dict) -> None:
             "Cap check is O(1) using a precomputed flag.",
             *_f3_perf_pair(
                 6,
-                bug_module='"""Cap gate."""\n# Author claim (unverified): Cap check is O(1) using a precomputed flag.\n\ndef cap_check_ops(n: int) -> int:\n    ops = 0\n    for _ in range(max(0, n)):\n        ops += 1\n    return ops\n\n\ndef cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n    cap_check_ops(new_count)\n    return new_count <= cap\n',
+                bug_module='"""Cap gate."""\n\ndef cap_check_ops(n: int) -> int:\n    ops = 0\n    for _ in range(max(0, n)):\n        ops += 1\n    return ops\n\n\ndef cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n    cap_check_ops(new_count)\n    return new_count <= cap\n',
                 bug_test="from internal.r1b_perf_06 import cap_allows_publish\n\n\ndef test_cap_blocks_growth_beyond_limit():\n    assert cap_allows_publish(128, 129, cap=128) is False\n",
                 good_module="",
                 good_test="",
             ),
-            lambda mod: _cap_ops_oracle(mod, claim="O(1) cap check"),
+            lambda mod: _cap_ops_oracle(mod, claim="Cap check is O(1) using a precomputed flag."),
         ),
     ]
     for item in f3_modules:
         claim_fn = item[-1]
-        name, title, claim_comment, mod_path, test_path, bug_mod, bug_test, _gmod, _gtest = item[:-1]
-        bug_mod = _with_claim_comment(bug_mod, claim_comment)
+        name, title, visible_claim, mod_path, test_path, bug_mod, bug_test, _gmod, _gtest = item[:-1]
+        bug_mod = _embed_visible_claim(bug_mod, visible_claim)
         files = [(mod_path, None, bug_mod), (test_path, None, bug_test)]
         head_run = _pytest(
             env,

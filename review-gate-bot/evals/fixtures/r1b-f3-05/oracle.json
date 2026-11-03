@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f3-05",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "d42488481c2bea5a330e333548d07e2654b9cc4e637ad733d2c82b844b3f5c9e",
+  "diffSha256": "971d08f5b307719ea6e27b612702466a5172d5d66427884988049fc2bc78b60d",
   "changedPaths": [
     "internal/r1b_perf_05.py",
     "tests/test_r1b_perf_05.py"
@@ -9,8 +9,9 @@
   "behavior": {
     "expectedVerdict": "MODIFY",
     "family": "F3-unmeasured-perf",
-    "claimInPrBody": "O(1) memoized answers",
+    "visibleClaim": "Repeated scans reuse a memo table for O(1) answers.",
     "scanLoopOpsAt64": 64,
+    "claimFalsifiedByMeasurement": true,
     "note": "Scan still walks netuids once per call; memo does not make work O(1)."
   },
   "pytest": {

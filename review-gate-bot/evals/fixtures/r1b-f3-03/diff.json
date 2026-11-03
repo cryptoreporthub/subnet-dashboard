@@ -4,9 +4,9 @@
     {
       "path": "internal/r1b_perf_03.py",
       "status": "added",
-      "additions": 9,
+      "additions": 8,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,9 @@\n+\"\"\"Batch counter for refresh budgeting.\"\"\"\n+# Author claim (unverified): Refresh performs one query per subnet batch (no extra round trips).\n+# Author claim (unverified): Refresh performs one query per subnet batch (no extra round trips).\n+\n+def queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n+    if netuid_count <= 0:\n+        return 0\n+    batches = (netuid_count + batch_size - 1) // batch_size\n+    return batches + netuid_count  # accidental per-netuid follow-up"
+      "patch": "@@ -0,0 +1,8 @@\n+\"\"\"Batch counter for refresh budgeting.\"\"\"\n+# Refresh performs one query per subnet batch (no extra round trips).\n+\n+def queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n+    if netuid_count <= 0:\n+        return 0\n+    batches = (netuid_count + batch_size - 1) // batch_size\n+    return batches + netuid_count  # accidental per-netuid follow-up"
     },
     {
       "path": "tests/test_r1b_perf_03.py",

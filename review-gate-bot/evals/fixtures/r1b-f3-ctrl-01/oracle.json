@@ -8,10 +8,11 @@
   ],
   "behavior": {
     "expectedVerdict": "PASS",
-    "claimInPrBody": "O(n) loop ops measured in test",
+    "visibleClaim": "O(n) loop ops measured in test",
     "loopOpsAt32": 32,
     "loopOpsAt64": 64,
-    "withinLinearRatio": true
+    "withinLinearRatio": true,
+    "claimFalsifiedByMeasurement": false
   },
   "pytest": {
     "summary": "1 passed",

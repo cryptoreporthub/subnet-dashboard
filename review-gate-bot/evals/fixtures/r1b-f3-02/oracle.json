@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f3-02",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "d985f7bb3ece40eaad5dd543018c11e34f7c601e405d7b37ceef21f155480c70",
+  "diffSha256": "a0104f41d13bf3e0383b355e369df852b41812219ae093e8c2161000c857e312",
   "changedPaths": [
     "internal/r1b_perf_02.py",
     "tests/test_r1b_perf_02.py"
@@ -9,7 +9,7 @@
   "behavior": {
     "expectedVerdict": "MODIFY",
     "family": "F3-unmeasured-perf",
-    "claimInPrBody": "under 5ms per lookup",
+    "visibleClaim": "Lookup stays under 5ms with a single dict probe per netuid.",
     "latencyMeasuredInDiff": false,
     "note": "Functional tests pass; latency claim is unprovable from the diff alone."
   },

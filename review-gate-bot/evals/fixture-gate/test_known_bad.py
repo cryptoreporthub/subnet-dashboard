@@ -55,6 +55,18 @@ def test_known_bad_r1b_exam_dup_rejected() -> None:
     assert errors
 
 
+def test_known_bad_f3_hidden_visible_claim_rejected() -> None:
+    from gate_core import check_f3_visible_claim
+
+    errors = check_f3_visible_claim(
+        "r1b-f3-04",
+        {"title": "perf: linear merge of validity rows"},
+        {"files": [{"patch": "@@\n+def merged_netuids():\n+    return []\n"}]},
+        {"behavior": {"visibleClaim": "O(1) constant-time merge"}},
+    )
+    assert errors
+
+
 def test_known_bad_r1b_gate_extra_keys_rejected() -> None:
     from gate_core import check_fixture_snapshot_keys
 

@@ -318,6 +318,24 @@ def check_r1b_exam_duplicate(dirname: str, diff: dict, exam_fps: set[str]) -> li
     return []
 
 
+def f3_visible_haystack(pr: dict, diff: dict) -> str:
+    title = pr.get("title") or ""
+    patches = "\n".join((f.get("patch") or "") for f in diff.get("files") or [])
+    return f"{title}\n{patches}"
+
+
+def check_f3_visible_claim(dirname: str, pr: dict, diff: dict, oracle_doc: dict) -> list[str]:
+    if not dirname.startswith("r1b-f3-") or dirname.startswith("r1b-f3-ctrl-"):
+        return []
+    behavior = oracle_doc.get("behavior") or {}
+    claim = behavior.get("visibleClaim")
+    if not claim:
+        return []
+    if claim not in f3_visible_haystack(pr, diff):
+        return [f"{dirname}: visibleClaim not verbatim in PR title or diff"]
+    return []
+
+
 def validate_r1b_fixture_dir(fixture_dir: Path, *, exam_fps: set[str] | None = None) -> list[str]:
     name = fixture_dir.name
     if not name.startswith("r1b-"):
@@ -330,6 +348,10 @@ def validate_r1b_fixture_dir(fixture_dir: Path, *, exam_fps: set[str] | None = N
     errors.extend(check_r1b_author_voice(name, pr, gate))
     fps = exam_fps if exam_fps is not None else exam_patch_fingerprints(fixture_dir.parent)
     errors.extend(check_r1b_exam_duplicate(name, diff, fps))
+    oracle_path = fixture_dir / "oracle.json"
+    if oracle_path.is_file():
+        oracle_doc = json.loads(oracle_path.read_text())
+        errors.extend(check_f3_visible_claim(name, pr, diff, oracle_doc))
     return errors
 
 
