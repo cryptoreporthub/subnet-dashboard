@@ -1,0 +1,11 @@
+{
+  "number": 9306,
+  "title": "universe: count a netuid the chain read could not report as not registered",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9306",
+  "headSha": "7b1b568539ffbaaf49ccc7a4d14ff1bcceff79c5",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

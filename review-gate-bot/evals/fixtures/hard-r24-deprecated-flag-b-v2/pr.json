@@ -1,0 +1,12 @@
+{
+  "number": 9416,
+  "title": "chore: drop experimental refresh toggle",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9416",
+  "headSha": "ca7d91c5030154ea210ecaa64ee5649cb3110899",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "config/experimental_refresh.toml",
+    "tests/test_experimental_refresh_config.py"
+  ]
+}

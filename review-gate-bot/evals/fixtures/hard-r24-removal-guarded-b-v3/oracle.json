@@ -1,0 +1,23 @@
+{
+  "fixture": "hard-r24-removal-guarded-b-v3",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "f00c0e3894e143784f44e105edc14e34a531828c4d40f87bc55ee4eb0eb4bb27",
+  "changedPaths": [
+    "internal/r24_census_bundle.py",
+    "tests/test_r24_census_bundle.py"
+  ],
+  "pytest": {
+    "summary": "49 passed",
+    "passed": 49,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Helper module and seven tests that import it removed; no unrelated test files deleted.",
+    "baseTestcases": 56,
+    "headTestcases": 49
+  }
+}

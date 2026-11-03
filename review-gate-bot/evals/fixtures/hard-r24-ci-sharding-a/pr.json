@@ -1,0 +1,11 @@
+{
+  "number": 9405,
+  "title": "ci: shard pytest across two runners",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9405",
+  "headSha": "a3baca992740e1b3d4211bf07c48f6a522e73233",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml"
+  ]
+}

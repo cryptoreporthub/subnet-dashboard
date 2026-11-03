@@ -1,0 +1,21 @@
+{
+  "fixture": "hard-r24-tests-moved-b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "bdedc114dc113e6d8576f6e39b99e24d00c6690256f15d712ba6ba184267263c",
+  "changedPaths": [
+    "tests/test_subnet_sanity.py",
+    "tests/sanity/test_core.py"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Tests moved under tests/sanity/ with identical bodies."
+  }
+}

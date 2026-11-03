@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 3,
+      "deletions": 0,
+      "patch": "@@ -730,6 +730,9 @@\n                 built = _hold_prior(\n                     self._snapshot, \"degraded\", \"Unsafe shrink blocked \u2014 retained last-known-good universe\"\n                 )\n+            removed = sorted(set(self._snapshot.netuids) - set(built.netuids))\n+            if removed:\n+                logger.info(\"subnet_universe removed %d netuid(s) after the 48h grace: %s\", len(removed), removed)\n             self._publish(built)\n             return built\n         finally:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

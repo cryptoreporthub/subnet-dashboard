@@ -1,0 +1,8 @@
+{
+  "files": {
+    "tests/test_subnet_universe.py": "def test_edge_combined():\n    assert True\n"
+  },
+  "baseFiles": {
+    "tests/test_subnet_universe.py": "def test_edge_a():\n    assert True\n\ndef test_edge_b():\n    assert True\n"
+  }
+}

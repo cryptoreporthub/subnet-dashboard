@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 2,
+      "patch": "@@ -708,8 +708,6 @@\n                 self._atomic_persist(snap)\n \n     def refresh_once(self) -> UniverseSnapshot:\n-        if not is_universe_refresh_writer():\n-            return self.reload_from_disk_if_stale()\n         if not self._refresh_lock.acquire(blocking=False):\n             return self._snapshot\n         try:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

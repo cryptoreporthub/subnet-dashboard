@@ -1,0 +1,12 @@
+{
+  "number": 9403,
+  "title": "test: relocate subnet sanity checks file",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9403",
+  "headSha": "9ea8deba8a21bf6e23ba90f0466a59c8e878b2a8",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_sanity_checks.py",
+    "tests/test_subnet_sanity.py"
+  ]
+}

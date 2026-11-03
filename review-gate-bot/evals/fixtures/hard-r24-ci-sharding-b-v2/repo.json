@@ -1,0 +1,10 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  unit:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q -m \"not integration\"\n  integration:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q -m integration\n",
+    "tests/conftest.py": "import pytest\n\n\ndef pytest_configure(config):\n    config.addinivalue_line(\"markers\", \"integration: cross-service checks\")\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/conftest.py": ""
+  }
+}

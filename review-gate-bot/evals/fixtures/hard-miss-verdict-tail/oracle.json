@@ -1,0 +1,83 @@
+{
+  "fixture": "hard-miss-verdict-tail",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "2747072416978467a28c224156c59f50c46c32a6ae7a0775d8ea7700b5310f2c",
+  "changedPaths": [
+    "review-gate-bot/bot/lib/verdicts.ts"
+  ],
+  "behavior": {
+    "shaWord": {
+      "oldPattern": "/^[0-9a-f]{7,40}$/i",
+      "fixedPattern": "/^[0-9a-f]{12,40}$/i",
+      "rows": [
+        {
+          "word": "deadbeef",
+          "length": 8,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "effaced",
+          "length": 7,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "defaced",
+          "length": 7,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "facade",
+          "length": 6,
+          "acceptedAtD578603e": false,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "decade",
+          "length": 6,
+          "acceptedAtD578603e": false,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "abcdef1234",
+          "length": 10,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "abcdef12345",
+          "length": 11,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "abcdef123456",
+          "length": 12,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": true
+        },
+        {
+          "word": "0123456789abcdef0123456789abcdef01234567",
+          "length": 40,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": true
+        },
+        {
+          "word": "deadbeef/effaced",
+          "length": 16,
+          "acceptedAtD578603e": false,
+          "acceptedByTheTwelveRule": false
+        },
+        {
+          "word": "a1b2c3d",
+          "length": 7,
+          "acceptedAtD578603e": true,
+          "acceptedByTheTwelveRule": false
+        }
+      ]
+    },
+    "diffRange": "44ce7ea5..d578603e"
+  }
+}

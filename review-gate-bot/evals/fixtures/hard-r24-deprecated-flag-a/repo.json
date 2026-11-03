@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/subnet_universe_flags.py": "",
+    "tests/test_subnet_universe_flags.py": ""
+  },
+  "baseFiles": {
+    "internal/subnet_universe_flags.py": "USE_LEGACY_UNIVERSE_PARSER = True\n",
+    "tests/test_subnet_universe_flags.py": "import os\n\n\ndef test_legacy_parser_flag_default():\n    assert os.environ.get(\"USE_LEGACY_UNIVERSE_PARSER\", \"0\") in (\"0\", \"false\", \"\")\n"
+  }
+}

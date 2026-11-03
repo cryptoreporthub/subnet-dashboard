@@ -1,0 +1,20 @@
+{
+  "fixture": "hard-r24-test-deleted-prod-kept",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "7212ab54681eea4d070b0d85091b08765e61cf8b4cde5e0798e3564ff609217f",
+  "changedPaths": [
+    "tests/test_subnet_universe_stale_regression.py"
+  ],
+  "pytest": {
+    "summary": "55 passed",
+    "passed": 55,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "MODIFY",
+    "note": "Tests removed while production code they guarded remains; comparison can stay green."
+  }
+}

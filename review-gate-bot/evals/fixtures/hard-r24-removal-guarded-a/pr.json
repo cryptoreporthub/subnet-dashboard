@@ -1,0 +1,12 @@
+{
+  "number": 9401,
+  "title": "chore: remove legacy subnet probe shim",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9401",
+  "headSha": "ef2c81e1e1089a9c0873a7cfce6b2b978d1c1c9e",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/legacy_subnet_probe.py",
+    "tests/test_legacy_subnet_probe.py"
+  ]
+}

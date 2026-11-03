@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/legacy_subnet_probe.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 6,
+      "patch": "@@ -1,6 +0,0 @@\n-\"\"\"Legacy subnet probe helpers (scheduled for removal with v2 census).\"\"\"\n-from __future__ import annotations\n-\n-\n-def probe_once(netuid: int) -> bool:\n-    return netuid >= 0"
+    },
+    {
+      "path": "tests/test_legacy_subnet_probe.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 5,
+      "patch": "@@ -1,5 +0,0 @@\n-from internal.legacy_subnet_probe import probe_once\n-\n-\n-def test_probe_accepts_non_negative_netuid():\n-    assert probe_once(5) is True"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

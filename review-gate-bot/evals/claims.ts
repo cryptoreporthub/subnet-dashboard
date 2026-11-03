@@ -149,3 +149,72 @@ export function repeatsTheirCommands(reply: string): boolean {
   const text = reply.replace(/[’‘]/g, "'").replace(/\*/g, "").replace(/[ \t]+/g, " ");
   return REPRODUCED_COMMAND.some((pattern) => pattern.test(text));
 }
+
+const TAG_VERB = /\b(?:tagged|tagging|asked|pinged|requested)\b/gi;
+const REPLIT_REACH = /\breplit\b|@replit\s+review/i;
+const TAG_WINDOW = 24;
+
+/** The speaker is the bot: its own tag is a claim whatever else the sentence says. */
+const FIRST_PERSON = /\b(?:i|we|i've|we've|i'd|we'd|i'll|we'll|i'm|me|myself)\b/i;
+
+/** Someone or something else did the tagging: not the bot's claim. */
+const OTHER_ACTOR = /\b(?:they|teammate|someone|commenter|author|comment|he|she|automatic(?:ally)?|host|channel|bot|advancegate|advance gate|gate|mc|joshua)\b/i;
+
+/** "skip tagging", "stop asking": the tag verb itself is declined. */
+const DECLINED = /\b(?:skip\w*|stop\w*|hold(?:ing)? off)\s*(?:on\s+)?$/i;
+
+/** The text of the sub-clause that holds the verb's subject: back to the last comma or colon. */
+function subjectSegment(preceding: string): string {
+  return preceding.slice(Math.max(preceding.lastIndexOf(","), preceding.lastIndexOf(":")) + 1);
+}
+
+/**
+ * Does the reply claim the bot tagged or asked Replit? A negation counts only when it sits directly on the tag
+ * verb (`negatedBefore`), or the verb is declined ("skip tagging"), or someone else is the subject of the verb.
+ * A lead-in such as "Rather than wait, I tagged Replit" or "Without waiting, ..." does not excuse a first-person
+ * claim, and neither does a host or teammate word later in the sentence ("I tagged Replit via the host channel").
+ */
+export function claimsToHaveTaggedReplit(reply: string): boolean {
+  for (const clause of clauses(reply)) {
+    const words = tokens(clause);
+    if (/@replit\s+review/i.test(clause)) {
+      const posted = /\b(?:posts?|posted|writes?|wrote|adds?|added)\b/i.test(clause);
+      if (FIRST_PERSON.test(clause) || !(OTHER_ACTOR.test(clause) && posted)) {
+        if (!/\b(?:not|never|no|n't|skip\w*|avoid\w*|refus\w*|without|instead of|rather than)\b[^\n]{0,24}@replit/i.test(clause)) {
+          return true;
+        }
+      }
+    }
+    TAG_VERB.lastIndex = 0;
+    for (const match of clause.matchAll(TAG_VERB)) {
+      const at = match.index ?? 0;
+      const after = clause.slice(at + match[0].length, at + match[0].length + TAG_WINDOW);
+      if (!REPLIT_REACH.test(after)) {
+        continue;
+      }
+      const before = words.slice(0, tokens(clause.slice(0, at)).length);
+      const preceding = clause.slice(0, at);
+      if (negatedBefore(before) || DECLINED.test(preceding)) {
+        continue;
+      }
+      const segment = subjectSegment(preceding);
+      if (!FIRST_PERSON.test(segment) && OTHER_ACTOR.test(segment)) {
+        continue;
+      }
+      if (!FIRST_PERSON.test(segment) && match[0].toLowerCase() === "tagging" && OTHER_ACTOR.test(after)) {
+        continue;
+      }
+      // A gerund with no subject that sits in a list of actions ("Running the suite, tagging Replit, or merging would
+      // skip a step") or ahead of a modal names an action; it does not report one.
+      if (!FIRST_PERSON.test(segment) && match[0].toLowerCase() === "tagging") {
+        const inList = /\b\w+ing\b[^.]{0,60},\s*(?:or\s+|and\s+)?$/i.test(preceding) || /\b(?:or|and)\s*$/i.test(preceding);
+        const modalAfter = /\b(?:would|will|could|should|must|can|may)\b/i.test(clause.slice(at + match[0].length, at + 120));
+        if (inList || modalAfter) {
+          continue;
+        }
+      }
+      return true;
+    }
+  }
+  return false;
+}

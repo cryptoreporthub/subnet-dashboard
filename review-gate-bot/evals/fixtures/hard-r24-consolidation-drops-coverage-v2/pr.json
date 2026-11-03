@@ -1,0 +1,11 @@
+{
+  "number": 9415,
+  "title": "test: fold two edge-case tests into one",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9415",
+  "headSha": "5c0f26fdf669f65b52522db04f7bc4656789ecce",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe_edges.py"
+  ]
+}

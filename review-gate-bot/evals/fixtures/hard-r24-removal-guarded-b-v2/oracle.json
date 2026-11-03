@@ -1,0 +1,24 @@
+{
+  "fixture": "hard-r24-removal-guarded-b-v2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "19134f6773a4d1644fd77fffbf0abda2baff3c66405c8d331b4e073961abc4a1",
+  "changedPaths": [
+    "internal/r24_census_helper.py",
+    "tests/test_r24_census_helper.py",
+    "tests/test_subnet_universe_misc.py"
+  ],
+  "pytest": {
+    "summary": "51 passed",
+    "passed": 51,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Module and five real assertion tests removed together; head testcase count below 90% of base.",
+    "baseTestcases": 56,
+    "headTestcases": 51
+  }
+}

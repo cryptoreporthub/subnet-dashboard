@@ -1,0 +1,12 @@
+{
+  "number": 9404,
+  "title": "test: split sanity checks into package layout",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9404",
+  "headSha": "e6978947b7a3d70c215c6b5ce71af6dfdb277722",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_sanity.py",
+    "tests/sanity/test_core.py"
+  ]
+}

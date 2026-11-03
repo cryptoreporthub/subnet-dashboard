@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/legacy_subnet_probe.py": "",
+    "tests/test_legacy_subnet_probe.py": ""
+  },
+  "baseFiles": {
+    "internal/legacy_subnet_probe.py": "\"\"\"Legacy subnet probe helpers (scheduled for removal with v2 census).\"\"\"\nfrom __future__ import annotations\n\n\ndef probe_once(netuid: int) -> bool:\n    return netuid >= 0\n",
+    "tests/test_legacy_subnet_probe.py": "from internal.legacy_subnet_probe import probe_once\n\n\ndef test_probe_accepts_non_negative_netuid():\n    assert probe_once(5) is True\n"
+  }
+}

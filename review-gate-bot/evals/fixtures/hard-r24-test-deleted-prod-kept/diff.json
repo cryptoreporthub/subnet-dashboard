@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_subnet_universe_stale_regression.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 3,
+      "patch": "@@ -1,3 +0,0 @@\n-def test_stale_regression_placeholder():\n-    from internal.subnet_universe import STALE_GRACE_SECONDS\n-    assert STALE_GRACE_SECONDS > 0"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

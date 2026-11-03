@@ -1,0 +1,11 @@
+{
+  "number": 9409,
+  "title": "test: delete stale universe regression file",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9409",
+  "headSha": "ab79f2b9f19a4ef6e4d538a3cf74446adf3fc101",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe_stale_regression.py"
+  ]
+}

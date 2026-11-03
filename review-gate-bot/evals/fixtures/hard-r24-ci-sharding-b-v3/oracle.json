@@ -1,0 +1,22 @@
+{
+  "fixture": "hard-r24-ci-sharding-b-v3",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "62c5f0e36c46b37c0abde55939ccdd2c91b3c3c56d302d22582d41dce10c0d7a",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/conftest.py",
+    "tests/test_r24_shard_partition.py"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Marker registered in conftest; diff marks one existing test @pytest.mark.integration; unit and integration jobs partition all tests."
+  }
+}

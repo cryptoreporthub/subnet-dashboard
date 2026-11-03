@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": ".github/workflows/ci-smoke.yml",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 2,
+      "patch": "@@ -1,7 +1,11 @@\n name: ci-smoke\n on: [push]\n jobs:\n-  test:\n+  unit:\n     runs-on: ubuntu-latest\n     steps:\n-      - run: pytest -q\n+      - run: pytest -q -m \"not integration\"\n+  integration:\n+    runs-on: ubuntu-latest\n+    steps:\n+      - run: pytest -q -m integration"
+    },
+    {
+      "path": "tests/conftest.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+import pytest\n+\n+\n+def pytest_configure(config):\n+    config.addinivalue_line(\"markers\", \"integration: cross-service checks\")"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

@@ -1,0 +1,21 @@
+{
+  "fixture": "hard-r24-deprecated-flag-b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "b313d0ba0c531b41d79987ab2b5e3ab60ce2f21b65a5dc9239ecd08472522ce4",
+  "changedPaths": [
+    "config/experimental_refresh.toml",
+    "tests/test_experimental_refresh_config.py"
+  ],
+  "pytest": {
+    "summary": "55 passed",
+    "passed": 55,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Experimental toggle config and tests removed in one diff."
+  }
+}

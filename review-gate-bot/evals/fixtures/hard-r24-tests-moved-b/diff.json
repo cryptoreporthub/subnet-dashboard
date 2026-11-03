@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "tests/test_subnet_sanity.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 2,
+      "patch": "@@ -1,2 +0,0 @@\n-def test_moved_happy_path():\n-    assert 2 + 2 == 4"
+    },
+    {
+      "path": "tests/sanity/test_core.py",
+      "status": "added",
+      "additions": 2,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,2 @@\n+def test_moved_happy_path():\n+    assert 2 + 2 == 4"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}
