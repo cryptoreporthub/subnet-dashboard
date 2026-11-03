@@ -312,29 +312,29 @@ class DailyPickScheduler:
         return result
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
-        import contextlib
-
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
-        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         try:
-            from internal.process_memory import heavy_job_rss_scope
+            from internal.council.daily_pick_engine import get_or_create_today_pick
 
-            scope = heavy_job_rss_scope("daily_pick_scheduler")
-        except ImportError:
-            pass
-        with scope:
-            try:
-                from internal.council.daily_pick_engine import get_or_create_today_pick
+            subnets = _load_subnets()
+            ctx = _market_context(subnets)
+            timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
+            payload = None
+            with self._work_lock:
+                self._work_generation += 1
 
-                subnets = _load_subnets()
-                ctx = _market_context(subnets)
-                timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
-                payload = None
-                with self._work_lock:
-                    self._work_generation += 1
+            def _run_pick() -> Optional[Dict[str, Any]]:
+                import contextlib
 
-                def _run_pick() -> Optional[Dict[str, Any]]:
+                scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+                try:
+                    from internal.process_memory import heavy_job_rss_scope
+
+                    scope = heavy_job_rss_scope("daily_pick_scheduler")
+                except ImportError:
+                    pass
+                with scope:
                     with self._work_lock:
                         tick_gen = self._work_generation
                     return get_or_create_today_pick(
@@ -344,68 +344,68 @@ class DailyPickScheduler:
                         is_cancelled=lambda: self._work_generation != tick_gen,
                     )
 
-                with self._submit_lock:
-                    inflight = self._inflight_future
-                    if inflight is not None and not inflight.done():
-                        return self._refuse_inflight(reschedule)
-                    trace = stage_trace.begin()
-                    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
-                    fut = pool.submit(_run_pick)
-                    self._inflight_future = fut
+            with self._submit_lock:
+                inflight = self._inflight_future
+                if inflight is not None and not inflight.done():
+                    return self._refuse_inflight(reschedule)
+                trace = stage_trace.begin()
+                pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
+                fut = pool.submit(_run_pick)
+                self._inflight_future = fut
 
-                try:
-                    payload = fut.result(timeout=timeout)
-                except FuturesTimeoutError:
-                    with self._work_lock:
-                        self._work_generation += 1
-                    result["error"] = f"daily pick tick timed out after {timeout}s"
-                    result["stall"] = stage_trace.describe_stall(trace)
-                    logger.warning("%s (worker abandoned)", result["error"])
-                finally:
-                    pool.shutdown(wait=False, cancel_futures=True)
-                result["stages"] = trace.report()
-                tick_succeeded = isinstance(payload, dict)
-                if tick_succeeded:
-                    result["ok"] = True
-                    result["action"] = payload.get("action")
-                    result["date"] = payload.get("date")
-                    pick = payload.get("pick")
-                    if isinstance(pick, dict):
-                        sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
-                        result["netuid"] = pick.get("netuid") or sn.get("netuid")
-                    result["ab_benchmark"] = _record_ab_benchmark(
-                        subnets, ctx, "daily-pick-scheduler"
-                    )
-                    today_ready = _today_pick_ready()
-                else:
-                    # ponytail: timeout/error ticks must retry soon — abandoned worker
-                    # writes to disk must not defer scheduling to tomorrow's UTC slot.
-                    today_ready = False
-                if not today_ready and result.get("error"):
-                    try:
-                        from internal.council.daily_pick_engine import write_scheduler_hold
-
-                        hold = write_scheduler_hold(str(result["error"]))
-                        result["scheduler_hold"] = True
-                        result["action"] = hold.get("action")
-                        result["date"] = hold.get("date")
-                    except Exception as hold_exc:
-                        logger.warning("scheduler hold write failed: %s", hold_exc)
-                elif result["ok"] and not today_ready:
-                    # Placeholder HOLD still counts as progress for GET, but keep retrying.
-                    result["error"] = result.get("error") or "today pick not ready (scheduler_hold)"
-            except Exception as exc:
-                result["error"] = str(exc)
-                logger.warning("daily pick scheduler tick failed: %s", exc)
+            try:
+                payload = fut.result(timeout=timeout)
+            except FuturesTimeoutError:
+                with self._work_lock:
+                    self._work_generation += 1
+                result["error"] = f"daily pick tick timed out after {timeout}s"
+                result["stall"] = stage_trace.describe_stall(trace)
+                logger.warning("%s (worker abandoned)", result["error"])
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
+            result["stages"] = trace.report()
+            tick_succeeded = isinstance(payload, dict)
+            if tick_succeeded:
+                result["ok"] = True
+                result["action"] = payload.get("action")
+                result["date"] = payload.get("date")
+                pick = payload.get("pick")
+                if isinstance(pick, dict):
+                    sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
+                    result["netuid"] = pick.get("netuid") or sn.get("netuid")
+                result["ab_benchmark"] = _record_ab_benchmark(
+                    subnets, ctx, "daily-pick-scheduler"
+                )
+                today_ready = _today_pick_ready()
+            else:
+                # ponytail: timeout/error ticks must retry soon — abandoned worker
+                # writes to disk must not defer scheduling to tomorrow's UTC slot.
                 today_ready = False
-                if not _today_pick_ready():
-                    try:
-                        from internal.council.daily_pick_engine import write_scheduler_hold
+            if not today_ready and result.get("error"):
+                try:
+                    from internal.council.daily_pick_engine import write_scheduler_hold
 
-                        write_scheduler_hold(str(exc))
-                        result["scheduler_hold"] = True
-                    except Exception as hold_exc:
-                        logger.warning("scheduler hold write failed: %s", hold_exc)
+                    hold = write_scheduler_hold(str(result["error"]))
+                    result["scheduler_hold"] = True
+                    result["action"] = hold.get("action")
+                    result["date"] = hold.get("date")
+                except Exception as hold_exc:
+                    logger.warning("scheduler hold write failed: %s", hold_exc)
+            elif result["ok"] and not today_ready:
+                # Placeholder HOLD still counts as progress for GET, but keep retrying.
+                result["error"] = result.get("error") or "today pick not ready (scheduler_hold)"
+        except Exception as exc:
+            result["error"] = str(exc)
+            logger.warning("daily pick scheduler tick failed: %s", exc)
+            today_ready = False
+            if not _today_pick_ready():
+                try:
+                    from internal.council.daily_pick_engine import write_scheduler_hold
+
+                    write_scheduler_hold(str(exc))
+                    result["scheduler_hold"] = True
+                except Exception as hold_exc:
+                    logger.warning("scheduler hold write failed: %s", hold_exc)
 
         tick_ok = bool(result.get("ok")) and today_ready
         evidence: Dict[str, Any] = {

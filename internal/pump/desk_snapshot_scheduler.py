@@ -121,12 +121,22 @@ class PumpDeskSnapshotScheduler:
             submitted = False
 
             def _run() -> Dict[str, Any]:
-                try:
-                    from internal.pump.desk_snapshot import run_snapshot
+                import contextlib
 
-                    return run_snapshot(save=True)
-                finally:
-                    _cycle_lock.release()
+                scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+                try:
+                    from internal.process_memory import heavy_job_rss_scope
+
+                    scope = heavy_job_rss_scope("pump_desk_snapshot")
+                except ImportError:
+                    pass
+                with scope:
+                    try:
+                        from internal.pump.desk_snapshot import run_snapshot
+
+                        return run_snapshot(save=True)
+                    finally:
+                        _cycle_lock.release()
 
             future = pool.submit(_run)
             self._inflight_future = future
@@ -145,45 +155,35 @@ class PumpDeskSnapshotScheduler:
                 _cycle_lock.release()
 
     def _tick(self) -> Dict[str, Any]:
-        import contextlib
-
         result: Dict[str, Any] = {"ok": False}
-        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         try:
-            from internal.process_memory import heavy_job_rss_scope
-
-            scope = heavy_job_rss_scope("pump_desk_snapshot")
-        except ImportError:
-            pass
-        with scope:
-            try:
-                payload = self._run_snapshot_with_timeout()
-                if payload.get("skipped"):
-                    result["skipped"] = payload["skipped"]
-                    self.liveness.record_skip(reason=str(payload["skipped"]))
-                elif payload.get("error"):
-                    result["error"] = str(payload["error"])
-                    self.liveness.record_failure(error=result["error"])
-                else:
-                    result["ok"] = True
-                    result["alert_level"] = payload.get("alert_level")
-                    result["path"] = payload.get("path")
-                    result["actionable_count"] = len(payload.get("actionable_badges") or [])
-                    self.liveness.record_success(
-                        evidence={
-                            "actionable_count": result["actionable_count"],
-                            "op": "pump_desk_snapshot",
-                        }
+            payload = self._run_snapshot_with_timeout()
+            if payload.get("skipped"):
+                result["skipped"] = payload["skipped"]
+                self.liveness.record_skip(reason=str(payload["skipped"]))
+            elif payload.get("error"):
+                result["error"] = str(payload["error"])
+                self.liveness.record_failure(error=result["error"])
+            else:
+                result["ok"] = True
+                result["alert_level"] = payload.get("alert_level")
+                result["path"] = payload.get("path")
+                result["actionable_count"] = len(payload.get("actionable_badges") or [])
+                self.liveness.record_success(
+                    evidence={
+                        "actionable_count": result["actionable_count"],
+                        "op": "pump_desk_snapshot",
+                    }
+                )
+                if payload.get("alert_level") == "alert":
+                    logger.warning(
+                        "pump desk snapshot ALERT: %s",
+                        payload.get("alert_reasons"),
                     )
-                    if payload.get("alert_level") == "alert":
-                        logger.warning(
-                            "pump desk snapshot ALERT: %s",
-                            payload.get("alert_reasons"),
-                        )
-            except Exception as exc:
-                result["error"] = str(exc)
-                self.liveness.record_failure(error=str(exc))
-                logger.warning("pump desk snapshot tick failed: %s", exc)
+        except Exception as exc:
+            result["error"] = str(exc)
+            self.liveness.record_failure(error=str(exc))
+            logger.warning("pump desk snapshot tick failed: %s", exc)
 
         with _lock:
             self._last_result = dict(result)
