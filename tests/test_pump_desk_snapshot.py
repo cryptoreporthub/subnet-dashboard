@@ -61,6 +61,42 @@ def test_build_snapshot_uses_collectors(monkeypatch):
     assert payload["daily_pick"]["netuid"] == 40
 
 
+def test_run_stage_rss_end_log_after_collector_unblocks(monkeypatch, caplog):
+    """RSS phase=end for a stage must not appear until the collector finishes (#1538)."""
+    import logging
+    import threading
+
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", lambda pid=None: 1000)
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
+    monkeypatch.setattr(snap, "SNAPSHOT_STAGE_TIMEOUT_SECONDS", 30.0)
+
+    release = threading.Event()
+    entered = threading.Event()
+    label = "rss_bookend_probe"
+
+    def blocked_collector():
+        entered.set()
+        assert release.wait(timeout=15)
+        return {"status": "ok"}
+
+    box: dict = {}
+
+    def run_stage():
+        box["out"] = snap._run_stage_with_timeout(label, blocked_collector, {"status": "timeout"})
+
+    worker = threading.Thread(target=run_stage, name="stage-driver")
+    worker.start()
+    assert entered.wait(timeout=2)
+    end_marker = f"name=pump_desk_snapshot_stage:{label} phase=end"
+    assert end_marker not in caplog.text
+    release.set()
+    worker.join(timeout=5)
+    assert worker.is_alive() is False
+    assert box["out"]["status"] == "ok"
+    assert end_marker in caplog.text
+
+
 def test_slow_collector_returns_explicit_timeout_fallback(monkeypatch):
     import time
 

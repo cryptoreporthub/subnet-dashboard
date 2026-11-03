@@ -89,6 +89,21 @@ def _load_subnets_inner() -> List[Dict[str, Any]]:
     return enrich_subnet_rows(_registry_rows())
 
 
+def _load_subnets_inner_with_rss() -> List[Dict[str, Any]]:
+    """Worker-owned RSS bookends for timed subnet feed loads (#1538)."""
+    import contextlib
+
+    scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+    try:
+        from internal.process_memory import heavy_job_rss_scope
+
+        scope = heavy_job_rss_scope("subnet_feed_load")
+    except ImportError:
+        pass
+    with scope:
+        return _load_subnets_inner()
+
+
 def _registry_fallback_rows() -> List[Dict[str, Any]]:
     try:
         from internal.subnet_names import enrich_subnet_rows
@@ -132,7 +147,7 @@ def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
 
         def _run() -> None:
             try:
-                result.append(_load_subnets_inner())
+                result.append(_load_subnets_inner_with_rss())
             except BaseException as exc:
                 exc_holder.append(exc)
 
@@ -154,7 +169,7 @@ def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
         return result[0] if result else _registry_fallback_rows()
     pool = ThreadPoolExecutor(max_workers=1)
     try:
-        fut = pool.submit(_load_subnets_inner)
+        fut = pool.submit(_load_subnets_inner_with_rss)
         try:
             return fut.result(timeout=limit)
         except FuturesTimeoutError:
