@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": ".github/workflows/ci-smoke.yml",
+      "status": "modified",
+      "additions": 9,
+      "deletions": 1,
+      "patch": "@@ -3,5 +3,13 @@\n jobs:\n   test:\n     runs-on: ubuntu-latest\n+    strategy:\n+      matrix:\n+        shard-index: [0, 1, 2]\n     steps:\n-      - run: pytest -q\n+      - uses: actions/checkout@v4\n+      - uses: actions/setup-python@v5\n+        with:\n+          python-version: '3.12'\n+      - run: pip install pytest pytest-shard\n+      - run: python -m pytest -q tests/test_r27_shard_smoke.py --shard-id=${{ matrix.shard-index }} --num-shards=3\n"
+    },
+    {
+      "path": "tests/test_r27_shard_smoke.py",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,6 @@\n+import pytest\n+\n+\n+@pytest.mark.parametrize(\"n\", [0, 1, 2, 3, 4, 5])\n+def test_shard_slot(n):\n+    assert n + n == 2 * n\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

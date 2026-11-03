@@ -1,0 +1,13 @@
+{
+  "number": 9624,
+  "title": "ci: add three-way pytest shard matrix with tests",
+  "body": "Adds shard smoke tests and a 0-based matrix job using python -m pytest with pytest-shard.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9624",
+  "headSha": "a27f000000000000000000000000000000000004",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_r27_shard_smoke.py"
+  ]
+}

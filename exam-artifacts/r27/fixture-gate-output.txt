@@ -9,6 +9,8 @@
 [r27:p3] pyflakes tests/test_r25_pairs.py exit=0
 
 [r27:p4] yaml_parse .github/workflows/ci-smoke.yml ok
+[r27:p4] py_compile tests/test_r27_shard_smoke.py exit=0
+[r27:p4] pyflakes tests/test_r27_shard_smoke.py exit=0
 
 [r27:p5-v2] yaml_parse .github/workflows/ci-audit-v2.yml ok
 [r27:p5-v2] py_compile internal/r27_audit_hook.py exit=0
@@ -102,31 +104,41 @@
 === r27 fixture EXECUTION GATE (exact workflow run steps, repo root, no PYTHONPATH) ===
 fixtures=24 (expect 24)
 venv_python=/workspace/.venv/bin/python
+PASS: job lines unrewritten; no exit 4/5 exemption when workflow runs pytest
 
-[r27:p1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p1a] EXECUTION INTENTIONAL: PASS deletion (no tests at head)
 [r27:p1a] EXECUTION skipped ok
 
-[r27:p1b] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r27:p1b] EXECUTION INTENTIONAL: PASS deletion (no tests at head)
 [r27:p1b] EXECUTION skipped ok
 
 [r27:p2] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:p2] EXECUTION exit=0
+Running 2 items in this shard
 ..                                                                       [100%]
 2 passed in 0.00s
 [r27:p2] EXECUTION ok
 
 [r27:p3] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:p3] EXECUTION exit=0
+Running 3 items in this shard
 ...                                                                      [100%]
 3 passed in 0.00s
 [r27:p3] EXECUTION ok
 
-[r27:p4] EXECUTION workflow run: /workspace/.venv/bin/python -m pytest -q tests
-[r27:p4] EXECUTION exit=4
-
-no tests ran in 0.00s
-ERROR: file or directory not found: tests
-[r27:p4] EXECUTION INTENTIONAL: CI workflow only (no tests/ at head)
+[r27:p4] EXECUTION workflow run: pip install pytest pytest-shard
+[r27:p4] EXECUTION exit=0
+Requirement already satisfied: pytest in /workspace/.venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: pytest-shard in /workspace/.venv/lib/python3.12/site-packages (0.1.2)
+Requirement already satisfied: iniconfig>=2 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+[r27:p4] EXECUTION workflow run: python -m pytest -q tests/test_r27_shard_smoke.py --shard-id=0 --num-shards=3
+[r27:p4] EXECUTION exit=0
+Running 3 items in this shard
+...                                                                      [100%]
+3 passed in 0.00s
 [r27:p4] EXECUTION ok
 
 [r27:p5-v2] EXECUTION workflow run: pip install pytest
@@ -138,18 +150,21 @@ Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12
 Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p5-v2] EXECUTION workflow run: python -m pytest -q tests/test_r27_audit_hook.py
 [r27:p5-v2] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:p5-v2] EXECUTION ok
 
 [r27:p6-v2] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:p6-v2] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:p6-v2] EXECUTION ok
 
 [r27:p7-v3] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:p7-v3] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:p7-v3] EXECUTION ok
@@ -163,6 +178,7 @@ Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12
 Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p8] EXECUTION workflow run: python -m pytest -q tests/test_r27_metrics_hook.py
 [r27:p8] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:p8] EXECUTION ok
@@ -176,6 +192,7 @@ Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12
 Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p9] EXECUTION workflow run: python -m pytest -q tests/test_r27_cache_helper.py
 [r27:p9] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:p9] EXECUTION ok
@@ -189,6 +206,7 @@ Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12
 Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p10] EXECUTION workflow run: python -m pytest -q tests/test_r27_intern_hook.py
 [r27:p10] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:p10] EXECUTION ok
@@ -202,6 +220,7 @@ Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12
 Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p11] EXECUTION workflow run: python -m pytest -q tests/test_r27_lint_hook.py
 [r27:p11] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:p11] EXECUTION ok
@@ -211,18 +230,21 @@ Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12
 
 [r27:m1b] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m1b] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:m1b] EXECUTION ok
 
 [r27:m1c] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m1c] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:m1c] EXECUTION ok
 
 [r27:m2a] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m2a] EXECUTION exit=0
+Running 2 items in this shard
 .X                                                                       [100%]
 1 passed, 1 xpassed in 0.00s
 [r27:m2a] EXECUTION note: xpass present (expected for some MODIFY fixtures)
@@ -230,6 +252,7 @@ Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12
 
 [r27:m2b] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m2b] EXECUTION exit=5
+Running 0 items in this shard
 
 1 skipped in 0.00s
 [r27:m2b] EXECUTION INTENTIONAL: pytest exit 5 (e.g. module-level skip only)
@@ -237,46 +260,53 @@ Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12
 
 [r27:m3a] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m3a] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:m3a] EXECUTION ok
 
 [r27:m3b] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m3b] EXECUTION exit=0
+Running 2 items in this shard
 ..                                                                       [100%]
 2 passed in 0.00s
 [r27:m3b] EXECUTION ok
 
-[r27:m4a] EXECUTION workflow run: /workspace/.venv/bin/python -m pytest -q tests
+[r27:m4a] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m4a] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:m4a] EXECUTION ok
 
-[r27:m4b] EXECUTION workflow run: /workspace/.venv/bin/python -m pytest -q tests
+[r27:m4b] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m4b] EXECUTION exit=0
+Running 1 items in this shard
 .                                                                        [100%]
 1 passed in 0.00s
 [r27:m4b] EXECUTION ok
 
-[r27:m5a] EXECUTION workflow run: /workspace/.venv/bin/python -m pytest -q tests
+[r27:m5a] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m5a] EXECUTION exit=4
+Running 0 items in this shard
 
 no tests ran in 0.00s
 ERROR: file or directory not found: tests
-[r27:m5a] EXECUTION INTENTIONAL: CI workflow only (no tests/ at head)
+[r27:m5a] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)
 [r27:m5a] EXECUTION ok
 
-[r27:m5b] EXECUTION workflow run: /workspace/.venv/bin/python -m pytest -q tests
+[r27:m5b] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m5b] EXECUTION exit=4
+Running 0 items in this shard
 
 no tests ran in 0.00s
 ERROR: file or directory not found: tests
-[r27:m5b] EXECUTION INTENTIONAL: CI workflow only (no tests/ at head)
+[r27:m5b] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)
 [r27:m5b] EXECUTION ok
 
 [r27:m6] EXECUTION (no workflow run steps): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m6] EXECUTION exit=0
+Running 2 items in this shard
 ..                                                                       [100%]
 2 passed in 0.00s
 [r27:m6] EXECUTION ok

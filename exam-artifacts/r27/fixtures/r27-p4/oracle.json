@@ -1,0 +1,25 @@
+{
+  "fixture": "r27-p4",
+  "slug": "p4",
+  "mechanism": "P4",
+  "variant": "p4",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "28c52235407a5efc7faa35bba3f818d7c1cbd7467234302ecd278bcefdc6bbe4",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_r27_shard_smoke.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "labeling": {
+    "note": "Diff changed for r27-GATE-DEFECT; Claude re-label required"
+  },
+  "pytest": {
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

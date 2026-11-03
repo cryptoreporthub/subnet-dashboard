@@ -52,13 +52,13 @@
     },
     {
       "slug": "p4",
-      "fixture": "r25-p4",
-      "fixturePath": "exam-artifacts/r25/fixtures/r25-p4",
+      "fixture": "r27-p4",
+      "fixturePath": "exam-artifacts/r27/fixtures/r27-p4",
       "oracle": "PASS",
       "sha256": {
-        "diff": "6f4ef8bef159ef373f8713e5d1fa4dfefed7f261a0b2d309f7727559e719b379",
-        "oracle": "76d0e7895eef493adfd15827e09cb028433980370d9ffd435e57e6c9cc5b7aed",
-        "repo": "caeeb9f910234f20befffb572a203a4df2bddc84cf2b92fc971726aa4c2eaf35"
+        "diff": "28c52235407a5efc7faa35bba3f818d7c1cbd7467234302ecd278bcefdc6bbe4",
+        "oracle": "4fe5f20dece7a6adb25128f0f3cb412dc6262659299a293df1d6712db52d21ea",
+        "repo": "1b0037f874f5ed38659a898f942a9387957850862b5936925eb6fb1cc08ead01"
       }
     },
     {
@@ -331,10 +331,11 @@
   "r23Pin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
   "c25Pin": "06269de964afc69bc81dd71156caa5bb2594bea1",
   "contentPins": {
-    "stageCManifest": "6cd82fe44d16dd572cd436880a264d22102e160dba3f9f64a8ab01c042e2e1f8",
+    "stageCManifest": "1edec81c4a072df9bf168292eb000e17df9fee4a40855fcfdac59f8d85f588f9",
     "runPlanC": "312c6e3a4c47211e7d2fff1d378a04c07a426892b42848114e0459c91a6730b7",
     "runnerC": "5bbc6979b8c3d34ea8b59a4898cf13f9eec36637e9848238cd1bb7cfa0628a38",
     "prompts": "6c28552b7fca83d907dae7676ff70abc3767e18bcb317c4f1f4b42492581053c",
     "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96"
-  }
+  },
+  "p4Relabel": "r27-GATE-DEFECT: p4 diff changed; Claude re-label both labelers"
 }

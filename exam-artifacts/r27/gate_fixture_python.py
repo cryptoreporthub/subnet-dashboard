@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -19,6 +18,16 @@ VENV_BIN = str(Path(VENV_PYTHON).parent)
 
 OUT_STATIC = ROOT / "exam-artifacts/r27/fixture-gate-output.txt"
 OUT_EXEC = ROOT / "exam-artifacts/r27/fixture-execution-gate-output.txt"
+
+_ORACLE_BY_SLUG: dict[str, str] | None = None
+
+
+def oracle_by_slug() -> dict[str, str]:
+    global _ORACLE_BY_SLUG
+    if _ORACLE_BY_SLUG is None:
+        manifest = json.loads((ROOT / "exam-artifacts/r27/stage-c-manifest.json").read_text())
+        _ORACLE_BY_SLUG = {row["slug"]: row["oracle"] for row in manifest["fixtures"]}
+    return _ORACLE_BY_SLUG
 
 
 def stage_c_fixtures() -> list[tuple[str, Path]]:
@@ -107,21 +116,22 @@ def materialize_head(tdp: Path, files: dict[str, str]) -> None:
         path.write_text(content, encoding="utf-8")
 
 
-def sanitize_workflow_cmd(cmd: str) -> str:
-    """Local execution: expand GH Actions matrix; shard flags need plugin (ponytail: fall back to module pytest)."""
+def sanitize_workflow_cmd(cmd: str, oracle: str) -> str:
+    """Expand GH Actions matrix only. PASS: no command rewrites (job-line fidelity)."""
     cmd = (
         cmd.replace("${{ matrix.shard-index }}", "0")
         .replace("${{matrix.shard-index}}", "0")
     )
+    if oracle == "PASS":
+        return cmd
     if "--shard-id" in cmd or "--num-shards" in cmd:
-        # ponytail: gate venv has no pytest-shard; run full suite like CI would on one shard
         return f"{VENV_PYTHON} -m pytest -q tests"
     if cmd.strip() == "pytest -q":
         return f"{VENV_PYTHON} -m pytest -q tests"
     return cmd
 
 
-def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bool]:
+def run_execution_gate(label: str, files: dict[str, str], oracle: str) -> tuple[list[str], bool]:
     lines: list[str] = []
     failed = False
     with tempfile.TemporaryDirectory() as td:
@@ -137,8 +147,12 @@ def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bo
 
         if run_steps:
             for cmd in run_steps:
-                cmd = sanitize_workflow_cmd(cmd)
-                lines.append(f"[r27:{label}] EXECUTION workflow run: {cmd}")
+                raw = cmd
+                cmd = sanitize_workflow_cmd(cmd, oracle)
+                if raw != cmd and oracle == "MODIFY":
+                    lines.append(f"[r27:{label}] EXECUTION workflow run (MODIFY local shim): {cmd}")
+                else:
+                    lines.append(f"[r27:{label}] EXECUTION workflow run: {cmd}")
                 proc = subprocess.run(
                     cmd,
                     cwd=str(tdp),
@@ -152,9 +166,9 @@ def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bo
                 if combined.strip():
                     lines.extend(combined.rstrip().splitlines())
                 if proc.returncode != 0:
-                    if proc.returncode in (4, 5) and not test_modules and "pytest" in cmd:
+                    if oracle == "MODIFY" and proc.returncode in (4, 5) and not test_modules and "pytest" in cmd:
                         lines.append(
-                            f"[r27:{label}] EXECUTION INTENTIONAL: CI workflow only (no tests/ at head)"
+                            f"[r27:{label}] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)"
                         )
                         continue
                     lines.append(f"[r27:{label}] EXECUTION FAIL: workflow command failed")
@@ -165,6 +179,10 @@ def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bo
             return lines, failed
 
         if not test_modules:
+            if oracle == "PASS":
+                lines.append(f"[r27:{label}] EXECUTION INTENTIONAL: PASS deletion (no tests at head)")
+                lines.append(f"[r27:{label}] EXECUTION skipped ok")
+                return lines, False
             lines.append(
                 f"[r27:{label}] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)"
             )
@@ -190,12 +208,20 @@ def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bo
             lines.append(f"[r27:{label}] EXECUTION FAIL: failing or erroring tests")
             failed = True
         elif proc.returncode == 0:
-            if "xpassed" in summary:
+            if oracle == "MODIFY" and "xpassed" in summary:
                 lines.append(f"[r27:{label}] EXECUTION note: xpass present (expected for some MODIFY fixtures)")
-            lines.append(f"[r27:{label}] EXECUTION ok")
+            if oracle == "PASS" and "passed" not in summary.lower():
+                lines.append(f"[r27:{label}] EXECUTION FAIL: PASS requires passing pytest summary")
+                failed = True
+            else:
+                lines.append(f"[r27:{label}] EXECUTION ok")
         elif proc.returncode == 5:
-            lines.append(f"[r27:{label}] EXECUTION INTENTIONAL: pytest exit 5 (e.g. module-level skip only)")
-            lines.append(f"[r27:{label}] EXECUTION ok")
+            if oracle == "PASS":
+                lines.append(f"[r27:{label}] EXECUTION FAIL: PASS fixture cannot exit 5")
+                failed = True
+            else:
+                lines.append(f"[r27:{label}] EXECUTION INTENTIONAL: pytest exit 5 (e.g. module-level skip only)")
+                lines.append(f"[r27:{label}] EXECUTION ok")
         else:
             lines.append(f"[r27:{label}] EXECUTION FAIL: unexpected pytest exit {proc.returncode}")
             failed = True
@@ -207,13 +233,16 @@ def main() -> int:
     exec_lines: list[str] = [
         "=== r27 fixture EXECUTION GATE (exact workflow run steps, repo root, no PYTHONPATH) ===",
         f"venv_python={VENV_PYTHON}",
+        "PASS: job lines unrewritten; no exit 4/5 exemption when workflow runs pytest",
         "",
     ]
     static_fail = exec_fail = False
     count = 0
+    oracles = oracle_by_slug()
 
     for label, repo in stage_c_fixtures():
         count += 1
+        oracle = oracles.get(label, "MODIFY")
         if not repo.is_file():
             static_lines.append(f"MISSING r27:{label} {repo}")
             static_fail = True
@@ -221,7 +250,7 @@ def main() -> int:
         files = head_files(repo)
         static_lines.extend(run_static_gate(label, files))
         static_lines.append("")
-        elines, ebad = run_execution_gate(label, files)
+        elines, ebad = run_execution_gate(label, files, oracle)
         exec_lines.extend(elines)
         exec_lines.append("")
         exec_fail = exec_fail or ebad
