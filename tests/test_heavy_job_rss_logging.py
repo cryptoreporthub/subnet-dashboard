@@ -173,6 +173,22 @@ def test_heavy_job_rss_scope_logs_end_on_success_and_exception(caplog, monkeypat
     assert "name=scope_boom" in lines[3] and "phase=end" in lines[3]
 
 
+def test_registry_freshness_background_tick_bookends(caplog, monkeypatch):
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", lambda pid=None: 4000)
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
+    monkeypatch.setattr(
+        "internal.freshness.refresh_all",
+        lambda **_: {"synced_at": "t", "registry": {"ok": True}},
+    )
+    from internal import freshness
+
+    freshness._background_tick()
+    lines = _heavy_lines(caplog)
+    assert any("name=registry_freshness_sync" in x and "phase=start" in x for x in lines)
+    assert any("name=registry_freshness_sync" in x and "phase=end" in x for x in lines)
+
+
 def test_defer_boot_brackets_target_with_boot_target_lines(caplog, monkeypatch):
     import threading
 

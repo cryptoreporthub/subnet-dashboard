@@ -445,9 +445,19 @@ class PriceTracker:
         self._stop_event = threading.Event()
 
         def _loop():
+            import contextlib
+
             while self._running and not self._stop_event.is_set():
+                scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
                 try:
-                    self.check_outcomes()
+                    from internal.process_memory import heavy_job_rss_scope
+
+                    scope = heavy_job_rss_scope("message_intel_outcome_check")
+                except ImportError:
+                    pass
+                try:
+                    with scope:
+                        self.check_outcomes()
                 except Exception as e:
                     logger.error("Outcome check error: %s", e)
                 self._stop_event.wait(interval)

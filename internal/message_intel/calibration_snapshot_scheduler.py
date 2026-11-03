@@ -142,33 +142,43 @@ class CalibrationSnapshotScheduler:
         return self._tick(reschedule=False)
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"ok": False}
-        try:
-            from internal.message_intel.calibration_snapshot import run_calibration_snapshot
+        import contextlib
 
-            payload = run_calibration_snapshot(save=True)
-            result["ok"] = True
-            result["alert_level"] = payload.get("alert_level")
-            result["drifted"] = (payload.get("drift") or {}).get("drifted")
-            result["factor"] = (payload.get("calibration_health") or {}).get("factor")
-            result["path"] = payload.get("path")
-            self.liveness.record_success(
-                evidence={
-                    "factor": result.get("factor"),
-                    "drifted": bool(result.get("drifted")),
-                    "op": "calibration_snapshot",
-                }
-            )
-            if payload.get("alert_level") in ("warn", "alert"):
-                logger.warning(
-                    "calibration snapshot %s: %s",
-                    payload.get("alert_level"),
-                    payload.get("alert_reasons"),
+        result: Dict[str, Any] = {"ok": False}
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        try:
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("calibration_snapshot")
+        except ImportError:
+            pass
+        with scope:
+            try:
+                from internal.message_intel.calibration_snapshot import run_calibration_snapshot
+
+                payload = run_calibration_snapshot(save=True)
+                result["ok"] = True
+                result["alert_level"] = payload.get("alert_level")
+                result["drifted"] = (payload.get("drift") or {}).get("drifted")
+                result["factor"] = (payload.get("calibration_health") or {}).get("factor")
+                result["path"] = payload.get("path")
+                self.liveness.record_success(
+                    evidence={
+                        "factor": result.get("factor"),
+                        "drifted": bool(result.get("drifted")),
+                        "op": "calibration_snapshot",
+                    }
                 )
-        except Exception as exc:
-            result["error"] = str(exc)
-            self.liveness.record_failure(error=str(exc))
-            logger.warning("calibration snapshot tick failed: %s", exc)
+                if payload.get("alert_level") in ("warn", "alert"):
+                    logger.warning(
+                        "calibration snapshot %s: %s",
+                        payload.get("alert_level"),
+                        payload.get("alert_reasons"),
+                    )
+            except Exception as exc:
+                result["error"] = str(exc)
+                self.liveness.record_failure(error=str(exc))
+                logger.warning("calibration snapshot tick failed: %s", exc)
 
         if reschedule and self._is_registered():
             delay = _seconds_until_slot()

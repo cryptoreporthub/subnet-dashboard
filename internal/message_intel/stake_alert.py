@@ -857,14 +857,24 @@ def stake_alert_enabled() -> bool:
 
 
 def _alert_loop() -> None:
+    import contextlib
+
     try:
         interval = max(60, int(os.environ.get("STAKE_ALERT_INTERVAL_SECONDS", "300")))
     except ValueError:
         interval = 300
     logger.info("stake alert watcher started (interval=%ss)", interval)
     while not _ALERT_STOP.is_set():
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         try:
-            check_stake_alerts()
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("message_intel_stake_alert")
+        except ImportError:
+            pass
+        try:
+            with scope:
+                check_stake_alerts()
         except Exception as exc:
             logger.warning("stake alert tick failed: %s", exc)
         if _ALERT_STOP.wait(interval):

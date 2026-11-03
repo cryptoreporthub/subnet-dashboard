@@ -123,37 +123,47 @@ class PickSelectionAuditScheduler:
         return self._tick(reschedule=False)
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
-        try:
-            from internal.council.pick_selection_audit import run_audit_today
+        import contextlib
 
-            subnets, ctx = _load_subnets_and_context()
-            payload = run_audit_today(subnets, ctx, save=True)
-            result["ok"] = True
-            result["verdict"] = payload.get("verdict")
-            result["category"] = payload.get("category")
-            result["published_netuid"] = payload.get("published_netuid")
-            primary = (payload.get("oracles") or {}).get("full_universe", {})
-            result["oracle_scheduler_netuid"] = (primary.get("pick") or {}).get("netuid")
-            result["audit_path"] = payload.get("pick_date")
-            self.liveness.record_success(
-                evidence={
-                    "verdict": result.get("verdict"),
-                    "published_netuid": result.get("published_netuid"),
-                    "op": "pick_selection_audit",
-                }
-            )
-            if payload.get("verdict") == "MISS":
-                logger.warning(
-                    "pick selection audit MISS: category=%s published=%s oracle=%s",
-                    payload.get("category"),
-                    payload.get("published_netuid"),
-                    result.get("oracle_scheduler_netuid"),
+        result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        try:
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("pick_selection_audit")
+        except ImportError:
+            pass
+        with scope:
+            try:
+                from internal.council.pick_selection_audit import run_audit_today
+
+                subnets, ctx = _load_subnets_and_context()
+                payload = run_audit_today(subnets, ctx, save=True)
+                result["ok"] = True
+                result["verdict"] = payload.get("verdict")
+                result["category"] = payload.get("category")
+                result["published_netuid"] = payload.get("published_netuid")
+                primary = (payload.get("oracles") or {}).get("full_universe", {})
+                result["oracle_scheduler_netuid"] = (primary.get("pick") or {}).get("netuid")
+                result["audit_path"] = payload.get("pick_date")
+                self.liveness.record_success(
+                    evidence={
+                        "verdict": result.get("verdict"),
+                        "published_netuid": result.get("published_netuid"),
+                        "op": "pick_selection_audit",
+                    }
                 )
-        except Exception as exc:
-            result["error"] = str(exc)
-            self.liveness.record_failure(error=str(exc))
-            logger.warning("pick selection audit tick failed: %s", exc)
+                if payload.get("verdict") == "MISS":
+                    logger.warning(
+                        "pick selection audit MISS: category=%s published=%s oracle=%s",
+                        payload.get("category"),
+                        payload.get("published_netuid"),
+                        result.get("oracle_scheduler_netuid"),
+                    )
+            except Exception as exc:
+                result["error"] = str(exc)
+                self.liveness.record_failure(error=str(exc))
+                logger.warning("pick selection audit tick failed: %s", exc)
 
         with _lock:
             self._last_error = result.get("error")

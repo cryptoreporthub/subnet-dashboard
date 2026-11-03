@@ -19,38 +19,58 @@ _active = False
 
 
 def _tick() -> None:
+    import contextlib
+
     if not cfg.forward_record_enabled():
         stop_forward_recorder()
         return
-    reader = get_shared_reader()
-    from internal.chain_price.sampler import run_forward_sample
+    scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+    try:
+        from internal.process_memory import heavy_job_rss_scope
 
-    result = run_forward_sample(reader)
-    outcome = result.get("outcome")
-    if outcome == "ok":
-        logger.info(
-            "chain price forward sample ok block=%s provider=%s samples=%s",
-            result.get("block"),
-            result.get("provider_served", result.get("provider")),
-            result.get("samples_written"),
-        )
-    elif outcome == "disk_low":
-        logger.debug("chain price forward sample skipped: disk_low")
-    else:
-        logger.warning("chain price forward sample: %s", result)
+        scope = heavy_job_rss_scope("chain_price_forward_sample")
+    except ImportError:
+        pass
+    with scope:
+        reader = get_shared_reader()
+        from internal.chain_price.sampler import run_forward_sample
+
+        result = run_forward_sample(reader)
+        outcome = result.get("outcome")
+        if outcome == "ok":
+            logger.info(
+                "chain price forward sample ok block=%s provider=%s samples=%s",
+                result.get("block"),
+                result.get("provider_served", result.get("provider")),
+                result.get("samples_written"),
+            )
+        elif outcome == "disk_low":
+            logger.debug("chain price forward sample skipped: disk_low")
+        else:
+            logger.warning("chain price forward sample: %s", result)
 
 
 def _prune_tick() -> None:
-    from internal.chain_price import db as price_db
+    import contextlib
 
     if not cfg.forward_record_enabled():
         return
+    scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
     try:
-        stats = price_db.run_hourly_prune_job()
-        if stats["deleted_samples"] or stats["deleted_blocks"]:
-            logger.info("chain price hourly prune: %s", stats)
-    except OSError as exc:
-        logger.warning("chain price hourly prune failed: %s", exc)
+        from internal.process_memory import heavy_job_rss_scope
+
+        scope = heavy_job_rss_scope("chain_price_hourly_prune")
+    except ImportError:
+        pass
+    with scope:
+        from internal.chain_price import db as price_db
+
+        try:
+            stats = price_db.run_hourly_prune_job()
+            if stats["deleted_samples"] or stats["deleted_blocks"]:
+                logger.info("chain price hourly prune: %s", stats)
+        except OSError as exc:
+            logger.warning("chain price hourly prune failed: %s", exc)
 
 
 def _start_delay_seconds() -> float:

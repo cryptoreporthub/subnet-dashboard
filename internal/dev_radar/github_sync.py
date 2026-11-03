@@ -234,7 +234,17 @@ class DevRadarGithubScheduler:
         return {"stopped": True}
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
-        result = run_github_sync()
+        import contextlib
+
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        try:
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("dev_radar_github_sync")
+        except ImportError:
+            pass
+        with scope:
+            result = run_github_sync()
         with _lock:
             self._last_result = dict(result)
         if reschedule and self._running:

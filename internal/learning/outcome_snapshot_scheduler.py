@@ -114,35 +114,45 @@ class OutcomeSnapshotScheduler:
         return self._tick(reschedule=False)
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
+        import contextlib
+
         result: Dict[str, Any] = {"ok": False}
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         try:
-            from internal.learning.expired_recovery import recover_expired_predictions
+            from internal.process_memory import heavy_job_rss_scope
 
-            recovery = recover_expired_predictions()
-            result["recovered"] = recovery.get("recovered", 0)
-            result["recovery_skipped"] = recovery.get("skipped", 0)
+            scope = heavy_job_rss_scope("outcome_snapshot")
+        except ImportError:
+            pass
+        with scope:
+            try:
+                from internal.learning.expired_recovery import recover_expired_predictions
 
-            from internal.learning.outcome_snapshot import run_snapshot
+                recovery = recover_expired_predictions()
+                result["recovered"] = recovery.get("recovered", 0)
+                result["recovery_skipped"] = recovery.get("skipped", 0)
 
-            payload = run_snapshot(save=True)
-            result["ok"] = True
-            result["alert_level"] = payload.get("alert_level")
-            result["health_score"] = (payload.get("council_health") or {}).get("health_score")
-            result["escalation"] = (payload.get("council_health") or {}).get("escalation")
-            result["path"] = payload.get("path")
-            self.liveness.record_success(
-                evidence={
-                    "health_score": result.get("health_score"),
-                    "recovered": result.get("recovered", 0),
-                    "op": "outcome_snapshot",
-                }
-            )
-            if payload.get("alert_level") == "alert":
-                logger.warning("outcome snapshot ALERT: %s", payload.get("alert_reasons"))
-        except Exception as exc:
-            result["error"] = str(exc)
-            self.liveness.record_failure(error=str(exc))
-            logger.warning("outcome snapshot tick failed: %s", exc)
+                from internal.learning.outcome_snapshot import run_snapshot
+
+                payload = run_snapshot(save=True)
+                result["ok"] = True
+                result["alert_level"] = payload.get("alert_level")
+                result["health_score"] = (payload.get("council_health") or {}).get("health_score")
+                result["escalation"] = (payload.get("council_health") or {}).get("escalation")
+                result["path"] = payload.get("path")
+                self.liveness.record_success(
+                    evidence={
+                        "health_score": result.get("health_score"),
+                        "recovered": result.get("recovered", 0),
+                        "op": "outcome_snapshot",
+                    }
+                )
+                if payload.get("alert_level") == "alert":
+                    logger.warning("outcome snapshot ALERT: %s", payload.get("alert_reasons"))
+            except Exception as exc:
+                result["error"] = str(exc)
+                self.liveness.record_failure(error=str(exc))
+                logger.warning("outcome snapshot tick failed: %s", exc)
 
         with _lock:
             self._last_result = dict(result)
