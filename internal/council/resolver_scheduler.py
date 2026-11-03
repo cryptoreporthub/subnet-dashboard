@@ -616,7 +616,14 @@ class PredictionResolverScheduler:
                     # Retry sooner so pending_past_grace doesn't rot behind long snapshots.
                     self._schedule_next(min(2, max(1, self.refresh_minutes)))
                 return skipped
-            from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
+            try:
+                from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
+            except ImportError:  # RSS bookends are observability; never fail the tick
+                def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
+                    return None
+
+                def process_uptime_seconds() -> float:
+                    return 0.0
 
             _rss_t0 = time.perf_counter()
             _uptime = process_uptime_seconds() if first_tick else None

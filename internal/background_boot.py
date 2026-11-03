@@ -650,13 +650,16 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
             "yes",
             "on",
         )
+        scope: ContextManager[None] = contextlib.nullcontext()
         try:
-            from internal.process_memory import log_heavy_job_rss
+            from internal.process_memory import heavy_job_rss_scope, log_heavy_job_rss
 
             log_heavy_job_rss("boot_scheduler_started:registry_freshness_sync", "milestone")
-        except Exception:
+            scope = heavy_job_rss_scope("boot_target:registry_freshness_sync")
+        except ImportError:  # RSS bookends are observability; never fail the sync start
             pass
-        start_background_sync(immediate=boot_sync)
+        with scope:
+            start_background_sync(immediate=boot_sync)
         logger.info("Registry freshness background sync started")
     except Exception as exc:
         logger.warning("Registry freshness sync failed to start: %s", exc)

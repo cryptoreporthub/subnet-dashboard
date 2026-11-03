@@ -14,6 +14,12 @@ from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
 from internal.pump.state import scan_all_subnets
 
+try:
+    from internal.process_memory import log_heavy_job_rss
+except ImportError:  # RSS bookends are observability; never fail the pump tick
+    def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
 logger = logging.getLogger(__name__)
 
 PUMP_LADDER_REFRESH_MINUTES = int(os.environ.get("PUMP_LADDER_REFRESH_MINUTES", "20"))
@@ -219,8 +225,6 @@ class PumpLadderScheduler:
         body_meta: Dict[str, bool] = {"stalled": False}
 
         def _body() -> None:
-            from internal.process_memory import log_heavy_job_rss
-
             _rss_t0 = time.perf_counter()
             log_heavy_job_rss("pump_ladder", "start", started_at=_rss_t0)
             try:
@@ -244,8 +248,6 @@ class PumpLadderScheduler:
                 raise outcome["exc"]
             return outcome["result"]
         body_meta["stalled"] = True
-        from internal.process_memory import log_heavy_job_rss
-
         log_heavy_job_rss("pump_ladder_stall_release", "milestone")
         logger.warning(
             "pump ladder tick body stalled >%.0fs; releasing heavy_job_slot",
@@ -257,8 +259,6 @@ class PumpLadderScheduler:
         return result
 
     def _tick_body(self) -> Dict[str, Any]:
-        from internal.process_memory import log_heavy_job_rss
-
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         _scan_t0 = time.perf_counter()
         log_heavy_job_rss("pump_ladder_scan", "start", started_at=_scan_t0)
