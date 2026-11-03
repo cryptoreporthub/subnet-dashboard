@@ -95,13 +95,8 @@ def main() -> None:
         start_background_workers,
         stop_background_workers,
     )
+    from internal.process_memory import log_heavy_job_rss
     from internal.worker_heartbeat import touch_heartbeat
-
-    try:
-        from internal.process_memory import log_heavy_job_rss
-    except ImportError:  # RSS bookends are observability; never block worker boot
-        def log_heavy_job_rss(*_args: object, **_kwargs: object) -> None:
-            return None
 
     log_heavy_job_rss("boot_import_done", "milestone")
 
