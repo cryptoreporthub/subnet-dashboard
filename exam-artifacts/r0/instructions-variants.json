@@ -1,20 +1,34 @@
 {
-  "generatedAt": "2026-11-03T09:30:13.015Z",
+  "base": "50e231f3",
+  "note": "composed = pr-head instructions.md + instructions.ts append only",
   "arms": {
-    "none": {
-      "sha256": "95d5d7fe35366607cf07f3d4edc30b39433a53bfabe8b7f05ab7437afbebdd20",
-      "composedChars": 15140,
-      "methodChars": 0
+    "A": {
+      "baseSha": "2b3203b9eaee5c10e73e0d2a233edcbe4d682b3f7008c87f606a8d694bcbd11d",
+      "baseChars": 6790,
+      "appendChars": 0,
+      "composedChars": 6790,
+      "sha256": "2b3203b9eaee5c10e73e0d2a233edcbe4d682b3f7008c87f606a8d694bcbd11d"
     },
-    "owner-adv5": {
-      "sha256": "500efc156068f062f77aad66fc625080de09c1e3f6ad809e77ecc9af39e2e30a",
-      "composedChars": 18382,
-      "methodChars": 3240
+    "B": {
+      "baseSha": "2b3203b9eaee5c10e73e0d2a233edcbe4d682b3f7008c87f606a8d694bcbd11d",
+      "baseChars": 6790,
+      "appendChars": 1416,
+      "composedChars": 8208,
+      "sha256": "a4deedad75533f40e6c68baf9cf07e8495a078581504ed23607edb7b0fad4f39"
     },
-    "all-three": {
-      "sha256": "416cfbbc7a6fd5dd4cb09540c772a3bfb6cdc9f1dc7178068305b716183f5321",
-      "composedChars": 25840,
-      "methodChars": 10698
+    "C": {
+      "baseSha": "2b3203b9eaee5c10e73e0d2a233edcbe4d682b3f7008c87f606a8d694bcbd11d",
+      "baseChars": 6790,
+      "appendChars": 10469,
+      "composedChars": 17261,
+      "sha256": "06c4c50619e4ed193aa615594f05bb9a724aab1e30d268d3f7200b8f120acd7b"
+    },
+    "D": {
+      "baseSha": "2b3203b9eaee5c10e73e0d2a233edcbe4d682b3f7008c87f606a8d694bcbd11d",
+      "baseChars": 6790,
+      "appendChars": 2618,
+      "composedChars": 9410,
+      "sha256": "f9e11475de09f6eb53150f5f2f4b3ddabde3ea1067465dffed1f1b05efd0c6fb"
     }
   }
 }

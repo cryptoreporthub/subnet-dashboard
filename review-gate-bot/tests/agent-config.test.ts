@@ -103,15 +103,19 @@ test("the model reaches no MCP server but the bot's own: nothing is attached for
   assert.deepEqual(hosted, ["replit.ts"], "host connections are invisible to the model, and only Replit is wired");
 });
 
-test("a blocking finding is scoped to what the diff does: a pre-existing defect on an unchanged path is reported, not blocking", async () => {
+test("exam-local blocking-scope paragraph lives in hard-exam r2 instructions, not PR-head base", async () => {
   const { readFile } = await import("node:fs/promises");
-  const text = await readFile(new URL("../bot/instructions.md", import.meta.url), "utf8");
-  assert.match(text, /about what the diff does/);
-  assert.match(text, /pre-existing, identical at base/);
-  assert.match(text, /leave it out of the `blocking` list/);
-  assert.match(text, /read the same code at base/);
-  // the rule that rules out PASS is kept: a finding the diff introduces still forces MODIFY or FAIL
-  assert.match(text, /the verdict is \*\*MODIFY or FAIL, never PASS\*\*/);
+  const { spawnSync } = await import("node:child_process");
+  const head = await readFile(new URL("../bot/instructions.md", import.meta.url), "utf8");
+  assert.doesNotMatch(head, /about what the diff does/);
+  const repoRoot = new URL("../..", import.meta.url).pathname;
+  const r2 = spawnSync("git", ["show", "80f8a295:review-gate-bot/bot/instructions.md"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  assert.equal(r2.status, 0, r2.stderr);
+  assert.match(r2.stdout, /about what the diff does/);
+  assert.match(r2.stdout, /pre-existing, identical at base/);
 });
 
 test("adversarial-review: 'covered by another test' must name a test whose assertion fails under the same mutation", async () => {

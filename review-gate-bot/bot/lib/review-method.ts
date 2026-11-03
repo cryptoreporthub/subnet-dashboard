@@ -5,7 +5,7 @@ import { methodArmFromEnv, reviewMethodMarkdownForArm } from "./method-variants.
 
 const BOT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Skills whose full SKILL.md body is appended to the system prompt via `bot/instructions.ts`. */
+/** Skills whose full SKILL.md body can be appended via `bot/instructions.ts` (arm C). */
 export const ALWAYS_DELIVERED_SKILLS = ["adversarial-review", "owner-rules", "settled-check"] as const;
 
 export type AlwaysDeliveredSkill = (typeof ALWAYS_DELIVERED_SKILLS)[number];

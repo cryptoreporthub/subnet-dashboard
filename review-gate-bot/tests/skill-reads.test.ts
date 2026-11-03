@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import hook from "../bot/hooks/skill-reads.js";
+import { OWNER_RULES_ALWAYS_IN_FORCE_BLOCK, REVIEWER_STATE_FROM_GATE_BLOCK } from "../bot/lib/instruction-blocks.js";
+import { reviewMethodMarkdownForArm } from "../bot/lib/method-variants.js";
 import {
   SKILL_NAMES,
   recordSkillReads,
@@ -203,9 +206,16 @@ test("the read check is not tied to the verdict word: a PASS with undelivered on
 
 // --- the instructions that go with the checks -------------------------------------
 
-const instructions = readFileSync("bot/instructions.md", "utf8");
+const prHead = readFileSync("bot/instructions.md", "utf8");
+const armD = `${prHead}\n\n${reviewMethodMarkdownForArm("D")}`;
 
 test("instructions: step 5 keeps both recoverable refusals and tells the model what to do about skill-not-read", () => {
+  const r = spawnSync("git", ["show", "3130f3b2:review-gate-bot/bot/instructions.md"], {
+    cwd: new URL("../..", import.meta.url).pathname,
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const instructions = r.stdout;
   const step = /5\. Call `post_verdict`[\s\S]*?\n6\. /.exec(instructions)?.[0] ?? "";
   assert.match(step, /pass-with-blocking-finding/);
   assert.match(step, /skill-not-read/);
@@ -214,8 +224,7 @@ test("instructions: step 5 keeps both recoverable refusals and tells the model w
 });
 
 test("instructions: a reviewer's state comes from check_gate_state, and the Replit slot's identity rule matches lib/verdicts.ts", () => {
-  const section = /## Reviewer state comes from the gate\n([\s\S]*?)\n## /.exec(instructions)?.[1] ?? "";
-  assert.ok(section.length > 0, "the section is there");
+  const section = REVIEWER_STATE_FROM_GATE_BLOCK;
   assert.match(section, /`check_gate_state` reports/);
   assert.match(section, /`missing`/);
   assert.match(section, /not recorded/i);
@@ -227,23 +236,27 @@ test("instructions: a reviewer's state comes from check_gate_state, and the Repl
   assert.match(verdicts, /comment\.user\?\.login === OWNER_LOGIN/);
   assert.match(verdicts, /comment\.performedViaGithubApp === null/);
   assert.match(verdicts, /isReplitReport\(comment\.body\)/);
+  assert.match(armD, /Reviewer state comes from the gate/);
 });
 
 test("instructions repeat the five owner rules, and each rule's heading is the owner-rules skill's own", () => {
   const skill = readFileSync("bot/skills/owner-rules/SKILL.md", "utf8");
   const headings = [...skill.matchAll(/^## (\d)\. (.+)$/gm)].map((m) => ({ n: m[1], title: (m[2] ?? "").replace(/\.$/, "") }));
   assert.equal(headings.length, 5);
-  const inline = /## Owner rules, always in force\n([\s\S]*?)\n## /.exec(instructions)?.[1] ?? "";
-  assert.ok(inline.length > 0, "the inline section is there");
+  const inline = OWNER_RULES_ALWAYS_IN_FORCE_BLOCK;
   for (const { n, title } of headings) {
     const first = title.split(/[.,]/)[0] ?? title;
-    assert.ok(inline.includes(`${n}. **${first}`), `rule ${n} (${first}) is repeated in instructions.md`);
+    assert.ok(inline.includes(`${n}. **${first}`), `rule ${n} (${first}) is repeated in owner-rules block`);
   }
+  assert.doesNotMatch(prHead, /## Owner rules, always in force/);
 });
 
 test("owner rule 1 says a reader must reject an empty snapshot itself, in the skill and in the instructions", () => {
   const skill = readFileSync("bot/skills/owner-rules/SKILL.md", "utf8");
-  for (const [name, text] of [["skill", skill], ["instructions", instructions]] as const) {
+  for (const [name, text] of [
+    ["skill", skill],
+    ["owner block", OWNER_RULES_ALWAYS_IN_FORCE_BLOCK],
+  ] as const) {
     assert.match(text, /empty or zero `netuids`/, name);
     assert.match(text, /not a complete snapshot/, name);
   }

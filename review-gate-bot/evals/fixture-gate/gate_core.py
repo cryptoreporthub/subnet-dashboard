@@ -114,6 +114,25 @@ def check_shard_collects_nothing(repo_doc: dict, python: str) -> list[str]:
     return errors
 
 
+def check_planted_oracle_semantics(oracle_doc: dict) -> list[str]:
+    """Planted-bug fixtures must not claim PASS when the planted head still exhibits the bug."""
+    fixture = oracle_doc.get("fixture") or ""
+    behavior = oracle_doc.get("behavior") or {}
+    expected = behavior.get("expectedVerdict")
+    if expected != "PASS":
+        return []
+    if fixture == "hard-planted-blank-reload":
+        planted = behavior.get("planted") or {}
+        reader = planted.get("reader") or {}
+        if reader.get("servingNetuids") == 0 and reader.get("keptLastComplete") is False:
+            return ["planted-blank-reload oracle must not expect PASS at planted head"]
+    return []
+
+
+def validate_oracle_json(oracle_doc: dict) -> list[str]:
+    return check_planted_oracle_semantics(oracle_doc)
+
+
 def validate_repo_doc(repo_doc: dict, *, python: str | None = None) -> list[str]:
     oracle = (repo_doc.get("oracle") or "MODIFY") if isinstance(repo_doc.get("oracle"), str) else "MODIFY"
     if isinstance(repo_doc.get("gate"), dict):

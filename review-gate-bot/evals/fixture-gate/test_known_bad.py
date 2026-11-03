@@ -29,8 +29,27 @@ _p4_parent = subprocess.run(
 KNOWN_BAD.append((_p4_parent, "exam-artifacts/r27/fixtures/r27-p4/repo.json", "r27 p4 first version shard-1 empty"))
 
 
+KNOWN_BAD.append(
+    (
+        "synthetic",
+        "review-gate-bot/evals/fixtures/hard-planted-blank-reload/oracle.json",
+        "planted-blank-reload oracle PASS at head",
+    )
+)
+
+
 @pytest.mark.parametrize("rev,path,label", KNOWN_BAD)
 def test_known_bad_fixture_is_rejected(rev: str, path: str, label: str) -> None:
+    if rev == "synthetic" and "oracle PASS" in label:
+        import json
+
+        from gate_core import validate_oracle_json
+
+        base = json.loads((REPO / path).read_text())
+        bad = {**base, "behavior": {**(base.get("behavior") or {}), "expectedVerdict": "PASS"}}
+        errors = validate_oracle_json(bad)
+        assert errors, label
+        return
     doc = load_repo_json_at(REPO, rev, path)
     assert doc is not None, f"missing {rev}:{path}"
     py = str(REPO / ".venv/bin/python") if (REPO / ".venv/bin/python").is_file() else None

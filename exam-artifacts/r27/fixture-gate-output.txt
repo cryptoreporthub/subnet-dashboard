@@ -3,105 +3,139 @@
 
 
 [r27:p2] py_compile tests/layout/test_r25_layout_a.py exit=0
-[r27:p2] pyflakes tests/layout/test_r25_layout_a.py exit=0
+[r27:p2] pyflakes tests/layout/test_r25_layout_a.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p3] py_compile tests/test_r25_pairs.py exit=0
-[r27:p3] pyflakes tests/test_r25_pairs.py exit=0
+[r27:p3] pyflakes tests/test_r25_pairs.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p4-v2] yaml_parse .github/workflows/ci-smoke.yml ok
 [r27:p4-v2] py_compile internal/r27_suite_anchor.py exit=0
-[r27:p4-v2] pyflakes internal/r27_suite_anchor.py exit=0
+[r27:p4-v2] pyflakes internal/r27_suite_anchor.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p4-v2] py_compile tests/test_r27_suite_anchor.py exit=0
-[r27:p4-v2] pyflakes tests/test_r27_suite_anchor.py exit=0
+[r27:p4-v2] pyflakes tests/test_r27_suite_anchor.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p5-v2] yaml_parse .github/workflows/ci-audit-v2.yml ok
 [r27:p5-v2] py_compile internal/r27_audit_hook.py exit=0
-[r27:p5-v2] pyflakes internal/r27_audit_hook.py exit=0
+[r27:p5-v2] pyflakes internal/r27_audit_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p5-v2] py_compile tests/test_r27_audit_hook.py exit=0
-[r27:p5-v2] pyflakes tests/test_r27_audit_hook.py exit=0
+[r27:p5-v2] pyflakes tests/test_r27_audit_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p6-v2] py_compile internal/r25_feature_flags.py exit=0
-[r27:p6-v2] pyflakes internal/r25_feature_flags.py exit=0
+[r27:p6-v2] pyflakes internal/r25_feature_flags.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p6-v2] py_compile tests/test_r25_feature_flags.py exit=0
-[r27:p6-v2] pyflakes tests/test_r25_feature_flags.py exit=0
+[r27:p6-v2] pyflakes tests/test_r25_feature_flags.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p7-v3] py_compile internal/r25_label_weight.py exit=0
-[r27:p7-v3] pyflakes internal/r25_label_weight.py exit=0
+[r27:p7-v3] pyflakes internal/r25_label_weight.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p7-v3] py_compile tests/test_r25_label_new.py exit=0
-[r27:p7-v3] pyflakes tests/test_r25_label_new.py exit=0
+[r27:p7-v3] pyflakes tests/test_r25_label_new.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p8] yaml_parse .github/workflows/ci-metrics-hook.yml ok
 [r27:p8] py_compile internal/r27_metrics_hook.py exit=0
-[r27:p8] pyflakes internal/r27_metrics_hook.py exit=0
+[r27:p8] pyflakes internal/r27_metrics_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p8] py_compile tests/test_r27_metrics_hook.py exit=0
-[r27:p8] pyflakes tests/test_r27_metrics_hook.py exit=0
+[r27:p8] pyflakes tests/test_r27_metrics_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p9] yaml_parse .github/workflows/ci-cache-helper.yml ok
 [r27:p9] py_compile internal/r27_cache_helper.py exit=0
-[r27:p9] pyflakes internal/r27_cache_helper.py exit=0
+[r27:p9] pyflakes internal/r27_cache_helper.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p9] py_compile tests/test_r27_cache_helper.py exit=0
-[r27:p9] pyflakes tests/test_r27_cache_helper.py exit=0
+[r27:p9] pyflakes tests/test_r27_cache_helper.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p10] yaml_parse .github/workflows/ci-intern-hook.yml ok
 [r27:p10] py_compile internal/r27_intern_hook.py exit=0
-[r27:p10] pyflakes internal/r27_intern_hook.py exit=0
+[r27:p10] pyflakes internal/r27_intern_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p10] py_compile tests/test_r27_intern_hook.py exit=0
-[r27:p10] pyflakes tests/test_r27_intern_hook.py exit=0
+[r27:p10] pyflakes tests/test_r27_intern_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:p11] yaml_parse .github/workflows/ci-lint-hook.yml ok
 [r27:p11] py_compile internal/r27_lint_hook.py exit=0
-[r27:p11] pyflakes internal/r27_lint_hook.py exit=0
+[r27:p11] pyflakes internal/r27_lint_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:p11] py_compile tests/test_r27_lint_hook.py exit=0
-[r27:p11] pyflakes tests/test_r27_lint_hook.py exit=0
+[r27:p11] pyflakes tests/test_r27_lint_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m1a] py_compile internal/r25_m1a_service.py exit=0
-[r27:m1a] pyflakes internal/r25_m1a_service.py exit=0
+[r27:m1a] pyflakes internal/r25_m1a_service.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m1b] py_compile internal/r25_m1b_service.py exit=0
-[r27:m1b] pyflakes internal/r25_m1b_service.py exit=0
+[r27:m1b] pyflakes internal/r25_m1b_service.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:m1b] py_compile tests/test_r25_m1b_edges.py exit=0
-[r27:m1b] pyflakes tests/test_r25_m1b_edges.py exit=0
+[r27:m1b] pyflakes tests/test_r25_m1b_edges.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m1c] py_compile internal/r25_m1c_service.py exit=0
-[r27:m1c] pyflakes internal/r25_m1c_service.py exit=0
+[r27:m1c] pyflakes internal/r25_m1c_service.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:m1c] py_compile tests/test_r25_m1c_smoke.py exit=0
-[r27:m1c] pyflakes tests/test_r25_m1c_smoke.py exit=0
+[r27:m1c] pyflakes tests/test_r25_m1c_smoke.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m2a] py_compile tests/test_r25_m2a_layout.py exit=0
-[r27:m2a] pyflakes tests/test_r25_m2a_layout.py exit=0
+[r27:m2a] pyflakes tests/test_r25_m2a_layout.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m2b] py_compile tests/test_r25_m2b_hook.py exit=0
-[r27:m2b] pyflakes tests/test_r25_m2b_hook.py exit=0
+[r27:m2b] pyflakes tests/test_r25_m2b_hook.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m3a] py_compile tests/conftest.py exit=0
-[r27:m3a] pyflakes tests/conftest.py exit=0
+[r27:m3a] pyflakes tests/conftest.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:m3a] py_compile tests/test_r25_m3a_integration.py exit=0
-[r27:m3a] pyflakes tests/test_r25_m3a_integration.py exit=0
+[r27:m3a] pyflakes tests/test_r25_m3a_integration.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:m3a] py_compile tests/test_r25_m3a_unit.py exit=0
-[r27:m3a] pyflakes tests/test_r25_m3a_unit.py exit=0
+[r27:m3a] pyflakes tests/test_r25_m3a_unit.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m3b] pytest_ini pytest.ini ok
 [r27:m3b] py_compile tests/test_r25_m3b_wide.py exit=0
-[r27:m3b] pyflakes tests/test_r25_m3b_wide.py exit=0
+[r27:m3b] pyflakes tests/test_r25_m3b_wide.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:m3b] py_compile tests/unit/test_r25_m3b_narrow.py exit=0
-[r27:m3b] pyflakes tests/unit/test_r25_m3b_narrow.py exit=0
+[r27:m3b] pyflakes tests/unit/test_r25_m3b_narrow.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m4a] yaml_parse .github/workflows/ci-smoke.yml ok
 [r27:m4a] py_compile tests/test_r25_m4a_smoke.py exit=0
-[r27:m4a] pyflakes tests/test_r25_m4a_smoke.py exit=0
+[r27:m4a] pyflakes tests/test_r25_m4a_smoke.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m4b] yaml_parse .github/workflows/ci-smoke.yml ok
 [r27:m4b] py_compile tests/test_r25_m4b_smoke.py exit=0
-[r27:m4b] pyflakes tests/test_r25_m4b_smoke.py exit=0
+[r27:m4b] pyflakes tests/test_r25_m4b_smoke.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 [r27:m5a] yaml_parse .github/workflows/ci-smoke.yml ok
 
 [r27:m5b] yaml_parse .github/workflows/ci-smoke.yml ok
 
 [r27:m6] py_compile internal/r25_m6_service.py exit=0
-[r27:m6] pyflakes internal/r25_m6_service.py exit=0
+[r27:m6] pyflakes internal/r25_m6_service.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 [r27:m6] py_compile tests/test_r25_m6_scale.py exit=0
-[r27:m6] pyflakes tests/test_r25_m6_scale.py exit=0
+[r27:m6] pyflakes tests/test_r25_m6_scale.py exit=1
+/agent/repos/subnet-dashboard/.venv/bin/python: No module named pyflakes
 
 === r27 fixture EXECUTION GATE (exact workflow run steps, repo root, no PYTHONPATH) ===
 fixtures=24 (expect 24)
@@ -130,12 +164,12 @@ Running 3 items in this shard
 
 [r27:p4-v2] EXECUTION workflow run: pip install pytest pytest-shard
 [r27:p4-v2] EXECUTION exit=0
-Requirement already satisfied: pytest in /workspace/.venv/lib/python3.12/site-packages (9.2.0)
-Requirement already satisfied: pytest-shard in /workspace/.venv/lib/python3.12/site-packages (0.1.2)
-Requirement already satisfied: iniconfig>=2 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
-Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (26.3)
-Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
-Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: pytest-shard in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (0.1.2)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p4-v2] EXECUTION workflow run: python -m pytest -q tests/ --shard-id=0 --num-shards=3
 [r27:p4-v2] EXECUTION exit=0
 Running 2 items in this shard
@@ -155,11 +189,11 @@ Running 3 items in this shard
 
 [r27:p5-v2] EXECUTION workflow run: pip install pytest
 [r27:p5-v2] EXECUTION exit=0
-Requirement already satisfied: pytest in /workspace/.venv/lib/python3.12/site-packages (9.2.0)
-Requirement already satisfied: iniconfig>=2 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
-Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (26.3)
-Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
-Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p5-v2] EXECUTION workflow run: python -m pytest -q tests/test_r27_audit_hook.py
 [r27:p5-v2] EXECUTION exit=0
 Running 1 items in this shard
@@ -183,11 +217,11 @@ Running 1 items in this shard
 
 [r27:p8] EXECUTION workflow run: pip install pytest
 [r27:p8] EXECUTION exit=0
-Requirement already satisfied: pytest in /workspace/.venv/lib/python3.12/site-packages (9.2.0)
-Requirement already satisfied: iniconfig>=2 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
-Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (26.3)
-Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
-Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p8] EXECUTION workflow run: python -m pytest -q tests/test_r27_metrics_hook.py
 [r27:p8] EXECUTION exit=0
 Running 1 items in this shard
@@ -197,11 +231,11 @@ Running 1 items in this shard
 
 [r27:p9] EXECUTION workflow run: pip install pytest
 [r27:p9] EXECUTION exit=0
-Requirement already satisfied: pytest in /workspace/.venv/lib/python3.12/site-packages (9.2.0)
-Requirement already satisfied: iniconfig>=2 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
-Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (26.3)
-Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
-Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p9] EXECUTION workflow run: python -m pytest -q tests/test_r27_cache_helper.py
 [r27:p9] EXECUTION exit=0
 Running 1 items in this shard
@@ -211,11 +245,11 @@ Running 1 items in this shard
 
 [r27:p10] EXECUTION workflow run: pip install pytest
 [r27:p10] EXECUTION exit=0
-Requirement already satisfied: pytest in /workspace/.venv/lib/python3.12/site-packages (9.2.0)
-Requirement already satisfied: iniconfig>=2 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
-Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (26.3)
-Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
-Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p10] EXECUTION workflow run: python -m pytest -q tests/test_r27_intern_hook.py
 [r27:p10] EXECUTION exit=0
 Running 1 items in this shard
@@ -225,11 +259,11 @@ Running 1 items in this shard
 
 [r27:p11] EXECUTION workflow run: pip install pytest
 [r27:p11] EXECUTION exit=0
-Requirement already satisfied: pytest in /workspace/.venv/lib/python3.12/site-packages (9.2.0)
-Requirement already satisfied: iniconfig>=2 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
-Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (26.3)
-Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
-Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: pytest in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (9.2.0)
+Requirement already satisfied: iniconfig>=2 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: packaging>=24 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (26.3)
+Requirement already satisfied: pluggy<2,>=1.6 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /agent/repos/subnet-dashboard/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p11] EXECUTION workflow run: python -m pytest -q tests/test_r27_lint_hook.py
 [r27:p11] EXECUTION exit=0
 Running 1 items in this shard
@@ -281,7 +315,7 @@ Running 1 items in this shard
 [r27:m3b] EXECUTION exit=0
 Running 2 items in this shard
 ..                                                                       [100%]
-2 passed in 0.00s
+2 passed in 0.01s
 [r27:m3b] EXECUTION ok
 
 [r27:m4a] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests

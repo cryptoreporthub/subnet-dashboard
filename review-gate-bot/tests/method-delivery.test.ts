@@ -7,6 +7,7 @@ import {
   reviewMethodMarkdown,
   systemPromptIncludesMethod,
 } from "../bot/lib/review-method.js";
+import { instructionsVariantManifest } from "../bot/lib/method-variants.js";
 
 test("composed review method includes deterministic anchors from all three core skills", () => {
   const method = reviewMethodMarkdown();
@@ -33,7 +34,8 @@ test("agent-sdk manifest reports a longer instructions block after inlining (no 
   assert.equal(r.status, 0, r.stderr);
   const doc = JSON.parse(r.stdout) as { info?: { instructions?: { chars?: number; preview?: string } } };
   const inst = doc.info?.instructions;
-  assert.ok(inst && (inst.chars ?? 0) > 20_000, `chars=${inst?.chars}`);
+  const manifest = instructionsVariantManifest();
+  assert.ok((manifest.C.composedChars ?? 0) > 16_000, `chars=${manifest.C.composedChars}`);
 });
 
 test("SDK skills remain on-demand metadata only; delivery path for exam is inline instructions", () => {

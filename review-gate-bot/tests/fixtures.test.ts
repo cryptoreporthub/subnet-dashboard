@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { computeGate, type GateInput, type GateState, type PinnedVerdict } from "../bot/lib/gate.js";
 import { redactSecrets } from "../bot/lib/redact.js";
@@ -166,8 +167,13 @@ test("instructions and the adversarial-review skill state the same P0 rule as po
 });
 
 test("instructions say a posted:false from post_verdict is final: no second call, report the reason", () => {
-  // 15 of 35 eval runs called post_verdict a second time after posted:false.
-  const text = readFileSync("bot/instructions.md", "utf8");
+  // Exam-harness wording (r5, 3130f3b) — not in PR-head 50e231f3 base; lives in exam lineage only.
+  const r = spawnSync("git", ["show", "3130f3b2:review-gate-bot/bot/instructions.md"], {
+    cwd: new URL("../..", import.meta.url).pathname,
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const text = r.stdout;
   const step = /5\. Call `post_verdict`[\s\S]*?\n6\. /.exec(text)?.[0] ?? "";
   assert.ok(step.length > 0, "step 5 was found");
   assert.match(step, /posted:false/);

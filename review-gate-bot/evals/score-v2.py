@@ -57,10 +57,33 @@ def post_verdict_calls(r: dict) -> list[dict]:
         if tc.get("isError") or tc.get("status") == "failed":
             continue
         inp = tc.get("input") or tc.get("args") or {}
-        out.append(inp)
+        out.append({"input": inp, "output": tc.get("output") or ""})
     return out
 
 
+def post_was_accepted(output: str) -> bool:
+    if not output:
+        return False
+    try:
+        doc = json.loads(output)
+    except json.JSONDecodeError:
+        return False
+    return doc.get("posted") is True
+
+
+def classify_run(r: dict) -> str:
+    accepted: list[str] = []
+    for call in post_verdict_calls(r):
+        if not post_was_accepted(call["output"]):
+            continue
+        v = verdict_from_post(call["input"], r.get("finalText") or "")
+        if v is None:
+            return "NO_POST"
+        accepted.append(v)
+    if not accepted:
+        return "NO_POST"
+    if len(set(accepted)) == 1:
+        return accepted[0]
 def verdict_from_post(post: dict, final_text: str = "") -> str | None:
     v = post.get("verdict")
     if isinstance(v, str) and v.upper() in ("PASS", "MODIFY", "FAIL", "BLOCK"):
@@ -68,21 +91,6 @@ def verdict_from_post(post: dict, final_text: str = "") -> str | None:
     body = post.get("body") or final_text or ""
     tok = first_line_token(body)
     return tok if tok in ("PASS", "MODIFY", "FAIL") else None
-
-
-def classify_run(r: dict) -> str:
-    posts = post_verdict_calls(r)
-    if not posts:
-        return "NO_POST"
-    verdicts: list[str] = []
-    for post in posts:
-        v = verdict_from_post(post, r.get("finalText") or "")
-        if v is None:
-            return "NO_POST"
-        verdicts.append(v)
-    if len(set(verdicts)) == 1:
-        return verdicts[0]
-    return "NO_POST"
 
 
 def parse_arm_stack(run_id: str, meta: dict | None) -> tuple[str, str]:

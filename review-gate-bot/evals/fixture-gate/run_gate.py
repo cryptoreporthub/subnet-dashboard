@@ -30,13 +30,14 @@ def main() -> int:
     py = venv_python()
     env = os.environ.copy()
     env.setdefault("PYTHONPATH", str(REPO))
+    env["ORACLE_PYTHON"] = py
 
     steps: list[tuple[str, list[str], Path]] = [
         ("structural pytest", [py, "-m", "pytest", "-q", str(GATE / "test_gate.py")], REPO),
         ("known-bad rejection", [py, "-m", "pytest", "-q", str(GATE / "test_known_bad.py")], REPO),
         (
-            "oracle-gen --check (legacy hard-* only; hard-r24-* scoped out)",
-            ["python3", "evals/oracle-gen/gen.py", "--check", "--skip-behavior"],
+            "oracle-gen --check (executed oracle ON; ORACLE_PYTHON=%s)" % py,
+            ["python3", "evals/oracle-gen/gen.py", "--check", "--python", py],
             BOT,
         ),
     ]
