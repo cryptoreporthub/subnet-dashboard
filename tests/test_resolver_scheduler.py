@@ -972,7 +972,7 @@ def test_resolver_worker_rss_end_logged_after_timeout_abandons_cycle(
 
     def _blocked(self):
         started.set()
-        release.wait(timeout=2)
+        release.wait()
         return {"ok": True, "run_at": resolver_scheduler._now_iso()}
 
     monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
@@ -995,13 +995,16 @@ def test_resolver_worker_rss_end_logged_after_timeout_abandons_cycle(
             if "prediction_resolver_worker" in r.getMessage()
         ]
 
-    timed_out = sched._run_refresh_cycle_with_timeout()
-    assert started.wait(timeout=1)
-    assert "cycle_timeout" in str(timed_out["error"])
-    assert any("phase=start" in line for line in _worker_lines())
-    assert not any("phase=end" in line for line in _worker_lines())
+    try:
+        timed_out = sched._run_refresh_cycle_with_timeout()
+        assert started.wait(timeout=1)
+        assert "cycle_timeout" in str(timed_out["error"])
+        assert any("phase=start" in line for line in _worker_lines())
+        assert not any("phase=end" in line for line in _worker_lines())
+    finally:
+        # Unblock the abandoned worker even when an assertion above fails.
+        release.set()
 
-    release.set()
     deadline = time.time() + 2
     while time.time() < deadline and not any("phase=end" in line for line in _worker_lines()):
         time.sleep(0.01)
