@@ -1,0 +1,5 @@
+=== r25 worktree model config 2026-11-03T02:32:49Z ===
+--- R23 (a5819378) ---
+  model: { id: "composer-2.5", params: [{ id: "fast", value: "false" }] },
+--- C25 (06269de9) ---
+  model: { id: "composer-2.5", params: [{ id: "fast", value: "false" }] },

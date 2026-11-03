@@ -1,0 +1,284 @@
+{
+  "results": [
+    {
+      "id": "review-gate-r25/p1a/1",
+      "evalCase": "review-gate-r25/p1a",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/p1b/1",
+      "evalCase": "review-gate-r25/p1b",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/p2/1",
+      "evalCase": "review-gate-r25/p2",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/p3/1",
+      "evalCase": "review-gate-r25/p3",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/p4/1",
+      "evalCase": "review-gate-r25/p4",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/p5/1",
+      "evalCase": "review-gate-r25/p5",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/p6/1",
+      "evalCase": "review-gate-r25/p6",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/p7/1",
+      "evalCase": "review-gate-r25/p7",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "PASS",
+            "body": "PASS\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m1a/1",
+      "evalCase": "review-gate-r25/m1a",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m1b/1",
+      "evalCase": "review-gate-r25/m1b",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m1c/1",
+      "evalCase": "review-gate-r25/m1c",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m2a/1",
+      "evalCase": "review-gate-r25/m2a",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m2b/1",
+      "evalCase": "review-gate-r25/m2b",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m3a/1",
+      "evalCase": "review-gate-r25/m3a",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m3b/1",
+      "evalCase": "review-gate-r25/m3b",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m4a/1",
+      "evalCase": "review-gate-r25/m4a",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m4b/1",
+      "evalCase": "review-gate-r25/m4b",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m5a/1",
+      "evalCase": "review-gate-r25/m5a",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m5b/1",
+      "evalCase": "review-gate-r25/m5b",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r25/m6/1",
+      "evalCase": "review-gate-r25/m6",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage C dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    }
+  ]
+}

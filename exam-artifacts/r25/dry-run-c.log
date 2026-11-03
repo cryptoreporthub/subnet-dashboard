@@ -1,0 +1,26 @@
+=== r25 Stage C dry run (no model) ===
+scorer=review-gate-bot/evals/score-r24-first-line.py sha256=7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96
+contentPins={"prompts": "745a9e243b2601867e840a5e85bfb99e5d7d18ef7c82661308581c1a459863a4", "runPlanC": "84211630a253cfc01932a6d52e567c21403b2def181709a3ac7a3a1a49ecfb96", "runnerC": "817d719005252c19b6590dc787bf76b1812e1752220cd6d9398eeb654c23f0b9", "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96", "stageCManifest": "4960e5b412d5c05559e5e79e33679f43e4654b62627253bbf5b3652611758264"}
+eval --list review-gate-r25 count=20
+review-gate-r25/p1a  [r25, gate, stage-c] — r25 Stage C r25-p1a (oracle PASS)
+review-gate-r25/p1b  [r25, gate, stage-c] — r25 Stage C r25-p1b (oracle PASS)
+review-gate-r25/p2  [r25, gate, stage-c] — r25 Stage C r25-p2 (oracle PASS)
+review-gate-r25/p3  [r25, gate, stage-c] — r25 Stage C r25-p3 (oracle PASS)
+review-gate-r25/p4  [r25, gate, stage-c] — r25 Stage C r25-p4 (oracle PASS)
+review-gate-r25/p5  [r25, gate, stage-c] — r25 Stage C r25-p5 (oracle PASS)
+review-gate-r25/p6  [r25, gate, stage-c] — r25 Stage C r25-p6 (oracle PASS)
+review-gate-r25/p7  [r25, gate, stage-c] — r25 Stage C r25-p7 (oracle PASS)
+review-gate-r25/m1a  [r25, gate, stage-c] — r25 Stage C r25-m1a (oracle MODIFY)
+review-gate-r25/m1b  [r25, gate, stage-c] — r25 Stage C r25-m1b (oracle MODIFY)
+review-gate-r25/m1c  [r25, gate, stage-c] — r25 Stage C r25-m1c (oracle MODIFY)
+review-gate-r25/m2a  [r25, gate, stage-c] — r25 Stage C r25-m2a (oracle MODIFY)
+review-gate-r25/m2b  [r25, gate, stage-c] — r25 Stage C r25-m2b (oracle MODIFY)
+review-gate-r25/m3a  [r25, gate, stage-c] — r25 Stage C r25-m3a (oracle MODIFY)
+review-gate-r25/m3b  [r25, gate, stage-c] — r25 Stage C r25-m3b (oracle MODIFY)
+review-gate-r25/m4a  [r25, gate, stage-c] — r25 Stage C r25-m4a (oracle MODIFY)
+review-gate-r25/m4b  [r25, gate, stage-c] — r25 Stage C r25-m4b (oracle MODIFY)
+review-gate-r25/m5a  [r25, gate, stage-c] — r25 Stage C r25-m5a (oracle MODIFY)
+review-gate-r25/m5b  [r25, gate, stage-c] — r25 Stage C r25-m5b (oracle MODIFY)
+review-gate-r25/m6  [r25, gate, stage-c] — r25 Stage C r25-m6 (oracle MODIFY)
+=== scorer output (synthetic oracle-aligned) ===
+{"path": "/tmp/pr-1522-exam-r8-work/repo/exam-artifacts/r25/dry-run-c-synthetic.json", "runs": [{"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p1a/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p1b/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p2/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p3/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p4/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p5/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p6/1"}, {"category": "PASS", "duplicatePosts": 0, "id": "review-gate-r25/p7/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m1a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m1b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m1c/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m2a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m2b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m3a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m3b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m4a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m4b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m5a/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m5b/1"}, {"category": "MODIFY", "duplicatePosts": 0, "id": "review-gate-r25/m6/1"}]}
