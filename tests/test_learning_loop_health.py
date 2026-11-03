@@ -456,6 +456,34 @@ def test_resolver_liveness_view_single_flight(monkeypatch):
     assert second["status"] == "unavailable"
 
 
+def test_resolver_cache_drops_after_in_process_tick_write(monkeypatch):
+    from internal import liveness
+
+    views = iter([{"status": "unavailable"}, {"status": "ok"}])
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", lambda: next(views))
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+
+    assert loop_health._resolver_liveness_view()["status"] == "unavailable"
+    tracker.record_success({"noop": True})
+    assert loop_health._resolver_liveness_view()["status"] == "ok"
+
+
+def test_resolver_cache_kept_after_write_to_other_tracker(monkeypatch):
+    from internal import liveness
+
+    views = iter([{"status": "unavailable"}, {"status": "ok"}])
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", lambda: next(views))
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    monkeypatch.setitem(liveness._REGISTRY, "unrelated_control_tracker", None)
+    liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+    other = liveness.LivenessTracker("unrelated_control_tracker", 60, persist=False)
+
+    assert loop_health._resolver_liveness_view()["status"] == "unavailable"
+    other.record_success({"noop": True})
+    assert loop_health._resolver_liveness_view()["status"] == "unavailable"
+
+
 def test_published_long_without_ledger_is_stalled(tmp_path, monkeypatch):
     daily = tmp_path / "daily_picks.json"
     preds = tmp_path / "predictions.json"
