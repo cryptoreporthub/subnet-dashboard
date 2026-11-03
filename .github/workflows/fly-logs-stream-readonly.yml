@@ -11,6 +11,8 @@ on:
         default: 45
         type: number
 
+permissions: {}
+
 jobs:
   stream:
     name: Tail logs, filter, RSS summary
