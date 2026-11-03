@@ -10,7 +10,12 @@ FIX_SHA_FULL="$(python3 -c "import json; print(json.load(open('$PLAN'))['fixture
 FIX_SHA="${FIX_SHA_FULL:0:8}"
 RUN_LOG="$REPO_ROOT/exam-artifacts/r1-packb-a/r1-packb-a2-run-${SHA_SHORT}.log"
 AUDIT="$REPO_ROOT/exam-artifacts/r1-packb-a/slot-audit-a2-${SHA_SHORT}.ndjson"
+EXTRACT="$REPO_ROOT/exam-artifacts/r1-packb-a/extract-slot-audit.mjs"
 mkdir -p "$REPO_ROOT/exam-artifacts/r1-packb-a/runs"
+if [[ ! -f "$EXTRACT" ]]; then
+  echo "STOP: missing $EXTRACT (commit harness before run)"
+  exit 2
+fi
 : >"$AUDIT"
 
 exec > >(tee -a "$RUN_LOG") 2>&1
