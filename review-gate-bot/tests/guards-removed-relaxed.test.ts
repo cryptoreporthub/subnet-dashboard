@@ -42,3 +42,4 @@ test("section lists each flag for the reviewer", () => {
   assert.match(section, /Guards removed or relaxed/);
   assert.match(section, /`a.py`/);
   assert.match(section, /assert x/);
+});
