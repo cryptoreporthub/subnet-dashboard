@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""r24 Stage A scorer: posted first-line verdict only (no dets)."""
+"""r24 Stage A scorer: posted first-line verdict only (no dets).
+
+LOCK-3: identical successful post_verdict calls → that verdict; conflicting posts,
+no post, or unparseable body → NO_POST (invalid).
+"""
 import json
 import re
 import sys
 from pathlib import Path
 
-CATEGORIES = ("PASS", "MODIFY", "FAIL", "NO_POST", "MULTI_POST")
+CATEGORIES = ("PASS", "MODIFY", "FAIL", "NO_POST")
 
 
 def first_line_token(text: str) -> str | None:
@@ -31,18 +35,34 @@ def post_verdict_calls(r: dict) -> list[dict]:
     return out
 
 
+def verdict_from_post(post: dict, final_text: str = "") -> str | None:
+    v = post.get("verdict")
+    if isinstance(v, str) and v.upper() in ("PASS", "MODIFY", "FAIL", "BLOCK"):
+        return "FAIL" if v.upper() in ("FAIL", "BLOCK") else v.upper()
+    body = post.get("body") or final_text or ""
+    tok = first_line_token(body)
+    return tok if tok in ("PASS", "MODIFY", "FAIL") else None
+
+
 def classify_run(r: dict) -> str:
     posts = post_verdict_calls(r)
     if not posts:
         return "NO_POST"
-    if len(posts) > 1:
-        return "MULTI_POST"
-    v = posts[0].get("verdict")
-    if isinstance(v, str) and v.upper() in ("PASS", "MODIFY", "FAIL", "BLOCK"):
-        return "FAIL" if v.upper() in ("FAIL", "BLOCK") else v.upper()
-    body = posts[0].get("body") or r.get("finalText") or ""
-    tok = first_line_token(body)
-    return tok if tok in ("PASS", "MODIFY", "FAIL") else "NO_POST"
+    verdicts: list[str] = []
+    for post in posts:
+        v = verdict_from_post(post, r.get("finalText") or "")
+        if v is None:
+            return "NO_POST"
+        verdicts.append(v)
+    if len(set(verdicts)) == 1:
+        return verdicts[0]
+    return "NO_POST"
+
+
+def duplicate_post_count(r: dict) -> int:
+    """Descriptive only (LOCK-3); not used for category."""
+    posts = post_verdict_calls(r)
+    return max(0, len(posts) - 1)
 
 
 def score_file(path: Path, expected: str | None = None) -> dict:
@@ -50,7 +70,7 @@ def score_file(path: Path, expected: str | None = None) -> dict:
     rows = []
     for r in doc.get("results") or []:
         cat = classify_run(r)
-        row = {"id": r.get("id"), "category": cat}
+        row = {"id": r.get("id"), "category": cat, "duplicatePosts": duplicate_post_count(r)}
         if expected:
             row["expected"] = expected
             row["match"] = cat == expected or (expected == "FAIL" and cat == "FAIL")

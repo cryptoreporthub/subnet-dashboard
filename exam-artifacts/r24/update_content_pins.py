@@ -11,6 +11,7 @@ MANIFEST_PATH = ROOT / "exam-artifacts/r24/stage-a-manifest.json"
 
 PIN_PATHS = {
     "runPlan": ROOT / "exam-artifacts/r24/run-plan.json",
+    "runPlanRerun": ROOT / "exam-artifacts/r24/run-plan-rerun.json",
     "runner": ROOT / "review-gate-bot/evals/review-gate-r24.eval.ts",
     "prompts": ROOT / "review-gate-bot/evals/r24-prompts.ts",
     "scorer": ROOT / "review-gate-bot/evals/score-r24-first-line.py",
@@ -34,6 +35,7 @@ def main() -> None:
     pins = {
         "stageAManifest": sha256_bytes(manifest_body.encode()),
         "runPlan": sha256_file(PIN_PATHS["runPlan"]),
+        "runPlanRerun": sha256_file(PIN_PATHS["runPlanRerun"]),
         "runner": sha256_file(PIN_PATHS["runner"]),
         "prompts": sha256_file(PIN_PATHS["prompts"]),
         "scorer": sha256_file(PIN_PATHS["scorer"]),
