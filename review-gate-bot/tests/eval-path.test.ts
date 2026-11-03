@@ -168,6 +168,31 @@ test("R1 arm H: measured on the same line allows PASS in eval", async () => {
   assert.deepEqual(result, { posted: true, reason: "eval", verdict: "PASS" });
 });
 
+test("R2 arm H: PASS mentioning a 30s timeout constant is refused (unrelated prose)", async () => {
+  const result = (await execute(
+    {
+      ...VERDICT,
+      body: "Loop uses a 30s timeout constant; no blocking findings.",
+      skills: [{ skill: "adversarial-review", used: true, note: "Looks fine." }],
+    },
+    contextFor("eval", "eval-r2-h-timeout-constant"),
+  )) as { posted: boolean; reason: string };
+  assert.equal(result.posted, false);
+  assert.equal(result.reason, "pass-with-unmeasured-perf-claim");
+});
+
+test("R2 arm H: PASS with O(n) and same-line measured by the oracle is accepted", async () => {
+  const result = await execute(
+    {
+      ...VERDICT,
+      body: "O(n) of the 128 subnets, measured by the oracle; no blocking findings.",
+      skills: [{ skill: "adversarial-review", used: true, note: "Clean." }],
+    },
+    contextFor("eval", "eval-r2-h-on-measured"),
+  );
+  assert.deepEqual(result, { posted: true, reason: "eval", verdict: "PASS" });
+});
+
 test("Joshua's own PASS is never read as a Replit verdict", () => {
   const pinned = collectPinnedVerdicts({
     reviews: [],
