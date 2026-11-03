@@ -459,7 +459,11 @@ def _sync_once() -> bool:
         logger.debug("live_subnets sync skipped — already in flight")
         return False
     _record_boot_status(phase="sync_start")
-    from internal.process_memory import log_heavy_job_rss
+    try:
+        from internal.process_memory import log_heavy_job_rss
+    except ImportError:  # RSS bookends are observability; never fail the sync
+        def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
+            return None
 
     _rss_t0 = time.perf_counter()
     log_heavy_job_rss("live_subnets_sync", "start", started_at=_rss_t0)

@@ -1692,7 +1692,11 @@ class ScoreSnapshotScheduler:
                 )
 
             logger.info("score snapshot cycle started")
-            from internal.process_memory import log_heavy_job_rss
+            try:
+                from internal.process_memory import log_heavy_job_rss
+            except ImportError:  # RSS bookends are observability; never fail the cycle
+                def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
+                    return None
 
             _rss_t0 = time.perf_counter()
             log_heavy_job_rss("score_snapshot", "start", started_at=_rss_t0)

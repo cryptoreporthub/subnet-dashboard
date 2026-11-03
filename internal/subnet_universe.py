@@ -17,6 +17,12 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from internal.chain_read import UNPINNED_BLOCK_HASH, ChainRead
 
+try:
+    from internal.process_memory import log_heavy_job_rss
+except ImportError:  # RSS bookends are observability; never block the universe refresh
+    def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
 logger = logging.getLogger(__name__)
 
 # Netuid scan width for TMC-pagination gap probes. Bounds discovery, not membership.
@@ -754,6 +760,8 @@ class SubnetUniverseProvider:
             return self.reload_from_disk_if_stale()
         if not self._refresh_lock.acquire(blocking=False):
             return self._snapshot
+        _rss_t0 = time.perf_counter()
+        log_heavy_job_rss("subnet_universe_refresh", "start", started_at=_rss_t0)
         try:
             build = self._builder.build(self._snapshot)
             built = build.snapshot
@@ -775,6 +783,7 @@ class SubnetUniverseProvider:
             self._publish(built)
             return built
         finally:
+            log_heavy_job_rss("subnet_universe_refresh", "end", started_at=_rss_t0)
             self._refresh_lock.release()
 
     def ensure_refresh_loop(self) -> None:
