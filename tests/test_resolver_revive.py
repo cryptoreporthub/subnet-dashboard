@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from concurrent.futures import wait as futures_wait
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -321,4 +322,145 @@ def test_force_release_cycle_lock_replaces_wedged_lock():
     assert not sched._cycle_lock.locked()
     assert sched._cycle_lock.acquire(blocking=False)
     sched._cycle_lock.release()
+
+
+class _OrphanProbe:
+    """Blocks the first cycle's resolve call and records which thread runs expire."""
+
+    def __init__(self):
+        self.resolve_started = threading.Event()
+        self.release = threading.Event()
+        self.orphan_thread = None
+        self.expire_threads = []
+        self._resolve_calls = 0
+        self._lock = threading.Lock()
+
+    def resolve(self, *_a, **_k):
+        with self._lock:
+            self._resolve_calls += 1
+            first = self._resolve_calls == 1
+        if first:
+            self.orphan_thread = threading.current_thread()
+            self.resolve_started.set()
+            self.release.wait(timeout=5)
+        return {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {"warning": False, "pending_count": 0},
+        }
+
+    def expire(self):
+        self.expire_threads.append(threading.current_thread())
+        return {
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {"warning": False, "pending_count": 0},
+        }
+
+    def orphan_expires(self):
+        return sum(1 for t in self.expire_threads if t is self.orphan_thread)
+
+
+def _patch_orphan_env(tmp_path, monkeypatch, probe):
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    soul.write_text("{}", encoding="utf-8")
+    preds.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}), encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr(rs, "_default_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(resolver, "resolve_due_predictions", probe.resolve)
+    monkeypatch.setattr(resolver, "expire_stale_predictions", probe.expire)
+
+    @contextmanager
+    def _free_slot(_name):
+        yield True
+
+    monkeypatch.setattr("internal.heavy_job_gate.heavy_job_slot", _free_slot)
+
+
+def _fresh_scheduler():
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = True
+    sched._first_tick_pending = False
+    rs._scheduler = sched
+    return sched
+
+
+def _start_blocked_cycle(sched, probe):
+    """Run one timed cycle in a thread. Return (caller_thread, worker_future) once resolve blocks."""
+    caller = threading.Thread(target=sched._run_refresh_cycle_with_timeout, daemon=True)
+    caller.start()
+    assert probe.resolve_started.wait(timeout=5)
+    deadline = time.monotonic() + 5
+    while sched._inflight_future is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert sched._inflight_future is not None
+    return caller, sched._inflight_future
+
+
+def test_positive_control_orphan_expires_when_nothing_intervenes(tmp_path, monkeypatch):
+    """Harness check: an untouched live cycle runs expire on its own worker thread."""
+    probe = _OrphanProbe()
+    _patch_orphan_env(tmp_path, monkeypatch, probe)
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 30)
+    rs.stop_prediction_resolver_scheduler()
+    sched = _fresh_scheduler()
+    try:
+        _caller, fut = _start_blocked_cycle(sched, probe)
+        probe.release.set()
+        futures_wait([fut], timeout=5)
+        assert fut.done()
+        assert probe.orphan_expires() == 1
+    finally:
+        probe.release.set()
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_timed_out_orphan_cannot_expire_after_release(tmp_path, monkeypatch):
+    """Timeout path already abandons the cycle, so its late expire stage is skipped."""
+    probe = _OrphanProbe()
+    _patch_orphan_env(tmp_path, monkeypatch, probe)
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.2)
+    rs.stop_prediction_resolver_scheduler()
+    sched = _fresh_scheduler()
+    try:
+        caller, fut = _start_blocked_cycle(sched, probe)
+        caller.join(timeout=5)
+        assert not caller.is_alive()
+        probe.release.set()
+        futures_wait([fut], timeout=5)
+        assert fut.done()
+        assert probe.orphan_expires() == 0
+    finally:
+        probe.release.set()
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_stale_lock_revive_stops_live_orphan_from_expiring(tmp_path, monkeypatch):
+    """Revive force-releases a live (not timed-out) cycle; its orphan must not expire afterwards."""
+    probe = _OrphanProbe()
+    _patch_orphan_env(tmp_path, monkeypatch, probe)
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
+    rs.stop_prediction_resolver_scheduler()
+    sched = _fresh_scheduler()
+    try:
+        _caller, fut = _start_blocked_cycle(sched, probe)
+        out = rs.revive_prediction_resolver_scheduler(force=True)
+        assert out.get("stale_lock_recycled") is True
+        assert out.get("revived") is True
+        probe.release.set()
+        futures_wait([fut], timeout=5)
+        assert fut.done()
+        assert probe.orphan_expires() == 0
+    finally:
+        probe.release.set()
+        rs.stop_prediction_resolver_scheduler()
 
