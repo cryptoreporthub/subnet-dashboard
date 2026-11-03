@@ -1,11 +1,11 @@
 {
-  "number": 9436,
-  "title": "universe: persist tmp suffix comment",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9436",
+  "number": 9439,
+  "title": "pytest.ini: document shard-free local runs",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9439",
   "headSha": "feabbec5afe74da3482f4b679b8c01d3d5420a41",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,
   "files": [
-    "internal/subnet_universe.py"
+    "pytest.ini"
   ]
 }

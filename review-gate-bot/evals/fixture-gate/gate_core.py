@@ -246,6 +246,74 @@ def validate_oracle_json(oracle_doc: dict) -> list[str]:
     return check_planted_oracle_semantics(oracle_doc)
 
 
+DEFECT_VOICE = re.compile(
+    r"\b(omit|drop|without|ignores|skip|shrink|bypass|disable|relax|untested|claimed)\b",
+    re.I,
+)
+
+
+def pack_b_control(gate: dict) -> bool:
+    return bool(gate.get("packBControl") or (gate.get("packB") or {}).get("control"))
+
+
+def author_voice_text(pr: dict, gate: dict) -> str:
+    return "\n".join([pr.get("title") or "", gate.get("prBody") or pr.get("body") or ""])
+
+
+def check_r1b_author_voice(dirname: str, pr: dict, gate: dict) -> list[str]:
+    if not dirname.startswith("r1b-"):
+        return []
+    if pack_b_control(gate):
+        return []
+    if DEFECT_VOICE.search(author_voice_text(pr, gate)):
+        return [f"{dirname}: defect-naming token in title/body (author voice or packBControl)"]
+    return []
+
+
+def diff_patch_fingerprint(diff: dict) -> str:
+    import hashlib
+
+    parts = [f["patch"] for f in sorted(diff.get("files") or [], key=lambda x: x.get("path", ""))]
+    return hashlib.sha256("\n---\n".join(parts).encode()).hexdigest()
+
+
+def exam_patch_fingerprints(fixtures_root: Path) -> set[str]:
+    fps: set[str] = set()
+    if not fixtures_root.is_dir():
+        return fps
+    for d in fixtures_root.iterdir():
+        if not d.is_dir() or not d.name.startswith("hard-"):
+            continue
+        if d.name.startswith("hard-r24-"):
+            continue
+        diff_path = d / "diff.json"
+        if diff_path.is_file():
+            fps.add(diff_patch_fingerprint(json.loads(diff_path.read_text())))
+    return fps
+
+
+def check_r1b_exam_duplicate(dirname: str, diff: dict, exam_fps: set[str]) -> list[str]:
+    if not dirname.startswith("r1b-"):
+        return []
+    if diff_patch_fingerprint(diff) in exam_fps:
+        return [f"{dirname}: unified diff matches an exam (hard-*) fixture patch"]
+    return []
+
+
+def validate_r1b_fixture_dir(fixture_dir: Path, *, exam_fps: set[str] | None = None) -> list[str]:
+    name = fixture_dir.name
+    if not name.startswith("r1b-"):
+        return []
+    errors: list[str] = []
+    pr = json.loads((fixture_dir / "pr.json").read_text())
+    gate = json.loads((fixture_dir / "gate.json").read_text())
+    diff = json.loads((fixture_dir / "diff.json").read_text())
+    errors.extend(check_r1b_author_voice(name, pr, gate))
+    fps = exam_fps if exam_fps is not None else exam_patch_fingerprints(fixture_dir.parent)
+    errors.extend(check_r1b_exam_duplicate(name, diff, fps))
+    return errors
+
+
 def validate_repo_doc(repo_doc: dict, *, python: str) -> list[str]:
     oracle = (repo_doc.get("oracle") or "MODIFY") if isinstance(repo_doc.get("oracle"), str) else "MODIFY"
     if isinstance(repo_doc.get("gate"), dict):

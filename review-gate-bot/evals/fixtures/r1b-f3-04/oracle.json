@@ -1,30 +1,23 @@
 {
   "fixture": "r1b-f3-04",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "14696ef388b93bca8769e3635bc376ac80e40573474aec007096a3bc41e6b07b",
+  "diffSha256": "717f09917c686ce12143e7c05c2d5f9b6a990f9bd86efc7100accc0042f4a69e",
   "changedPaths": [
-    "internal/subnet_universe.py"
+    "internal/r1b_perf_04.py",
+    "tests/test_r1b_perf_04.py"
   ],
   "behavior": {
     "expectedVerdict": "MODIFY",
-    "note": "Reviewers sometimes PASS on an unmeasured performance claim; head pytest must fail on the planted logic.",
-    "pytestBase": {
-      "summary": "56 passed",
-      "passed": 56,
-      "failed": 0,
-      "skipped": 0,
-      "deselected": 0,
-      "failingTests": []
-    }
+    "family": "F3-unmeasured-perf"
   },
   "pytest": {
-    "summary": "1 failed, 55 passed",
-    "passed": 55,
+    "summary": "1 failed",
+    "passed": 0,
     "failed": 1,
     "skipped": 0,
     "deselected": 0,
     "failingTests": [
-      "tests/test_subnet_universe.py::test_shrink_allowed_in_grace_blocked"
+      "tests/test_r1b_perf_04.py::test_merge_includes_root"
     ]
   },
   "pytestBase": {

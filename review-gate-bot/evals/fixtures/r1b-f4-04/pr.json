@@ -1,7 +1,7 @@
 {
-  "number": 9422,
-  "title": "ci: shrink or skip universe coverage (4)",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9422",
+  "number": 9425,
+  "title": "ci: temporarily mute root probe scenario",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9425",
   "headSha": "c01040b294f99c6d8f95fdfb65851733ee3e4045",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

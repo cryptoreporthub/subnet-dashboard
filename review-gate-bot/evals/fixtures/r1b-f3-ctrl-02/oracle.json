@@ -1,0 +1,20 @@
+{
+  "fixture": "r1b-f3-ctrl-02",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "10f3f4054dc7e8ee08fe5e29e022f52df6f890f94a3c4bdfb7ae5d1158da4298",
+  "changedPaths": [
+    "internal/r1b_perf_08.py",
+    "tests/test_r1b_perf_08.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

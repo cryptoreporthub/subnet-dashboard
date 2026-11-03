@@ -1,16 +1,17 @@
 {
   "fixture": "r1b-clean-11",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "997e9caea103739bafae935ab837b0237cf52133a03127face8f648a9074e5b3",
+  "diffSha256": "8a89408a6853a5321e3d6999c449a98d6304289fcdd215e90b24c237cb715363",
   "changedPaths": [
-    "internal/subnet_universe.py"
+    "internal/r1b_clean_perf.py",
+    "tests/test_r1b_clean_perf.py"
   ],
   "behavior": {
     "expectedVerdict": "PASS"
   },
   "pytest": {
-    "summary": "56 passed",
-    "passed": 56,
+    "summary": "1 passed",
+    "passed": 1,
     "failed": 0,
     "skipped": 0,
     "deselected": 0,

@@ -1,9 +1,9 @@
 {
   "fixture": "r1b-clean-09",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "a21ad5a671ff68793440236ecb194067b8f9afa7f44fb42a1fc74ae3b7ffcdc3",
+  "diffSha256": "0d7002a917d08d15642e6e2468d4145e9424dd074916330aa1a9014765e25725",
   "changedPaths": [
-    "pytest.ini"
+    "internal/subnet_universe.py"
   ],
   "behavior": {
     "expectedVerdict": "PASS"

@@ -6,5 +6,6 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review"
+  "next": "review",
+  "prBody": "Hot path stays O(1) using timedelta.seconds instead of total_seconds()."
 }

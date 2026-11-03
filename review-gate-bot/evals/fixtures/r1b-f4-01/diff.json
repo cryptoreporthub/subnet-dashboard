@@ -6,14 +6,14 @@
       "status": "modified",
       "additions": 1,
       "deletions": 0,
-      "patch": "@@ -1,2 +1,3 @@\n [pytest]\n pythonpath = .\n+addopts = --deselect tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing --deselect tests/test_subnet_universe.py::test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered"
+      "patch": "@@ -1,2 +1,3 @@\n [pytest]\n pythonpath = .\n+addopts = --deselect tests/test_subnet_universe.py::test_t1_empty_state_emergency_registry"
     },
     {
       "path": "tests/test_subnet_universe.py",
       "status": "modified",
       "additions": 1,
       "deletions": 0,
-      "patch": "@@ -224,6 +224,7 @@\n   assert entry[\"negative_since\"]\n \n \n+@pytest.mark.skip(reason=\"noisy on shared CI\")\n def test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row(universe_tmp, monkeypatch):\n     \"\"\"Owner rule (2026-10-25): SN7 is off chain while TMC lists it. Expected drops to 127; SN7's row keeps its grace.\"\"\"\n     import internal.council.snapshot_coverage as cov"
+      "patch": "@@ -209,6 +209,7 @@\n       assert entry.get(\"negative_since\") in (None, \"\")\n \n \n+@pytest.mark.skip(reason=\"shard timing\")\n def test_t9_chain_unregistered_beats_tmc_listing(universe_tmp):\n   \"\"\"Owner rule (2026-10-25): the chain wins. Unregistered on chain leaves expected now; the row keeps its 48h grace.\"\"\"\n   prior = _prior_snapshot([42])"
     }
   ],
   "truncated": false,

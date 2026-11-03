@@ -1,9 +1,10 @@
 {
   "fixture": "r1b-f2-05",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "9686da97e4076b6f1c78449f6f7c428325c78faf5b07908ba08ff875907c5467",
+  "diffSha256": "2b24628d123f8ce5fbb5b333e77858baaa243bc918e6624f627845e1002fd73f",
   "changedPaths": [
-    "internal/subnet_universe.py"
+    "internal/subnet_universe.py",
+    "review-gate-bot/bot/lib/tag.ts"
   ],
   "behavior": {
     "base": {

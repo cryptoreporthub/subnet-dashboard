@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f1-04",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "b72e2a7dd3d02181705660feeb871073ec0a5fec646c0147006d320d072f6cd3",
+  "diffSha256": "4ce3d8ee4647991325da8e6086dd02349a77dd91f12204911e6bcfd6604d6871",
   "changedPaths": [
     "internal/subnet_universe.py"
   ],
@@ -18,8 +18,8 @@
     },
     "planted": {
       "reader": {
-        "servingNetuids": 0,
-        "keptLastComplete": false
+        "servingNetuids": 5,
+        "keptLastComplete": true
       },
       "writer": {
         "servingNetuids": 5,

@@ -1,12 +1,19 @@
 {
-  "totalFiles": 1,
+  "totalFiles": 2,
   "files": [
     {
-      "path": "internal/subnet_universe.py",
-      "status": "modified",
-      "additions": 1,
-      "deletions": 1,
-      "patch": "@@ -350,7 +350,7 @@\n             tmc_val = netuid in tmc_positive\n         probe_val = probe_map.get(netuid)\n         if not probe_complete and netuid not in probe_map:\n-            probe_val = None\n+            probe_val = False\n         if netuid == ROOT_NETUID:\n             probe_val = None\n "
+      "path": "internal/r1b_perf_03.py",
+      "status": "added",
+      "additions": 7,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,7 @@\n+\"\"\"Batch counter for refresh budgeting.\"\"\"\n+\n+def queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n+    if netuid_count <= 0:\n+        return 0\n+    batches = (netuid_count + batch_size - 1) // batch_size\n+    return batches + netuid_count  # accidental per-netuid follow-up"
+    },
+    {
+      "path": "tests/test_r1b_perf_03.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r1b_perf_03 import queries_for_refresh\n+\n+\n+def test_one_query_per_refresh_not_per_netuid():\n+    assert queries_for_refresh(64, batch_size=32) == 2"
     }
   ],
   "truncated": false,

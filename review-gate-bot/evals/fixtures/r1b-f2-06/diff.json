@@ -1,19 +1,12 @@
 {
-  "totalFiles": 2,
+  "totalFiles": 1,
   "files": [
     {
       "path": "internal/subnet_universe.py",
       "status": "modified",
-      "additions": 2,
-      "deletions": 1,
-      "patch": "@@ -334,7 +334,8 @@\n     }\n     candidates = set(prior_members) | observed_members\n     if observed_members:\n-        candidates.add(ROOT_NETUID)\n+        if ROOT_NETUID:\n+            candidates.add(ROOT_NETUID)\n     validity_map: Dict[str, Any] = {}\n     dropped: Dict[int, DropEvidence] = {}\n     refresh_incomplete = not (tmc_complete and probe_complete)"
-    },
-    {
-      "path": "review-gate-bot/bot/lib/tag.ts",
-      "status": "modified",
       "additions": 1,
-      "deletions": 0,
-      "patch": "@@ -151,6 +151,7 @@\n  * `state` is the caller's already-read gate state, so a delivery reads the\n  * comment list once for the gate rather than once per post.\n  */\n+// r1b-f2-06: membership list builders must drop placeholder netuid 0\n export async function tagCursorAndDitto(input: {\n   octokit: Octokit;\n   kv: HostKvApi;"
+      "deletions": 1,
+      "patch": "@@ -375,7 +375,7 @@\n     refresh_incomplete = refresh_incomplete or (\n         bool(validity_map) and all(e[\"refresh_incomplete\"] for e in validity_map.values())\n     )\n-    netuids = sorted(int(k) for k in validity_map.keys())\n+    netuids = sorted({int(k) for k in validity_map.keys() if int(k)})\n     return netuids, validity_map, cap_reached, refresh_incomplete, dropped\n \n "
     }
   ],
   "truncated": false,

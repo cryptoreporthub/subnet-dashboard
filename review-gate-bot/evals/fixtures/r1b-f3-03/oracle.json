@@ -1,192 +1,23 @@
 {
   "fixture": "r1b-f3-03",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "8f8bbea5876b4013b7218039a8c8204f75806deb91925e35e081b487340ff746",
+  "diffSha256": "eee36a5cca04dc546a46bf9f60fe76de35299a22e5e3d3835d78f3684b418b66",
   "changedPaths": [
-    "internal/subnet_universe.py"
+    "internal/r1b_perf_03.py",
+    "tests/test_r1b_perf_03.py"
   ],
   "behavior": {
-    "base": {
-      "completeRead": {
-        "size": 128,
-        "exactSet0to127": true,
-        "tmcOnly150Admitted": false
-      },
-      "failedReadCycle1": {
-        "size": 128,
-        "negativeMembers": 0,
-        "graceClocksStarted": 0,
-        "graceClockStampedAt": []
-      },
-      "failedReadCycle2Rows": [
-        {
-          "elapsedSinceCycle1": "47h59m59s (just before the grace)",
-          "clockAt": "2026-10-29T11:59:59+00:00",
-          "size": 128,
-          "removable": 0,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0,
-            1,
-            2
-          ]
-        },
-        {
-          "elapsedSinceCycle1": "48h00m00s (at the grace)",
-          "clockAt": "2026-10-29T12:00:00+00:00",
-          "size": 128,
-          "removable": 0,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0,
-            1,
-            2
-          ]
-        },
-        {
-          "elapsedSinceCycle1": "48h00m01s (just after the grace)",
-          "clockAt": "2026-10-29T12:00:01+00:00",
-          "size": 128,
-          "removable": 0,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0,
-            1,
-            2
-          ]
-        },
-        {
-          "elapsedSinceCycle1": "49h",
-          "clockAt": "2026-10-29T13:00:00+00:00",
-          "size": 128,
-          "removable": 0,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0,
-            1,
-            2
-          ]
-        }
-      ],
-      "failedReadCycle2After48h": {
-        "size": 128,
-        "removable": 0,
-        "shrinkAllowed": true,
-        "membersLeft": [
-          0,
-          1,
-          2
-        ]
-      }
-    },
-    "planted": {
-      "completeRead": {
-        "size": 128,
-        "exactSet0to127": true,
-        "tmcOnly150Admitted": false
-      },
-      "failedReadCycle1": {
-        "size": 128,
-        "negativeMembers": 127,
-        "graceClocksStarted": 127,
-        "graceClockStampedAt": [
-          "2026-10-27T12:00:00+00:00"
-        ]
-      },
-      "failedReadCycle2Rows": [
-        {
-          "elapsedSinceCycle1": "47h59m59s (just before the grace)",
-          "clockAt": "2026-10-29T11:59:59+00:00",
-          "size": 128,
-          "removable": 0,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0,
-            1,
-            2
-          ]
-        },
-        {
-          "elapsedSinceCycle1": "48h00m00s (at the grace)",
-          "clockAt": "2026-10-29T12:00:00+00:00",
-          "size": 1,
-          "removable": 127,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0
-          ]
-        },
-        {
-          "elapsedSinceCycle1": "48h00m01s (just after the grace)",
-          "clockAt": "2026-10-29T12:00:01+00:00",
-          "size": 1,
-          "removable": 127,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0
-          ]
-        },
-        {
-          "elapsedSinceCycle1": "49h",
-          "clockAt": "2026-10-29T13:00:00+00:00",
-          "size": 1,
-          "removable": 127,
-          "shrinkAllowed": true,
-          "membersLeft": [
-            0
-          ]
-        }
-      ],
-      "failedReadCycle2After48h": {
-        "size": 1,
-        "removable": 127,
-        "shrinkAllowed": true,
-        "membersLeft": [
-          0
-        ]
-      }
-    },
-    "clock": {
-      "kind": "injected: the module's `datetime` name is replaced by a subclass whose now() returns a clock set by the oracle (oracles.py FrozenDatetime)",
-      "cycle1At": "2026-10-27T12:00:00+00:00",
-      "cycle2At": [
-        {
-          "after": "47h59m59s (just before the grace)",
-          "at": "2026-10-29T11:59:59+00:00"
-        },
-        {
-          "after": "48h00m00s (at the grace)",
-          "at": "2026-10-29T12:00:00+00:00"
-        },
-        {
-          "after": "48h00m01s (just after the grace)",
-          "at": "2026-10-29T12:00:01+00:00"
-        },
-        {
-          "after": "49h",
-          "at": "2026-10-29T13:00:00+00:00"
-        }
-      ],
-      "graceSeconds": 172800,
-      "wallClockUsed": false
-    },
-    "mainBehaviourToReport": {
-      "tmcOnly150AdmittedDuringFailedChainRead": true,
-      "status": "degraded",
-      "note": "On the base code a TMC-listed netuid the chain never confirmed is admitted (as degraded) while the chain read fails. The contract pinned in the eval therefore does not claim otherwise."
-    },
-    "note": "Reviewers sometimes PASS on an unmeasured performance claim; head pytest must fail on the planted logic.",
-    "expectedVerdict": "MODIFY"
+    "expectedVerdict": "MODIFY",
+    "family": "F3-unmeasured-perf"
   },
   "pytest": {
-    "summary": "2 failed, 54 passed",
-    "passed": 54,
-    "failed": 2,
+    "summary": "1 failed",
+    "passed": 0,
+    "failed": 1,
     "skipped": 0,
     "deselected": 0,
     "failingTests": [
-      "tests/test_subnet_universe.py::test_aged_negative_retained_when_probe_rpc_error",
-      "tests/test_subnet_universe.py::test_partial_chain_read_never_marks_a_tmc_listed_netuid_negative"
+      "tests/test_r1b_perf_03.py::test_one_query_per_refresh_not_per_netuid"
     ]
   },
   "pytestBase": {

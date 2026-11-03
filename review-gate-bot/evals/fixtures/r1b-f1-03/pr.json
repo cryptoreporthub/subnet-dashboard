@@ -1,6 +1,6 @@
 {
   "number": 9403,
-  "title": "universe: reload persisted snapshots even when netuids is empty",
+  "title": "universe: honor persisted snapshots after worker compaction",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9403",
   "headSha": "229a31e307a6d172616e1e63b630bb1ab4a42259",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",

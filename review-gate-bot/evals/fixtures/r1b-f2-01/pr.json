@@ -1,11 +1,12 @@
 {
   "number": 9407,
-  "title": "universe: omit netuid 0 when assembling membership (1)",
+  "title": "universe: align membership keys with run_mode helper",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9407",
   "headSha": "e6194fed7d8ffb289adee21bb5c9d2af11f879a4",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,
   "files": [
-    "internal/subnet_universe.py"
+    "internal/subnet_universe.py",
+    "internal/run_mode.py"
   ]
 }

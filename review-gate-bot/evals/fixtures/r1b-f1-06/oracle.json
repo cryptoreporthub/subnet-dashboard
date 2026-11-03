@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f1-06",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "4ce3d8ee4647991325da8e6086dd02349a77dd91f12204911e6bcfd6604d6871",
+  "diffSha256": "85a324037efc285597f998212c6301196cc54d6ac5e3c48142cace89aefd99db",
   "changedPaths": [
     "internal/subnet_universe.py"
   ],

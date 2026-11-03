@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_redact_clean_tokens.py",
+      "status": "added",
+      "additions": 10,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,10 @@\n+\"\"\"Batch sizing.\"\"\"\n+import os\n+\n+\n+def read_max_tokens(default: int = 4096) -> int:\n+    raw = os.environ.get(\"MAX_TOKENS\", str(default))\n+    try:\n+        return max(1, int(raw))\n+    except ValueError:\n+        return default"
+    },
+    {
+      "path": "tests/test_r1b_redact_clean_tokens.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r1b_redact_clean_tokens import read_max_tokens\n+\n+\n+def test_read_max_tokens_default():\n+    assert read_max_tokens() == 4096"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

@@ -1,12 +1,19 @@
 {
-  "totalFiles": 1,
+  "totalFiles": 2,
   "files": [
     {
-      "path": "internal/subnet_universe.py",
-      "status": "modified",
-      "additions": 1,
-      "deletions": 1,
-      "patch": "@@ -267,7 +267,7 @@\n \n \n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n-    if netuid == ROOT_NETUID:\n+    if netuid == ROOT_NETUID and evidence.probe is not False:\n         return False\n     if evidence.probe is not False:\n         return False"
+      "path": "internal/r1b_perf_06.py",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,4 @@\n+\"\"\"Cap gate.\"\"\"\n+\n+def cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n+    return new_count <= cap or prior_count <= cap"
+    },
+    {
+      "path": "tests/test_r1b_perf_06.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r1b_perf_06 import cap_allows_publish\n+\n+\n+def test_cap_blocks_growth_beyond_limit():\n+    assert cap_allows_publish(128, 129, cap=128) is False"
     }
   ],
   "truncated": false,

@@ -6,5 +6,6 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review"
+  "next": "review",
+  "prBody": "Workers sometimes persist status=ok rows while netuids is being rewritten; readers should pick that up."
 }

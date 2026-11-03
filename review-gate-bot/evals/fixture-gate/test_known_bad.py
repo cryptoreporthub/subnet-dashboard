@@ -1,6 +1,7 @@
 """Gate must reject known-bad fixture revisions from git history (R0.2 acceptance)."""
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -36,6 +37,22 @@ KNOWN_BAD.append(
         "planted-blank-reload oracle PASS at head",
     )
 )
+
+
+def test_known_bad_r1b_defect_title_rejected() -> None:
+    from gate_core import check_r1b_author_voice
+
+    errors = check_r1b_author_voice("r1b-f1-bad", {"title": "ci: shrink universe tests"}, {})
+    assert errors
+
+
+def test_known_bad_r1b_exam_dup_rejected() -> None:
+    from gate_core import check_r1b_exam_duplicate, diff_patch_fingerprint
+
+    exam_diff = json.loads((REPO / "review-gate-bot/evals/fixtures/hard-planted-nonowner-refresh/diff.json").read_text())
+    fp = diff_patch_fingerprint(exam_diff)
+    errors = check_r1b_exam_duplicate("r1b-dup", exam_diff, {fp})
+    assert errors
 
 
 @pytest.mark.parametrize("rev,path,label", KNOWN_BAD)

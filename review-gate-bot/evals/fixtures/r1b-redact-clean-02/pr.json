@@ -1,0 +1,12 @@
+{
+  "number": 9447,
+  "title": "metrics: expose token_count for logging only",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9447",
+  "headSha": "50576fcaa30fbc299126b61cc74b21df03b36604",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_redact_clean_count.py",
+    "tests/test_r1b_redact_clean_count.py"
+  ]
+}

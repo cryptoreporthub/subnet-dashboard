@@ -1,72 +1,24 @@
 {
   "fixture": "r1b-f3-05",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "e4bcfcd055c143eef774d93bb0f866dbd0fad8bd7b44bcad3be202fd6bd08cae",
+  "diffSha256": "5686edaff579f297642fa4292849f8e776cb0ae1e159177d56cf7ab57c06056d",
   "changedPaths": [
-    "internal/subnet_universe.py"
+    "internal/r1b_perf_05.py",
+    "tests/test_r1b_perf_05.py"
   ],
   "behavior": {
-    "graceSeconds": 172800,
-    "rows": [
-      {
-        "elapsed": "23h",
-        "timedelta.seconds": 82800,
-        "base": false,
-        "planted": false
-      },
-      {
-        "elapsed": "25h",
-        "timedelta.seconds": 3600,
-        "base": false,
-        "planted": true
-      },
-      {
-        "elapsed": "47h",
-        "timedelta.seconds": 82800,
-        "base": false,
-        "planted": true
-      },
-      {
-        "elapsed": "47h59m59s (just before the grace)",
-        "timedelta.seconds": 86399,
-        "base": false,
-        "planted": true
-      },
-      {
-        "elapsed": "48h00m00s (at the grace)",
-        "timedelta.seconds": 0,
-        "base": true,
-        "planted": true
-      },
-      {
-        "elapsed": "48h00m01s (just after the grace)",
-        "timedelta.seconds": 1,
-        "base": true,
-        "planted": true
-      },
-      {
-        "elapsed": "49h",
-        "timedelta.seconds": 3600,
-        "base": true,
-        "planted": true
-      },
-      {
-        "elapsed": "72h",
-        "timedelta.seconds": 0,
-        "base": true,
-        "planted": true
-      }
-    ],
-    "note": "Reviewers sometimes PASS on an unmeasured performance claim; head pytest must fail on the planted logic.",
-    "expectedVerdict": "MODIFY"
+    "expectedVerdict": "MODIFY",
+    "family": "F3-unmeasured-perf"
   },
   "pytest": {
-    "summary": "56 passed",
-    "passed": 56,
-    "failed": 0,
+    "summary": "1 failed",
+    "passed": 0,
+    "failed": 1,
     "skipped": 0,
     "deselected": 0,
-    "failingTests": []
+    "failingTests": [
+      "tests/test_r1b_perf_05.py::test_memo_distinguishes_same_length_different_sets"
+    ]
   },
   "pytestBase": {
     "summary": "56 passed",

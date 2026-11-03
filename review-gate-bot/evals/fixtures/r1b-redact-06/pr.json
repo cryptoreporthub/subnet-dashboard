@@ -1,7 +1,7 @@
 {
-  "number": 9442,
-  "title": "universe: client_secret default disables grace",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9442",
+  "number": 9445,
+  "title": "universe: client_secret default shortens grace when unset",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9445",
   "headSha": "ad1c2f6d587f18b55f29e653f625f09195ef56e5",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

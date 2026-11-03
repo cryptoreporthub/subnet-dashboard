@@ -1,12 +1,11 @@
 {
   "number": 9412,
-  "title": "universe: omit netuid 0 when assembling membership (6)",
+  "title": "universe: normalize validity_map keys before sorting",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9412",
   "headSha": "af9a6e08d6e0d56608d0b93aa35e479daa825d20",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,
   "files": [
-    "internal/subnet_universe.py",
-    "review-gate-bot/bot/lib/tag.ts"
+    "internal/subnet_universe.py"
   ]
 }

@@ -6,5 +6,6 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review"
+  "next": "review",
+  "prBody": "Lookup stays under 5ms with a single dict probe per netuid."
 }

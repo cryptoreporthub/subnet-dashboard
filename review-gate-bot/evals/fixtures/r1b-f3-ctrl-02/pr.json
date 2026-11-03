@@ -1,0 +1,12 @@
+{
+  "number": 9420,
+  "title": "perf: measured query count for refresh batches",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9420",
+  "headSha": "354a4ec473bbfbb64aff7575cd16ea2360488426",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_perf_08.py",
+    "tests/test_r1b_perf_08.py"
+  ]
+}

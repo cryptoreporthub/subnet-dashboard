@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f4-02",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "2331db6e85bf678563d3d65b5813d3e4d69b0ebd18c813951d2c73e93de21e2f",
+  "diffSha256": "9ccf9de964417a96ecee2c593f6a69f2da7c1c3710565fe6f1c69f5798dd8d74",
   "changedPaths": [
     "pytest.ini",
     "tests/test_subnet_universe.py"
@@ -27,6 +27,6 @@
         "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read"
       ]
     },
-    "note": "Skipped/deselected tests keep the gate suite comparison clean while hiding chain/TMC bugs."
+    "expectedVerdict": "MODIFY"
   }
 }

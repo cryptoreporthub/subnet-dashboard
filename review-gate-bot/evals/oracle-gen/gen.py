@@ -121,7 +121,7 @@ if SKIP:   # the fast layer never runs the code under test
                   and n not in ("configure", "set_clock", "FrozenDatetime", "load", "both", "snap")]:
         setattr(oracles, _name, lambda *a, **k: {})
 
-def run_pytest(universe=None, tests=None, ini=None, extra_args=(), extra_files=None):
+def run_pytest(universe=None, tests=None, ini=None, extra_args=(), extra_files=None, test_paths=None):
     """Run tests/test_subnet_universe.py in the throwaway tree with the given heads. Returns counts and the failing test ids. No durations: they differ on every run."""
     if SKIP: return {}
     if extra_files:
@@ -133,7 +133,8 @@ def run_pytest(universe=None, tests=None, ini=None, extra_args=(), extra_files=N
     open(f"{PYROOT}/tests/test_subnet_universe.py", "w").write(tests if tests is not None else _tests0)
     open(f"{PYROOT}/pytest.ini", "w").write(ini if ini is not None else _ini0)
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "LANG")}
-    r = subprocess.run([VENV_PY, "-m", "pytest", "tests/test_subnet_universe.py", "-q", "-p", "no:cacheprovider", "-rf", *extra_args],
+    targets = test_paths or ["tests/test_subnet_universe.py"]
+    r = subprocess.run([VENV_PY, "-m", "pytest", *targets, "-q", "-p", "no:cacheprovider", "-rf", *extra_args],
                        cwd=PYROOT, env=env, capture_output=True, text=True, timeout=600)
     tail = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-300:]
     failing = sorted({l.split(" ")[1] for l in r.stdout.splitlines() if l.startswith("FAILED ")})

@@ -6,5 +6,6 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review"
+  "next": "review",
+  "prBody": "Async refresh helps web processes catch up when the worker is momentarily busy."
 }

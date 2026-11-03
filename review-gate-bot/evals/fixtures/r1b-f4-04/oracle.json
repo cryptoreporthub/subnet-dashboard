@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f4-04",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "652f39a2320f9122186d57dfdf3f3a139ebfc64f96e80f267526b21c204ed32a",
+  "diffSha256": "ef3d1fb295d1e15052dc34261ceb2854298dc1280f29b624ed224cb93c7c093b",
   "changedPaths": [
     "pytest.ini",
     "tests/test_subnet_universe.py"
@@ -29,6 +29,6 @@
         "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
       ]
     },
-    "note": "Skipped/deselected tests keep the gate suite comparison clean while hiding chain/TMC bugs."
+    "expectedVerdict": "MODIFY"
   }
 }

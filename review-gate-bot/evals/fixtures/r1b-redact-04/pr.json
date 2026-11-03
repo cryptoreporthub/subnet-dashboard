@@ -1,7 +1,7 @@
 {
-  "number": 9440,
-  "title": "universe: password helper rejects blank negative_since",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9440",
+  "number": 9443,
+  "title": "universe: password helper validates negative_since formatting",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9443",
   "headSha": "d764649e30aea3e8ea9f4d6b8a306f468033bb5a",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

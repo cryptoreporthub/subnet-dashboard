@@ -1,9 +1,10 @@
 {
   "fixture": "r1b-f2-04",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "67bf8f786f70f67fbe5092eaffd72d6274954a8190a8e92334cdde292d038ed2",
+  "diffSha256": "0fc40ae0080c81f58ff77248f6aaa1fb7ea5f7e8d36c76ad5a27922c4857c10f",
   "changedPaths": [
-    "internal/subnet_universe.py"
+    "internal/subnet_universe.py",
+    "internal/chain_price/membership.py"
   ],
   "behavior": {
     "base": {

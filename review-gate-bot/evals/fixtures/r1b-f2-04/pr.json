@@ -1,11 +1,12 @@
 {
   "number": 9410,
-  "title": "universe: omit netuid 0 when assembling membership (4)",
+  "title": "universe: delegate netuid ordering to chain_price membership helper",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9410",
   "headSha": "bca36052f6be11c67b52c733747a7373cf2ff74a",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,
   "files": [
-    "internal/subnet_universe.py"
+    "internal/subnet_universe.py",
+    "internal/chain_price/membership.py"
   ]
 }

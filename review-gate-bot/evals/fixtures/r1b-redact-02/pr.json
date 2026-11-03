@@ -1,7 +1,7 @@
 {
-  "number": 9438,
-  "title": "universe: max_tokens cap shrinks the grace window",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9438",
+  "number": 9441,
+  "title": "universe: cap batch size with max_tokens for RPC batches",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9441",
   "headSha": "1016b5cabd566dc8818998e297953f0e935aae8e",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

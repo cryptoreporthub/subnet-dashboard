@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_redact_clean_count.py",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,4 @@\n+\"\"\"Logging helper.\"\"\"\n+\n+def token_count(text: str) -> int:\n+    return len(text.split())"
+    },
+    {
+      "path": "tests/test_r1b_redact_clean_count.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r1b_redact_clean_count import token_count\n+\n+\n+def test_token_count_words():\n+    assert token_count(\"a b c\") == 3"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

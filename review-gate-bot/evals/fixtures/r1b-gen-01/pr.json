@@ -1,7 +1,7 @@
 {
-  "number": 9443,
-  "title": "generalization: drop netuid 0 via internal/run_mode.py",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9443",
+  "number": 9449,
+  "title": "generalization: membership helper via internal/run_mode.py",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9449",
   "headSha": "0a71ea955f7f3def695d321688886de5a619a6c0",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

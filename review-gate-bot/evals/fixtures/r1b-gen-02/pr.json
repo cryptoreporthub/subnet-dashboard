@@ -1,7 +1,7 @@
 {
-  "number": 9444,
-  "title": "generalization: drop netuid 0 via internal/subnets/tradable.py",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9444",
+  "number": 9450,
+  "title": "generalization: membership helper via internal/subnets/tradable.py",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9450",
   "headSha": "80a0cc9543b7ab56b01799e2de9a3646cda767f2",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

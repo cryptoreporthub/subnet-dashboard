@@ -1,10 +1,9 @@
 {
   "fixture": "r1b-f2-06",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "52f6196079b8cdfc02bfff06604dd1580a181be26ee2ca46b45089d910cdee78",
+  "diffSha256": "67bf8f786f70f67fbe5092eaffd72d6274954a8190a8e92334cdde292d038ed2",
   "changedPaths": [
-    "internal/subnet_universe.py",
-    "review-gate-bot/bot/lib/tag.ts"
+    "internal/subnet_universe.py"
   ],
   "behavior": {
     "base": {
@@ -36,10 +35,10 @@
         ]
       },
       "normalReadWithPrior": {
-        "size": 129,
-        "admittedNewSubnet128": true,
-        "status": "ok",
-        "message": ""
+        "size": 128,
+        "admittedNewSubnet128": false,
+        "status": "degraded",
+        "message": "Unsafe shrink blocked \u2014 retained last-known-good universe"
       },
       "failedReadWithPrior": {
         "size": 128,
@@ -50,13 +49,16 @@
     "note": "planted drops netuid 0 on a normal read (127 members, not the exact 128). With a prior that holds root, the planted build shrinks by root, the shrink guard blocks the publish, and the refresh is stuck on the old snapshot (a new registration is never admitted). On the failed-read recovery path root survives in both, because the prior is held: the bug is hidden there, not absent."
   },
   "pytest": {
-    "summary": "1 failed, 55 passed",
-    "passed": 55,
-    "failed": 1,
+    "summary": "4 failed, 52 passed",
+    "passed": 52,
+    "failed": 4,
     "skipped": 0,
     "deselected": 0,
     "failingTests": [
-      "tests/test_subnet_universe.py::test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete"
+      "tests/test_subnet_universe.py::test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered",
+      "tests/test_subnet_universe.py::test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete",
+      "tests/test_subnet_universe.py::test_t1_empty_state_emergency_registry",
+      "tests/test_subnet_universe.py::test_t4_no_truncation_above_max_netuids"
     ]
   }
 }

@@ -1,12 +1,19 @@
 {
-  "totalFiles": 1,
+  "totalFiles": 2,
   "files": [
     {
-      "path": "internal/subnet_universe.py",
-      "status": "modified",
-      "additions": 2,
-      "deletions": 1,
-      "patch": "@@ -279,7 +279,8 @@\n             started = started.replace(tzinfo=timezone.utc)\n     except Exception:\n         return False\n-    return (now - started).total_seconds() >= STALE_GRACE_SECONDS\n+    # Bounded work per refresh: compare against one day, not full 48h constant\n+    return (now - started).total_seconds() >= min(STALE_GRACE_SECONDS, 86400)\n \n \n def is_universe_refresh_writer() -> bool:"
+      "path": "internal/r1b_perf_05.py",
+      "status": "added",
+      "additions": 10,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,10 @@\n+\"\"\"Memoized netuid scan.\"\"\"\n+_memo = {}\n+\n+def cached_max_netuid(netuids: list[int]) -> int:\n+    key = len(netuids)\n+    if key in _memo:\n+        return _memo[key]\n+    val = max(n for n in netuids if n)\n+    _memo[key] = val\n+    return val"
+    },
+    {
+      "path": "tests/test_r1b_perf_05.py",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,6 @@\n+from internal.r1b_perf_05 import cached_max_netuid\n+\n+\n+def test_memo_distinguishes_same_length_different_sets():\n+    assert cached_max_netuid([0, 1, 2]) == 2\n+    assert cached_max_netuid([0, 5, 6]) == 6"
     }
   ],
   "truncated": false,

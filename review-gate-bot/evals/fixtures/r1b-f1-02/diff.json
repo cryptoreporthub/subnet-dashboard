@@ -6,7 +6,7 @@
       "status": "modified",
       "additions": 1,
       "deletions": 1,
-      "patch": "@@ -756,7 +756,7 @@\n     def kick_refresh_async(self) -> None:\n         if _ci_or_test():\n             return\n-        if not is_universe_refresh_writer():\n+        if False:\n             self.reload_from_disk_if_stale()\n             return\n "
+      "patch": "@@ -756,7 +756,7 @@\n     def kick_refresh_async(self) -> None:\n         if _ci_or_test():\n             return\n-        if not is_universe_refresh_writer():\n+        if not is_universe_refresh_writer() and not os.environ.get(\"UNIVERSE_ASYNC_WEB\"):\n             self.reload_from_disk_if_stale()\n             return\n "
     }
   ],
   "truncated": false,

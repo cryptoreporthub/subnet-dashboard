@@ -1,0 +1,20 @@
+{
+  "fixture": "r1b-redact-clean-02",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "1ea2de5dea24a9737537f2ebac39c6f74a6f2a720495b783f29caa4b507651a0",
+  "changedPaths": [
+    "internal/r1b_redact_clean_count.py",
+    "tests/test_r1b_redact_clean_count.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

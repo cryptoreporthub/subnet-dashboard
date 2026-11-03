@@ -1,12 +1,19 @@
 {
-  "totalFiles": 1,
+  "totalFiles": 2,
   "files": [
     {
       "path": "internal/subnet_universe.py",
       "status": "modified",
-      "additions": 1,
+      "additions": 2,
       "deletions": 1,
-      "patch": "@@ -375,7 +375,7 @@\n     refresh_incomplete = refresh_incomplete or (\n         bool(validity_map) and all(e[\"refresh_incomplete\"] for e in validity_map.values())\n     )\n-    netuids = sorted(int(k) for k in validity_map.keys())\n+    netuids = sorted({int(k) for k in validity_map.keys() if int(k)})\n     return netuids, validity_map, cap_reached, refresh_incomplete, dropped\n \n "
+      "patch": "@@ -375,7 +375,8 @@\n     refresh_incomplete = refresh_incomplete or (\n         bool(validity_map) and all(e[\"refresh_incomplete\"] for e in validity_map.values())\n     )\n-    netuids = sorted(int(k) for k in validity_map.keys())\n+    from internal.chain_price.membership import r1b_f2_netuids_d\n+    netuids = r1b_f2_netuids_d(validity_map)\n     return netuids, validity_map, cap_reached, refresh_incomplete, dropped\n \n "
+    },
+    {
+      "path": "internal/chain_price/membership.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -102,3 +102,7 @@\n     if total_networks != member_count_incl_root:\n         return [], \"invalid\"\n     return sorted(set(netuids)), \"ok\"\n+\n+\n+def r1b_f2_netuids_d(validity_map):\n+    keys = [int(k) for k in validity_map.keys()]; return sorted(x for x in keys if x)"
     }
   ],
   "truncated": false,

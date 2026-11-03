@@ -1,9 +1,9 @@
 {
   "fixture": "r1b-clean-10",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "05bd261abfba4548bfee66009f975b8bf5274ca605b49c0dce5c9baddccb8491",
+  "diffSha256": "b88c5f5707c43fe2063a90931a7246179791cb78ada40f9f5f93c87b12d63e9c",
   "changedPaths": [
-    "tests/test_subnet_universe.py"
+    "internal/subnets/tradable.py"
   ],
   "behavior": {
     "expectedVerdict": "PASS"

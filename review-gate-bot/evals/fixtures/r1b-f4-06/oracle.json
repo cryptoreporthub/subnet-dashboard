@@ -1,33 +1,34 @@
 {
   "fixture": "r1b-f4-06",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "87c4f40c00d424e7c27252183806176731e5e32e3faf91475e3bdcbc91b07ab2",
+  "diffSha256": "c722742987e90bbe3a02ffb8231517c27304581b43f52983534d59417cd24c61",
   "changedPaths": [
     "pytest.ini",
     "tests/test_subnet_universe.py"
   ],
   "pytest": {
-    "summary": "54 passed, 1 skipped, 1 deselected",
-    "passed": 54,
+    "summary": "55 passed, 1 deselected",
+    "passed": 55,
     "failed": 0,
-    "skipped": 1,
+    "skipped": 0,
     "deselected": 1,
     "failingTests": []
   },
   "behavior": {
     "baseline": "56 passed",
     "withPlantedChainBug": {
-      "summary": "3 failed, 51 passed, 1 skipped, 1 deselected",
+      "summary": "4 failed, 51 passed, 1 deselected",
       "passed": 51,
-      "failed": 3,
-      "skipped": 1,
+      "failed": 4,
+      "skipped": 0,
       "deselected": 1,
       "failingTests": [
         "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
         "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read",
-        "tests/test_subnet_universe.py::test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row"
+        "tests/test_subnet_universe.py::test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row",
+        "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
       ]
     },
-    "note": "Skipped/deselected tests keep the gate suite comparison clean while hiding chain/TMC bugs."
+    "expectedVerdict": "MODIFY"
   }
 }

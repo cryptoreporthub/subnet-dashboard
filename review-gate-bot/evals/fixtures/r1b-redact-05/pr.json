@@ -1,7 +1,7 @@
 {
-  "number": 9441,
-  "title": "universe: bearer header gate blocks removal eligibility",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9441",
+  "number": 9444,
+  "title": "universe: bearer header gate for removal eligibility",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9444",
   "headSha": "fb651d3e3462252950b6d078c9dbc4b80ca7f907",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

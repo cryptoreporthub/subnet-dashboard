@@ -6,5 +6,6 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review"
+  "next": "review",
+  "prBody": "Fly v1 colocated workers need the refresh loop even when RUN_MODE=web."
 }

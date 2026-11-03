@@ -1,12 +1,19 @@
 {
-  "totalFiles": 1,
+  "totalFiles": 2,
   "files": [
     {
       "path": "internal/subnet_universe.py",
       "status": "modified",
-      "additions": 1,
-      "deletions": 1,
-      "patch": "@@ -662,7 +662,7 @@\n         except Exception as exc:\n             reason = \"lkg_corrupt\"\n             logger.warning(\"subnet_universe corrupt/missing persistence: %s\", exc)\n-        return UniverseSnapshot.emergency_registry(reason=reason)\n+        return UniverseSnapshot.emergency_registry(reason=reason)  # cold start\n \n     def reload_from_disk_if_stale(self) -> UniverseSnapshot:\n         \"\"\"Reader path: pick up worker-published snapshot without refreshing.\"\"\""
+      "additions": 13,
+      "deletions": 5,
+      "patch": "@@ -266,6 +266,17 @@\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n \n \n+def _parse_negative_since(value: Any) -> Optional[datetime]:\n+    \"\"\"Parse negative_since as UTC.\"\"\"\n+    try:\n+        parsed = datetime.fromisoformat(str(value))\n+    except Exception:\n+        return None\n+    if parsed.tzinfo is None:\n+        parsed = parsed.replace(tzinfo=timezone.utc)\n+    return parsed\n+\n+\n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n     if netuid == ROOT_NETUID:\n         return False\n@@ -273,11 +284,8 @@\n         return False\n     if not evidence.negative_since:\n         return False\n-    try:\n-        started = datetime.fromisoformat(str(evidence.negative_since))\n-        if started.tzinfo is None:\n-            started = started.replace(tzinfo=timezone.utc)\n-    except Exception:\n+    started = _parse_negative_since(evidence.negative_since)\n+    if started is None:\n         return False\n     return (now - started).total_seconds() >= STALE_GRACE_SECONDS\n "
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,10 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_parse_negative_since_treats_naive_as_utc():\n+    from internal.subnet_universe import _parse_negative_since\n+\n+    assert _parse_negative_since(\"2026-10-01T00:00:00\").tzinfo is timezone.utc\n+    assert _parse_negative_since(\"not a date\") is None"
     }
   ],
   "truncated": false,

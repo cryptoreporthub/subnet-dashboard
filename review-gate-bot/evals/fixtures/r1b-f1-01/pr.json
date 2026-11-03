@@ -1,6 +1,6 @@
 {
   "number": 9401,
-  "title": "universe: refresh_once builds in web mode without the writer gate",
+  "title": "universe: share refresh work across web and worker",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9401",
   "headSha": "3d7148d82b16fc07cde502211883f7766dbed2f8",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",

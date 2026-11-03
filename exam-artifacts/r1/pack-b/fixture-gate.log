@@ -6,7 +6,7 @@
 === fixture-gate: gate executor probe ===
 Running 1 items in this shard
 .                                                                        [100%]
-1 passed in 0.37s
+1 passed in 0.36s
 fixture-gate ok: gate executor probe
 
 === fixture-gate: structural pytest ===
@@ -15,14 +15,19 @@ Running 3 items in this shard
 3 passed in 0.02s
 fixture-gate ok: structural pytest
 
-=== fixture-gate: known-bad rejection (7 cases) ===
-Running 7 items in this shard
-.......                                                                  [100%]
-7 passed in 5.70s
-fixture-gate ok: known-bad rejection (7 cases)
+=== fixture-gate: known-bad rejection ===
+Running 9 items in this shard
+.........                                                                [100%]
+9 passed in 5.84s
+fixture-gate ok: known-bad rejection
+
+=== fixture-gate: pack B author-voice + exam-dup gate ===
+Running 4 items in this shard
+....                                                                     [100%]
+4 passed in 0.02s
+fixture-gate ok: pack B author-voice + exam-dup gate
 
 === fixture-gate: oracle-gen --check (executed oracle ON; ORACLE_PYTHON=/agent/repos/subnet-dashboard/.venv/bin/python) ===
-Error fetching page 1: No module named 'httpx'
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
@@ -76,10 +81,6 @@ subnet_universe unsafe shrink blocked (128 -> 127) removed=[0]
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
-subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
-subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
-subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
-subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe unsafe shrink blocked (128 -> 128) removed=[0]
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe unsafe shrink blocked (128 -> 127) removed=[0]
@@ -92,7 +93,15 @@ subnet_universe unsafe shrink blocked (128 -> 127) removed=[0]
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (128 -> 128) removed=[0]
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (128 -> 127) removed=[0]
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (128 -> 128) removed=[0]
+subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
+subnet_universe unsafe shrink blocked (128 -> 127) removed=[0]
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows
 subnet_universe emergency_registry (reason=lkg_missing): registry-only rows

@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_perf_07.py",
+      "status": "added",
+      "additions": 7,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,7 @@\n+\"\"\"Linear merge with instrumentation.\"\"\"\n+\n+def merged_netuids(validity_map: dict) -> list[int]:\n+    out = []\n+    for k in validity_map.keys():\n+        out.append(int(k))\n+    return sorted(out)"
+    },
+    {
+      "path": "tests/test_r1b_perf_07.py",
+      "status": "added",
+      "additions": 7,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,7 @@\n+from internal.r1b_perf_07 import merged_netuids\n+\n+\n+def test_merge_linear_and_includes_root():\n+    m = {\"0\": {}, \"1\": {}, \"2\": {}}\n+    assert 0 in merged_netuids(m)\n+    assert len(merged_netuids(m)) == 3"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

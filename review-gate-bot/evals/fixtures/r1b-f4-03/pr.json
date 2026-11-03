@@ -1,7 +1,7 @@
 {
-  "number": 9421,
-  "title": "ci: shrink or skip universe coverage (3)",
-  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9421",
+  "number": 9424,
+  "title": "ci: focus universe suite on chain merge cases",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9424",
   "headSha": "41e0389fab0359de62259c34da5f1796b31ba6b7",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,

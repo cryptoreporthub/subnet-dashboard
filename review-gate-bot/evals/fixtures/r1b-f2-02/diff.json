@@ -1,12 +1,19 @@
 {
-  "totalFiles": 1,
+  "totalFiles": 2,
   "files": [
     {
       "path": "internal/subnet_universe.py",
       "status": "modified",
-      "additions": 1,
+      "additions": 2,
       "deletions": 1,
-      "patch": "@@ -375,7 +375,7 @@\n     refresh_incomplete = refresh_incomplete or (\n         bool(validity_map) and all(e[\"refresh_incomplete\"] for e in validity_map.values())\n     )\n-    netuids = sorted(int(k) for k in validity_map.keys())\n+    netuids = sorted(int(k) for k in validity_map.keys() if k != str(0))\n     return netuids, validity_map, cap_reached, refresh_incomplete, dropped\n \n "
+      "patch": "@@ -375,7 +375,8 @@\n     refresh_incomplete = refresh_incomplete or (\n         bool(validity_map) and all(e[\"refresh_incomplete\"] for e in validity_map.values())\n     )\n-    netuids = sorted(int(k) for k in validity_map.keys())\n+    from internal.subnets.tradable import r1b_f2_netuids_b\n+    netuids = r1b_f2_netuids_b(validity_map)\n     return netuids, validity_map, cap_reached, refresh_incomplete, dropped\n \n "
+    },
+    {
+      "path": "internal/subnets/tradable.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -67,3 +67,7 @@\n         return buy + sell\n     except (TypeError, ValueError):\n         return 0.0\n+\n+\n+def r1b_f2_netuids_b(validity_map):\n+    return sorted(k for k in (int(x) for x in validity_map.keys()) if k)"
     }
   ],
   "truncated": false,

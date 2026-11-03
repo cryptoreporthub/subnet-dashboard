@@ -1,11 +1,12 @@
 {
   "number": 9417,
-  "title": "universe: cap grace at one day for long-running refreshes",
+  "title": "perf: memoized O(1) cache for repeated netuid scans",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9417",
   "headSha": "bd273605150fd69529e01197201c1a9a3153af89",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "draft": false,
   "files": [
-    "internal/subnet_universe.py"
+    "internal/r1b_perf_05.py",
+    "tests/test_r1b_perf_05.py"
   ]
 }

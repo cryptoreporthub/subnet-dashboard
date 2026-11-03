@@ -6,5 +6,6 @@
   "replit": "missing",
   "suite": "clean",
   "replitTagged": false,
-  "next": "review"
+  "next": "review",
+  "prBody": "Keeps CI green while we stabilize flaky universe scenarios."
 }

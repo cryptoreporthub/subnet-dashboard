@@ -6,7 +6,7 @@
       "status": "modified",
       "additions": 1,
       "deletions": 0,
-      "patch": "@@ -1,2 +1,3 @@\n [pytest]\n pythonpath = .\n+addopts = -k \"not t9_chain\""
+      "patch": "@@ -1,2 +1,3 @@\n [pytest]\n pythonpath = .\n+addopts = -k \"not sn7_off_chain\""
     },
     {
       "path": "tests/test_subnet_universe.py",

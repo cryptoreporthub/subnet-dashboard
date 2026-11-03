@@ -1,9 +1,10 @@
 {
   "fixture": "r1b-f2-02",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "9db67cf55982b8c23159242013ad7d17ad5afd9e271950a03cd0f67e4d89b48b",
+  "diffSha256": "e415455eb339088fceb15cc85315c5b5a496499270ca2153d4974de059073cdc",
   "changedPaths": [
-    "internal/subnet_universe.py"
+    "internal/subnet_universe.py",
+    "internal/subnets/tradable.py"
   ],
   "behavior": {
     "base": {

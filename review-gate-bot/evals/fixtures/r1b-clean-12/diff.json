@@ -2,11 +2,11 @@
   "totalFiles": 1,
   "files": [
     {
-      "path": "internal/subnet_universe.py",
+      "path": "pytest.ini",
       "status": "modified",
       "additions": 1,
-      "deletions": 1,
-      "patch": "@@ -693,7 +693,7 @@\n             return\n         try:\n             os.makedirs(os.path.dirname(self._persist_file), exist_ok=True)\n-            tmp = self._persist_file + \".tmp\"\n+            tmp = self._persist_file + \".tmp\"  # atomic write\n             with open(tmp, \"w\") as handle:\n                 json.dump(snap.to_dict(), handle)\n             os.replace(tmp, self._persist_file)"
+      "deletions": 0,
+      "patch": "@@ -1,2 +1,3 @@\n [pytest]\n pythonpath = .\n+# pack-b: default addopts unchanged"
     }
   ],
   "truncated": false,
