@@ -57,8 +57,8 @@
       ]
     },
     {
-      "id": "review-gate-r27/p4/1",
-      "evalCase": "review-gate-r27/p4",
+      "id": "review-gate-r27/p4-v2/1",
+      "evalCase": "review-gate-r27/p4-v2",
       "toolCalls": [
         {
           "toolName": "post_verdict",

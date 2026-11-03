@@ -3,7 +3,8 @@
   "round": "r27",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
   "retired": {
-    "p5": "r25-p5 ambiguous CI wiring (no checkout/setup); replaced by p5-v2"
+    "p5": "r25-p5 ambiguous CI wiring (no checkout/setup); replaced by p5-v2",
+    "p4": "r27-p4 narrowed smoke file + tautology; replaced by p4-v2 full tests/ shard"
   },
   "fixtures": [
     {
@@ -51,14 +52,14 @@
       }
     },
     {
-      "slug": "p4",
-      "fixture": "r27-p4",
-      "fixturePath": "exam-artifacts/r27/fixtures/r27-p4",
+      "slug": "p4-v2",
+      "fixture": "r27-p4-v2",
+      "fixturePath": "exam-artifacts/r27/fixtures/r27-p4-v2",
       "oracle": "PASS",
       "sha256": {
-        "diff": "b01e59419f5f5b1994ad966820ba7f731cfbefa0b7e54dd874d4135f3945701f",
-        "oracle": "7940956723558459816dc2be82b1ae21fe554d44ff237573c2af9d5ac06eb847",
-        "repo": "970d8cc23974d8411073791b58155d0ac99bb2e9f465a7417d60f348f201a2ee"
+        "diff": "537698b91370ab14676072584966faf4f787b25cd966dff9cfd378467c74ce62",
+        "oracle": "0678e35233577c9e08f4e9c33910aa9fbf62b7a84fc8302106f79a97be4450be",
+        "repo": "c1b7f511d778632141e16b0478f47e33d8283ebe8bc1e327d0c32f81e1d86692"
       }
     },
     {
@@ -331,11 +332,10 @@
   "r23Pin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
   "c25Pin": "06269de964afc69bc81dd71156caa5bb2594bea1",
   "contentPins": {
-    "stageCManifest": "dcb282e215310b85f2a43cd8953f3fcc63b27810efaf3dd1a880e18e2666c6c7",
-    "runPlanC": "312c6e3a4c47211e7d2fff1d378a04c07a426892b42848114e0459c91a6730b7",
+    "stageCManifest": "8cb16a57072f24b6813702c25345b2cadf4092d425586be3e6ff5587fb71e7a9",
+    "runPlanC": "362ed7f19260c52417431f4db112cf53e28d652b116d00ce7b16d25d90e7cc35",
     "runnerC": "5bbc6979b8c3d34ea8b59a4898cf13f9eec36637e9848238cd1bb7cfa0628a38",
     "prompts": "6c28552b7fca83d907dae7676ff70abc3767e18bcb317c4f1f4b42492581053c",
     "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96"
-  },
-  "p4Relabel": "r27-GATE-DEFECT: p4 diff changed; Claude re-label both labelers"
+  }
 }

@@ -1,0 +1,10 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        shard-index: [0, 1, 2]\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.12'\n      - run: pip install pytest pytest-shard\n      - run: python -m pytest -q tests/ --shard-id=${{ matrix.shard-index }} --num-shards=3\n",
+    "internal/r27_suite_anchor.py": "from __future__ import annotations\n\n\ndef suite_anchor(step: int) -> int:\n    \"\"\"Deterministic suite helper (not a tautology target).\"\"\"\n    return (step * 7 + 11) % 97\n",
+    "tests/test_r27_suite_anchor.py": "import pytest\n\nfrom internal.r27_suite_anchor import suite_anchor\n\n\ndef test_anchor_baseline():\n    assert suite_anchor(0) == 11\n\n\n@pytest.mark.parametrize(\n    \"step,expected\",\n    [(1, 18), (2, 25), (3, 32), (4, 39), (5, 46), (6, 53), (7, 60), (8, 67), (9, 74)],\n)\ndef test_anchor_steps(step, expected):\n    assert suite_anchor(step) == expected\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
+  }
+}

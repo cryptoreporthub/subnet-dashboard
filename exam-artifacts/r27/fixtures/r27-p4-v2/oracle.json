@@ -1,0 +1,26 @@
+{
+  "fixture": "r27-p4-v2",
+  "slug": "p4-v2",
+  "mechanism": "P4",
+  "variant": "p4-v2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "537698b91370ab14676072584966faf4f787b25cd966dff9cfd378467c74ce62",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "internal/r27_suite_anchor.py",
+    "tests/test_r27_suite_anchor.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "labeling": {
+    "note": "Replaces p4; Claude dual label on p4-v2 pending"
+  },
+  "pytest": {
+    "summary": "10 passed",
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

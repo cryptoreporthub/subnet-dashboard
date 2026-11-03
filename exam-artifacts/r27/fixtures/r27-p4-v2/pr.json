@@ -1,0 +1,14 @@
+{
+  "number": 9631,
+  "title": "ci: shard full test suite with matrix",
+  "body": "Adds suite tests and shards the full tests/ tree via python -m pytest (same scope as base pytest -q, not a single smoke file).",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9631",
+  "headSha": "a27f000000000000000000000000000000000104",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "internal/r27_suite_anchor.py",
+    "tests/test_r27_suite_anchor.py"
+  ]
+}
