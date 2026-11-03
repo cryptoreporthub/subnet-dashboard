@@ -917,5 +917,5 @@
       ]
     }
   ],
-  "slotNote": "240 scored slots per arm (24 fixtures \u00d7 10 invocations); PASS subset 120 slots (12\u00d710)"
+  "slotNote": "5 invocations/arm \u00d7 24 cases = 120 slots/arm (60 PASS + 60 MODIFY); 240 total across both arms (10 invocations)"
 }

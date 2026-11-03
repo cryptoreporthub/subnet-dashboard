@@ -51,7 +51,7 @@ def main() -> None:
         "c25Pin": "06269de964afc69bc81dd71156caa5bb2594bea1",
         "slugs": slugs,
         "blocks": blocks,
-        "slotNote": "240 scored slots per arm (24 fixtures × 10 invocations); PASS subset 120 slots (12×10)",
+        "slotNote": "5 invocations/arm × 24 cases = 120 slots/arm (60 PASS + 60 MODIFY); 240 total across both arms (10 invocations)",
     }
     out = ROOT / "exam-artifacts/r27/run-plan-c.json"
     out.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")

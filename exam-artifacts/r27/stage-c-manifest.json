@@ -271,11 +271,30 @@
       }
     }
   ],
+  "slotMath": {
+    "invocationsPerArm": 5,
+    "casesPerInvocation": 24,
+    "slotsPerArm": 120,
+    "passFixtures": 12,
+    "modifyFixtures": 12,
+    "passSlotsPerArm": 60,
+    "modifySlotsPerArm": 60,
+    "totalInvocationsBothArms": 10,
+    "totalSlotsBothArms": 240,
+    "formula": "5 invocations/arm \u00d7 24 cases = 120 slots/arm (60 PASS + 60 MODIFY); 240 total across both arms"
+  },
   "bars": {
-    "C1": "PASS over-block cap 4 (60 PASS slots = 12 fixtures \u00d7 5 blocks)",
-    "C2": "MODIFY caught C25 >= 50/60",
-    "C3": "MODIFY gain C25 vs R23 >= +5 slots",
-    "C4": "Each MODIFY category >= 50% caught under C25"
+    "lockRef": "LOCK-C (6593881720), r27 PASS denominator 60 (stricter than 4/40)",
+    "C1": {
+      "summary": "PASS over-block cap 4/60 per arm (not 4/40; stricter rate)",
+      "maxOverBlocksPerArm": 4,
+      "passSlotDenominatorPerArm": 60,
+      "noPassFixtureBlocked": "No PASS fixture with \u22654 of 5 invocations blocked (per arm)",
+      "fisherOneSided": "One-sided Fisher (C25 over-block vs R23): require p \u2265 0.10 (fail if p < 0.10 that C25 over-blocks more)"
+    },
+    "C2": "MODIFY caught: C25 \u2265 50/60 per arm",
+    "C3": "MODIFY gain: C25 minus R23 \u2265 +5 of 60 MODIFY slots per paired comparison",
+    "C4": "MODIFY categories M1 15, M2 10, M3 10, M4 10, M5 10, M6 5: each \u226550% caught under C25"
   },
   "model": "composer-2.5 fast:false both arms (same as r25)",
   "arms": {
@@ -312,8 +331,8 @@
   "r23Pin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
   "c25Pin": "06269de964afc69bc81dd71156caa5bb2594bea1",
   "contentPins": {
-    "stageCManifest": "b1088980bd797bb175a3a0f4a27b9f0d7fe5d681545f99e196ade0649f98da5d",
-    "runPlanC": "f76eb2eda4310635bfff017e179ce856c15e6895d7b5ff60b0afac480039d622",
+    "stageCManifest": "e34dd6f1bc74ff8b07451b2d1f5f2dbb6c509fd958d4a8b0828b09b3d9414c04",
+    "runPlanC": "312c6e3a4c47211e7d2fff1d378a04c07a426892b42848114e0459c91a6730b7",
     "runnerC": "5bbc6979b8c3d34ea8b59a4898cf13f9eec36637e9848238cd1bb7cfa0628a38",
     "prompts": "6c28552b7fca83d907dae7676ff70abc3767e18bcb317c4f1f4b42492581053c",
     "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96"
