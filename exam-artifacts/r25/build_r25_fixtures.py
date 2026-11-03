@@ -21,8 +21,8 @@ SLUGS = [
     "p3",
     "p4",
     "p5",
-    "p6",
-    "p7",
+    "p6-v2",
+    "p7-v2",
     "m1a",
     "m1b",
     "m1c",
@@ -172,8 +172,8 @@ def fixture_meta(slug: str, idx: int) -> dict:
         "p3": "test: table-drive pair sum cases",
         "p4": "ci: add three-way pytest shard matrix",
         "p5": "test: add audit hook coverage job",
-        "p6": "chore: remove legacy refresh flag",
-        "p7": "test: move split validation to dedicated module",
+        "p6-v2": "chore: drop deprecated refresh toggle",
+        "p7-v2": "test: relocate label weight check",
         "m1a": "test: drop stale regression file",
         "m1b": "test: trim unused edge case",
         "m1c": "test: simplify hook smoke check",
@@ -194,8 +194,8 @@ def fixture_meta(slug: str, idx: int) -> dict:
         "p3": "Collapses separate pair-sum tests into one parametrized test with the same inputs.",
         "p4": "Adds a complete 0-based shard matrix matching num-shards.",
         "p5": "Introduces audit hook tests and a workflow job that runs them.",
-        "p6": "Removes a deprecated boolean flag and the test that locked its default.",
-        "p7": "Deletes an obsolete split test while adding the replacement case elsewhere.",
+        "p6-v2": "Removes a deprecated toggle and its dedicated test without changing other behavior.",
+        "p7-v2": "Moves a label-weight assertion into a new module while dropping the old file.",
         "m1a": "Removes a regression test module; service code is unchanged.",
         "m1b": "Drops one test function from an existing module.",
         "m1c": "Leaves the test name but removes substantive assertions.",
@@ -351,48 +351,68 @@ def repo_for(slug: str) -> dict:
             },
             "baseFiles": {},
         }
-    if slug == "p6":
+    if slug == "p6-v2":
         mod_base = (
             "from __future__ import annotations\n\n"
-            "ENABLE_LEGACY_FOO = True\n\n\n"
+            "ENABLE_LEGACY_REFRESH = True\n\n\n"
             "def refresh_enabled() -> bool:\n"
-            "    return not ENABLE_LEGACY_FOO\n"
+            "    return not ENABLE_LEGACY_REFRESH\n\n\n"
+            "def stable_slot_count() -> int:\n"
+            "    return 11\n"
         )
         mod_head = (
             "from __future__ import annotations\n\n\n"
             "def refresh_enabled() -> bool:\n"
-            "    return True\n"
+            "    return False\n\n\n"
+            "def stable_slot_count() -> int:\n"
+            "    return 11\n"
         )
-        tst = (
-            "from internal.r25_feature_flags import ENABLE_LEGACY_FOO\n\n\n"
-            "def test_legacy_foo_default():\n"
-            "    assert ENABLE_LEGACY_FOO is True\n"
+        tst_flag = (
+            "from internal.r25_feature_flags import ENABLE_LEGACY_REFRESH\n\n\n"
+            "def test_legacy_refresh_flag_default():\n"
+            "    assert ENABLE_LEGACY_REFRESH is True\n"
+        )
+        tst_stable = (
+            "from internal.r25_feature_flags import stable_slot_count\n\n\n"
+            "def test_stable_slot_count():\n"
+            "    assert stable_slot_count() == 11\n"
         )
         return {
             "files": {
                 "internal/r25_feature_flags.py": mod_head,
-                "tests/test_r25_feature_flags.py": "",
+                "tests/test_r25_feature_flags.py": tst_stable,
             },
             "baseFiles": {
                 "internal/r25_feature_flags.py": mod_base,
-                "tests/test_r25_feature_flags.py": tst,
+                "tests/test_r25_feature_flags.py": tst_flag + "\n\n" + tst_stable,
             },
         }
-    if slug == "p7":
+    if slug == "p7-v2":
+        mod = (
+            "from __future__ import annotations\n\n\n"
+            "def label_weight(label: str) -> int:\n"
+            "    return sum(ord(c) for c in label)\n"
+        )
         old_t = (
-            "def test_split_checksum_legacy():\n"
-            "    assert hash('legacy') == hash('legacy')\n"
+            "from internal.r25_label_weight import label_weight\n\n\n"
+            "def test_label_weight_legacy():\n"
+            "    assert label_weight(\"legacy\") == 729\n"
         )
         new_t = (
-            "def test_split_checksum_current():\n"
-            "    assert hash('current') == hash('current')\n"
+            "from internal.r25_label_weight import label_weight\n\n\n"
+            "def test_label_weight_legacy_replacement():\n"
+            "    assert label_weight(\"legacy\") == 729\n"
         )
         return {
             "files": {
-                "tests/test_r25_split_old.py": "",
-                "tests/test_r25_split_new.py": new_t,
+                "internal/r25_label_weight.py": mod,
+                "tests/test_r25_label_old.py": "",
+                "tests/test_r25_label_new.py": new_t,
             },
-            "baseFiles": {"tests/test_r25_split_old.py": old_t},
+            "baseFiles": {
+                "internal/r25_label_weight.py": mod,
+                "tests/test_r25_label_old.py": old_t,
+            },
         }
     if slug == "m1a":
         svc = (

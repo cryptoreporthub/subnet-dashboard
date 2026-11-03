@@ -1,9 +1,0 @@
-{
-  "files": {
-    "tests/test_r25_split_old.py": "",
-    "tests/test_r25_split_new.py": "def test_split_checksum_current():\n    assert hash('current') == hash('current')\n"
-  },
-  "baseFiles": {
-    "tests/test_r25_split_old.py": "def test_split_checksum_legacy():\n    assert hash('legacy') == hash('legacy')\n"
-  }
-}

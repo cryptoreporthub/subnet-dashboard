@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "tests/test_r25_label_new.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r25_label_weight import label_weight\n+\n+\n+def test_label_weight_legacy_replacement():\n+    assert label_weight(\"legacy\") == 729\n"
+    },
+    {
+      "path": "tests/test_r25_label_old.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 5,
+      "patch": "@@ -1,5 +0,0 @@\n-from internal.r25_label_weight import label_weight\n-\n-\n-def test_label_weight_legacy():\n-    assert label_weight(\"legacy\") == 729\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

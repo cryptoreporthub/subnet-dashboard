@@ -38,7 +38,7 @@ def main() -> None:
         "exam-artifacts/r25/fixture-gate-output.txt",
         "exam-artifacts/r25/gate_fixture_python.py",
         "exam-artifacts/r25/r25c_dry_run.py",
-        "exam-artifacts/r25/prove_worktrees.sh",
+        "exam-artifacts/r25/pin_manifest.py",
         "exam-artifacts/r25/pins.json",
         "review-gate-bot/evals/score-r24-first-line.py",
     ]

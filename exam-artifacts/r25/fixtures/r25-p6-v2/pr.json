@@ -1,7 +1,7 @@
 {
   "number": 9607,
-  "title": "chore: remove legacy refresh flag",
-  "body": "Removes a deprecated boolean flag and the test that locked its default.",
+  "title": "chore: drop deprecated refresh toggle",
+  "body": "Removes a deprecated toggle and its dedicated test without changing other behavior.",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9607",
   "headSha": "a25f000000000000000000000000000000000007",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",

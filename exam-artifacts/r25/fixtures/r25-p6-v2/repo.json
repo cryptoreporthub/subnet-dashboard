@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/r25_feature_flags.py": "from __future__ import annotations\n\n\ndef refresh_enabled() -> bool:\n    return False\n\n\ndef stable_slot_count() -> int:\n    return 11\n",
+    "tests/test_r25_feature_flags.py": "from internal.r25_feature_flags import stable_slot_count\n\n\ndef test_stable_slot_count():\n    assert stable_slot_count() == 11\n"
+  },
+  "baseFiles": {
+    "internal/r25_feature_flags.py": "from __future__ import annotations\n\nENABLE_LEGACY_REFRESH = True\n\n\ndef refresh_enabled() -> bool:\n    return not ENABLE_LEGACY_REFRESH\n\n\ndef stable_slot_count() -> int:\n    return 11\n",
+    "tests/test_r25_feature_flags.py": "from internal.r25_feature_flags import ENABLE_LEGACY_REFRESH\n\n\ndef test_legacy_refresh_flag_default():\n    assert ENABLE_LEGACY_REFRESH is True\n\n\nfrom internal.r25_feature_flags import stable_slot_count\n\n\ndef test_stable_slot_count():\n    assert stable_slot_count() == 11\n"
+  }
+}

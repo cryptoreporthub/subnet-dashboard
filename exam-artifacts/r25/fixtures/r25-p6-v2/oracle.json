@@ -1,13 +1,13 @@
 {
-  "fixture": "r25-p7",
-  "slug": "p7",
-  "mechanism": "P7",
-  "variant": "p7",
+  "fixture": "r25-p6-v2",
+  "slug": "p6-v2",
+  "mechanism": "P6",
+  "variant": "p6-v2",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "64dfa432ea7c7719d758425e6b54d097ec5d855acebeb9c4e56752d8055d78fe",
+  "diffSha256": "9c7aa29464a19d873ca3a8e18d325b167f1f96e55c773070f360bcc9746e0371",
   "changedPaths": [
-    "tests/test_r25_split_new.py",
-    "tests/test_r25_split_old.py"
+    "internal/r25_feature_flags.py",
+    "tests/test_r25_feature_flags.py"
   ],
   "behavior": {
     "expectedVerdict": "PASS"

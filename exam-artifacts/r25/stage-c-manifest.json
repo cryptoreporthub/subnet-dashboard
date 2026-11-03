@@ -69,25 +69,25 @@
       }
     },
     {
-      "slug": "p6",
-      "fixture": "r25-p6",
-      "fixturePath": "exam-artifacts/r25/fixtures/r25-p6",
+      "slug": "p6-v2",
+      "fixture": "r25-p6-v2",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p6-v2",
       "oracle": "PASS",
       "sha256": {
-        "diff": "b2c3699997ee1587c3e7017619ce8315c9adc44d5ac02fb27b4989619c7874cf",
-        "oracle": "b0cb5125484decac7bdddacf5be98a4f54682e95a3c3d26c3ed7ad554eb323ec",
-        "repo": "49fe9bb60de0c25758ea0ba13ea3a70abce71e45825f01edca1deb827fc2e389"
+        "diff": "9c7aa29464a19d873ca3a8e18d325b167f1f96e55c773070f360bcc9746e0371",
+        "oracle": "7189f56411ca82671bb7569b4fca1017b838201725edcc1647f99f09d81354a2",
+        "repo": "5aa307e1f8882625261b8a0ab54268dba61f40328c75d1ca2e2e15b050fa6f03"
       }
     },
     {
-      "slug": "p7",
-      "fixture": "r25-p7",
-      "fixturePath": "exam-artifacts/r25/fixtures/r25-p7",
+      "slug": "p7-v2",
+      "fixture": "r25-p7-v2",
+      "fixturePath": "exam-artifacts/r25/fixtures/r25-p7-v2",
       "oracle": "PASS",
       "sha256": {
-        "diff": "64dfa432ea7c7719d758425e6b54d097ec5d855acebeb9c4e56752d8055d78fe",
-        "oracle": "4dc972865aae3c621882f8163974a80daf10b8af847633de8e131b772c41d694",
-        "repo": "e0263cad4135c0467177f54e60aa20ca0b719bbb4f6140145df4aa67e5d63649"
+        "diff": "1d533a12f9894bb56c1d25dddb0357c78f68f58a364f6c8e90b67e4aea2f8459",
+        "oracle": "db1cf97944892b997782bbb335734b348c9b18d454deccc9a21587705b01cb0c",
+        "repo": "c339f87c7356948b2bf3aab2d77589ff02ec817e70dbd259218c809347f0f78c"
       }
     },
     {
@@ -253,8 +253,8 @@
   "r23Pin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
   "c25Pin": "06269de964afc69bc81dd71156caa5bb2594bea1",
   "contentPins": {
-    "stageCManifest": "d7df2f142c7b2887b0773391a142937e3cb43afebb5c60bdcd8e1bd418d2e5b9",
-    "runPlanC": "84211630a253cfc01932a6d52e567c21403b2def181709a3ac7a3a1a49ecfb96",
+    "stageCManifest": "5e33d3099f298986a2804e0281204bb3b40b522bceee23b6fe92b45e82597ec3",
+    "runPlanC": "e00dde1af9bb4caff7095f811b6ae301d07c9e33f4adb0751c90a23e3490d38a",
     "runnerC": "817d719005252c19b6590dc787bf76b1812e1752220cd6d9398eeb654c23f0b9",
     "prompts": "745a9e243b2601867e840a5e85bfb99e5d7d18ef7c82661308581c1a459863a4",
     "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96"
