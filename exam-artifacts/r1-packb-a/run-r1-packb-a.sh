@@ -24,8 +24,8 @@ PREF="$(bash "$REPO_ROOT/exam-artifacts/r1-packb-a/preflight-r1-packb-a.sh")"
 echo "$PREF"
 echo "$PREF" | grep -q preflight_ok || { echo "STOP preflight failed"; exit 3; }
 
-SYSPROMPT_CHARS="$(echo "$PREF" | sed -n 's/^sysprompt_chars=\([0-9]*\).*/\1/p')"
-SYSPROMPT_SHA="$(echo "$PREF" | sed -n 's/^sysprompt_sha256=\([a-f0-9]*\).*/\1/p')"
+SYSPROMPT_CHARS="$(echo "$PREF" | sed -n 's/^sysprompt_chars=\([0-9]*\)$/\1/p' | head -1)"
+SYSPROMPT_SHA="$(echo "$PREF" | sed -n 's/^sysprompt_sha256=\([a-f0-9]\{64\}\)$/\1/p' | head -1)"
 MODEL_JSON="$(echo "$PREF" | sed -n 's/^model_object=\(.*\)/\1/p')"
 if [[ ${#SYSPROMPT_SHA} -ne 64 ]]; then
   echo "STOP: empty sysprompt sha256 (V1)"

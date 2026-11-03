@@ -20,7 +20,8 @@ if (typeof text !== "string") {
 const sha = createHash("sha256").update(text).digest("hex");
 const modelJson = JSON.stringify(agent.model);
 const expectedJson = JSON.stringify(EXPECTED_MODEL);
-console.log(`sysprompt_chars=${text.length} sysprompt_sha256=${sha}`);
+console.log(`sysprompt_chars=${text.length}`);
+console.log(`sysprompt_sha256=${sha}`);
 console.log(`model_object=${modelJson}`);
 if (text.length !== EXPECTED_CHARS || sha !== EXPECTED_SHA) {
   console.error(`STOP: sysprompt mismatch (got ${text.length} chars, sha ${sha})`);
