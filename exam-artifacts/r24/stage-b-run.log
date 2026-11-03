@@ -1,0 +1,22 @@
+=== Stage B run start 2026-11-03T01:53:03Z RUN_TIP=18c2ae82d2182961516740ff09e1b19dbe6a2702 plan=/tmp/pr-1522-exam-r8-work/repo/exam-artifacts/r24/run-plan-b.json ===
+eval_build=
+0.3.0 model_id=composer-2.5 fast=false
+INV_01_A_START 2026-11-03T01:53:05Z pin=PRE cases=12
+INV_01_A_END 2026-11-03T01:58:17Z duration_s=311.2 exit=0
+INV_01_WROTE exam-artifacts/r24/runs-b/inv-01-PRE-block1.json sysprompt=4fbf87011cacd116f03d4659b30f05a456bb2971f53e3ed86462285847b3bfba
+INV_02_A_START 2026-11-03T01:58:17Z pin=POST cases=12
+INV_02_A_END 2026-11-03T02:03:40Z duration_s=323.5 exit=0
+INV_02_WROTE exam-artifacts/r24/runs-b/inv-02-POST-block1.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+INV_03_A_START 2026-11-03T02:03:40Z pin=POST cases=12
+INV_03_A_END 2026-11-03T02:08:54Z duration_s=313.6 exit=0
+INV_03_WROTE exam-artifacts/r24/runs-b/inv-03-POST-block2.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+INV_04_A_START 2026-11-03T02:08:54Z pin=PRE cases=12
+INV_04_A_END 2026-11-03T02:14:53Z duration_s=359.5 exit=0
+INV_04_WROTE exam-artifacts/r24/runs-b/inv-04-PRE-block2.json sysprompt=4fbf87011cacd116f03d4659b30f05a456bb2971f53e3ed86462285847b3bfba
+INV_05_A_START 2026-11-03T02:14:54Z pin=PRE cases=12
+INV_05_A_END 2026-11-03T02:20:17Z duration_s=323.6 exit=0
+INV_05_WROTE exam-artifacts/r24/runs-b/inv-05-PRE-block3.json sysprompt=4fbf87011cacd116f03d4659b30f05a456bb2971f53e3ed86462285847b3bfba
+INV_06_A_START 2026-11-03T02:20:17Z pin=POST cases=12
+INV_06_A_END 2026-11-03T02:25:25Z duration_s=308.0 exit=0
+INV_06_WROTE exam-artifacts/r24/runs-b/inv-06-POST-block3.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+=== Stage B run complete 2026-11-03T02:25:25Z ===
