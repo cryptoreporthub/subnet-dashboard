@@ -3,6 +3,10 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { redactSecrets } from "../lib/redact.js";
+import {
+  evalVerdictAlreadyAccepted,
+  markEvalVerdictAccepted,
+} from "../lib/eval-verdict-once.js";
 import { postVerdictComment } from "../lib/tag.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
@@ -101,7 +105,11 @@ export default defineTool({
     }
 
     if (ctx.session.purpose === "eval") {
-      return { posted: false, reason: "eval", verdict: input.verdict };
+      if (await evalVerdictAlreadyAccepted(ctx.host.kv, ctx.session.id)) {
+        return { posted: false, reason: "already-posted-eval", verdict: input.verdict };
+      }
+      await markEvalVerdictAccepted(ctx.host.kv, ctx.session.id);
+      return { posted: true, reason: "eval", verdict: input.verdict };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");

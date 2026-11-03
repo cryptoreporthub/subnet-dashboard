@@ -9,6 +9,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "fixture-gate": "python3 evals/fixture-gate/run_gate.py",
     "dev": "agent-sdk dev --dir .",
     "validate": "agent-sdk validate --dir .",
     "eval": "agent-sdk eval --dir ."

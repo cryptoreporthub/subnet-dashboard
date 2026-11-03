@@ -7,4 +7,5 @@ npm-debug.log*
 .agentkit/
 state-root/
 evals/**/report.xml
+evals/fixture-gate/.gate-pytest-venv/
 reports/
