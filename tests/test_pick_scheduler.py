@@ -349,6 +349,7 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch, 
     second = sched._tick(reschedule=False)
     assert second.get("skipped") == "previous_cycle_inflight"
     assert calls["n"] == 1
+    assert "name=daily_pick_scheduler:load_subnets phase=end" in caplog.text
     assert "name=daily_pick_scheduler phase=end" not in caplog.text
     sched._inflight_future.result(timeout=15)
     assert "name=daily_pick_scheduler phase=end" in caplog.text
