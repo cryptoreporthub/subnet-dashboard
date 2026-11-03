@@ -26,6 +26,15 @@ except Exception:  # pragma: no cover - persistence degrades gracefully
 
 _REGISTRY: Dict[str, "LivenessTracker"] = {}
 _REG_LOCK = threading.Lock()
+# Bumped on every in-process write to a tracker, so readers that cache a view of it
+# can drop the view as soon as the tracker moves instead of waiting out a TTL.
+_WRITE_SEQ: Dict[str, int] = {}
+
+
+def write_seq(name: str) -> int:
+    with _REG_LOCK:
+        return _WRITE_SEQ.get(name, 0)
+
 
 DEFAULT_SKIP_LIMIT = int(os.environ.get("LIVENESS_SKIP_LIMIT", "8"))
 BACKOFF_CAP_SECONDS = int(os.environ.get("LIVENESS_BACKOFF_CAP_SECONDS", "3600"))
@@ -408,6 +417,8 @@ class LivenessTracker:
         return path() if callable(path) else path
 
     def _save(self) -> None:
+        with _REG_LOCK:
+            _WRITE_SEQ[self.name] = _WRITE_SEQ.get(self.name, 0) + 1
         if not self.persist or write_soul_map is None:
             return
         snap = self.snapshot()
