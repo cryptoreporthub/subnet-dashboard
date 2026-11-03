@@ -250,7 +250,8 @@ test("an eval read at base serves the fixture's base text for a file the diff ch
   assert.equal((await at("base", "a.py")).text, "old\n");
   assert.equal((await at("base", "a.py")).sha, BASE);
   assert.equal((await at("head", "a.py")).text, "new\n");
-  assert.equal((await at("base", "b.py")).text, "same\n", "a file the diff did not touch reads the same at base");
+  assert.equal((await at("head", "b.py")).text, "same\n");
+  assert.equal((await at("base", "b.py")).ok, false, "at base only baseFiles is served, not head files");
 });
 
 // --- An eval suite comparison answers with the suite state the fixture pins ---------------
