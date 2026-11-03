@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -34,7 +34,7 @@\n \n \n @pytest.fixture(autouse=True)\n-def _reset_universe_provider():\n+def _reset_universe_provider():  # isolate provider singleton\n     _reset_provider_for_tests()\n     yield\n     _reset_provider_for_tests()"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

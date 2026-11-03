@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "pytest.ini",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "patch": "@@ -1,2 +1,3 @@\n [pytest]\n pythonpath = .\n+# pack-b clean: default addopts unchanged"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

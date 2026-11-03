@@ -1,0 +1,11 @@
+{
+  "number": 9425,
+  "title": "universe: document ROOT_NETUID in place",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9425",
+  "headSha": "4842a2cc1d38124ec89c99b2cfcd8e18aeb83a55",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

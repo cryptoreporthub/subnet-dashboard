@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -1,4 +1,4 @@\n-\"\"\"D5 subnet universe tests T1\u2013T9.\"\"\"\n+\"\"\"D5 subnet universe tests T1\u2013T9 (pack-b clean).\"\"\"\n \n from __future__ import annotations\n "
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -736,7 +736,7 @@\n             self._refresh_lock.release()\n \n     def ensure_refresh_loop(self) -> None:\n-        if _ci_or_test() or not is_universe_refresh_writer():\n+        if _ci_or_test():\n             return\n         with self._loop_lock:\n             if self._loop_started:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

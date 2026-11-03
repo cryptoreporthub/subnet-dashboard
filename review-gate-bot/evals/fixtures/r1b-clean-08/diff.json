@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -657,7 +657,7 @@\n                     payload = json.load(handle)\n                 if isinstance(payload, dict) and payload.get(\"netuids\"):\n                     snap = UniverseSnapshot.from_dict(payload)\n-                    logger.info(\"subnet_universe loaded LKG: %d netuids\", len(snap.netuids))\n+                    logger.info(\"subnet_universe loaded LKG snapshot: %d netuids\", len(snap.netuids))\n                     return snap\n         except Exception as exc:\n             reason = \"lkg_corrupt\""
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

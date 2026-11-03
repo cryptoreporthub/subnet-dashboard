@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -283,7 +283,7 @@\n \n \n def is_universe_refresh_writer() -> bool:\n-    \"\"\"Only worker processes may refresh/publish; web reloads persisted snapshots.\"\"\"\n+    \"\"\"Only worker processes may refresh/publish; web readers reload persisted snapshots.\"\"\"\n     if _ci_or_test():\n         return True\n     try:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

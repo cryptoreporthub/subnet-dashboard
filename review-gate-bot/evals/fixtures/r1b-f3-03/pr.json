@@ -1,0 +1,11 @@
+{
+  "number": 9415,
+  "title": "universe: treat failed chain reads as definitive negatives",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9415",
+  "headSha": "d071af2dd0295d253b8bad0ce348e4fd458db39a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

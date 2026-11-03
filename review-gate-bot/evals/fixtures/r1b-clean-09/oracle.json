@@ -1,0 +1,19 @@
+{
+  "fixture": "r1b-clean-09",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a21ad5a671ff68793440236ecb194067b8f9afa7f44fb42a1fc74ae3b7ffcdc3",
+  "changedPaths": [
+    "pytest.ini"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

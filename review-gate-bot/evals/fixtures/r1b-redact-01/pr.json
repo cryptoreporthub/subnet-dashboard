@@ -1,0 +1,11 @@
+{
+  "number": 9437,
+  "title": "universe: token_count guard rejects ordinary removals",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9437",
+  "headSha": "2dbb5f5e435c4aa2b6a6e0497d80367e1beea7bd",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

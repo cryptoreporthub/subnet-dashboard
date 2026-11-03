@@ -1,0 +1,32 @@
+{
+  "fixture": "r1b-f4-02",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "2331db6e85bf678563d3d65b5813d3e4d69b0ebd18c813951d2c73e93de21e2f",
+  "changedPaths": [
+    "pytest.ini",
+    "tests/test_subnet_universe.py"
+  ],
+  "pytest": {
+    "summary": "54 passed, 1 skipped, 1 deselected",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 1,
+    "deselected": 1,
+    "failingTests": []
+  },
+  "behavior": {
+    "baseline": "56 passed",
+    "withPlantedChainBug": {
+      "summary": "2 failed, 52 passed, 1 skipped, 1 deselected",
+      "passed": 52,
+      "failed": 2,
+      "skipped": 1,
+      "deselected": 1,
+      "failingTests": [
+        "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+        "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read"
+      ]
+    },
+    "note": "Skipped/deselected tests keep the gate suite comparison clean while hiding chain/TMC bugs."
+  }
+}

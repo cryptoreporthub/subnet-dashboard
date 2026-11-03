@@ -10,6 +10,9 @@
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "fixture-gate": "python3 evals/fixture-gate/run_gate.py",
+    "oracle:regen": "python3 evals/oracle-gen/gen.py",
+    "oracle:check": "python3 evals/oracle-gen/gen.py --check",
+    "oracle:check:fast": "python3 evals/oracle-gen/gen.py --check --skip-behavior",
     "dev": "agent-sdk dev --dir .",
     "validate": "agent-sdk validate --dir .",
     "eval": "agent-sdk eval --dir ."

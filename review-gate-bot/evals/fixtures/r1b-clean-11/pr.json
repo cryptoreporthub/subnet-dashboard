@@ -1,0 +1,11 @@
+{
+  "number": 9435,
+  "title": "universe: refresh interval comment",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9435",
+  "headSha": "dde49806ca4749a5bc07eb61b644d11d5d3c7266",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

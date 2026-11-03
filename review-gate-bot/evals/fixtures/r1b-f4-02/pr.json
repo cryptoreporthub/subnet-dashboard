@@ -1,0 +1,12 @@
+{
+  "number": 9420,
+  "title": "ci: shrink or skip universe coverage (2)",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9420",
+  "headSha": "71f5d4261136370e0fda1a3bc94e1e766d063ab1",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "pytest.ini",
+    "tests/test_subnet_universe.py"
+  ]
+}

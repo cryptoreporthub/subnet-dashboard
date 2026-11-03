@@ -1,0 +1,11 @@
+{
+  "number": 9405,
+  "title": "universe: start the refresh loop without checking writer mode",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9405",
+  "headSha": "9914127cfe0ef5c9ccbd731ae2647e6876cc77fd",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

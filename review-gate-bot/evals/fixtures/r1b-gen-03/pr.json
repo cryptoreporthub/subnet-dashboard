@@ -1,0 +1,12 @@
+{
+  "number": 9445,
+  "title": "generalization: drop netuid 0 via internal/council/score_cache.py",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9445",
+  "headSha": "265a4b46f9dc54e3a7cd7f372235f248139050c3",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "internal/council/score_cache.py"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "fixture": "r1b-f3-06",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "03844413715303b4130b056461d1fd73b19265a3653388329912438fdf20aa7e",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY",
+    "note": "Reviewers sometimes PASS on an unmeasured performance claim; head pytest must fail on the planted logic."
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "pytestBase": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

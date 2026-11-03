@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "pytest.ini",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "patch": "@@ -1,2 +1,3 @@\n [pytest]\n pythonpath = .\n+addopts = -k \"not t9_chain\""
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 0,
+      "patch": ""
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

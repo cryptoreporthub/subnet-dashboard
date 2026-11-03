@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -21,7 +21,7 @@\n MAX_NETUIDS = 200\n STALE_GRACE_SECONDS = 172800  # 48h\n ROOT_NETUID = 0  # NetworksAdded lists root but get_member_netuids drops it: membership adds it, the probe never reports on it\n-REFRESH_INTERVAL_SECONDS = 300\n+REFRESH_INTERVAL_SECONDS = 300  # five minutes\n PERSIST_VERSION = 1\n \n BASE_DIR = os.path.dirname(os.path.abspath(__file__))"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

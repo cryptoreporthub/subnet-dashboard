@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -299,7 +299,7 @@\n     now = datetime.now(timezone.utc)\n     for netuid in set(prior.netuids) - set(build.snapshot.netuids):\n         evidence = build.dropped.get(netuid)\n-        if evidence is None or not _eligible_for_removal(netuid, evidence, now):\n+        if evidence is None:\n             return False\n     return True\n "
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

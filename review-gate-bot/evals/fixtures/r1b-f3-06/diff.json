@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -267,7 +267,7 @@\n \n \n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n-    if netuid == ROOT_NETUID:\n+    if netuid == ROOT_NETUID and evidence.probe is not False:\n         return False\n     if evidence.probe is not False:\n         return False"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

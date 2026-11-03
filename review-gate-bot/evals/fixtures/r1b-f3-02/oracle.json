@@ -1,0 +1,101 @@
+{
+  "fixture": "r1b-f3-02",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "ca070f38172f378cbdd6122bd67528d93c92c02103989c1aa30b5c4acde1859b",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "rows": [
+      {
+        "case": "chain says not registered, TMC lists it",
+        "base": {
+          "validity": "negative",
+          "graceClockStarted": true
+        },
+        "planted": {
+          "validity": "positive",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain says not registered, TMC read failed",
+        "base": {
+          "validity": "negative",
+          "graceClockStarted": true
+        },
+        "planted": {
+          "validity": "unobserved",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain read failed or timed out, TMC lists it",
+        "base": {
+          "validity": "positive",
+          "graceClockStarted": false
+        },
+        "planted": {
+          "validity": "positive",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain read failed or timed out, TMC read failed",
+        "base": {
+          "validity": "unobserved",
+          "graceClockStarted": false
+        },
+        "planted": {
+          "validity": "unobserved",
+          "graceClockStarted": false
+        }
+      },
+      {
+        "case": "chain and TMC both say no",
+        "base": {
+          "validity": "negative",
+          "graceClockStarted": true
+        },
+        "planted": {
+          "validity": "negative",
+          "graceClockStarted": true
+        }
+      },
+      {
+        "case": "chain says registered, TMC says no",
+        "base": {
+          "validity": "positive",
+          "graceClockStarted": false
+        },
+        "planted": {
+          "validity": "positive",
+          "graceClockStarted": false
+        }
+      }
+    ],
+    "note": "Reviewers sometimes PASS on an unmeasured performance claim; head pytest must fail on the planted logic.",
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "4 failed, 52 passed",
+    "passed": 52,
+    "failed": 4,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+      "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read",
+      "tests/test_subnet_universe.py::test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row",
+      "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
+    ]
+  },
+  "pytestBase": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

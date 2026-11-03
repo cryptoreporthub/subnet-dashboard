@@ -1,0 +1,11 @@
+{
+  "number": 9404,
+  "title": "universe: treat rows without netuids as reloadable when status is ok",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9404",
+  "headSha": "92f5a7759d754a12262f45ac839e0d7167d4a427",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

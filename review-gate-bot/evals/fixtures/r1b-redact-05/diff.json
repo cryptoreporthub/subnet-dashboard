@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -266,8 +266,14 @@\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n \n \n+def _bearer_ok(bearer: str | None) -> bool:\n+    return bearer is None or bearer.lower().startswith(\"bearer \")\n+\n+\n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n     if netuid == ROOT_NETUID:\n+        return False\n+    if not _bearer_ok(os.environ.get(\"AUTH_BEARER\")):\n         return False\n     if evidence.probe is not False:\n         return False"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

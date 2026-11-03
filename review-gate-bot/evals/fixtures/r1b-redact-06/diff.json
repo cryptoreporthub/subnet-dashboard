@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 9,
+      "deletions": 1,
+      "patch": "@@ -266,6 +266,13 @@\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n \n \n+DEFAULT_CLIENT_SECRET = \"unset\"\n+\n+\n+def _client_secret_default(client_secret: str | None) -> str:\n+    return client_secret or DEFAULT_CLIENT_SECRET\n+\n+\n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n     if netuid == ROOT_NETUID:\n         return False\n@@ -279,7 +286,8 @@\n             started = started.replace(tzinfo=timezone.utc)\n     except Exception:\n         return False\n-    return (now - started).total_seconds() >= STALE_GRACE_SECONDS\n+    grace = STALE_GRACE_SECONDS if _client_secret_default(os.environ.get(\"CLIENT_SECRET\")) != \"unset\" else 0\n+    return (now - started).total_seconds() >= grace\n \n \n def is_universe_refresh_writer() -> bool:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

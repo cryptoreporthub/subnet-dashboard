@@ -1,0 +1,11 @@
+{
+  "number": 9411,
+  "title": "universe: omit netuid 0 when assembling membership (5)",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9411",
+  "headSha": "c1f6dd954a04d4c762832899784321a88b7d3f96",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

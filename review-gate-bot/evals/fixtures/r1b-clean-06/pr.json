@@ -1,0 +1,11 @@
+{
+  "number": 9430,
+  "title": "tests: clarify prior snapshot helper",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9430",
+  "headSha": "dca882a04a483325e4a9190c5d2e461bd1eb2b99",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe.py"
+  ]
+}

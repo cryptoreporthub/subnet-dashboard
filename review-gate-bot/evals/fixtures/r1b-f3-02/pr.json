@@ -1,0 +1,11 @@
+{
+  "number": 9414,
+  "title": "universe: chain negative loses to a TMC listing under load",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9414",
+  "headSha": "e5fb689d959bd048fb3e2ca9d0fac0bb452df15c",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

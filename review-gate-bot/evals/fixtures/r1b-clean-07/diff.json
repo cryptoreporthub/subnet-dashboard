@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -662,7 +662,7 @@\n         except Exception as exc:\n             reason = \"lkg_corrupt\"\n             logger.warning(\"subnet_universe corrupt/missing persistence: %s\", exc)\n-        return UniverseSnapshot.emergency_registry(reason=reason)\n+        return UniverseSnapshot.emergency_registry(reason=reason)  # cold start\n \n     def reload_from_disk_if_stale(self) -> UniverseSnapshot:\n         \"\"\"Reader path: pick up worker-published snapshot without refreshing.\"\"\""
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

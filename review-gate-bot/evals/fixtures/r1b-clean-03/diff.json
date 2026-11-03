@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -294,7 +294,7 @@\n         return False\n \n \n-def _shrink_allowed(prior: UniverseSnapshot, build: MembershipBuild) -> bool:\n+def _shrink_allowed(prior: UniverseSnapshot, build: MembershipBuild) -> bool:  # removal evidence gate\n     \"\"\"True when every netuid dropped from prior carries this cycle's removal evidence.\"\"\"\n     now = datetime.now(timezone.utc)\n     for netuid in set(prior.netuids) - set(build.snapshot.netuids):"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

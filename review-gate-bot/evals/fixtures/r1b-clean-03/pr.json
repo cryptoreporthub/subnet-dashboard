@@ -1,0 +1,11 @@
+{
+  "number": 9427,
+  "title": "universe: name the shrink guard",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9427",
+  "headSha": "d676e65401624645132f1a1f485f7cb231dfc4d0",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

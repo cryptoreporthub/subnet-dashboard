@@ -1,0 +1,12 @@
+{
+  "number": 9446,
+  "title": "generalization: drop netuid 0 via internal/chain_price/membership.py",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9446",
+  "headSha": "0b569f846468d4bf9538816cedbc60f8936e75fe",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "internal/chain_price/membership.py"
+  ]
+}

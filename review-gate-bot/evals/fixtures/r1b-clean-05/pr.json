@@ -1,0 +1,11 @@
+{
+  "number": 9429,
+  "title": "tests: label the autouse reset fixture",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9429",
+  "headSha": "ca173207b631002337433ae1e053f4fbba741d4f",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe.py"
+  ]
+}

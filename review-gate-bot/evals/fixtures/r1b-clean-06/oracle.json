@@ -1,0 +1,19 @@
+{
+  "fixture": "r1b-clean-06",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "3700e5e0dc30493fda135cd14f8cd351a5ffc684a51741c8f352a3ddb1584049",
+  "changedPaths": [
+    "tests/test_subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

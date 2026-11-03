@@ -1,0 +1,57 @@
+{
+  "fixture": "r1b-f2-03",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "bce937b16de1bde44069a360defd177a58f063892777461a40bc97cf346fa2a9",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "base": {
+      "normalReadNoPrior": {
+        "size": 128,
+        "hasRoot": true,
+        "exactSet0to127": true,
+        "missing": []
+      },
+      "normalReadWithPrior": {
+        "size": 129,
+        "admittedNewSubnet128": true,
+        "status": "ok",
+        "message": ""
+      },
+      "failedReadWithPrior": {
+        "size": 128,
+        "hasRoot": true,
+        "status": "degraded"
+      }
+    },
+    "planted": {
+      "normalReadNoPrior": {
+        "size": 128,
+        "hasRoot": true,
+        "exactSet0to127": true,
+        "missing": []
+      },
+      "normalReadWithPrior": {
+        "size": 129,
+        "admittedNewSubnet128": true,
+        "status": "ok",
+        "message": ""
+      },
+      "failedReadWithPrior": {
+        "size": 128,
+        "hasRoot": true,
+        "status": "degraded"
+      }
+    },
+    "note": "planted drops netuid 0 on a normal read (127 members, not the exact 128). With a prior that holds root, the planted build shrinks by root, the shrink guard blocks the publish, and the refresh is stuck on the old snapshot (a new registration is never admitted). On the failed-read recovery path root survives in both, because the prior is held: the bug is hidden there, not absent."
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

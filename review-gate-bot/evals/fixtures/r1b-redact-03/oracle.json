@@ -1,0 +1,22 @@
+{
+  "fixture": "r1b-redact-03",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "10a374941be5b10d00254efa353fbe9df01f08dacca419883b3cd97255873f3c",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "2 failed, 54 passed",
+    "passed": 54,
+    "failed": 2,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_aged_negative_retained_when_probe_rpc_error",
+      "tests/test_subnet_universe.py::test_partial_chain_read_never_marks_a_tmc_listed_netuid_negative"
+    ]
+  }
+}
