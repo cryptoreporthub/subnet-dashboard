@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m1c",
+  "slug": "m1c",
+  "mechanism": "M1",
+  "variant": "m1c",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "c4c1a61269f27ebeb00cad38c05556af45965e398b273d4597c38d925542bc5e",
+  "changedPaths": [
+    "tests/test_r25_m1c_smoke.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

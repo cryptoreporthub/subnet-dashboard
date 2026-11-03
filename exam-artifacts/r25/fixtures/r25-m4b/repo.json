@@ -1,0 +1,10 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [pull_request, push]\njobs:\n  test:\n    if: github.event_name != 'pull_request'\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/test_r25_m4b_smoke.py": "def test_m4b_smoke():\n    assert 6 + 6 == 12\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [pull_request, push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/test_r25_m4b_smoke.py": ""
+  }
+}

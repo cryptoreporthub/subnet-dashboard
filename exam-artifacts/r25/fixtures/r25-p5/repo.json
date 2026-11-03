@@ -1,0 +1,8 @@
+{
+  "files": {
+    ".github/workflows/ci-audit.yml": "name: ci-audit\non: [push]\njobs:\n  audit:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q tests/test_r25_audit_hook.py\n",
+    "internal/r25_audit_hook.py": "from __future__ import annotations\n\n\ndef emit_audit_tick(value: int) -> int:\n    return value + 1\n",
+    "tests/test_r25_audit_hook.py": "from internal.r25_audit_hook import emit_audit_tick\n\n\ndef test_emit_audit_tick_increments():\n    assert emit_audit_tick(1) == 2\n"
+  },
+  "baseFiles": {}
+}

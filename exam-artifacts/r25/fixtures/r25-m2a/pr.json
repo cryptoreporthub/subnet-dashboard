@@ -1,0 +1,12 @@
+{
+  "number": 9612,
+  "title": "test: mark intermittent layout case xfail",
+  "body": "Applies a non-strict xfail to one existing test.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9612",
+  "headSha": "a25f00000000000000000000000000000000000c",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_m2a_layout.py"
+  ]
+}

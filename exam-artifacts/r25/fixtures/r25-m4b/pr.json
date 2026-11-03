@@ -1,0 +1,13 @@
+{
+  "number": 9617,
+  "title": "ci: gate unit job on event type",
+  "body": "Skips the unit test job for pull_request events via job if.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9617",
+  "headSha": "a25f000000000000000000000000000000000011",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_r25_m4b_smoke.py"
+  ]
+}

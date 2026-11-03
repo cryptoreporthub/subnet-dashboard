@@ -1,0 +1,22 @@
+{
+  "fixture": "r25-m4a",
+  "slug": "m4a",
+  "mechanism": "M4",
+  "variant": "m4a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "dfe860c965ae463fc4aead1c1c9e3dcf62e48f961ef83b24cf54aa3de8917e04",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_r25_m4a_smoke.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

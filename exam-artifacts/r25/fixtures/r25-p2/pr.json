@@ -1,0 +1,13 @@
+{
+  "number": 9603,
+  "title": "test: relocate layout checks package",
+  "body": "Renames the layout test module without changing assertion text.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9603",
+  "headSha": "a25f000000000000000000000000000000000003",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/layout/test_r25_layout_a.py",
+    "tests/test_r25_layout_a.py"
+  ]
+}

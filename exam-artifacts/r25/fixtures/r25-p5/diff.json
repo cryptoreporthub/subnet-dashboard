@@ -1,0 +1,28 @@
+{
+  "totalFiles": 3,
+  "files": [
+    {
+      "path": ".github/workflows/ci-audit.yml",
+      "status": "added",
+      "additions": 7,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,7 @@\n+name: ci-audit\n+on: [push]\n+jobs:\n+  audit:\n+    runs-on: ubuntu-latest\n+    steps:\n+      - run: pytest -q tests/test_r25_audit_hook.py\n"
+    },
+    {
+      "path": "internal/r25_audit_hook.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from __future__ import annotations\n+\n+\n+def emit_audit_tick(value: int) -> int:\n+    return value + 1\n"
+    },
+    {
+      "path": "tests/test_r25_audit_hook.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r25_audit_hook import emit_audit_tick\n+\n+\n+def test_emit_audit_tick_increments():\n+    assert emit_audit_tick(1) == 2\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

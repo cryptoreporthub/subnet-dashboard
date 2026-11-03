@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m1a",
+  "slug": "m1a",
+  "mechanism": "M1",
+  "variant": "m1a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "4aa2bbf95b0c0a98d565e0c8be23ce1d3b779babc8ac09ca0b0e2e166cc2234c",
+  "changedPaths": [
+    "tests/test_r25_m1a_hook.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

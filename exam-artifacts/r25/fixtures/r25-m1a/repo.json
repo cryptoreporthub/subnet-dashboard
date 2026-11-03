@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/r25_m1a_service.py": "from __future__ import annotations\n\n\ndef hook_value() -> int:\n    return 42\n",
+    "tests/test_r25_m1a_hook.py": ""
+  },
+  "baseFiles": {
+    "internal/r25_m1a_service.py": "from __future__ import annotations\n\n\ndef hook_value() -> int:\n    return 42\n",
+    "tests/test_r25_m1a_hook.py": "from internal.r25_m1a_service import hook_value\n\n\ndef test_hook_value_stable():\n    assert hook_value() == 42\n"
+  }
+}

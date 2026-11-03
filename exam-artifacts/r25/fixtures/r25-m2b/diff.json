@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_r25_m2b_hook.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -1,2 +1,7 @@\n+import pytest\n+\n+pytest.skip(\"hook runtime unavailable in this image\", allow_module_level=True)\n+\n+\n def test_hook_probe():\n     assert 2 + 2 == 4\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

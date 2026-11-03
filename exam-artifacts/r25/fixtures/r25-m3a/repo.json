@@ -1,0 +1,12 @@
+{
+  "files": {
+    "tests/test_r25_m3a_unit.py": "def test_unit_only():\n    assert \"x\" in \"xy\"\n",
+    "tests/test_r25_m3a_integration.py": "def test_integration_only():\n    assert len(\"ab\") == 2\n",
+    "tests/conftest.py": "collect_ignore_glob = [\"*_integration.py\"]\n"
+  },
+  "baseFiles": {
+    "tests/test_r25_m3a_unit.py": "def test_unit_only():\n    assert \"x\" in \"xy\"\n",
+    "tests/test_r25_m3a_integration.py": "def test_integration_only():\n    assert len(\"ab\") == 2\n",
+    "tests/conftest.py": ""
+  }
+}

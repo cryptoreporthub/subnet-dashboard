@@ -1,0 +1,12 @@
+{
+  "number": 9605,
+  "title": "ci: add three-way pytest shard matrix",
+  "body": "Adds a complete 0-based shard matrix matching num-shards.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9605",
+  "headSha": "a25f000000000000000000000000000000000005",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml"
+  ]
+}

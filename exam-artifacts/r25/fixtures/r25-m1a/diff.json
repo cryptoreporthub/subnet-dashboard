@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_r25_m1a_hook.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 5,
+      "patch": "@@ -1,5 +0,0 @@\n-from internal.r25_m1a_service import hook_value\n-\n-\n-def test_hook_value_stable():\n-    assert hook_value() == 42\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

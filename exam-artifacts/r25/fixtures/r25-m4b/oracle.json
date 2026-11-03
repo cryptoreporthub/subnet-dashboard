@@ -1,0 +1,22 @@
+{
+  "fixture": "r25-m4b",
+  "slug": "m4b",
+  "mechanism": "M4",
+  "variant": "m4b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "45f9f15d8122c32939e24e0e3f6a2576f21c4ab6cd21194c2428db8bf9a42963",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_r25_m4b_smoke.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

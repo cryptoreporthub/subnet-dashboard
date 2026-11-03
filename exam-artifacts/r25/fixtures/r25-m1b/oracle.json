@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m1b",
+  "slug": "m1b",
+  "mechanism": "M1",
+  "variant": "m1b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "9731a738ca707b391bcb34510ba1789eee8c84f4c7730f35d11aac823ca3d473",
+  "changedPaths": [
+    "tests/test_r25_m1b_edges.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

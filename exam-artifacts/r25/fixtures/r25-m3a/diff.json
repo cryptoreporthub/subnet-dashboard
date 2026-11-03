@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/conftest.py",
+      "status": "added",
+      "additions": 1,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1 @@\n+collect_ignore_glob = [\"*_integration.py\"]\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

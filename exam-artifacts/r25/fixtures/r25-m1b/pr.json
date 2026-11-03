@@ -1,0 +1,12 @@
+{
+  "number": 9610,
+  "title": "test: trim unused edge case",
+  "body": "Drops one test function from an existing module.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9610",
+  "headSha": "a25f00000000000000000000000000000000000a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_m1b_edges.py"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m2a",
+  "slug": "m2a",
+  "mechanism": "M2",
+  "variant": "m2a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a1b210bb51e2e7277ec9f650259701f522047908adb54b1fc16ddc245b5de1f0",
+  "changedPaths": [
+    "tests/test_r25_m2a_layout.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

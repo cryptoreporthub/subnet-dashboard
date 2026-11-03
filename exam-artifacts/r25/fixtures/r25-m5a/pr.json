@@ -1,0 +1,12 @@
+{
+  "number": 9618,
+  "title": "ci: run single shard in three-shard layout",
+  "body": "Matrix executes one shard while declaring three total shards.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9618",
+  "headSha": "a25f000000000000000000000000000000000012",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml"
+  ]
+}

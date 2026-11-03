@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m3a",
+  "slug": "m3a",
+  "mechanism": "M3",
+  "variant": "m3a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "01ba7c6959abacc191b78980430cd210e865acf6927a1edc67b63f661a28053e",
+  "changedPaths": [
+    "tests/conftest.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

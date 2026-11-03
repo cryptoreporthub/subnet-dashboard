@@ -1,0 +1,12 @@
+{
+  "number": 9619,
+  "title": "ci: adjust declared shard matrix",
+  "body": "Matrix omits a shard index still implied by num-shards.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9619",
+  "headSha": "a25f000000000000000000000000000000000013",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml"
+  ]
+}

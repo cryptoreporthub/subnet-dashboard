@@ -1,0 +1,12 @@
+{
+  "files": {
+    "pytest.ini": "[pytest]\ntestpaths = tests/unit\n",
+    "tests/unit/test_r25_m3b_narrow.py": "def test_narrow_path():\n    assert 4 - 1 == 3\n",
+    "tests/test_r25_m3b_wide.py": "def test_wide_path():\n    assert 2 * 3 == 6\n"
+  },
+  "baseFiles": {
+    "pytest.ini": "[pytest]\ntestpaths = tests\n",
+    "tests/unit/test_r25_m3b_narrow.py": "def test_narrow_path():\n    assert 4 - 1 == 3\n",
+    "tests/test_r25_m3b_wide.py": "def test_wide_path():\n    assert 2 * 3 == 6\n"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m2b",
+  "slug": "m2b",
+  "mechanism": "M2",
+  "variant": "m2b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "3a8173d78a21fd60dc11c2d6c5028f6138b268482e72817e94ddc2ca4d0fdbab",
+  "changedPaths": [
+    "tests/test_r25_m2b_hook.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

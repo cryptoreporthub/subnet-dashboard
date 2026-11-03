@@ -1,0 +1,22 @@
+{
+  "fixture": "r25-p7",
+  "slug": "p7",
+  "mechanism": "P7",
+  "variant": "p7",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "64dfa432ea7c7719d758425e6b54d097ec5d855acebeb9c4e56752d8055d78fe",
+  "changedPaths": [
+    "tests/test_r25_split_new.py",
+    "tests/test_r25_split_old.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "files": {
+    "tests/test_r25_layout_a.py": "",
+    "tests/layout/test_r25_layout_a.py": "def test_layout_columns_align():\n    assert len([1, 2, 3]) == 3\n\n\ndef test_layout_rows_align():\n    assert sum([1, 1]) == 2\n"
+  },
+  "baseFiles": {
+    "tests/test_r25_layout_a.py": "def test_layout_columns_align():\n    assert len([1, 2, 3]) == 3\n\n\ndef test_layout_rows_align():\n    assert sum([1, 1]) == 2\n"
+  }
+}

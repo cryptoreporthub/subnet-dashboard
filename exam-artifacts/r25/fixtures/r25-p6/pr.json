@@ -1,0 +1,13 @@
+{
+  "number": 9607,
+  "title": "chore: remove legacy refresh flag",
+  "body": "Removes a deprecated boolean flag and the test that locked its default.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9607",
+  "headSha": "a25f000000000000000000000000000000000007",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r25_feature_flags.py",
+    "tests/test_r25_feature_flags.py"
+  ]
+}

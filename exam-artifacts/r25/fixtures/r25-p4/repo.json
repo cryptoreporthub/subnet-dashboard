@@ -1,0 +1,8 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        shard-index: [0, 1, 2]\n    steps:\n      - run: pytest -q --shard-id=${{ matrix.shard-index }} --num-shards=3\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
+  }
+}

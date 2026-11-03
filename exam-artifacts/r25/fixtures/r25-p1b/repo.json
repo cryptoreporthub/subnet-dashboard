@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/r25_quota_stub.py": "",
+    "tests/test_r25_quota_stub.py": ""
+  },
+  "baseFiles": {
+    "internal/r25_quota_stub.py": "\"\"\"Quota stub used only in fixture builds.\"\"\"\nfrom __future__ import annotations\n\n\ndef quota_headroom(limit: int, used: int) -> int:\n    return limit - used\n",
+    "tests/test_r25_quota_stub.py": "from internal.r25_quota_stub import quota_headroom\n\n\ndef test_headroom_positive():\n    assert quota_headroom(10, 4) == 6\n\n\ndef test_headroom_zero_used():\n    assert quota_headroom(5, 0) == 5\n"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "fixture": "r25-p2",
+  "slug": "p2",
+  "mechanism": "P2",
+  "variant": "p2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "ce0935401912145c60b17416f8c3279192623ea8d8050a23aabaf9e0b1371be9",
+  "changedPaths": [
+    "tests/layout/test_r25_layout_a.py",
+    "tests/test_r25_layout_a.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

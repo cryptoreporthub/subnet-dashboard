@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/r25_m1b_service.py": "from __future__ import annotations\n\n\ndef edge_total(values: list[int]) -> int:\n    return sum(values)\n",
+    "tests/test_r25_m1b_edges.py": "from internal.r25_m1b_service import edge_total\n\n\ndef test_edge_total_simple():\n    assert edge_total([1, 2]) == 3\n"
+  },
+  "baseFiles": {
+    "internal/r25_m1b_service.py": "from __future__ import annotations\n\n\ndef edge_total(values: list[int]) -> int:\n    return sum(values)\n",
+    "tests/test_r25_m1b_edges.py": "from internal.r25_m1b_service import edge_total\n\n\ndef test_edge_total_simple():\n    assert edge_total([1, 2]) == 3\n\n\ndef test_edge_total_empty():\n    assert edge_total([]) == 0\n"
+  }
+}

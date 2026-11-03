@@ -1,0 +1,12 @@
+{
+  "number": 9604,
+  "title": "test: table-drive pair sum cases",
+  "body": "Collapses separate pair-sum tests into one parametrized test with the same inputs.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9604",
+  "headSha": "a25f000000000000000000000000000000000004",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_pairs.py"
+  ]
+}

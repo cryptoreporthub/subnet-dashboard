@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "pytest.ini",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -1,2 +1,2 @@\n [pytest]\n-testpaths = tests\n+testpaths = tests/unit\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

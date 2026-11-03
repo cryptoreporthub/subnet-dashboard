@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-p4",
+  "slug": "p4",
+  "mechanism": "P4",
+  "variant": "p4",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "6f4ef8bef159ef373f8713e5d1fa4dfefed7f261a0b2d309f7727559e719b379",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

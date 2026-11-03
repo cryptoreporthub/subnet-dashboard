@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m5b",
+  "slug": "m5b",
+  "mechanism": "M5",
+  "variant": "m5b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "ffaa248a481439986b73c2f8708ad5e8572c06fac6f92ed1ff1c596a3e8d049f",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

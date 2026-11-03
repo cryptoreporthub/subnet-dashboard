@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "tests/test_r25_split_new.py",
+      "status": "added",
+      "additions": 2,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,2 @@\n+def test_split_checksum_current():\n+    assert hash('current') == hash('current')\n"
+    },
+    {
+      "path": "tests/test_r25_split_old.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 2,
+      "patch": "@@ -1,2 +0,0 @@\n-def test_split_checksum_legacy():\n-    assert hash('legacy') == hash('legacy')\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

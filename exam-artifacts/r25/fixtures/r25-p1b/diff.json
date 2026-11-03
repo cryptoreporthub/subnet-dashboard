@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r25_quota_stub.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 6,
+      "patch": "@@ -1,6 +0,0 @@\n-\"\"\"Quota stub used only in fixture builds.\"\"\"\n-from __future__ import annotations\n-\n-\n-def quota_headroom(limit: int, used: int) -> int:\n-    return limit - used\n"
+    },
+    {
+      "path": "tests/test_r25_quota_stub.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 9,
+      "patch": "@@ -1,9 +0,0 @@\n-from internal.r25_quota_stub import quota_headroom\n-\n-\n-def test_headroom_positive():\n-    assert quota_headroom(10, 4) == 6\n-\n-\n-def test_headroom_zero_used():\n-    assert quota_headroom(5, 0) == 5\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

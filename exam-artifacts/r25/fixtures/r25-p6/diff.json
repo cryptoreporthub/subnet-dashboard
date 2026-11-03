@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r25_feature_flags.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 3,
+      "patch": "@@ -1,7 +1,5 @@\n from __future__ import annotations\n-\n-ENABLE_LEGACY_FOO = True\n \n \n def refresh_enabled() -> bool:\n-    return not ENABLE_LEGACY_FOO\n+    return True\n"
+    },
+    {
+      "path": "tests/test_r25_feature_flags.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 5,
+      "patch": "@@ -1,5 +0,0 @@\n-from internal.r25_feature_flags import ENABLE_LEGACY_FOO\n-\n-\n-def test_legacy_foo_default():\n-    assert ENABLE_LEGACY_FOO is True\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

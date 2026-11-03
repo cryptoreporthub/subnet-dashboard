@@ -1,0 +1,13 @@
+{
+  "number": 9601,
+  "title": "chore: drop unused census index helper",
+  "body": "Removes an internal helper and its dedicated tests that no longer ship in production builds.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9601",
+  "headSha": "a25f000000000000000000000000000000000001",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r25_stale_index.py",
+    "tests/test_r25_stale_index.py"
+  ]
+}

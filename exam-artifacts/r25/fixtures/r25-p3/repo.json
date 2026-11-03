@@ -1,0 +1,8 @@
+{
+  "files": {
+    "tests/test_r25_pairs.py": "import pytest\n\n\n@pytest.mark.parametrize(\n    \"left,right,expected\",\n    [(2, 3, 5), (4, 1, 5), (0, 9, 9)],\n)\ndef test_pair_sum(left, right, expected):\n    assert left + right == expected\n"
+  },
+  "baseFiles": {
+    "tests/test_r25_pairs.py": "def test_pair_sum_two_and_three():\n    assert 2 + 3 == 5\n\n\ndef test_pair_sum_four_and_one():\n    assert 4 + 1 == 5\n\n\ndef test_pair_sum_zero_and_nine():\n    assert 0 + 9 == 9\n"
+  }
+}

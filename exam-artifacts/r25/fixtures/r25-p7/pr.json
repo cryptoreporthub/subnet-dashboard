@@ -1,0 +1,13 @@
+{
+  "number": 9608,
+  "title": "test: move split validation to dedicated module",
+  "body": "Deletes an obsolete split test while adding the replacement case elsewhere.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9608",
+  "headSha": "a25f000000000000000000000000000000000008",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_split_new.py",
+    "tests/test_r25_split_old.py"
+  ]
+}

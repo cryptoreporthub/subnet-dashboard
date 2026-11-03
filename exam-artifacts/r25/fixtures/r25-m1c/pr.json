@@ -1,0 +1,12 @@
+{
+  "number": 9611,
+  "title": "test: simplify hook smoke check",
+  "body": "Leaves the test name but removes substantive assertions.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9611",
+  "headSha": "a25f00000000000000000000000000000000000b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_m1c_smoke.py"
+  ]
+}

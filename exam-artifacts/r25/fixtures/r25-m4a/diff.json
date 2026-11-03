@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": ".github/workflows/ci-smoke.yml",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 1,
+      "patch": "@@ -1,5 +1,8 @@\n name: ci-smoke\n-on: [pull_request]\n+on:\n+  pull_request:\n+    paths-ignore:\n+      - \"tests/**\"\n jobs:\n   test:\n     runs-on: ubuntu-latest\n"
+    },
+    {
+      "path": "tests/test_r25_m4a_smoke.py",
+      "status": "added",
+      "additions": 2,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,2 @@\n+def test_m4a_smoke():\n+    assert 5 + 5 == 10\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

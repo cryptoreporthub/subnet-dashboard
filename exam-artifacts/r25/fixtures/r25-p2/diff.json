@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "tests/layout/test_r25_layout_a.py",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,6 @@\n+def test_layout_columns_align():\n+    assert len([1, 2, 3]) == 3\n+\n+\n+def test_layout_rows_align():\n+    assert sum([1, 1]) == 2\n"
+    },
+    {
+      "path": "tests/test_r25_layout_a.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 6,
+      "patch": "@@ -1,6 +0,0 @@\n-def test_layout_columns_align():\n-    assert len([1, 2, 3]) == 3\n-\n-\n-def test_layout_rows_align():\n-    assert sum([1, 1]) == 2\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

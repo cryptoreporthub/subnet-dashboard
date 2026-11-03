@@ -1,0 +1,22 @@
+{
+  "fixture": "r25-p6",
+  "slug": "p6",
+  "mechanism": "P6",
+  "variant": "p6",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "b2c3699997ee1587c3e7017619ce8315c9adc44d5ac02fb27b4989619c7874cf",
+  "changedPaths": [
+    "internal/r25_feature_flags.py",
+    "tests/test_r25_feature_flags.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "number": 9609,
+  "title": "test: drop stale regression file",
+  "body": "Removes a regression test module; service code is unchanged.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9609",
+  "headSha": "a25f000000000000000000000000000000000009",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_m1a_hook.py"
+  ]
+}

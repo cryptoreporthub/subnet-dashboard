@@ -1,0 +1,12 @@
+{
+  "number": 9620,
+  "title": "test: reduce parametrized hook cases",
+  "body": "Removes several parametrized cases; production helper unchanged.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9620",
+  "headSha": "a25f000000000000000000000000000000000014",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_m6_scale.py"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "fixture": "r25-p1b",
+  "slug": "p1b",
+  "mechanism": "P1",
+  "variant": "p1b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "26023516eff48dd6f5e505c1c15248ff58c00e13cc402bc024d5102e9c613c62",
+  "changedPaths": [
+    "internal/r25_quota_stub.py",
+    "tests/test_r25_quota_stub.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "50 passed",
+    "passed": 50,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

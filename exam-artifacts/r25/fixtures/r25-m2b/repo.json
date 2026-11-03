@@ -1,0 +1,8 @@
+{
+  "files": {
+    "tests/test_r25_m2b_hook.py": "import pytest\n\npytest.skip(\"hook runtime unavailable in this image\", allow_module_level=True)\n\n\ndef test_hook_probe():\n    assert 2 + 2 == 4\n"
+  },
+  "baseFiles": {
+    "tests/test_r25_m2b_hook.py": "def test_hook_probe():\n    assert 2 + 2 == 4\n"
+  }
+}

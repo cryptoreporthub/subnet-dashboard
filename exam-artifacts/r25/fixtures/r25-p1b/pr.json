@@ -1,0 +1,13 @@
+{
+  "number": 9602,
+  "title": "refactor: remove quota stub module",
+  "body": "Deletes the quota stub package together with the tests that only exercised that stub.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9602",
+  "headSha": "a25f000000000000000000000000000000000002",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r25_quota_stub.py",
+    "tests/test_r25_quota_stub.py"
+  ]
+}

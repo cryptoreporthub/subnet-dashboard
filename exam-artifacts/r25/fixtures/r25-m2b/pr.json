@@ -1,0 +1,12 @@
+{
+  "number": 9613,
+  "title": "test: skip module on unsupported runtime",
+  "body": "Adds a module-level skip for environments without the hook runtime.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9613",
+  "headSha": "a25f00000000000000000000000000000000000d",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_r25_m2b_hook.py"
+  ]
+}

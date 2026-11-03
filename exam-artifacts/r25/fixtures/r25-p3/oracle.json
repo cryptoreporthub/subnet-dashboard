@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-p3",
+  "slug": "p3",
+  "mechanism": "P3",
+  "variant": "p3",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "cd6412e3ab605419244377a156db176576df4de2f86ea298f42defc7b967e89a",
+  "changedPaths": [
+    "tests/test_r25_pairs.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/r25_m1c_service.py": "from __future__ import annotations\n\n\ndef smoke_token() -> str:\n    return \"ok\"\n",
+    "tests/test_r25_m1c_smoke.py": "from internal.r25_m1c_service import smoke_token\n\n\ndef test_smoke_token():\n    smoke_token()\n"
+  },
+  "baseFiles": {
+    "internal/r25_m1c_service.py": "from __future__ import annotations\n\n\ndef smoke_token() -> str:\n    return \"ok\"\n",
+    "tests/test_r25_m1c_smoke.py": "from internal.r25_m1c_service import smoke_token\n\n\ndef test_smoke_token():\n    assert smoke_token() == \"ok\"\n"
+  }
+}

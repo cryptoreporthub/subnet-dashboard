@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_r25_pairs.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 8,
+      "patch": "@@ -1,10 +1,9 @@\n-def test_pair_sum_two_and_three():\n-    assert 2 + 3 == 5\n+import pytest\n \n \n-def test_pair_sum_four_and_one():\n-    assert 4 + 1 == 5\n-\n-\n-def test_pair_sum_zero_and_nine():\n-    assert 0 + 9 == 9\n+@pytest.mark.parametrize(\n+    \"left,right,expected\",\n+    [(2, 3, 5), (4, 1, 5), (0, 9, 9)],\n+)\n+def test_pair_sum(left, right, expected):\n+    assert left + right == expected\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

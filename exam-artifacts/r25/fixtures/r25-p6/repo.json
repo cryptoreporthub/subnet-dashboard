@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/r25_feature_flags.py": "from __future__ import annotations\n\n\ndef refresh_enabled() -> bool:\n    return True\n",
+    "tests/test_r25_feature_flags.py": ""
+  },
+  "baseFiles": {
+    "internal/r25_feature_flags.py": "from __future__ import annotations\n\nENABLE_LEGACY_FOO = True\n\n\ndef refresh_enabled() -> bool:\n    return not ENABLE_LEGACY_FOO\n",
+    "tests/test_r25_feature_flags.py": "from internal.r25_feature_flags import ENABLE_LEGACY_FOO\n\n\ndef test_legacy_foo_default():\n    assert ENABLE_LEGACY_FOO is True\n"
+  }
+}

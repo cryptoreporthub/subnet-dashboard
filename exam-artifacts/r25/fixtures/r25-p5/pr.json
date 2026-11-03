@@ -1,0 +1,14 @@
+{
+  "number": 9606,
+  "title": "test: add audit hook coverage job",
+  "body": "Introduces audit hook tests and a workflow job that runs them.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9606",
+  "headSha": "a25f000000000000000000000000000000000006",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-audit.yml",
+    "internal/r25_audit_hook.py",
+    "tests/test_r25_audit_hook.py"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m3b",
+  "slug": "m3b",
+  "mechanism": "M3",
+  "variant": "m3b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "8fc54e724e788791ef2326fd3d77b772b4aa4c5cbdd1d32f72eae7f292e1b0bc",
+  "changedPaths": [
+    "pytest.ini"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

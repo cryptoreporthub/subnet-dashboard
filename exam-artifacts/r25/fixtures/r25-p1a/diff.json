@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r25_stale_index.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 6,
+      "patch": "@@ -1,6 +0,0 @@\n-\"\"\"Unused census index (removed with v3 pipeline).\"\"\"\n-from __future__ import annotations\n-\n-\n-def index_netuid(netuid: int) -> int:\n-    return netuid\n"
+    },
+    {
+      "path": "tests/test_r25_stale_index.py",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 9,
+      "patch": "@@ -1,9 +0,0 @@\n-from internal.r25_stale_index import index_netuid\n-\n-\n-def test_index_non_negative():\n-    assert index_netuid(3) == 3\n-\n-\n-def test_index_zero():\n-    assert index_netuid(0) == 0\n"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

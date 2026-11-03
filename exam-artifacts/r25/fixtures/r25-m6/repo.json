@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/r25_m6_service.py": "from __future__ import annotations\n\n\ndef scale_hook(value: int, factor: int) -> int:\n    return value * factor\n",
+    "tests/test_r25_m6_scale.py": "import pytest\n\nfrom internal.r25_m6_service import scale_hook\n\n\n@pytest.mark.parametrize(\n    \"value,factor,expected\",\n    [(2, 3, 6), (0, 5, 0)],\n)\ndef test_scale_hook(value, factor, expected):\n    assert scale_hook(value, factor) == expected\n"
+  },
+  "baseFiles": {
+    "internal/r25_m6_service.py": "from __future__ import annotations\n\n\ndef scale_hook(value: int, factor: int) -> int:\n    return value * factor\n",
+    "tests/test_r25_m6_scale.py": "import pytest\n\nfrom internal.r25_m6_service import scale_hook\n\n\n@pytest.mark.parametrize(\n    \"value,factor,expected\",\n    [(2, 3, 6), (0, 5, 0), (4, 4, 16), (-1, 2, -2)],\n)\ndef test_scale_hook(value, factor, expected):\n    assert scale_hook(value, factor) == expected\n"
+  }
+}

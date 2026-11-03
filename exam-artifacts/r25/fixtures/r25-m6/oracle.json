@@ -1,0 +1,21 @@
+{
+  "fixture": "r25-m6",
+  "slug": "m6",
+  "mechanism": "M6",
+  "variant": "m6",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "517657c3476e3d1fff575a0f47215b421abb9a75e7917c48a104e777efe22627",
+  "changedPaths": [
+    "tests/test_r25_m6_scale.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "54 passed",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

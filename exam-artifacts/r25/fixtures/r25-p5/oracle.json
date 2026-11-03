@@ -1,0 +1,23 @@
+{
+  "fixture": "r25-p5",
+  "slug": "p5",
+  "mechanism": "P5",
+  "variant": "p5",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "749ed2e6523120a9611f596f46337ab4d2b0a0e063370310257427acb2a8f79a",
+  "changedPaths": [
+    ".github/workflows/ci-audit.yml",
+    "internal/r25_audit_hook.py",
+    "tests/test_r25_audit_hook.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "52 passed",
+    "passed": 52,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

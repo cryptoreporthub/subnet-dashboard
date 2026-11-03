@@ -1,0 +1,12 @@
+{
+  "number": 9614,
+  "title": "test: ignore integration glob in conftest",
+  "body": "Configures collect_ignore_glob for integration-style files.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9614",
+  "headSha": "a25f00000000000000000000000000000000000e",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/conftest.py"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "fixture": "r25-p1a",
+  "slug": "p1a",
+  "mechanism": "P1",
+  "variant": "p1a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "44f83291c0ca8e9383b102cc6bc27849541c5668ff4953a7e53268c7d3de09ef",
+  "changedPaths": [
+    "internal/r25_stale_index.py",
+    "tests/test_r25_stale_index.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "50 passed",
+    "passed": 50,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

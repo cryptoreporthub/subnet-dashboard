@@ -1,0 +1,13 @@
+{
+  "number": 9616,
+  "title": "ci: limit pull_request workflow paths",
+  "body": "Adds paths-ignore entries on pull_request events.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9616",
+  "headSha": "a25f000000000000000000000000000000000010",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_r25_m4a_smoke.py"
+  ]
+}

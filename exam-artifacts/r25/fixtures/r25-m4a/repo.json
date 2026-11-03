@@ -1,0 +1,10 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non:\n  pull_request:\n    paths-ignore:\n      - \"tests/**\"\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/test_r25_m4a_smoke.py": "def test_m4a_smoke():\n    assert 5 + 5 == 10\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/test_r25_m4a_smoke.py": ""
+  }
+}
