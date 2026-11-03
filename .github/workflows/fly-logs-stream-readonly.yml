@@ -11,9 +11,10 @@ on:
         default: 45
         type: number
 
-# Only actions: write, which actions/upload-artifact@v4 needs. The job has no checkout.
-permissions:
-  actions: write
+# No GITHUB_TOKEN scopes. The job has no checkout, and the artifact upload works with
+# none: probe run 41577510678 uploaded fly-logs-stream-41577510678 under permissions: {}.
+# Fly credentials come from the FLY_API_TOKEN secret, not GITHUB_TOKEN.
+permissions: {}
 
 jobs:
   stream:
