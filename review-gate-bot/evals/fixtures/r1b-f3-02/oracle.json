@@ -11,6 +11,7 @@
     "family": "F3-unmeasured-perf",
     "visibleClaim": "Lookup stays under 5ms with a single dict probe per netuid.",
     "latencyMeasuredInDiff": false,
+    "claimFalsifiedByMeasurement": false,
     "note": "Functional tests pass; latency claim is unprovable from the diff alone."
   },
   "pytest": {
