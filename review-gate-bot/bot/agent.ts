@@ -8,12 +8,12 @@ import { defineAgent } from "@grok/agent-sdk";
  * in the repo. See README.md for the exact names and how Joshua sets them.
  */
 export default defineAgent({
-  // Pinned so an SDK upgrade cannot change how the gate judges. Joshua chose DeepSeek at
-  // maximum reasoning effort for the bot (#1513). This is a human override of
-  // model-guide.md, which is why that guide names this bot as its one exception.
+  // Pinned so an SDK upgrade cannot change how the gate judges. Joshua's decision: the bot runs
+  // on Composer 2.5 with fast off. Composer has no effort level (only `fast`), and DeepSeek
+  // (#1513) is not available on the team's quota, so the bot is pinned to what it is measured on.
   model: {
-    id: "deepseek-v41-flash-1017",
-    params: [{ id: "effort", value: "max" }],
+    id: "composer-2.5",
+    params: [{ id: "fast", value: "false" }],
   },
   description:
     "Mission Control review gate for cryptoreporthub/subnet-dashboard. Adversarial PR review, deterministic gate order, automatic @cursor/@ditto/@replit tagging. Never merges, deploys, restarts, sets secrets or labels.",

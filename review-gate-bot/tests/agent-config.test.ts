@@ -61,10 +61,10 @@ test("every secret the channel names is declared for deploy, and no token is", (
 });
 
 test("the model is pinned, not left to the SDK default", () => {
-  // Joshua's decision (#1513): the bot runs on DeepSeek at maximum reasoning effort.
+  // Joshua's decision: the bot runs on Composer 2.5 with fast off. Composer has no effort level.
   assert.deepEqual((agent as unknown as { model?: unknown }).model, {
-    id: "deepseek-v41-flash-1017",
-    params: [{ id: "effort", value: "max" }],
+    id: "composer-2.5",
+    params: [{ id: "fast", value: "false" }],
   });
 });
 
