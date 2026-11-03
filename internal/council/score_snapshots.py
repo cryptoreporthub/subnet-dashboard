@@ -38,6 +38,7 @@ from internal.council.scheduler_cycle_state import liveness_state_path as _liven
 from internal.council.snapshot_coverage import env_int, membership_allows_admission, membership_generation
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
+from internal.process_memory import log_heavy_job_rss
 
 logger = logging.getLogger(__name__)
 
@@ -1692,12 +1693,6 @@ class ScoreSnapshotScheduler:
                 )
 
             logger.info("score snapshot cycle started")
-            try:
-                from internal.process_memory import log_heavy_job_rss
-            except ImportError:  # RSS bookends are observability; never fail the cycle
-                def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
-                    return None
-
             _rss_t0 = time.perf_counter()
             log_heavy_job_rss("score_snapshot", "start", started_at=_rss_t0)
             try:
