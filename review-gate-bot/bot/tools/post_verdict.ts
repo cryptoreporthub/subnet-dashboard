@@ -8,6 +8,7 @@ import {
   markEvalVerdictAccepted,
 } from "../lib/eval-verdict-once.js";
 import { postVerdictComment } from "../lib/tag.js";
+import { passClaimsUnmeasuredPerf } from "../lib/unmeasured-perf-claim.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
 
@@ -83,7 +84,7 @@ export function composeVerdictBody(input: {
  */
 export default defineTool({
   description:
-    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required.",
+    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. Refuses a PASS whose body or Skills notes carry an unmeasured duration or big-O claim (same-line `measured` from a tool is required). The Skills table is required.",
   inputSchema: z.object({
     headSha: Sha,
     verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
@@ -102,6 +103,16 @@ export default defineTool({
     const blocking = input.blocking ?? [];
     if (input.verdict === "PASS" && blocking.length > 0) {
       return { posted: false, reason: "pass-with-blocking-finding", verdict: input.verdict, blocking };
+    }
+
+    const perfText = `${input.body}\n${input.skills.map((s) => s.note).join("\n")}`;
+    if (input.verdict === "PASS" && passClaimsUnmeasuredPerf(perfText)) {
+      return {
+        posted: false,
+        reason: "pass-with-unmeasured-perf-claim",
+        verdict: input.verdict,
+        hint: "A duration or complexity figure in a PASS must sit on the same line as an affirmative `measured` label for a figure a tool returned. Otherwise post MODIFY or FAIL.",
+      };
     }
 
     if (ctx.session.purpose === "eval") {
