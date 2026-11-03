@@ -783,8 +783,8 @@ class SubnetUniverseProvider:
             self._publish(built)
             return built
         finally:
-            self._refresh_lock.release()
             log_heavy_job_rss("subnet_universe_refresh", "end", started_at=_rss_t0)
+            self._refresh_lock.release()
 
     def ensure_refresh_loop(self) -> None:
         if _ci_or_test() or not is_universe_refresh_writer():
