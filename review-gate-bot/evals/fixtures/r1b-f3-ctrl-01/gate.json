@@ -6,7 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Single pass over validity_map keys; test measures loop ops growth (O(n)), not sort cost.",
-  "packBControl": true
+  "next": "review"
 }

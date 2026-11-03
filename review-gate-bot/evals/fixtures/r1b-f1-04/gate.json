@@ -6,6 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Row payloads remain authoritative while netuids is temporarily empty during migration."
+  "next": "review"
 }

@@ -8,6 +8,7 @@ import type { Octokit } from "@octokit/rest";
 import { readPr, suiteKey } from "../bot/lib/gh.js";
 import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
+import { CHECK_GATE_STATE_OUTPUT_KEYS } from "../bot/lib/check_gate_output.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
 import { composeVerdictBody } from "../bot/tools/post_verdict.js";
 import listRepoFiles from "../bot/tools/list_repo_files.js";
@@ -193,6 +194,26 @@ test("an eval gate state is the fixture's, for the head it pins", async () => {
   assert.equal(result.next, "await_cursor_ditto");
   assert.equal(result.fileCount, 1);
   assert.equal(result.source, "fixture");
+  for (const key of Object.keys(result)) {
+    assert.ok(
+      (CHECK_GATE_STATE_OUTPUT_KEYS as readonly string[]).includes(key),
+      `unexpected check_gate_state key: ${key}`,
+    );
+  }
+});
+
+test("check_gate_state strips non-production keys from fixture gate.json", async () => {
+  const polluted = {
+    ...FIXTURE_GATE,
+    prBody: "extra narrative",
+    packBControl: true,
+    note: "eval-only",
+  };
+  const result = (await run(checkGateState)({}, await evalContext(polluted))) as Record<string, unknown>;
+  assert.equal(result.next, "await_cursor_ditto");
+  assert.equal("prBody" in result, false);
+  assert.equal("packBControl" in result, false);
+  assert.equal("note" in result, false);
 });
 
 test("an eval gate state is not shown beside a PR head the fixture does not pin", async () => {

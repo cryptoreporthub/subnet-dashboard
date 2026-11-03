@@ -6,6 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Web readers reload disk, then may publish when the worker is colocated on the same host."
+  "next": "review"
 }

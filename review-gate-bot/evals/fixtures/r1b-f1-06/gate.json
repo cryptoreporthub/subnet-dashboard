@@ -6,6 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Emergency compaction writes rows first; netuids may be empty for one publish cycle."
+  "next": "review"
 }

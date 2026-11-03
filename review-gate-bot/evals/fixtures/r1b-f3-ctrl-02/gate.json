@@ -6,7 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Documented batch count matches measured queries_for_refresh.",
-  "packBControl": true
+  "next": "review"
 }

@@ -252,21 +252,39 @@ DEFECT_VOICE = re.compile(
 )
 
 
-def pack_b_control(gate: dict) -> bool:
-    return bool(gate.get("packBControl") or (gate.get("packB") or {}).get("control"))
+PR_SNAPSHOT_KEYS = frozenset({"number", "headSha", "baseSha", "draft", "title", "files", "url"})
+GATE_STATE_KEYS = frozenset(
+    {"headSha", "mc", "cursor", "ditto", "replit", "suite", "replitTagged", "next", "suiteDetail"}
+)
+
+
+def check_fixture_snapshot_keys(dirname: str, pr: dict, gate: dict) -> list[str]:
+    """Pack B / eval fixtures must not add keys the production gate tool never returns."""
+    errors: list[str] = []
+    extra_pr = set(pr) - PR_SNAPSHOT_KEYS
+    extra_gate = set(gate) - GATE_STATE_KEYS
+    if extra_pr:
+        errors.append(f"{dirname}: pr.json extra keys {sorted(extra_pr)}")
+    if extra_gate:
+        errors.append(f"{dirname}: gate.json extra keys {sorted(extra_gate)}")
+    return errors
+
+
+def pack_b_control(dirname: str, gate: dict) -> bool:
+    return dirname.startswith("r1b-f3-ctrl-")
 
 
 def author_voice_text(pr: dict, gate: dict) -> str:
-    return "\n".join([pr.get("title") or "", gate.get("prBody") or pr.get("body") or ""])
+    return pr.get("title") or ""
 
 
 def check_r1b_author_voice(dirname: str, pr: dict, gate: dict) -> list[str]:
     if not dirname.startswith("r1b-"):
         return []
-    if pack_b_control(gate):
+    if pack_b_control(dirname, gate):
         return []
     if DEFECT_VOICE.search(author_voice_text(pr, gate)):
-        return [f"{dirname}: defect-naming token in title/body (author voice or packBControl)"]
+        return [f"{dirname}: defect-naming token in title (author voice)"]
     return []
 
 
@@ -308,6 +326,7 @@ def validate_r1b_fixture_dir(fixture_dir: Path, *, exam_fps: set[str] | None = N
     pr = json.loads((fixture_dir / "pr.json").read_text())
     gate = json.loads((fixture_dir / "gate.json").read_text())
     diff = json.loads((fixture_dir / "diff.json").read_text())
+    errors.extend(check_fixture_snapshot_keys(name, pr, gate))
     errors.extend(check_r1b_author_voice(name, pr, gate))
     fps = exam_fps if exam_fps is not None else exam_patch_fingerprints(fixture_dir.parent)
     errors.extend(check_r1b_exam_duplicate(name, diff, fps))

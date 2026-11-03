@@ -12,6 +12,22 @@ def sha_for(name: str) -> str:
     return hashlib.sha1(("evals-r1b:" + name).encode()).hexdigest()
 
 
+def _with_claim_comment(mod: str, claim: str) -> str:
+    """Embed F3 false/unprovable perf narrative in the diff (comment), not gate.json."""
+    if not claim:
+        return mod
+    line = f"# Author claim (unverified): {claim}\n"
+    if mod.startswith('"""'):
+        close = mod.find('"""\n', 3)
+        if close == -1:
+            close = mod.find('""",', 3)
+            insert = close + 4 if close != -1 else 0
+        else:
+            insert = close + 4
+        return mod[:insert] + line + mod[insert:]
+    return line + mod
+
+
 def _w(
     env,
     dirname,
@@ -22,14 +38,8 @@ def _w(
     gate=None,
     oracle=None,
     extra=None,
-    pr_body=None,
-    control=False,
 ):
     g = dict(gate or {})
-    if pr_body is not None:
-        g["prBody"] = pr_body
-    if control:
-        g["packBControl"] = True
     env["write"](
         dirname,
         number,
@@ -291,14 +301,13 @@ def build(env: dict) -> None:
             lambda head: oracles.blank_reload(uni, head),
         ),
     ]
-    for name, title, body, head, beh in f1_specs:
+    for name, title, _body, head, beh in f1_specs:
         _w(
             env,
             name,
             next_pr(),
             title,
             [(U, uni, head)],
-            pr_body=body,
             oracle={"behavior": beh(head), "pytest": _pytest(env, head)},
         )
 
@@ -386,7 +395,6 @@ def build(env: dict) -> None:
             next_pr(),
             title,
             file_list,
-            pr_body="Membership export should stay consistent with council and chain readers.",
             oracle={"behavior": _root_oracle(env, head, extra_files=extra_files, files=file_list), "pytest": pt},
         )
 
@@ -496,7 +504,8 @@ def build(env: dict) -> None:
     ]
     for item in f3_modules:
         claim_fn = item[-1]
-        name, title, pr_body, mod_path, test_path, bug_mod, bug_test, _gmod, _gtest = item[:-1]
+        name, title, claim_comment, mod_path, test_path, bug_mod, bug_test, _gmod, _gtest = item[:-1]
+        bug_mod = _with_claim_comment(bug_mod, claim_comment)
         files = [(mod_path, None, bug_mod), (test_path, None, bug_test)]
         head_run = _pytest(
             env,
@@ -511,7 +520,6 @@ def build(env: dict) -> None:
             next_pr(),
             title,
             files,
-            pr_body=pr_body,
             oracle={
                 "behavior": {"expectedVerdict": "MODIFY", "family": "F3-unmeasured-perf", **claim},
                 "pytest": head_run,
@@ -558,7 +566,7 @@ def build(env: dict) -> None:
         ),
     ]
     for item in f3_ctrl:
-        name, title, pr_body, mod_path, test_path, _, _, good_mod, good_test = item
+        name, title, _ctrl_note, mod_path, test_path, _, _, good_mod, good_test = item
         files = [(mod_path, None, good_mod), (test_path, None, good_test)]
         pt = _pytest(
             env,
@@ -575,8 +583,6 @@ def build(env: dict) -> None:
             next_pr(),
             title,
             files,
-            pr_body=pr_body,
-            control=True,
             oracle={"behavior": behavior, "pytest": pt},
         )
 
@@ -647,7 +653,6 @@ def build(env: dict) -> None:
             title,
             [("pytest.ini", ini, ini_head), (TEST, tests, tests_head)],
             extra=extra_repo,
-            pr_body="Keeps CI green while we stabilize flaky universe scenarios.",
             gate={"suite": "clean"},
             oracle={
                 "pytest": base_run,
@@ -1006,7 +1011,6 @@ def test_root_is_never_eligible_for_removal_whatever_the_elapsed_time():
             next_pr(),
             f"generalization: membership helper via {files[0][0] if len(files) == 1 else files[1][0]}",
             files,
-            pr_body="Share the netuid filter helper with adjacent modules.",
             oracle={"behavior": behavior, "pytest": pt},
         )
 

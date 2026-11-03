@@ -4,9 +4,9 @@
     {
       "path": "internal/r1b_perf_01.py",
       "status": "added",
-      "additions": 8,
+      "additions": 9,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,8 @@\n+\"\"\"Grace window helper.\"\"\"\n+from datetime import datetime\n+\n+STALE_GRACE_SECONDS = 48 * 3600\n+\n+\n+def grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n+    return (now - started).total_seconds() >= grace"
+      "patch": "@@ -0,0 +1,9 @@\n+\"\"\"Grace window helper.\"\"\"\n+# Author claim (unverified): Hot path stays O(1) using timedelta.seconds instead of total_seconds().\n+from datetime import datetime\n+\n+STALE_GRACE_SECONDS = 48 * 3600\n+\n+\n+def grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n+    return (now - started).total_seconds() >= grace"
     },
     {
       "path": "tests/test_r1b_perf_01.py",

@@ -6,6 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Cap check is O(1) using a precomputed flag."
+  "next": "review"
 }

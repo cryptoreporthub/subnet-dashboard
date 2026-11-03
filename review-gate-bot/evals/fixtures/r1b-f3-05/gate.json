@@ -6,6 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Repeated scans reuse a memo table for O(1) answers."
+  "next": "review"
 }

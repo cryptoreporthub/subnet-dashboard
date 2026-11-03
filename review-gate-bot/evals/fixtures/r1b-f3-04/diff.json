@@ -4,9 +4,9 @@
     {
       "path": "internal/r1b_perf_04.py",
       "status": "added",
-      "additions": 14,
+      "additions": 15,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,14 @@\n+\"\"\"Merge validity keys.\"\"\"\n+\n+def merged_netuids(validity_map: dict) -> list[int]:\n+    out = []\n+    for k in validity_map.keys():\n+        out.append(int(k))\n+    out.sort()\n+    return out\n+\n+def merge_loop_ops(validity_map: dict) -> int:\n+    ops = 0\n+    for _k in validity_map.keys():\n+        ops += 1\n+    return ops"
+      "patch": "@@ -0,0 +1,15 @@\n+\"\"\"Merge validity keys.\"\"\"\n+# Author claim (unverified): Merge stays O(n) with a single pass over validity_map keys.\n+\n+def merged_netuids(validity_map: dict) -> list[int]:\n+    out = []\n+    for k in validity_map.keys():\n+        out.append(int(k))\n+    out.sort()\n+    return out\n+\n+def merge_loop_ops(validity_map: dict) -> int:\n+    ops = 0\n+    for _k in validity_map.keys():\n+        ops += 1\n+    return ops"
     },
     {
       "path": "tests/test_r1b_perf_04.py",

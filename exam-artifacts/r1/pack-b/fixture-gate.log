@@ -16,15 +16,15 @@ Running 3 items in this shard
 fixture-gate ok: structural pytest
 
 === fixture-gate: known-bad rejection ===
-Running 9 items in this shard
-.........                                                                [100%]
-9 passed in 5.67s
+Running 10 items in this shard
+..........                                                               [100%]
+10 passed in 5.80s
 fixture-gate ok: known-bad rejection
 
 === fixture-gate: pack B author-voice + exam-dup gate ===
-Running 4 items in this shard
-....                                                                     [100%]
-4 passed in 0.02s
+Running 5 items in this shard
+.....                                                                    [100%]
+5 passed in 0.02s
 fixture-gate ok: pack B author-voice + exam-dup gate
 
 === fixture-gate: oracle-gen --check (executed oracle ON; ORACLE_PYTHON=/agent/repos/subnet-dashboard/.venv/bin/python) ===

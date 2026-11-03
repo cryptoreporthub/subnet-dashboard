@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-f3-01",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "49272c95f20508e64ee1a73bbfe194b9d8251b1e1d5220ca916dad48038dea5f",
+  "diffSha256": "67397b6a84423abff642531228a005231d7bfc1356e3fd111149885607790c67",
   "changedPaths": [
     "internal/r1b_perf_01.py",
     "tests/test_r1b_perf_01.py"

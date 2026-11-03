@@ -55,6 +55,33 @@ def test_known_bad_r1b_exam_dup_rejected() -> None:
     assert errors
 
 
+def test_known_bad_r1b_gate_extra_keys_rejected() -> None:
+    from gate_core import check_fixture_snapshot_keys
+
+    gate = {
+        "headSha": "a" * 40,
+        "mc": "missing",
+        "cursor": "missing",
+        "ditto": "missing",
+        "replit": "missing",
+        "suite": "missing",
+        "replitTagged": False,
+        "next": "review",
+        "prBody": "hidden claim",
+    }
+    pr = {
+        "number": 1,
+        "headSha": "a" * 40,
+        "baseSha": "b" * 40,
+        "draft": False,
+        "title": "t",
+        "files": [],
+        "url": "u",
+    }
+    errors = check_fixture_snapshot_keys("r1b-f3-01", pr, gate)
+    assert errors
+
+
 @pytest.mark.parametrize("rev,path,label", KNOWN_BAD)
 def test_known_bad_fixture_is_rejected(rev: str, path: str, label: str) -> None:
     if rev == "synthetic" and "oracle PASS" in label:

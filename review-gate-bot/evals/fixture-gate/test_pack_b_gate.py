@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from gate_core import (
+    check_fixture_snapshot_keys,
     check_r1b_author_voice,
     check_r1b_exam_duplicate,
     diff_patch_fingerprint,
@@ -40,9 +41,18 @@ def test_author_voice_gate_allows_control() -> None:
     errors = check_r1b_author_voice(
         "r1b-f3-ctrl-99",
         {"title": "tests: skip flake on purpose"},
-        {"packBControl": True},
+        {},
     )
     assert not errors
+
+
+def test_fixture_snapshot_keys_reject_prbody_in_gate() -> None:
+    errors = check_fixture_snapshot_keys(
+        "r1b-f1-99",
+        {"number": 1, "headSha": "a", "baseSha": "b", "draft": False, "title": "t", "files": [], "url": "u"},
+        {"headSha": "a", "mc": "missing", "cursor": "missing", "ditto": "missing", "replit": "missing", "suite": "missing", "replitTagged": False, "next": "review", "prBody": "nope"},
+    )
+    assert errors
 
 
 def test_exam_dup_gate_rejects_known_nonowner_patch() -> None:

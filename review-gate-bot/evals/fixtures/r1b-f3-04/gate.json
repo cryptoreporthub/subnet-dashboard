@@ -6,6 +6,5 @@
   "replit": "missing",
   "suite": "missing",
   "replitTagged": false,
-  "next": "review",
-  "prBody": "Merge stays O(n) with a single pass over validity_map keys."
+  "next": "review"
 }
