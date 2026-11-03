@@ -872,6 +872,8 @@ class PredictionResolverScheduler:
                 trigger="resolver_cycle",
             )
             token = _cycle_timing.set(timing)
+            _rss_t0 = time.perf_counter()
+            log_heavy_job_rss("prediction_resolver_worker", "start", started_at=_rss_t0)
             try:
                 if gen != self._cycle_generation:
                     return {
@@ -890,6 +892,7 @@ class PredictionResolverScheduler:
                     result["resolver_cycle_id"] = cycle_id
                 return result
             finally:
+                log_heavy_job_rss("prediction_resolver_worker", "end", started_at=_rss_t0)
                 _cycle_timing.reset(token)
                 reset_patchd_context(ctx_token)
                 if gen == self._cycle_generation:
