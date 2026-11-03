@@ -1415,7 +1415,7 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
         sched = _scheduler
         if sched is not None and not sched._cycle_lock.acquire(blocking=False):
             if _resolver_cycle_lock_stale(sched, age_before, force=force):
-                sched._force_release_cycle_lock(reason="revive_stale_lock")
+                sched._abandon_inflight_cycle()
                 with sched._submit_lock:
                     inflight = sched._inflight_future
                     if inflight is not None and inflight.done():
