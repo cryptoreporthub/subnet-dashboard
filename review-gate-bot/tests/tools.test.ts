@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -232,26 +233,77 @@ test("an eval file listing past the cap is cut and flagged, as a live listing is
   assert.equal(listing.truncated, true);
 });
 
-// --- An eval read of the base serves the base, not the head text under a base label ---------------
+// --- R0.8 eval base fidelity (read_repo_file + list_repo_files) ---------------
 
-test("an eval read at base serves the fixture's base text for a file the diff changed, at head the head text", async () => {
+async function evalBaseFixtureContext(
+  repo: { files: Record<string, string>; baseFiles?: Record<string, string> },
+  prFiles: string[],
+): Promise<{ session: { purpose: string }; workspaceDir: string }> {
   const dir = await mkdtemp(join(tmpdir(), "repo-eval-base-"));
   await writeFile(
     join(dir, "pr.json"),
-    JSON.stringify({ number: 1522, title: "t", url: "u", headSha: HEAD, baseSha: BASE, draft: false, files: ["a.py"] }),
+    JSON.stringify({ number: 1522, title: "t", url: "u", headSha: HEAD, baseSha: BASE, draft: false, files: prFiles }),
   );
-  await writeFile(
-    join(dir, "repo.json"),
-    JSON.stringify({ files: { "a.py": "new\n", "b.py": "same\n" }, baseFiles: { "a.py": "old\n" } }),
+  await writeFile(join(dir, "repo.json"), JSON.stringify(repo));
+  return { session: { purpose: "eval" }, workspaceDir: dir };
+}
+
+test("R0.8-1 eval read at base returns baseFiles text for a changed file; head returns head text", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n", "b.py": "same\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
   );
-  const ctx = { session: { purpose: "eval" }, workspaceDir: dir };
   const at = async (where: "head" | "base", path: string) =>
     (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string; sha?: string };
   assert.equal((await at("base", "a.py")).text, "old\n");
   assert.equal((await at("base", "a.py")).sha, BASE);
   assert.equal((await at("head", "a.py")).text, "new\n");
-  assert.equal((await at("head", "b.py")).text, "same\n");
-  assert.equal((await at("base", "b.py")).ok, false, "at base only baseFiles is served, not head files");
+});
+
+test("R0.8-2 eval read of unchanged context file succeeds at base and head with equal text", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n", "internal/context.py": "ctx\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string };
+  assert.equal((await at("base", "internal/context.py")).text, "ctx\n");
+  assert.equal((await at("head", "internal/context.py")).text, "ctx\n");
+});
+
+test("R0.8-3 eval read of PR-added file is not-found at base and succeeds at head", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "added.py": "added\n", "keep.py": "k\n" }, baseFiles: {} },
+    ["added.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string };
+  assert.equal((await at("base", "added.py")).ok, false);
+  assert.equal((await at("head", "added.py")).text, "added\n");
+});
+
+test("R0.8-4 eval list_repo_files at base includes unchanged files and excludes PR-added paths", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "added.py": "a\n", "keep.py": "k\n", "changed.py": "new" }, baseFiles: { "changed.py": "old" } },
+    ["added.py", "changed.py"],
+  );
+  const base = (await run(listRepoFiles)({ at: "base" }, ctx)) as { paths: string[] };
+  const head = (await run(listRepoFiles)({ at: "head" }, ctx)) as { paths: string[] };
+  assert.ok(base.paths.includes("keep.py"));
+  assert.ok(base.paths.includes("changed.py"));
+  assert.ok(!base.paths.includes("added.py"));
+  assert.ok(head.paths.includes("added.py"));
+});
+
+test("R0.8-5 read_repo_file and list_repo_files GitHub branches unchanged (no eval base helpers)", () => {
+  const readSrc = readFileSync(new URL("../bot/tools/read_repo_file.ts", import.meta.url), "utf8");
+  const listSrc = readFileSync(new URL("../bot/tools/list_repo_files.ts", import.meta.url), "utf8");
+  const readGh = readSrc.slice(readSrc.indexOf("const ref = parseGitHubPrContinuationKey"));
+  const listGh = listSrc.slice(listSrc.indexOf("const ref = parseGitHubPrContinuationKey"));
+  assert.match(readGh, /readRepoFile\(octokit/);
+  assert.doesNotMatch(readGh, /evalRepoTextAtBase/);
+  assert.match(listGh, /listRepoFiles\(octokit/);
+  assert.doesNotMatch(listGh, /evalRepoPathsAtBase/);
 });
 
 // --- An eval suite comparison answers with the suite state the fixture pins ---------------
