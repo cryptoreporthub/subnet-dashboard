@@ -1,0 +1,14 @@
+{
+  "number": 9512,
+  "title": "test: relocate module out of pytest discovery pattern",
+  "body": "Renames integration module so default test discovery no longer collects it.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9512",
+  "headSha": "0ad5b854901988ade4765ffd9c35d119218ddadb",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_unit_core.py",
+    "tests/integration/test_link.py",
+    "tests/integration/_support_link.py"
+  ]
+}

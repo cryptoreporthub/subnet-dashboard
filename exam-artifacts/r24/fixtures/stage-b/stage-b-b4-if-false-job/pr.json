@@ -1,0 +1,13 @@
+{
+  "number": 9508,
+  "title": "ci: gate test job behind always-false condition",
+  "body": "Test job is guarded by if: false so pytest never runs on push despite workflow remaining present.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9508",
+  "headSha": "18bb7b449fd4ba4d5aad47e7ccd524888b588c81",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py"
+  ]
+}

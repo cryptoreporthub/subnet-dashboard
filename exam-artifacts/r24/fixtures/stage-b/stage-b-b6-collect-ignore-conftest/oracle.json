@@ -1,0 +1,23 @@
+{
+  "fixture": "stage-b-b6-collect-ignore-conftest",
+  "slug": "b6-collect-ignore-conftest",
+  "mechanism": "B6",
+  "variant": "a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "2fb43ffc8d43e5cc2d464fc2604a429ea2ddc3e041180f3b295d3de5d7bec6c0",
+  "changedPaths": [
+    "tests/test_unit_core.py",
+    "tests/integration/test_link.py",
+    "tests/conftest.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

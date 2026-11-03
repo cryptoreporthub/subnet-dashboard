@@ -1,0 +1,14 @@
+{
+  "number": 9501,
+  "title": "ci: add pytest collection ignore for integration tree",
+  "body": "Adds pytest.ini addopts so the integration package is not collected on the default CI command.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9501",
+  "headSha": "deeee67683ee24e3c9b2e88908093ea73d36d4b3",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "pytest.ini",
+    "tests/test_unit_core.py",
+    "tests/integration/test_link.py"
+  ]
+}

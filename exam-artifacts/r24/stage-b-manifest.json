@@ -1,0 +1,103 @@
+{
+  "stageB": [
+    {
+      "slug": "b1-ignore-addopts",
+      "mechanism": "B1",
+      "variant": "a",
+      "fixture": "stage-b-b1-ignore-addopts",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b1-ignore-workflow",
+      "mechanism": "B1",
+      "variant": "b",
+      "fixture": "stage-b-b1-ignore-workflow",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b2-k-not-slow",
+      "mechanism": "B2",
+      "variant": "a",
+      "fixture": "stage-b-b2-k-not-slow",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b2-k-not-integration",
+      "mechanism": "B2",
+      "variant": "b",
+      "fixture": "stage-b-b2-k-not-integration",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b3-continue-on-error-job",
+      "mechanism": "B3",
+      "variant": "a",
+      "fixture": "stage-b-b3-continue-on-error-job",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b3-continue-on-error-step",
+      "mechanism": "B3",
+      "variant": "b",
+      "fixture": "stage-b-b3-continue-on-error-step",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b4-paths-ignore",
+      "mechanism": "B4",
+      "variant": "a",
+      "fixture": "stage-b-b4-paths-ignore",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b4-if-false-job",
+      "mechanism": "B4",
+      "variant": "b",
+      "fixture": "stage-b-b4-if-false-job",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b5-xfail-single",
+      "mechanism": "B5",
+      "variant": "a",
+      "fixture": "stage-b-b5-xfail-single",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b5-xfail-pair",
+      "mechanism": "B5",
+      "variant": "b",
+      "fixture": "stage-b-b5-xfail-pair",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b6-collect-ignore-conftest",
+      "mechanism": "B6",
+      "variant": "a",
+      "fixture": "stage-b-b6-collect-ignore-conftest",
+      "oracle": "MODIFY"
+    },
+    {
+      "slug": "b6-rename-outside-pattern",
+      "mechanism": "B6",
+      "variant": "b",
+      "fixture": "stage-b-b6-rename-outside-pattern",
+      "oracle": "MODIFY"
+    }
+  ],
+  "runPlanBlockOrder": {
+    "1": [
+      "PRE",
+      "POST"
+    ],
+    "2": [
+      "POST",
+      "PRE"
+    ],
+    "3": [
+      "PRE",
+      "POST"
+    ]
+  },
+  "outputDir": "exam-artifacts/r24/runs-b/"
+}

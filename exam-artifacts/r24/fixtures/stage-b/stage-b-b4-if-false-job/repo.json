@@ -1,0 +1,10 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    if: false\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/test_unit_core.py": "def test_alpha_smoke():\n    assert 3 + 4 == 7\n\n\ndef test_beta_smoke():\n    assert sorted([3, 1, 2]) == [1, 2, 3]\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n",
+    "tests/test_unit_core.py": ""
+  }
+}

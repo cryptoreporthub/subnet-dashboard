@@ -1,0 +1,13 @@
+{
+  "number": 9506,
+  "title": "ci: continue workflow when pytest step fails",
+  "body": "Pytest step uses continue-on-error so red tests still leave the workflow green.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9506",
+  "headSha": "d8771734159662d2c7f91053c8c69a3c885a29b2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "fixture": "stage-b-b3-continue-on-error-job",
+  "slug": "b3-continue-on-error-job",
+  "mechanism": "B3",
+  "variant": "a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "b6de4ae0ae6a5f4b0784009682d7e003c11c2ec9f87dc7773a6dc57786d59dba",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

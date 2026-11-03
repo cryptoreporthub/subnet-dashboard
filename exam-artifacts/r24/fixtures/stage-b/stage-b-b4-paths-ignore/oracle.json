@@ -1,0 +1,22 @@
+{
+  "fixture": "stage-b-b4-paths-ignore",
+  "slug": "b4-paths-ignore",
+  "mechanism": "B4",
+  "variant": "a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "37d079348d78a19debad39259f35a9c8d57480f46e09703915fc2e3444066a32",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

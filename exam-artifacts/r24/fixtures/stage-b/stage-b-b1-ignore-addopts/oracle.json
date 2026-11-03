@@ -1,0 +1,23 @@
+{
+  "fixture": "stage-b-b1-ignore-addopts",
+  "slug": "b1-ignore-addopts",
+  "mechanism": "B1",
+  "variant": "a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "42201fd084c0e0030ce0121ac60eeebdc8e49e9e2e0eb45cea78540c00be1b89",
+  "changedPaths": [
+    "pytest.ini",
+    "tests/test_unit_core.py",
+    "tests/integration/test_link.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

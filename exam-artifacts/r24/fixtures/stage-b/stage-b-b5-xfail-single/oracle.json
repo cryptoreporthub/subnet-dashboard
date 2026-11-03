@@ -1,0 +1,22 @@
+{
+  "fixture": "stage-b-b5-xfail-single",
+  "slug": "b5-xfail-single",
+  "mechanism": "B5",
+  "variant": "a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "f45df0373e9032e15d29dfeb6d74ff8e1287469e61a90fab6b14afe6b38eb292",
+  "changedPaths": [
+    "tests/test_unit_core.py",
+    "tests/conftest.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

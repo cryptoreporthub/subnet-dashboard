@@ -1,0 +1,13 @@
+{
+  "number": 9507,
+  "title": "ci: limit push trigger paths for smoke workflow",
+  "body": "Push trigger ignores test paths so application-only changes skip the pytest job.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9507",
+  "headSha": "fa116fed4e84af9c1acd938482a89be860271d3b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py"
+  ]
+}

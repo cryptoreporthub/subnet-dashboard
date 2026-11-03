@@ -1,0 +1,23 @@
+{
+  "fixture": "stage-b-b2-k-not-slow",
+  "slug": "b2-k-not-slow",
+  "mechanism": "B2",
+  "variant": "a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a83be7aa8d14b9cd7ec3912af75b71262f8a4f193af7ac756fe1f47fd904b33a",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py",
+    "tests/conftest.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

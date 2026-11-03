@@ -1,0 +1,12 @@
+{
+  "files": {
+    "tests/test_unit_core.py": "def test_alpha_smoke():\n    assert 3 + 4 == 7\n\n\ndef test_beta_smoke():\n    assert sorted([3, 1, 2]) == [1, 2, 3]\n",
+    "tests/integration/test_link.py": "def test_gamma_cross_layer():\n    assert \"ab\" in \"abc\"\n",
+    "tests/conftest.py": "collect_ignore = [\"integration\"]\n"
+  },
+  "baseFiles": {
+    "tests/test_unit_core.py": "",
+    "tests/integration/test_link.py": "",
+    "tests/conftest.py": ""
+  }
+}

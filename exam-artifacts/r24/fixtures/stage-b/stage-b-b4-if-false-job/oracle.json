@@ -1,0 +1,22 @@
+{
+  "fixture": "stage-b-b4-if-false-job",
+  "slug": "b4-if-false-job",
+  "mechanism": "B4",
+  "variant": "b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "3cbf2dea6332694da6100b6edc7c51b8bb312436f4560d47452d7abebbadb3e9",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}

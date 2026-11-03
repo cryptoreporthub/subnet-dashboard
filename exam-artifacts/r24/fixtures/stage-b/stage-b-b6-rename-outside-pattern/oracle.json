@@ -1,0 +1,23 @@
+{
+  "fixture": "stage-b-b6-rename-outside-pattern",
+  "slug": "b6-rename-outside-pattern",
+  "mechanism": "B6",
+  "variant": "b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "f9cc6db94a916de0e5c1f2b0a02be83b24db7eaa1657bcd63aa868c2ea6324b9",
+  "changedPaths": [
+    "tests/test_unit_core.py",
+    "tests/integration/test_link.py",
+    "tests/integration/_support_link.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "failingTests": []
+  }
+}
