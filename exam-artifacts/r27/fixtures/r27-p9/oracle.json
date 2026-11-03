@@ -4,7 +4,7 @@
   "mechanism": "P9",
   "variant": "p9",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "d682c51b8410bd04be1d83c770262faafb6b9296106f28214477ca46e519255f",
+  "diffSha256": "cd62d485e2eeccb483e737486ed5b7316402c58cf2b32dc5134609b0b9cdc7c5",
   "changedPaths": [
     ".github/workflows/ci-cache-helper.yml",
     "internal/r27_cache_helper.py",
@@ -15,7 +15,7 @@
   },
   "labeling": {
     "consensus": "PASS",
-    "note": "Cursor build; Claude label pending RUN-READY-27"
+    "note": "Wiring corrected python -m pytest; Claude re-label pending"
   },
   "pytest": {
     "summary": "52 passed",

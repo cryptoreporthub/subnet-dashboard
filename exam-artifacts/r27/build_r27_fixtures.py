@@ -152,7 +152,7 @@ def ci_job_pytest(workflow_name: str, test_path: str) -> str:
         "        with:\n"
         "          python-version: '3.12'\n"
         "      - run: pip install pytest\n"
-        f"      - run: pytest -q {test_path}\n"
+        f"      - run: python -m pytest -q {test_path}\n"
     )
 
 

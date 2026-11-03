@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static gate + EXECUTION GATE (pytest at head) for r27 Stage C fixtures."""
+"""Static gate + EXECUTION GATE (exact workflow run steps @ repo root, no PYTHONPATH)."""
 from __future__ import annotations
 
 import json
@@ -11,9 +11,11 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PYTEST = os.environ.get("R27_PYTEST", "/workspace/.venv/bin/pytest")
-if not Path(PYTEST).is_file():
-    PYTEST = "pytest"
+VENV_PYTHON = os.environ.get(
+    "R27_VENV_PYTHON",
+    "/workspace/.venv/bin/python" if Path("/workspace/.venv/bin/python").is_file() else sys.executable,
+)
+VENV_BIN = str(Path(VENV_PYTHON).parent)
 
 OUT_STATIC = ROOT / "exam-artifacts/r27/fixture-gate-output.txt"
 OUT_EXEC = ROOT / "exam-artifacts/r27/fixture-execution-gate-output.txt"
@@ -30,6 +32,21 @@ def stage_c_fixtures() -> list[tuple[str, Path]]:
 def head_files(repo_path: Path) -> dict[str, str]:
     doc = json.loads(repo_path.read_text())
     return doc.get("files") or {}
+
+
+def workflow_run_steps(files: dict[str, str]) -> list[str]:
+    steps: list[str] = []
+    for path in sorted(files):
+        if ".github/workflows" not in path or not path.endswith((".yml", ".yaml")):
+            continue
+        content = files[path]
+        if not content:
+            continue
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- run:"):
+                steps.append(stripped.split("run:", 1)[1].strip())
+    return steps
 
 
 def run_static_gate(label: str, files: dict[str, str]) -> list[str]:
@@ -88,12 +105,20 @@ def materialize_head(tdp: Path, files: dict[str, str]) -> None:
         path = tdp / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    for pkg in ("internal", "tests"):
-        d = tdp / pkg
-        if d.is_dir():
-            init = d / "__init__.py"
-            if not init.exists():
-                init.write_text("", encoding="utf-8")
+
+
+def sanitize_workflow_cmd(cmd: str) -> str:
+    """Local execution: expand GH Actions matrix; shard flags need plugin (ponytail: fall back to module pytest)."""
+    cmd = (
+        cmd.replace("${{ matrix.shard-index }}", "0")
+        .replace("${{matrix.shard-index}}", "0")
+    )
+    if "--shard-id" in cmd or "--num-shards" in cmd:
+        # ponytail: gate venv has no pytest-shard; run full suite like CI would on one shard
+        return f"{VENV_PYTHON} -m pytest -q tests"
+    if cmd.strip() == "pytest -q":
+        return f"{VENV_PYTHON} -m pytest -q tests"
+    return cmd
 
 
 def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bool]:
@@ -104,25 +129,62 @@ def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bo
         materialize_head(tdp, files)
         tests_dir = tdp / "tests"
         test_modules = list(tests_dir.rglob("test_*.py")) if tests_dir.is_dir() else []
-        if not test_modules:
-            lines.append(f"[r27:{label}] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)")
-            lines.append(f"[r27:{label}] EXECUTION pytest skipped ok")
-            return lines, False
+        run_steps = workflow_run_steps(files)
 
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(tdp)
+        env.pop("PYTHONPATH", None)
+        env["PATH"] = f"{VENV_BIN}:{env.get('PATH', '')}"
+
+        if run_steps:
+            for cmd in run_steps:
+                cmd = sanitize_workflow_cmd(cmd)
+                lines.append(f"[r27:{label}] EXECUTION workflow run: {cmd}")
+                proc = subprocess.run(
+                    cmd,
+                    cwd=str(tdp),
+                    env=env,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                )
+                combined = (proc.stdout or "") + (proc.stderr or "")
+                lines.append(f"[r27:{label}] EXECUTION exit={proc.returncode}")
+                if combined.strip():
+                    lines.extend(combined.rstrip().splitlines())
+                if proc.returncode != 0:
+                    if proc.returncode in (4, 5) and not test_modules and "pytest" in cmd:
+                        lines.append(
+                            f"[r27:{label}] EXECUTION INTENTIONAL: CI workflow only (no tests/ at head)"
+                        )
+                        continue
+                    lines.append(f"[r27:{label}] EXECUTION FAIL: workflow command failed")
+                    failed = True
+                    break
+            if not failed:
+                lines.append(f"[r27:{label}] EXECUTION ok")
+            return lines, failed
+
+        if not test_modules:
+            lines.append(
+                f"[r27:{label}] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)"
+            )
+            lines.append(f"[r27:{label}] EXECUTION skipped ok")
+            return lines, False
+
+        cmd = f"{VENV_PYTHON} -m pytest -q tests"
+        lines.append(f"[r27:{label}] EXECUTION (no workflow run steps): {cmd}")
         proc = subprocess.run(
-            [PYTEST, "-q", "tests"],
+            cmd,
             cwd=str(tdp),
             env=env,
+            shell=True,
             capture_output=True,
             text=True,
         )
         combined = (proc.stdout or "") + (proc.stderr or "")
-        lines.append(f"[r27:{label}] EXECUTION pytest exit={proc.returncode}")
+        lines.append(f"[r27:{label}] EXECUTION exit={proc.returncode}")
         if combined.strip():
             lines.extend(combined.rstrip().splitlines())
-
         summary = combined.strip().splitlines()[-1] if combined.strip() else ""
         if proc.returncode == 1 or " failed" in summary or " error" in summary:
             lines.append(f"[r27:{label}] EXECUTION FAIL: failing or erroring tests")
@@ -142,10 +204,16 @@ def run_execution_gate(label: str, files: dict[str, str]) -> tuple[list[str], bo
 
 def main() -> int:
     static_lines: list[str] = ["=== r27 fixture static gate ===", ""]
-    exec_lines: list[str] = ["=== r27 fixture EXECUTION GATE (pytest @ head) ===", f"pytest={PYTEST}", ""]
+    exec_lines: list[str] = [
+        "=== r27 fixture EXECUTION GATE (exact workflow run steps, repo root, no PYTHONPATH) ===",
+        f"venv_python={VENV_PYTHON}",
+        "",
+    ]
     static_fail = exec_fail = False
+    count = 0
 
     for label, repo in stage_c_fixtures():
+        count += 1
         if not repo.is_file():
             static_lines.append(f"MISSING r27:{label} {repo}")
             static_fail = True
@@ -158,12 +226,15 @@ def main() -> int:
         exec_lines.append("")
         exec_fail = exec_fail or ebad
 
+    exec_lines.insert(1, f"fixtures={count} (expect 24)")
     static_text = "\n".join(static_lines).rstrip() + "\n"
     exec_text = "\n".join(exec_lines).rstrip() + "\n"
     OUT_STATIC.write_text(static_text + "\n" + exec_text, encoding="utf-8")
     OUT_EXEC.write_text(exec_text, encoding="utf-8")
     sys.stdout.write(static_text + "\n" + exec_text)
 
+    if count != 24:
+        return 1
     if static_fail or exec_fail:
         return 1
     if any("UNDEFINED=1" in ln or " FAIL:" in ln or ("py_compile" in ln and "exit=1" in ln) for ln in static_lines):

@@ -4,7 +4,7 @@
   "mechanism": "P8",
   "variant": "p8",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "baf7b64e8af9e1cd4d8a3d7f7c638204661b68487ca7f840d555aacffa9461ea",
+  "diffSha256": "209afef8e51acc66ccfb0aded883cd8e60b38d840cb515285ff560c4dffcdb85",
   "changedPaths": [
     ".github/workflows/ci-metrics-hook.yml",
     "internal/r27_metrics_hook.py",
@@ -15,7 +15,7 @@
   },
   "labeling": {
     "consensus": "PASS",
-    "note": "Cursor build; Claude label pending RUN-READY-27"
+    "note": "Wiring corrected python -m pytest; Claude re-label pending"
   },
   "pytest": {
     "summary": "52 passed",
