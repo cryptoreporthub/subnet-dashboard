@@ -96,6 +96,16 @@ HERMETIC=(env -i
   R2_METHOD_ARM=A
 )
 
+WAVE2_HUNG_COUNT="$(grep -c '^WAVE_2_HUNG_KILLED' "$RUN_LOG" 2>/dev/null || true)"
+echo "wave2_hung_strikes=${WAVE2_HUNG_COUNT}"
+if [[ "$WAVE2_HUNG_COUNT" -ge 2 ]]; then
+  echo "STOP: wave2 second-hang policy (already ${WAVE2_HUNG_COUNT} WAVE_2_HUNG_KILLED); do not restart whole wave"
+  exit 10
+fi
+
+CAP_RUNNER="$REPO_ROOT/exam-artifacts/r1-packb-a/run-wave-slots-capped.sh"
+chmod +x "$CAP_RUNNER"
+
 for wave_idx in 1 2; do
   readarray -t WAVE_META < <(python3 - <<PY
 import json
@@ -108,43 +118,29 @@ PY
   ITER="${WAVE_META[0]}"
   OUT_REL="${WAVE_META[1]}"
   OUT="$REPO_ROOT/$OUT_REL"
-  mapfile -t IDS < <(python3 - <<PY
-import json
-print("\n".join(json.load(open("$PLAN"))["waves"][$wave_idx]["evalIds"]))
-PY
-)
-  STATE="/tmp/r1-packb-a-state-iter${ITER}-$$"
-  rm -rf "$STATE"
-  echo "WAVE_${ITER}_START $(date -u +%Y-%m-%dT%H:%M:%SZ) slots=${#IDS[@]}"
-  START=$SECONDS
-  EC=0
   WAVE_RESULTS=0
   if [[ -f "$OUT" ]]; then
-    WAVE_RESULTS="$(python3 -c "import json; print(len(json.load(open('$OUT')).get('results',[])))")"
-  fi
-  if [[ "$WAVE_RESULTS" -eq 48 ]]; then
-    echo "WAVE_${ITER}_SKIP eval already complete in $OUT_REL"
-  else
-    set +e
-    "${HERMETIC[@]}" bash -lc "cd '$BOT' && npx agent-sdk eval --dir . $(printf '%q ' "${IDS[@]}") --json --no-stream --max-concurrency 1 --state-root '$STATE' --out '$OUT'"
-    EC=$?
-    set -e
-  fi
-  DUR=$((SECONDS - START))
-  echo "WAVE_${ITER}_END $(date -u +%Y-%m-%dT%H:%M:%SZ) duration_s=${DUR} exit=${EC}"
-  if [[ ! -f "$OUT" ]]; then
-    echo "STOP: missing output $OUT"
-    exit 4
+    WAVE_RESULTS="$(python3 -c "import json; print(len(json.load(open('$OUT')).get('results',[])))" 2>/dev/null || echo 0)"
   fi
   EXPECT_AUDIT=$((48 * ITER))
   CURRENT_AUDIT="$(wc -l <"$AUDIT" | tr -d ' ')"
-  if [[ "$CURRENT_AUDIT" -lt "$EXPECT_AUDIT" ]]; then
-    node "$EXTRACT" "$OUT" "$AUDIT" "$SYSPROMPT_CHARS" "$SYSPROMPT_SHA" "$MODEL_JSON" "$FIX_SHA_FULL" "true"
-  else
-    echo "WAVE_${ITER}_AUDIT_SKIP already have $CURRENT_AUDIT lines (need $EXPECT_AUDIT)"
+  if [[ "$WAVE_RESULTS" -eq 48 ]] && [[ "$CURRENT_AUDIT" -ge "$EXPECT_AUDIT" ]]; then
+    echo "WAVE_${ITER}_SKIP complete json+audit"
+    continue
   fi
-  echo "WAVE_${ITER}_WROTE $OUT_REL audit_lines=$(wc -l <"$AUDIT" | tr -d ' ')"
-  rm -rf "$STATE"
+  if [[ "$ITER" -eq 2 ]] && [[ "$WAVE_RESULTS" -lt 48 ]]; then
+    rm -f "$OUT"
+    CURRENT_AUDIT="$(wc -l <"$AUDIT" | tr -d ' ')"
+    if [[ "$CURRENT_AUDIT" -gt 48 ]]; then
+      echo "STOP: partial wave2 audit without complete json; manual fix required"
+      exit 12
+    fi
+  fi
+  echo "WAVE_${ITER}_START $(date -u +%Y-%m-%dT%H:%M:%SZ) mode=per_slot_cap_15m"
+  bash "$CAP_RUNNER" "$wave_idx" "$SYSPROMPT_CHARS" "$SYSPROMPT_SHA" "$MODEL_JSON" "$FIX_SHA_FULL"
+  WAVE_RESULTS="$(python3 -c "import json; print(len(json.load(open('$OUT')).get('results',[])))")"
+  CURRENT_AUDIT="$(wc -l <"$AUDIT" | tr -d ' ')"
+  echo "WAVE_${ITER}_WROTE $OUT_REL results=${WAVE_RESULTS} audit_lines=${CURRENT_AUDIT}"
 done
 
 FINAL_LINES="$(wc -l <"$AUDIT" | tr -d ' ')"
