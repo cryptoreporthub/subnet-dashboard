@@ -969,8 +969,10 @@ def test_resolver_worker_rss_end_logged_after_timeout_abandons_cycle(
     monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
     started = threading.Event()
     release = threading.Event()
+    worker_thread_ids: list[int] = []
 
     def _blocked(self):
+        worker_thread_ids.append(threading.get_ident())
         started.set()
         release.wait()
         return {"ok": True, "run_at": resolver_scheduler._now_iso()}
@@ -989,10 +991,14 @@ def test_resolver_worker_rss_end_logged_after_timeout_abandons_cycle(
     sched._first_tick_pending = True
 
     def _worker_lines() -> list[str]:
+        # Only this test's worker: an earlier test's abandoned worker can still log here.
+        if not worker_thread_ids:
+            return []
         return [
             r.getMessage()
             for r in caplog.records
             if "prediction_resolver_worker" in r.getMessage()
+            and r.thread == worker_thread_ids[0]
         ]
 
     try:
