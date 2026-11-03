@@ -96,10 +96,20 @@ def check_gainers_alert(*, now: Optional[datetime] = None) -> Optional[Dict[str,
 
 
 def _alert_loop() -> None:
+    import contextlib
+
     logger.info("gainers alert watcher started (interval=%ss)", _interval_seconds())
     while not _ALERT_STOP.is_set():
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         try:
-            check_gainers_alert()
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("message_intel_gainers_alert")
+        except ImportError:
+            pass
+        try:
+            with scope:
+                check_gainers_alert()
         except Exception as exc:
             logger.warning("gainers alert tick failed: %s", exc)
         _ALERT_STOP.wait(3600)

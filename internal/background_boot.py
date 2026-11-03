@@ -189,16 +189,26 @@ def _start_resolver() -> None:
 
 def _start_whale_warm_scheduler() -> None:
     def _tick() -> None:
-        try:
-            from internal.pump.taostats_overlay import active_ladder_netuids
-            from internal.whales.warm import ensure_whale_ledger_warm
+        import contextlib
 
-            candidates = list(active_ladder_netuids())
-            if not candidates:
-                candidates = [64, 6, 2, 3, 7, 10, 18, 52, 97, 1]
-            ensure_whale_ledger_warm(candidates)
-        except Exception as exc:
-            logger.warning("whale warm tick failed: %s", exc)
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        try:
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("whale_ledger_warm")
+        except ImportError:
+            pass
+        with scope:
+            try:
+                from internal.pump.taostats_overlay import active_ladder_netuids
+                from internal.whales.warm import ensure_whale_ledger_warm
+
+                candidates = list(active_ladder_netuids())
+                if not candidates:
+                    candidates = [64, 6, 2, 3, 7, 10, 18, 52, 97, 1]
+                ensure_whale_ledger_warm(candidates)
+            except Exception as exc:
+                logger.warning("whale warm tick failed: %s", exc)
 
     try:
         minutes = int(os.environ.get("WHALE_LEDGER_WARM_INTERVAL_MINUTES", "20"))
@@ -227,9 +237,19 @@ def _start_tmp_reaper_scheduler() -> None:
         return
 
     def _tick() -> None:
-        from internal.tmp_boot_reaper import maybe_reap_scheduled
+        import contextlib
 
-        maybe_reap_scheduled()
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        try:
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("tmp_boot_reaper")
+        except ImportError:
+            pass
+        with scope:
+            from internal.tmp_boot_reaper import maybe_reap_scheduled
+
+            maybe_reap_scheduled()
 
     def _run() -> None:
         from internal.job_scheduler import schedule_interval_seconds

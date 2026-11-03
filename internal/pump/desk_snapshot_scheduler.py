@@ -121,12 +121,22 @@ class PumpDeskSnapshotScheduler:
             submitted = False
 
             def _run() -> Dict[str, Any]:
-                try:
-                    from internal.pump.desk_snapshot import run_snapshot
+                import contextlib
 
-                    return run_snapshot(save=True)
-                finally:
-                    _cycle_lock.release()
+                scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+                try:
+                    from internal.process_memory import heavy_job_rss_scope
+
+                    scope = heavy_job_rss_scope("pump_desk_snapshot")
+                except ImportError:
+                    pass
+                with scope:
+                    try:
+                        from internal.pump.desk_snapshot import run_snapshot
+
+                        return run_snapshot(save=True)
+                    finally:
+                        _cycle_lock.release()
 
             future = pool.submit(_run)
             self._inflight_future = future

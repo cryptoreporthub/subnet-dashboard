@@ -325,14 +325,24 @@ class DailyPickScheduler:
                 self._work_generation += 1
 
             def _run_pick() -> Optional[Dict[str, Any]]:
-                with self._work_lock:
-                    tick_gen = self._work_generation
-                return get_or_create_today_pick(
-                    subnets,
-                    ctx,
-                    False,
-                    is_cancelled=lambda: self._work_generation != tick_gen,
-                )
+                import contextlib
+
+                scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+                try:
+                    from internal.process_memory import heavy_job_rss_scope
+
+                    scope = heavy_job_rss_scope("daily_pick_scheduler")
+                except ImportError:
+                    pass
+                with scope:
+                    with self._work_lock:
+                        tick_gen = self._work_generation
+                    return get_or_create_today_pick(
+                        subnets,
+                        ctx,
+                        False,
+                        is_cancelled=lambda: self._work_generation != tick_gen,
+                    )
 
             with self._submit_lock:
                 inflight = self._inflight_future
@@ -480,33 +490,43 @@ class HourPickScheduler:
         return self._tick(reschedule=False)
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
-        try:
-            from internal.council.hourly_pick import select_hourly_pick
+        import contextlib
 
-            subnets = _load_subnets()
-            ctx = _market_context(subnets)
-            result["ab_benchmark"] = _record_ab_benchmark(
-                subnets, ctx, "hour-pick-scheduler"
-            )
-            pick = select_hourly_pick(subnets, ctx)
-            _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
-            result["ok"] = True
-            sn = (pick or {}).get("subnet") if isinstance(pick, dict) else {}
-            if isinstance(sn, dict):
-                result["netuid"] = sn.get("netuid")
-            if isinstance(pick, dict):
-                result["final_confidence"] = pick.get("final_confidence")
-            evidence: Dict[str, Any] = {"op": "hour_pick"}
-            if result.get("netuid") is not None:
-                evidence["netuid"] = result["netuid"]
-            else:
-                evidence["noop"] = True
-            self.liveness.record_success(evidence=evidence)
-        except Exception as exc:
-            result["error"] = str(exc)
-            self.liveness.record_failure(error=str(exc))
-            logger.warning("hour pick scheduler tick failed: %s", exc)
+        result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        try:
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("hour_pick_scheduler")
+        except ImportError:
+            pass
+        with scope:
+            try:
+                from internal.council.hourly_pick import select_hourly_pick
+
+                subnets = _load_subnets()
+                ctx = _market_context(subnets)
+                result["ab_benchmark"] = _record_ab_benchmark(
+                    subnets, ctx, "hour-pick-scheduler"
+                )
+                pick = select_hourly_pick(subnets, ctx)
+                _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
+                result["ok"] = True
+                sn = (pick or {}).get("subnet") if isinstance(pick, dict) else {}
+                if isinstance(sn, dict):
+                    result["netuid"] = sn.get("netuid")
+                if isinstance(pick, dict):
+                    result["final_confidence"] = pick.get("final_confidence")
+                evidence: Dict[str, Any] = {"op": "hour_pick"}
+                if result.get("netuid") is not None:
+                    evidence["netuid"] = result["netuid"]
+                else:
+                    evidence["noop"] = True
+                self.liveness.record_success(evidence=evidence)
+            except Exception as exc:
+                result["error"] = str(exc)
+                self.liveness.record_failure(error=str(exc))
+                logger.warning("hour pick scheduler tick failed: %s", exc)
 
         with _lock:
             self._last_result = {

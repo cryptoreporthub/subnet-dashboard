@@ -210,14 +210,24 @@ def check_trend_takeover(*, db=None) -> Optional[Dict[str, Any]]:
 
 
 def _trend_loop() -> None:
+    import contextlib
+
     try:
         interval = max(60, int(os.environ.get("TREND_ALERT_INTERVAL_SECONDS", "600")))
     except ValueError:
         interval = 600
     logger.info("trend takeover watcher started (interval=%ss)", interval)
     while not _TREND_STOP.is_set():
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         try:
-            check_trend_takeover()
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope("message_intel_trend_alert")
+        except ImportError:
+            pass
+        try:
+            with scope:
+                check_trend_takeover()
         except Exception as exc:
             logger.warning("trend takeover tick failed: %s", exc)
         _TREND_STOP.wait(interval)

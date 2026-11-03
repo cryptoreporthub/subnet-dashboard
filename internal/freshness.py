@@ -7,6 +7,7 @@ public taostat source. Safe for Fly.io single-worker deployment; no
 extra infrastructure required.
 """
 
+import contextlib
 import json
 import os
 import tempfile
@@ -501,14 +502,22 @@ def refresh_all(
 
 
 def _background_tick() -> None:
-    report = refresh_all()
-    with _lock:
-        _sync_state["last_sync_at"] = report["synced_at"]
-        _sync_state["last_sync_ok"] = report["registry"]["ok"]
-        _sync_state["last_sync_error"] = report["registry"].get("error")
-        _sync_state["next_sync_at"] = (
-            datetime.now(timezone.utc).timestamp() + BACKGROUND_INTERVAL_SECONDS
-        )
+    scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+    try:
+        from internal.process_memory import heavy_job_rss_scope
+
+        scope = heavy_job_rss_scope("registry_freshness_sync")
+    except ImportError:
+        pass
+    with scope:
+        report = refresh_all()
+        with _lock:
+            _sync_state["last_sync_at"] = report["synced_at"]
+            _sync_state["last_sync_ok"] = report["registry"]["ok"]
+            _sync_state["last_sync_error"] = report["registry"].get("error")
+            _sync_state["next_sync_at"] = (
+                datetime.now(timezone.utc).timestamp() + BACKGROUND_INTERVAL_SECONDS
+            )
 
 
 def start_background_sync(
