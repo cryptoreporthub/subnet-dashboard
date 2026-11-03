@@ -8,6 +8,7 @@ GET /api/daily-pick stays read-only — this module is the background author.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import threading
@@ -53,6 +54,15 @@ def _enabled() -> bool:
         "no",
         "off",
     )
+
+
+def _rss_bookend(name: str) -> contextlib.AbstractContextManager[None]:
+    try:
+        from internal.process_memory import heavy_job_rss_scope
+
+        return heavy_job_rss_scope(name)
+    except ImportError:
+        return contextlib.nullcontext()
 
 
 def _seconds_until_daily_slot() -> float:
@@ -317,8 +327,10 @@ class DailyPickScheduler:
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
 
-            subnets = _load_subnets()
-            ctx = _market_context(subnets)
+            with _rss_bookend("daily_pick_scheduler:load_subnets"):
+                subnets = _load_subnets()
+            with _rss_bookend("daily_pick_scheduler:market_context"):
+                ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
             with self._work_lock:
@@ -373,9 +385,10 @@ class DailyPickScheduler:
                 if isinstance(pick, dict):
                     sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
                     result["netuid"] = pick.get("netuid") or sn.get("netuid")
-                result["ab_benchmark"] = _record_ab_benchmark(
-                    subnets, ctx, "daily-pick-scheduler"
-                )
+                with _rss_bookend("daily_pick_scheduler:ab_benchmark"):
+                    result["ab_benchmark"] = _record_ab_benchmark(
+                        subnets, ctx, "daily-pick-scheduler"
+                    )
                 today_ready = _today_pick_ready()
             else:
                 # ponytail: timeout/error ticks must retry soon — abandoned worker

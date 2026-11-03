@@ -301,8 +301,13 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     assert "timed out" in str(result.get("error") or holds[0])
 
 
-def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
+def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch, caplog):
     """After timeout, the next tick must start fresh work — not skip forever."""
+    import logging
+
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", lambda pid=None: 1000)
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
     pick_scheduler.stop_pick_schedulers()
     calls = {"n": 0}
     second_started = threading.Event()
@@ -344,7 +349,9 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
     second = sched._tick(reschedule=False)
     assert second.get("skipped") == "previous_cycle_inflight"
     assert calls["n"] == 1
+    assert "name=daily_pick_scheduler phase=end" not in caplog.text
     sched._inflight_future.result(timeout=15)
+    assert "name=daily_pick_scheduler phase=end" in caplog.text
 
     third = sched._tick(reschedule=False)
     assert calls["n"] >= 2

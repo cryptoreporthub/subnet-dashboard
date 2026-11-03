@@ -110,7 +110,12 @@ def test_hung_resolver_refuses_second_submit(monkeypatch):
     sched._inflight_future.result(timeout=5)
 
 
-def test_hung_desk_snapshot_refuses_second_submit(monkeypatch):
+def test_hung_desk_snapshot_refuses_second_submit(monkeypatch, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", lambda pid=None: 1000)
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
     started = threading.Event()
     release = threading.Event()
     calls = []
@@ -141,9 +146,11 @@ def test_hung_desk_snapshot_refuses_second_submit(monkeypatch):
     worker.join(timeout=10)
     assert worker.is_alive() is False
     assert str(box["result"].get("error", "")).startswith("cycle_timeout_")
+    assert "name=pump_desk_snapshot phase=end" not in caplog.text
     assert sched._inflight_future.done() is False
     release.set()
     sched._inflight_future.result(timeout=5)
+    assert "name=pump_desk_snapshot phase=end" in caplog.text
     started.clear()
     recovered = sched._run_snapshot_with_timeout()
     assert started.wait(timeout=2)

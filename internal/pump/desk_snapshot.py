@@ -41,8 +41,18 @@ def _run_stage_with_timeout(
     done = threading.Event()
 
     def _run() -> None:
+        import contextlib
+
+        scope: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         try:
-            value = fn()
+            from internal.process_memory import heavy_job_rss_scope
+
+            scope = heavy_job_rss_scope(f"pump_desk_snapshot_stage:{label}")
+        except ImportError:
+            pass
+        try:
+            with scope:
+                value = fn()
             if isinstance(value, dict):
                 result["value"] = value
             else:
