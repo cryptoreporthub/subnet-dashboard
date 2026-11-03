@@ -1,24 +1,25 @@
 {
   "fixture": "r1b-f3-02",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "d2ca3284158ac10d6ec4083bf89bea5f86ca260eeae7b89b6f05c71040778227",
+  "diffSha256": "353963e19bf9d06a18161973c55398ed4e89e077d64475895834ffbd03cd8e63",
   "changedPaths": [
     "internal/r1b_perf_02.py",
     "tests/test_r1b_perf_02.py"
   ],
   "behavior": {
     "expectedVerdict": "MODIFY",
-    "family": "F3-unmeasured-perf"
+    "family": "F3-unmeasured-perf",
+    "claimInPrBody": "under 5ms per lookup",
+    "latencyMeasuredInDiff": false,
+    "note": "Functional tests pass; latency claim is unprovable from the diff alone."
   },
   "pytest": {
-    "summary": "1 failed",
-    "passed": 0,
-    "failed": 1,
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
     "skipped": 0,
     "deselected": 0,
-    "failingTests": [
-      "tests/test_r1b_perf_02.py::test_root_netuid_zero_is_member"
-    ]
+    "failingTests": []
   },
   "pytestBase": {
     "summary": "56 passed",

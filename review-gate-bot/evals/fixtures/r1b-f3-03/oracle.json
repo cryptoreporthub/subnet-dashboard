@@ -1,24 +1,26 @@
 {
   "fixture": "r1b-f3-03",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "eee36a5cca04dc546a46bf9f60fe76de35299a22e5e3d3835d78f3684b418b66",
+  "diffSha256": "abba213ee9fddf17bcc62ab51b31ece560b1f9a04733e4a3bf33993ffd23b5b8",
   "changedPaths": [
     "internal/r1b_perf_03.py",
     "tests/test_r1b_perf_03.py"
   ],
   "behavior": {
     "expectedVerdict": "MODIFY",
-    "family": "F3-unmeasured-perf"
+    "family": "F3-unmeasured-perf",
+    "claimInPrBody": "one RPC total per refresh (not per batch)",
+    "measuredBatchQueriesAt128": 4,
+    "claimOneTotalCall": false,
+    "note": "PR claims one RPC total; measured batch count grows with netuids."
   },
   "pytest": {
-    "summary": "1 failed",
-    "passed": 0,
-    "failed": 1,
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
     "skipped": 0,
     "deselected": 0,
-    "failingTests": [
-      "tests/test_r1b_perf_03.py::test_one_query_per_refresh_not_per_netuid"
-    ]
+    "failingTests": []
   },
   "pytestBase": {
     "summary": "56 passed",

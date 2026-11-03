@@ -1,13 +1,17 @@
 {
   "fixture": "r1b-f3-ctrl-01",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "53ac08b7c0e1dfd8cea581aae3cca1d226e200f3cd5bfbc4c23c19c6f9e9aa77",
+  "diffSha256": "05db1323f3a6f08a089ad61d9c58028480ae23848dea67b2cbc5a0b4989c84f6",
   "changedPaths": [
     "internal/r1b_perf_07.py",
     "tests/test_r1b_perf_07.py"
   ],
   "behavior": {
-    "expectedVerdict": "PASS"
+    "expectedVerdict": "PASS",
+    "claimInPrBody": "O(n) loop ops measured in test",
+    "loopOpsAt32": 32,
+    "loopOpsAt64": 64,
+    "withinLinearRatio": true
   },
   "pytest": {
     "summary": "1 passed",

@@ -167,6 +167,38 @@ def _f3_perf_pair(idx: int, *, bug_module: str, bug_test: str, good_module: str,
     return mod_path, test_path, bug_module, bug_test, good_module, good_test
 
 
+def _f3_loop_ops(mod_src: str, n: int) -> int:
+    """Count loop iterations exported by r1b_perf modules (executed oracle, no wall clock)."""
+    if not mod_src.strip():
+        return 0
+    ns: dict = {}
+    exec(mod_src, ns)  # noqa: S102 — fixture generator only
+    fn = ns.get("merge_loop_ops") or ns.get("scan_loop_ops") or ns.get("probe_loop_ops")
+    if not callable(fn):
+        return 0
+    m = {str(i): {} for i in range(n)}
+    return int(fn(m) if fn.__code__.co_argcount == 1 else fn(list(range(n))))
+
+
+def _linear_ops_oracle(mod_src: str, *, claim: str) -> dict:
+    small = _f3_loop_ops(mod_src, 32)
+    large = _f3_loop_ops(mod_src, 64)
+    linear = large <= small * 2 + 2 if small else True
+    return {"claimInPrBody": claim, "loopOpsAt32": small, "loopOpsAt64": large, "withinLinearRatio": linear}
+
+
+def _batch_claim_oracle(mod_src: str, *, claim: str) -> dict:
+    ns: dict = {}
+    exec(mod_src, ns)  # noqa: S102
+    fn = ns["queries_for_refresh"]
+    measured = int(fn(128, batch_size=32))
+    return {
+        "claimInPrBody": claim,
+        "measuredBatchQueriesAt128": measured,
+        "claimOneTotalCall": False,
+        "note": "PR claims one RPC total; measured batch count grows with netuids.",
+    }
+
 def build(env: dict) -> None:
     sub = env["sub"]
     uni = env["uni"]
@@ -359,6 +391,7 @@ def build(env: dict) -> None:
         )
 
     # ---- F3: unmeasured perf / complexity claims (new modules + tests) ---------------
+    # Head code + tests PASS; only the PR claim is false/unprovable. Oracle measures the claim.
     f3_modules = [
         (
             "r1b-f3-01",
@@ -366,11 +399,16 @@ def build(env: dict) -> None:
             "Hot path stays O(1) using timedelta.seconds instead of total_seconds().",
             *_f3_perf_pair(
                 1,
-                bug_module='"""Grace window helper (O(1) field read)."""\nfrom datetime import datetime, timedelta\n\nSTALE_GRACE_SECONDS = 48 * 3600\n\n\ndef grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n    delta = now - started\n    return delta.seconds >= grace\n',
-                bug_test='from datetime import datetime, timedelta, timezone\n\nfrom internal.r1b_perf_01 import STALE_GRACE_SECONDS, grace_elapsed_enough\n\n\ndef test_grace_uses_full_wall_clock_not_seconds_field():\n    now = datetime(2026, 10, 3, tzinfo=timezone.utc)\n    started = now - timedelta(days=2, seconds=1)\n    assert grace_elapsed_enough(now, started) is True\n    assert STALE_GRACE_SECONDS == 48 * 3600\n',
-                good_module='"""Grace window helper (O(1) wall clock)."""\nfrom datetime import datetime\n\nSTALE_GRACE_SECONDS = 48 * 3600\n\n\ndef grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n    return (now - started).total_seconds() >= grace\n',
-                good_test='from datetime import datetime, timedelta, timezone\n\nfrom internal.r1b_perf_01 import grace_elapsed_enough\n\n\ndef test_grace_uses_full_wall_clock():\n    now = datetime(2026, 10, 3, tzinfo=timezone.utc)\n    started = now - timedelta(days=2, seconds=1)\n    assert grace_elapsed_enough(now, started) is True\n',
+                bug_module='"""Grace window helper."""\nfrom datetime import datetime\n\nSTALE_GRACE_SECONDS = 48 * 3600\n\n\ndef grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n    return (now - started).total_seconds() >= grace\n',
+                bug_test='from datetime import datetime, timedelta, timezone\n\nfrom internal.r1b_perf_01 import STALE_GRACE_SECONDS, grace_elapsed_enough\n\n\ndef test_grace_uses_full_wall_clock():\n    now = datetime(2026, 10, 3, tzinfo=timezone.utc)\n    started = now - timedelta(days=2, seconds=1)\n    assert grace_elapsed_enough(now, started) is True\n    assert STALE_GRACE_SECONDS == 48 * 3600\n',
+                good_module="",
+                good_test="",
             ),
+            lambda mod: {
+                "claimInPrBody": "O(1) via timedelta.seconds",
+                "secondsFieldWouldMissMultiDayGrace": True,
+                "note": "Code uses total_seconds(); PR claim about .seconds alone is false.",
+            },
         ),
         (
             "r1b-f3-02",
@@ -378,11 +416,16 @@ def build(env: dict) -> None:
             "Lookup stays under 5ms with a single dict probe per netuid.",
             *_f3_perf_pair(
                 2,
-                bug_module='"""O(1) membership probe."""\n\ndef contains_netuid(netuids: list[int], target: int) -> bool:\n    table = {n: True for n in netuids if n}\n    for n in netuids:\n        if n == target:\n            return bool(table.get(n))\n    return False\n',
+                bug_module='"""Membership probe."""\n\ndef contains_netuid(netuids: list[int], target: int) -> bool:\n    return target in netuids\n\ndef probe_loop_ops(netuids: list[int]) -> int:\n    ops = 0\n    for _n in netuids:\n        ops += 1\n    return ops\n',
                 bug_test="from internal.r1b_perf_02 import contains_netuid\n\n\ndef test_root_netuid_zero_is_member():\n    assert contains_netuid([0, 1, 2], 0) is True\n",
-                good_module='"""O(1) membership probe."""\n\ndef contains_netuid(netuids: list[int], target: int) -> bool:\n    return target in netuids\n',
-                good_test="from internal.r1b_perf_02 import contains_netuid\n\n\ndef test_root_netuid_zero_is_member():\n    assert contains_netuid([0, 1, 2], 0) is True\n",
+                good_module="",
+                good_test="",
             ),
+            lambda mod: {
+                "claimInPrBody": "under 5ms per lookup",
+                "latencyMeasuredInDiff": False,
+                "note": "Functional tests pass; latency claim is unprovable from the diff alone.",
+            },
         ),
         (
             "r1b-f3-03",
@@ -390,10 +433,14 @@ def build(env: dict) -> None:
             "Refresh performs one query per subnet batch (no extra round trips).",
             *_f3_perf_pair(
                 3,
-                bug_module='"""Batch counter for refresh budgeting."""\n\ndef queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n    if netuid_count <= 0:\n        return 0\n    batches = (netuid_count + batch_size - 1) // batch_size\n    return batches + netuid_count  # accidental per-netuid follow-up\n',
-                bug_test="from internal.r1b_perf_03 import queries_for_refresh\n\n\ndef test_one_query_per_refresh_not_per_netuid():\n    assert queries_for_refresh(64, batch_size=32) == 2\n",
-                good_module='"""Batch counter for refresh budgeting."""\n\ndef queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n    if netuid_count <= 0:\n        return 0\n    return (netuid_count + batch_size - 1) // batch_size\n',
-                good_test="from internal.r1b_perf_03 import queries_for_refresh\n\n\ndef test_one_query_per_refresh_not_per_netuid():\n    assert queries_for_refresh(64, batch_size=32) == 2\n",
+                bug_module='"""Batch counter for refresh budgeting."""\n\ndef queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n    if netuid_count <= 0:\n        return 0\n    return (netuid_count + batch_size - 1) // batch_size\n',
+                bug_test="from internal.r1b_perf_03 import queries_for_refresh\n\n\ndef test_batch_count_for_sixty_four():\n    assert queries_for_refresh(64, batch_size=32) == 2\n",
+                good_module="",
+                good_test="",
+            ),
+            lambda mod: _batch_claim_oracle(
+                mod,
+                claim="one RPC total per refresh (not per batch)",
             ),
         ),
         (
@@ -402,11 +449,15 @@ def build(env: dict) -> None:
             "Merge stays O(n) with a single pass over validity_map keys.",
             *_f3_perf_pair(
                 4,
-                bug_module='"""Merge validity keys."""\n\ndef merged_netuids(validity_map: dict) -> list[int]:\n    keys = list(validity_map.keys())\n    out = []\n    for i, k in enumerate(keys):\n        for j, k2 in enumerate(keys):\n            if i == j and int(k2):\n                out.append(int(k2))\n    return sorted(out)\n',
+                bug_module='"""Merge validity keys."""\n\ndef merged_netuids(validity_map: dict) -> list[int]:\n    out = []\n    for k in validity_map.keys():\n        out.append(int(k))\n    out.sort()\n    return out\n\ndef merge_loop_ops(validity_map: dict) -> int:\n    ops = 0\n    for _k in validity_map.keys():\n        ops += 1\n    return ops\n',
                 bug_test='from internal.r1b_perf_04 import merged_netuids\n\n\ndef test_merge_includes_root():\n    assert 0 in merged_netuids({"0": {}, "1": {}, "2": {}})\n',
-                good_module='"""Merge validity keys."""\n\ndef merged_netuids(validity_map: dict) -> list[int]:\n    return sorted(int(k) for k in validity_map.keys())\n',
-                good_test='from internal.r1b_perf_04 import merged_netuids\n\n\ndef test_merge_includes_root():\n    assert 0 in merged_netuids({"0": {}, "1": {}, "2": {}})\n',
+                good_module="",
+                good_test="",
             ),
+            lambda mod: {
+                **_linear_ops_oracle(mod, claim="O(1) constant-time merge"),
+                "note": "Loop work is linear in keys; PR claims O(1).",
+            },
         ),
         (
             "r1b-f3-05",
@@ -414,11 +465,16 @@ def build(env: dict) -> None:
             "Repeated scans reuse a memo table for O(1) answers.",
             *_f3_perf_pair(
                 5,
-                bug_module='"""Memoized netuid scan."""\n_memo = {}\n\ndef cached_max_netuid(netuids: list[int]) -> int:\n    key = len(netuids)\n    if key in _memo:\n        return _memo[key]\n    val = max(n for n in netuids if n)\n    _memo[key] = val\n    return val\n',
+                bug_module='"""Memoized netuid scan."""\n_memo = {}\n\ndef cached_max_netuid(netuids: list[int]) -> int:\n    key = tuple(sorted(netuids))\n    if key in _memo:\n        return _memo[key]\n    val = max(netuids)\n    _memo[key] = val\n    return val\n\ndef scan_loop_ops(netuids: list[int]) -> int:\n    return len(netuids)\n',
                 bug_test="from internal.r1b_perf_05 import cached_max_netuid\n\n\ndef test_memo_distinguishes_same_length_different_sets():\n    assert cached_max_netuid([0, 1, 2]) == 2\n    assert cached_max_netuid([0, 5, 6]) == 6\n",
-                good_module='"""Memoized netuid scan."""\n_memo = {}\n\ndef cached_max_netuid(netuids: list[int]) -> int:\n    key = tuple(sorted(netuids))\n    if key in _memo:\n        return _memo[key]\n    val = max(netuids)\n    _memo[key] = val\n    return val\n',
-                good_test="from internal.r1b_perf_05 import cached_max_netuid\n\n\ndef test_memo_distinguishes_same_length_different_sets():\n    assert cached_max_netuid([0, 1, 2]) == 2\n    assert cached_max_netuid([0, 5, 6]) == 6\n",
+                good_module="",
+                good_test="",
             ),
+            lambda mod: {
+                "claimInPrBody": "O(1) memoized answers",
+                "scanLoopOpsAt64": _f3_loop_ops(mod, 64),
+                "note": "Scan still walks netuids once per call; memo does not make work O(1).",
+            },
         ),
         (
             "r1b-f3-06",
@@ -426,21 +482,29 @@ def build(env: dict) -> None:
             "Cap check is O(1) using a precomputed flag.",
             *_f3_perf_pair(
                 6,
-                bug_module='"""Cap gate."""\n\ndef cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n    return new_count <= cap or prior_count <= cap\n',
+                bug_module='"""Cap gate."""\n\ndef cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n    return new_count <= cap\n',
                 bug_test="from internal.r1b_perf_06 import cap_allows_publish\n\n\ndef test_cap_blocks_growth_beyond_limit():\n    assert cap_allows_publish(128, 129, cap=128) is False\n",
-                good_module='"""Cap gate."""\n\ndef cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n    return new_count <= cap\n',
-                good_test="from internal.r1b_perf_06 import cap_allows_publish\n\n\ndef test_cap_blocks_growth_beyond_limit():\n    assert cap_allows_publish(128, 129, cap=128) is False\n",
+                good_module="",
+                good_test="",
             ),
+            lambda mod: {
+                "claimInPrBody": "O(1) cap check",
+                "branchCountInSource": mod.count("if "),
+                "note": "Correct cap logic; complexity claim is not established by the diff.",
+            },
         ),
     ]
     for item in f3_modules:
-        name, title, pr_body, mod_path, test_path, bug_mod, bug_test, _good_mod, _good_test = item
+        claim_fn = item[-1]
+        name, title, pr_body, mod_path, test_path, bug_mod, bug_test, _gmod, _gtest = item[:-1]
         files = [(mod_path, None, bug_mod), (test_path, None, bug_test)]
         head_run = _pytest(
             env,
             extra_files={mod_path: bug_mod, test_path: bug_test},
             test_paths=[test_path],
         )
+        assert head_run.get("failed", 1) == 0, f"{name} pytest must pass at head"
+        claim = claim_fn(bug_mod) if not env.get("SKIP") else {}
         _w(
             env,
             name,
@@ -449,7 +513,7 @@ def build(env: dict) -> None:
             files,
             pr_body=pr_body,
             oracle={
-                "behavior": {"expectedVerdict": "MODIFY", "family": "F3-unmeasured-perf"},
+                "behavior": {"expectedVerdict": "MODIFY", "family": "F3-unmeasured-perf", **claim},
                 "pytest": head_run,
                 "pytestBase": baseline,
             },
@@ -458,14 +522,14 @@ def build(env: dict) -> None:
     f3_ctrl = [
         (
             "r1b-f3-ctrl-01",
-            "perf: measured O(n) merge stays linear",
-            "Merge is O(n); test counts loop iterations with a measuring hook.",
+            "universe: export validity keys with loop metrics",
+            "Single pass over validity_map keys; test measures loop ops growth (O(n)), not sort cost.",
             *_f3_perf_pair(
                 7,
                 bug_module="",
                 bug_test="",
-                good_module='"""Linear merge with instrumentation."""\n\ndef merged_netuids(validity_map: dict) -> list[int]:\n    out = []\n    for k in validity_map.keys():\n        out.append(int(k))\n    return sorted(out)\n',
-                good_test='from internal.r1b_perf_07 import merged_netuids\n\n\ndef test_merge_linear_and_includes_root():\n    m = {"0": {}, "1": {}, "2": {}}\n    assert 0 in merged_netuids(m)\n    assert len(merged_netuids(m)) == 3\n',
+                good_module='"""Linear merge with instrumentation."""\n\ndef merged_netuids(validity_map: dict) -> list[int]:\n    out = []\n    for k in validity_map.keys():\n        out.append(int(k))\n    out.sort()\n    return out\n\ndef merge_loop_ops(validity_map: dict) -> int:\n    ops = 0\n    for _k in validity_map.keys():\n        ops += 1\n    return ops\n',
+                good_test='from internal.r1b_perf_07 import merge_loop_ops, merged_netuids\n\n\ndef test_measured_linear_loop_ops():\n    small = {str(i): {} for i in range(10)}\n    large = {str(i): {} for i in range(20)}\n    s = merge_loop_ops(small)\n    ell = merge_loop_ops(large)\n    assert ell <= s * 2 + 1\n    assert s == 10\n    assert 0 in merged_netuids(small)\n',
             ),
         ),
         (
@@ -501,6 +565,10 @@ def build(env: dict) -> None:
             extra_files={mod_path: good_mod, test_path: good_test},
             test_paths=[test_path],
         )
+        assert pt.get("failed", 1) == 0, f"{name} control pytest must pass"
+        behavior = {"expectedVerdict": "PASS"}
+        if name == "r1b-f3-ctrl-01":
+            behavior.update(_linear_ops_oracle(good_mod, claim="O(n) loop ops measured in test"))
         _w(
             env,
             name,
@@ -509,7 +577,7 @@ def build(env: dict) -> None:
             files,
             pr_body=pr_body,
             control=True,
-            oracle={"behavior": {"expectedVerdict": "PASS"}, "pytest": pt},
+            oracle={"behavior": behavior, "pytest": pt},
         )
 
     # ---- F4: suite shape (not exam dup for 01 / 05) ---------------------------------
@@ -882,11 +950,11 @@ def test_root_is_never_eligible_for_removal_whatever_the_elapsed_time():
         ),
         (
             "r1b-redact-clean-03",
-            "http: normalize api_key_header casing",
+            "http: add ApiKey prefix when header missing",
             "internal/r1b_redact_clean_header.py",
-            '"""Header helper."""\n\ndef api_key_header(value: str | None) -> str:\n    if not value:\n        return ""\n    return value if value.lower().startswith("apikey ") else f"ApiKey {value}"\n',
+            '"""Header helper."""\n\ndef api_key_header(value: str | None) -> str:\n    if not value:\n        return ""\n    v = value.strip()\n    if v.lower().startswith("apikey "):\n        return "ApiKey " + v[7:].strip()\n    return f"ApiKey {v}"\n',
             "tests/test_r1b_redact_clean_header.py",
-            'from internal.r1b_redact_clean_header import api_key_header\n\n\ndef test_api_key_header_prefix():\n    assert api_key_header("secret").startswith("ApiKey ")\n',
+            'from internal.r1b_redact_clean_header import api_key_header\n\n\ndef test_api_key_header_prefix():\n    assert api_key_header("secret").startswith("ApiKey ")\n\n\ndef test_api_key_header_normalizes_prefix_casing():\n    assert api_key_header("apikey secret") == "ApiKey secret"\n',
         ),
     ]
     for name, title, mod_path, mod_text, test_path, test_text in redact_clean:

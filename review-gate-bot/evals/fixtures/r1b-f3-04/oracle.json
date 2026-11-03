@@ -1,24 +1,27 @@
 {
   "fixture": "r1b-f3-04",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "717f09917c686ce12143e7c05c2d5f9b6a990f9bd86efc7100accc0042f4a69e",
+  "diffSha256": "6485ca6c80db37b565f2b767b2210fa490c87385125f27fb567f8465733baa10",
   "changedPaths": [
     "internal/r1b_perf_04.py",
     "tests/test_r1b_perf_04.py"
   ],
   "behavior": {
     "expectedVerdict": "MODIFY",
-    "family": "F3-unmeasured-perf"
+    "family": "F3-unmeasured-perf",
+    "claimInPrBody": "O(1) constant-time merge",
+    "loopOpsAt32": 32,
+    "loopOpsAt64": 64,
+    "withinLinearRatio": true,
+    "note": "Loop work is linear in keys; PR claims O(1)."
   },
   "pytest": {
-    "summary": "1 failed",
-    "passed": 0,
-    "failed": 1,
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
     "skipped": 0,
     "deselected": 0,
-    "failingTests": [
-      "tests/test_r1b_perf_04.py::test_merge_includes_root"
-    ]
+    "failingTests": []
   },
   "pytestBase": {
     "summary": "56 passed",

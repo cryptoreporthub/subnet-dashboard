@@ -4,16 +4,16 @@
     {
       "path": "internal/r1b_perf_07.py",
       "status": "added",
-      "additions": 7,
+      "additions": 14,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,7 @@\n+\"\"\"Linear merge with instrumentation.\"\"\"\n+\n+def merged_netuids(validity_map: dict) -> list[int]:\n+    out = []\n+    for k in validity_map.keys():\n+        out.append(int(k))\n+    return sorted(out)"
+      "patch": "@@ -0,0 +1,14 @@\n+\"\"\"Linear merge with instrumentation.\"\"\"\n+\n+def merged_netuids(validity_map: dict) -> list[int]:\n+    out = []\n+    for k in validity_map.keys():\n+        out.append(int(k))\n+    out.sort()\n+    return out\n+\n+def merge_loop_ops(validity_map: dict) -> int:\n+    ops = 0\n+    for _k in validity_map.keys():\n+        ops += 1\n+    return ops"
     },
     {
       "path": "tests/test_r1b_perf_07.py",
       "status": "added",
-      "additions": 7,
+      "additions": 11,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,7 @@\n+from internal.r1b_perf_07 import merged_netuids\n+\n+\n+def test_merge_linear_and_includes_root():\n+    m = {\"0\": {}, \"1\": {}, \"2\": {}}\n+    assert 0 in merged_netuids(m)\n+    assert len(merged_netuids(m)) == 3"
+      "patch": "@@ -0,0 +1,11 @@\n+from internal.r1b_perf_07 import merge_loop_ops, merged_netuids\n+\n+\n+def test_measured_linear_loop_ops():\n+    small = {str(i): {} for i in range(10)}\n+    large = {str(i): {} for i in range(20)}\n+    s = merge_loop_ops(small)\n+    ell = merge_loop_ops(large)\n+    assert ell <= s * 2 + 1\n+    assert s == 10\n+    assert 0 in merged_netuids(small)"
     }
   ],
   "truncated": false,

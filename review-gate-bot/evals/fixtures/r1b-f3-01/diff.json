@@ -4,16 +4,16 @@
     {
       "path": "internal/r1b_perf_01.py",
       "status": "added",
-      "additions": 9,
+      "additions": 8,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,9 @@\n+\"\"\"Grace window helper (O(1) field read).\"\"\"\n+from datetime import datetime, timedelta\n+\n+STALE_GRACE_SECONDS = 48 * 3600\n+\n+\n+def grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n+    delta = now - started\n+    return delta.seconds >= grace"
+      "patch": "@@ -0,0 +1,8 @@\n+\"\"\"Grace window helper.\"\"\"\n+from datetime import datetime\n+\n+STALE_GRACE_SECONDS = 48 * 3600\n+\n+\n+def grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n+    return (now - started).total_seconds() >= grace"
     },
     {
       "path": "tests/test_r1b_perf_01.py",
       "status": "added",
       "additions": 10,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,10 @@\n+from datetime import datetime, timedelta, timezone\n+\n+from internal.r1b_perf_01 import STALE_GRACE_SECONDS, grace_elapsed_enough\n+\n+\n+def test_grace_uses_full_wall_clock_not_seconds_field():\n+    now = datetime(2026, 10, 3, tzinfo=timezone.utc)\n+    started = now - timedelta(days=2, seconds=1)\n+    assert grace_elapsed_enough(now, started) is True\n+    assert STALE_GRACE_SECONDS == 48 * 3600"
+      "patch": "@@ -0,0 +1,10 @@\n+from datetime import datetime, timedelta, timezone\n+\n+from internal.r1b_perf_01 import STALE_GRACE_SECONDS, grace_elapsed_enough\n+\n+\n+def test_grace_uses_full_wall_clock():\n+    now = datetime(2026, 10, 3, tzinfo=timezone.utc)\n+    started = now - timedelta(days=2, seconds=1)\n+    assert grace_elapsed_enough(now, started) is True\n+    assert STALE_GRACE_SECONDS == 48 * 3600"
     }
   ],
   "truncated": false,

@@ -1,24 +1,25 @@
 {
   "fixture": "r1b-f3-05",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "5686edaff579f297642fa4292849f8e776cb0ae1e159177d56cf7ab57c06056d",
+  "diffSha256": "d759ff5450235cef9b4005d585298cda54229b43f075ae1c244484704adbec56",
   "changedPaths": [
     "internal/r1b_perf_05.py",
     "tests/test_r1b_perf_05.py"
   ],
   "behavior": {
     "expectedVerdict": "MODIFY",
-    "family": "F3-unmeasured-perf"
+    "family": "F3-unmeasured-perf",
+    "claimInPrBody": "O(1) memoized answers",
+    "scanLoopOpsAt64": 64,
+    "note": "Scan still walks netuids once per call; memo does not make work O(1)."
   },
   "pytest": {
-    "summary": "1 failed",
-    "passed": 0,
-    "failed": 1,
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
     "skipped": 0,
     "deselected": 0,
-    "failingTests": [
-      "tests/test_r1b_perf_05.py::test_memo_distinguishes_same_length_different_sets"
-    ]
+    "failingTests": []
   },
   "pytestBase": {
     "summary": "56 passed",

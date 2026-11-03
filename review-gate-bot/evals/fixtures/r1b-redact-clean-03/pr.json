@@ -1,6 +1,6 @@
 {
   "number": 9448,
-  "title": "http: normalize api_key_header casing",
+  "title": "http: add ApiKey prefix when header missing",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9448",
   "headSha": "15b17f0046f1ed4d700e6bdb2eed5456ac493bcb",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",

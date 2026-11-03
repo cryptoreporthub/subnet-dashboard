@@ -6,7 +6,7 @@
       "status": "added",
       "additions": 4,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,4 @@\n+\"\"\"Cap gate.\"\"\"\n+\n+def cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n+    return new_count <= cap or prior_count <= cap"
+      "patch": "@@ -0,0 +1,4 @@\n+\"\"\"Cap gate.\"\"\"\n+\n+def cap_allows_publish(prior_count: int, new_count: int, *, cap: int = 128) -> bool:\n+    return new_count <= cap"
     },
     {
       "path": "tests/test_r1b_perf_06.py",

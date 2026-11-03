@@ -7,6 +7,6 @@
   "suite": "missing",
   "replitTagged": false,
   "next": "review",
-  "prBody": "Merge is O(n); test counts loop iterations with a measuring hook.",
+  "prBody": "Single pass over validity_map keys; test measures loop ops growth (O(n)), not sort cost.",
   "packBControl": true
 }

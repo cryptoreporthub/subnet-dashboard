@@ -1,24 +1,25 @@
 {
   "fixture": "r1b-f3-06",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "7792d74f0b05cc40ec2ed99bc09bb2f2d8f287dd57957c692c268323a5032d9d",
+  "diffSha256": "f1a5d25641cbecb3c266db6b316edfe79113019df77715495b1912500312405e",
   "changedPaths": [
     "internal/r1b_perf_06.py",
     "tests/test_r1b_perf_06.py"
   ],
   "behavior": {
     "expectedVerdict": "MODIFY",
-    "family": "F3-unmeasured-perf"
+    "family": "F3-unmeasured-perf",
+    "claimInPrBody": "O(1) cap check",
+    "branchCountInSource": 0,
+    "note": "Correct cap logic; complexity claim is not established by the diff."
   },
   "pytest": {
-    "summary": "1 failed",
-    "passed": 0,
-    "failed": 1,
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
     "skipped": 0,
     "deselected": 0,
-    "failingTests": [
-      "tests/test_r1b_perf_06.py::test_cap_blocks_growth_beyond_limit"
-    ]
+    "failingTests": []
   },
   "pytestBase": {
     "summary": "56 passed",

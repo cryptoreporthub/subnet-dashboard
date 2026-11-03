@@ -4,9 +4,9 @@
     {
       "path": "internal/r1b_perf_02.py",
       "status": "added",
-      "additions": 8,
+      "additions": 10,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,8 @@\n+\"\"\"O(1) membership probe.\"\"\"\n+\n+def contains_netuid(netuids: list[int], target: int) -> bool:\n+    table = {n: True for n in netuids if n}\n+    for n in netuids:\n+        if n == target:\n+            return bool(table.get(n))\n+    return False"
+      "patch": "@@ -0,0 +1,10 @@\n+\"\"\"Membership probe.\"\"\"\n+\n+def contains_netuid(netuids: list[int], target: int) -> bool:\n+    return target in netuids\n+\n+def probe_loop_ops(netuids: list[int]) -> int:\n+    ops = 0\n+    for _n in netuids:\n+        ops += 1\n+    return ops"
     },
     {
       "path": "tests/test_r1b_perf_02.py",

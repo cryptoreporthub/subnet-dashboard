@@ -4,9 +4,9 @@
     {
       "path": "internal/r1b_perf_04.py",
       "status": "added",
-      "additions": 10,
+      "additions": 14,
       "deletions": 0,
-      "patch": "@@ -0,0 +1,10 @@\n+\"\"\"Merge validity keys.\"\"\"\n+\n+def merged_netuids(validity_map: dict) -> list[int]:\n+    keys = list(validity_map.keys())\n+    out = []\n+    for i, k in enumerate(keys):\n+        for j, k2 in enumerate(keys):\n+            if i == j and int(k2):\n+                out.append(int(k2))\n+    return sorted(out)"
+      "patch": "@@ -0,0 +1,14 @@\n+\"\"\"Merge validity keys.\"\"\"\n+\n+def merged_netuids(validity_map: dict) -> list[int]:\n+    out = []\n+    for k in validity_map.keys():\n+        out.append(int(k))\n+    out.sort()\n+    return out\n+\n+def merge_loop_ops(validity_map: dict) -> int:\n+    ops = 0\n+    for _k in validity_map.keys():\n+        ops += 1\n+    return ops"
     },
     {
       "path": "tests/test_r1b_perf_04.py",
