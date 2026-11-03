@@ -83,22 +83,31 @@ const VERDICT = {
 const execute = postVerdict.execute as unknown as (input: unknown, ctx: unknown) => Promise<unknown>;
 
 /** A tool context that fails the test if the tool reaches for GitHub. */
-function contextFor(purpose: "eval" | "live"): unknown {
+function contextFor(purpose: "eval" | "live", sessionId = "eval-path-test"): unknown {
+  const store = new Map<string, unknown>();
   return {
-    session: { purpose, continuationKey: undefined },
+    session: { purpose, continuationKey: undefined, id: sessionId },
     host: {
       github: {
         getOctokit: async () => {
           throw new Error("reached GitHub");
         },
       },
+      kv: {
+        get: async (key: string) => store.get(key),
+        put: async (key: string, value: unknown) => void store.set(key, value),
+        delete: async (key: string) => void store.delete(key),
+      },
     },
   };
 }
 
-test("post_verdict in an eval session posts nothing and never reaches GitHub", async () => {
-  const result = await execute(VERDICT, contextFor("eval"));
-  assert.deepEqual(result, { posted: false, reason: "eval", verdict: "PASS" });
+test("post_verdict in an eval session accepts once without GitHub (eval-verdict-once)", async () => {
+  const ctx = contextFor("eval");
+  const result = await execute(VERDICT, ctx);
+  assert.deepEqual(result, { posted: true, reason: "eval", verdict: "PASS" });
+  const again = await execute(VERDICT, ctx);
+  assert.deepEqual(again, { posted: false, reason: "already-posted-eval", verdict: "PASS" });
 });
 
 test("the same call outside an eval is not short-circuited, so the guard above is the eval check", async () => {
@@ -116,15 +125,22 @@ for (const kind of ["never-expires", "overflow", "aborts-cycle", "poisons-later-
   });
 }
 
-test("the same finding under MODIFY or FAIL goes through, so the model can resubmit", async () => {
+test("the same finding under MODIFY or FAIL goes through in eval (still no GitHub)", async () => {
   for (const verdict of ["MODIFY", "FAIL"] as const) {
-    const result = await execute({ ...VERDICT, verdict, blocking: ["overflow"] }, contextFor("eval"));
-    assert.deepEqual(result, { posted: false, reason: "eval", verdict });
+    const result = await execute(
+      { ...VERDICT, verdict, blocking: ["overflow"] },
+      contextFor("eval", `eval-${verdict}`),
+    );
+    assert.deepEqual(result, { posted: true, reason: "eval", verdict });
   }
 });
 
-test("a PASS that declares no blocking finding is not refused", async () => {
-  assert.deepEqual(await execute({ ...VERDICT, blocking: [] }, contextFor("eval")), { posted: false, reason: "eval", verdict: "PASS" });
+test("a PASS that declares no blocking finding is accepted in eval", async () => {
+  assert.deepEqual(await execute({ ...VERDICT, blocking: [] }, contextFor("eval", "eval-pass")), {
+    posted: true,
+    reason: "eval",
+    verdict: "PASS",
+  });
 });
 
 test("Joshua's own PASS is never read as a Replit verdict", () => {

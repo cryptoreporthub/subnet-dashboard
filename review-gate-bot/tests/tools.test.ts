@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import type { Octokit } from "@octokit/rest";
 import { readPr, suiteKey } from "../bot/lib/gh.js";
 import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
+import { CHECK_GATE_STATE_OUTPUT_KEYS } from "../bot/lib/check_gate_output.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
 import { composeVerdictBody } from "../bot/tools/post_verdict.js";
 import listRepoFiles from "../bot/tools/list_repo_files.js";
@@ -192,6 +194,26 @@ test("an eval gate state is the fixture's, for the head it pins", async () => {
   assert.equal(result.next, "await_cursor_ditto");
   assert.equal(result.fileCount, 1);
   assert.equal(result.source, "fixture");
+  for (const key of Object.keys(result)) {
+    assert.ok(
+      (CHECK_GATE_STATE_OUTPUT_KEYS as readonly string[]).includes(key),
+      `unexpected check_gate_state key: ${key}`,
+    );
+  }
+});
+
+test("check_gate_state strips non-production keys from fixture gate.json", async () => {
+  const polluted = {
+    ...FIXTURE_GATE,
+    prBody: "extra narrative",
+    packBControl: true,
+    note: "eval-only",
+  };
+  const result = (await run(checkGateState)({}, await evalContext(polluted))) as Record<string, unknown>;
+  assert.equal(result.next, "await_cursor_ditto");
+  assert.equal("prBody" in result, false);
+  assert.equal("packBControl" in result, false);
+  assert.equal("note" in result, false);
 });
 
 test("an eval gate state is not shown beside a PR head the fixture does not pin", async () => {
@@ -230,4 +252,105 @@ test("an eval file listing past the cap is cut and flagged, as a live listing is
   const listing = (await run(listRepoFiles)({ at: "head" }, ctx)) as { paths: string[]; truncated: boolean };
   assert.equal(listing.paths.length, 2_000);
   assert.equal(listing.truncated, true);
+});
+
+// --- R0.8 eval base fidelity (read_repo_file + list_repo_files) ---------------
+
+async function evalBaseFixtureContext(
+  repo: { files: Record<string, string>; baseFiles?: Record<string, string> },
+  prFiles: string[],
+): Promise<{ session: { purpose: string }; workspaceDir: string }> {
+  const dir = await mkdtemp(join(tmpdir(), "repo-eval-base-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({ number: 1522, title: "t", url: "u", headSha: HEAD, baseSha: BASE, draft: false, files: prFiles }),
+  );
+  await writeFile(join(dir, "repo.json"), JSON.stringify(repo));
+  return { session: { purpose: "eval" }, workspaceDir: dir };
+}
+
+test("R0.8-1 eval read at base returns baseFiles text for a changed file; head returns head text", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n", "b.py": "same\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string; sha?: string };
+  assert.equal((await at("base", "a.py")).text, "old\n");
+  assert.equal((await at("base", "a.py")).sha, BASE);
+  assert.equal((await at("head", "a.py")).text, "new\n");
+});
+
+test("R1 arm G: eval read_repo_file defaults at to head when omitted", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
+  );
+  const out = (await run(readRepoFile)({ path: "a.py" }, ctx)) as { ok: boolean; text?: string; sha?: string };
+  assert.equal(out.text, "new\n");
+  assert.equal(out.sha, HEAD);
+});
+
+test("R0.8-2 eval read of unchanged context file succeeds at base and head with equal text", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n", "internal/context.py": "ctx\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string };
+  assert.equal((await at("base", "internal/context.py")).text, "ctx\n");
+  assert.equal((await at("head", "internal/context.py")).text, "ctx\n");
+});
+
+test("R0.8-3 eval read of PR-added file is not-found at base and succeeds at head", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "added.py": "added\n", "keep.py": "k\n" }, baseFiles: {} },
+    ["added.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string };
+  assert.equal((await at("base", "added.py")).ok, false);
+  assert.equal((await at("head", "added.py")).text, "added\n");
+});
+
+test("R0.8-4 eval list_repo_files at base includes unchanged files and excludes PR-added paths", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "added.py": "a\n", "keep.py": "k\n", "changed.py": "new" }, baseFiles: { "changed.py": "old" } },
+    ["added.py", "changed.py"],
+  );
+  const base = (await run(listRepoFiles)({ at: "base" }, ctx)) as { paths: string[] };
+  const head = (await run(listRepoFiles)({ at: "head" }, ctx)) as { paths: string[] };
+  assert.ok(base.paths.includes("keep.py"));
+  assert.ok(base.paths.includes("changed.py"));
+  assert.ok(!base.paths.includes("added.py"));
+  assert.ok(head.paths.includes("added.py"));
+});
+
+test("R0.8-5 read_repo_file and list_repo_files GitHub branches unchanged (no eval base helpers)", () => {
+  const readSrc = readFileSync(new URL("../bot/tools/read_repo_file.ts", import.meta.url), "utf8");
+  const listSrc = readFileSync(new URL("../bot/tools/list_repo_files.ts", import.meta.url), "utf8");
+  const readGh = readSrc.slice(readSrc.indexOf("const ref = parseGitHubPrContinuationKey"));
+  const listGh = listSrc.slice(listSrc.indexOf("const ref = parseGitHubPrContinuationKey"));
+  assert.match(readGh, /readRepoFile\(octokit/);
+  assert.doesNotMatch(readGh, /evalRepoTextAtBase/);
+  assert.match(listGh, /listRepoFiles\(octokit/);
+  assert.doesNotMatch(listGh, /evalRepoPathsAtBase/);
+});
+
+test("an eval compare_suite_runs returns the clean result a clean fixture gate pins, not a runner failure", async () => {
+  const ctx = await evalContext({ ...FIXTURE_GATE, suite: "clean" });
+  const result = (await run(compareSuiteRuns)({ headSha: HEAD, baseSha: BASE }, ctx)) as Record<string, unknown>;
+  assert.equal(result.clean, true);
+  assert.deepEqual(result.newFailures, []);
+  assert.equal(result.recorded, false, "an eval records nothing");
+  assert.equal(result.source, "fixture");
+});
+
+test("an eval compare_suite_runs stays not-clean when the fixture gate has no clean suite", async () => {
+  for (const suite of ["missing", "failed"]) {
+    const ctx = await evalContext({ ...FIXTURE_GATE, suite });
+    const result = (await run(compareSuiteRuns)({ headSha: HEAD, baseSha: BASE }, ctx)) as Record<string, unknown>;
+    assert.equal(result.clean, false, suite);
+    assert.equal(result.reason, "eval-no-runner", suite);
+  }
 });
