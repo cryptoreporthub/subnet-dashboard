@@ -18,7 +18,7 @@ fixture-gate ok: structural pytest
 === fixture-gate: known-bad rejection ===
 Running 9 items in this shard
 .........                                                                [100%]
-9 passed in 5.84s
+9 passed in 5.67s
 fixture-gate ok: known-bad rejection
 
 === fixture-gate: pack B author-voice + exam-dup gate ===
