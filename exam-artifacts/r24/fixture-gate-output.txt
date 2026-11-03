@@ -18,7 +18,7 @@
 [stage-a:hard-r24-ci-sharding-b-v3] yaml_parse .github/workflows/ci-smoke.yml ok
 [stage-a:hard-r24-ci-sharding-b-v3] py_compile tests/conftest.py exit=0
 [stage-a:hard-r24-ci-sharding-b-v3] pyflakes tests/conftest.py exit=1
-/tmp/tmpyeqyi5u3/tests/conftest.py:1:1: 'pytest' imported but unused
+/tmp/tmpq5frxhfu/tests/conftest.py:1:1: 'pytest' imported but unused
 [stage-a:hard-r24-ci-sharding-b-v3] py_compile tests/test_r24_shard_partition.py exit=0
 [stage-a:hard-r24-ci-sharding-b-v3] pyflakes tests/test_r24_shard_partition.py exit=0
 [stage-a:hard-r24-deprecated-flag-a] py_compile internal/subnet_universe_flags.py exit=0
@@ -35,8 +35,8 @@
 [stage-a:hard-ci-skipped-tests] pyflakes internal/subnet_universe.py exit=0
 [stage-a:hard-ci-skipped-tests] py_compile tests/test_subnet_universe.py exit=0
 [stage-a:hard-ci-skipped-tests] pyflakes tests/test_subnet_universe.py exit=1
-/tmp/tmp3xh20qpa/tests/test_subnet_universe.py:7:1: 'os' imported but unused
-/tmp/tmp3xh20qpa/tests/test_subnet_universe.py:16:1: 'internal.subnet_universe.persist_path' imported but unused
+/tmp/tmpi1r5d7ij/tests/test_subnet_universe.py:7:1: 'os' imported but unused
+/tmp/tmpi1r5d7ij/tests/test_subnet_universe.py:16:1: 'internal.subnet_universe.persist_path' imported but unused
 [stage-a:hard-r24-test-deleted-prod-kept] py_compile tests/test_subnet_universe_stale_regression.py exit=0
 [stage-a:hard-r24-test-deleted-prod-kept] pyflakes tests/test_subnet_universe_stale_regression.py exit=0
 [stage-a:hard-r24-consolidation-drops-coverage-v2] py_compile tests/test_subnet_universe_edges.py exit=0
@@ -54,15 +54,12 @@
 [stage-b:b2-k-not-slow-v2] yaml_parse .github/workflows/ci-smoke.yml ok
 [stage-b:b2-k-not-slow-v2] py_compile tests/conftest.py exit=0
 [stage-b:b2-k-not-slow-v2] pyflakes tests/conftest.py exit=1
-/tmp/tmp1pai9pgy/tests/conftest.py:1:1: 'pytest' imported but unused
+/tmp/tmp8r69z0l_/tests/conftest.py:1:1: 'pytest' imported but unused
 [stage-b:b2-k-not-slow-v2] py_compile tests/test_unit_core.py exit=0
 [stage-b:b2-k-not-slow-v2] pyflakes tests/test_unit_core.py exit=0
-[stage-b:b2-k-not-integration-v2] yaml_parse .github/workflows/ci-smoke.yml ok
-[stage-b:b2-k-not-integration-v2] py_compile tests/conftest.py exit=0
-[stage-b:b2-k-not-integration-v2] pyflakes tests/conftest.py exit=1
-/tmp/tmp1q_y3cv2/tests/conftest.py:1:1: 'pytest' imported but unused
-[stage-b:b2-k-not-integration-v2] py_compile tests/test_unit_core.py exit=0
-[stage-b:b2-k-not-integration-v2] pyflakes tests/test_unit_core.py exit=0
+[stage-b:b2-k-not-integration-v3] yaml_parse .github/workflows/ci-smoke.yml ok
+[stage-b:b2-k-not-integration-v3] py_compile tests/test_unit_core.py exit=0
+[stage-b:b2-k-not-integration-v3] pyflakes tests/test_unit_core.py exit=0
 [stage-b:b3-continue-on-error-job] yaml_parse .github/workflows/ci-smoke.yml ok
 [stage-b:b3-continue-on-error-job] py_compile tests/test_unit_core.py exit=0
 [stage-b:b3-continue-on-error-job] pyflakes tests/test_unit_core.py exit=0

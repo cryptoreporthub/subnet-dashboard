@@ -22,10 +22,10 @@
       "oracle": "MODIFY"
     },
     {
-      "slug": "b2-k-not-integration-v2",
+      "slug": "b2-k-not-integration-v3",
       "mechanism": "B2",
       "variant": "b",
-      "fixture": "stage-b-b2-k-not-integration-v2",
+      "fixture": "stage-b-b2-k-not-integration-v3",
       "oracle": "MODIFY"
     },
     {
@@ -99,5 +99,16 @@
       "POST"
     ]
   },
-  "outputDir": "exam-artifacts/r24/runs-b/"
+  "outputDir": "exam-artifacts/r24/runs-b/",
+  "contentPins": {
+    "stageBManifest": "a48eef1d859e7a9700108bf4d619f1ce52a72139c0788def59d59a4c26082b8f",
+    "runPlanB": "40b1580dd2fc678faa62fcdf477b9adb67c16ca5406a2ee5e4e2b1237a0893a3",
+    "runnerB": "14937033796d64c19168dee412e5fe6148ea1564ea7f567903ec1e7148dedc49",
+    "prompts": "7fc69b1b05f8d511e070bf73ad55d2c136852493893d41e36bc74d097f05c946",
+    "scorer": "7880d735ea4183f6ce27f62c40631822f3f79b820f85d5ac69e1812ea7d6da96"
+  },
+  "runnerB": "review-gate-bot/evals/review-gate-r24b.eval.ts",
+  "runPlanB": "exam-artifacts/r24/run-plan-b.json",
+  "scorer": "review-gate-bot/evals/score-r24-first-line.py",
+  "prompts": "review-gate-bot/evals/r24-prompts.ts"
 }

@@ -1,7 +1,7 @@
 {
   "exam-artifacts/r24/blind/b1-ignore-addopts.md": "bceba19b71ff1c6d182785dca10943e1d7185f216d4834d273e0c075e8b37406",
   "exam-artifacts/r24/blind/b1-ignore-workflow.md": "d06646616631d1140e9ab744225f2687c397112dc45689b980b1138618ac961a",
-  "exam-artifacts/r24/blind/b2-k-not-integration-v2.md": "398fe00fb634b7b5b2f62a3f497392880eb8423fd9d88c119098436569da79e8",
+  "exam-artifacts/r24/blind/b2-k-not-integration-v3.md": "6a223442e9534b85d93583061a8f175af2d4b4f488bef4116ed53c231a2a102b",
   "exam-artifacts/r24/blind/b2-k-not-slow-v2.md": "7aecc01720f8a28ec66e9c7d26b64712605b50627b9206361fc65f1f9e7c488a",
   "exam-artifacts/r24/blind/b3-continue-on-error-job.md": "3b73b192c0642339aa7d7fb27180fcd66b8db13afbd4ca82f8bfe2c634409d3b",
   "exam-artifacts/r24/blind/b3-continue-on-error-step.md": "800d2d118578d1b61c8b7242bb1990a8bfdb06d0c1e09296167041c60a072dcd",
@@ -21,11 +21,11 @@
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b1-ignore-workflow/oracle.json": "c33c670bec3686624b3acb8e186bb2ec4d44bd2e67cbd61e9c25fdd1b8c69f79",
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b1-ignore-workflow/pr.json": "5560c659d3a8f3130d5bcc0ad609321aa253663265fb9bc90584e871d2df0b9d",
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b1-ignore-workflow/repo.json": "70c5cede7e7e59ad4d2d8aed2e8d03de5d9ddbc58d6392b9c6b56aac7f3be92c",
-  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v2/diff.json": "6f0c3e591be5ae2e0702ec31fac4450dfe414c971919cadc449d261dfac629e8",
-  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v2/gate.json": "d51bebda91a15f7f2403e887c3c2b641a75fea3352ffa70275405988f2aa9d06",
-  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v2/oracle.json": "008964ff9ff310bd0c340cffe3d44145a566994436fc38e91065c0e91142646f",
-  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v2/pr.json": "04e5f879f466dfca1f54248a7bba83655de1584db4828064c69f33adbb1732ce",
-  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v2/repo.json": "672deb0110b8f874f53382e5f64d968752f40a7945dfa5c2590e3678291409b8",
+  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v3/diff.json": "2792ff3c33440c416ea9b66049eb8b20ef716cc2ad8490b3ac68805ae4309d25",
+  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v3/gate.json": "d063765e5c58a6939520d0b7e3c91390fa6951a8db199c12afb70301d6ac83bb",
+  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v3/oracle.json": "366c44ca67d9a8e20c14aae6b9ae72229a5c2b273f50571bcc670a304031f22e",
+  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v3/pr.json": "df575968f225db31add96bba3654b403f4d6ca9a4f508d641e9566e94fd22812",
+  "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-integration-v3/repo.json": "734981b32fbaffa29400f00e5b1dd73dde726ab643c384f1268b4d5fa67d8cf0",
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-slow-v2/diff.json": "69d36a9b9150e64127ee358be56c0403baed23576df6f148b45d781e268e8b9f",
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-slow-v2/gate.json": "161cad4d991b141377066755c9d5595a816be8c6ee2495814469674f2a39724d",
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b2-k-not-slow-v2/oracle.json": "716bb7951ecf52dcfb793e757771e3133d165b50fd0c65f4d6c2c96f342276e3",
@@ -71,5 +71,5 @@
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b6-rename-outside-pattern-v2/oracle.json": "a534a86ac35f7557384c582f9b1016e5052d9337dbcd755390c6cade75d1f6c8",
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b6-rename-outside-pattern-v2/pr.json": "34a9359c90282fee7dad00a21c3d072d28e4d44770d6ba2f653e63ed6a530b00",
   "exam-artifacts/r24/fixtures/stage-b/stage-b-b6-rename-outside-pattern-v2/repo.json": "147ff6ea408b5b8723ad86638b9b9a74e353fb2c7a71dee4bec64bb3138bc50d",
-  "exam-artifacts/r24/stage-b-manifest.json": "33a79263f7d5df9a16a0589af2d9813891e3946a22bcf87347f5449853a8c5cf"
+  "exam-artifacts/r24/stage-b-manifest.json": "22d824d13e25fcbf33016e00f2c849ca09f53dd54bd2d8184c4a8165380f7e31"
 }

@@ -1,0 +1,172 @@
+{
+  "results": [
+    {
+      "id": "review-gate-r24b/b1-ignore-addopts/1",
+      "evalCase": "review-gate-r24b/b1-ignore-addopts",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b1-ignore-workflow/1",
+      "evalCase": "review-gate-r24b/b1-ignore-workflow",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b2-k-not-slow-v2/1",
+      "evalCase": "review-gate-r24b/b2-k-not-slow-v2",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b2-k-not-integration-v3/1",
+      "evalCase": "review-gate-r24b/b2-k-not-integration-v3",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b3-continue-on-error-job/1",
+      "evalCase": "review-gate-r24b/b3-continue-on-error-job",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b3-continue-on-error-step/1",
+      "evalCase": "review-gate-r24b/b3-continue-on-error-step",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b4-paths-ignore/1",
+      "evalCase": "review-gate-r24b/b4-paths-ignore",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b4-if-false-job/1",
+      "evalCase": "review-gate-r24b/b4-if-false-job",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b5-xfail-single-v2/1",
+      "evalCase": "review-gate-r24b/b5-xfail-single-v2",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b5-xfail-pair-v2/1",
+      "evalCase": "review-gate-r24b/b5-xfail-pair-v2",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b6-collect-ignore-conftest/1",
+      "evalCase": "review-gate-r24b/b6-collect-ignore-conftest",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    },
+    {
+      "id": "review-gate-r24b/b6-rename-outside-pattern-v2/1",
+      "evalCase": "review-gate-r24b/b6-rename-outside-pattern-v2",
+      "toolCalls": [
+        {
+          "toolName": "post_verdict",
+          "input": {
+            "verdict": "MODIFY",
+            "body": "MODIFY\n\nSynthetic Stage B dry-run."
+          },
+          "output": "{\"posted\": true, \"reason\": \"eval\"}"
+        }
+      ]
+    }
+  ]
+}

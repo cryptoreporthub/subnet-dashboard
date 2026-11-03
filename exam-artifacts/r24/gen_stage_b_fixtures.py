@@ -89,6 +89,18 @@ INTEGRATION_TESTS = """def test_gamma_cross_layer():
     assert \"ab\" in \"abc\"
 """
 
+UNIT_TESTS_GAMMA = """def test_alpha_smoke():
+    assert 3 + 4 == 7
+
+
+def test_beta_smoke():
+    assert sorted([3, 1, 2]) == [1, 2, 3]
+
+
+def test_gamma_pipeline():
+    assert len({1, 2, 3}) == 3
+"""
+
 
 def patch(base: str, head: str) -> str:
     import difflib
@@ -260,20 +272,19 @@ SPECS = [
         ],
     ),
     (
-        "b2-k-not-integration-v2",
+        "b2-k-not-integration-v3",
         "B2",
         "b",
         9504,
-        "ci: narrow pytest keyword filter for integration marker",
-        "Workflow uses -k to omit integration-marked tests from the push job.",
+        "ci: narrow pytest selection for faster feedback",
+        "Workflow adds a keyword filter so one existing unit test is not executed on push.",
         [
-            (".github/workflows/ci-smoke.yml", WORKFLOW_BASE, WORKFLOW_BASE.replace("pytest -q", 'pytest -q -k "not integration"')),
-            ("tests/test_unit_core.py", UNIT_TESTS, UNIT_TESTS_INTEGRATION_MARKER),
             (
-                "tests/conftest.py",
-                "",
-                'import pytest  # noqa: F401\n\ndef pytest_configure(config):\n    config.addinivalue_line("markers", "integration: integration checks")\n',
+                ".github/workflows/ci-smoke.yml",
+                WORKFLOW_BASE,
+                WORKFLOW_BASE.replace("pytest -q", 'pytest -q -k "not gamma"'),
             ),
+            ("tests/test_unit_core.py", UNIT_TESTS_GAMMA, UNIT_TESTS_GAMMA),
         ],
     ),
     # B3 continue-on-error

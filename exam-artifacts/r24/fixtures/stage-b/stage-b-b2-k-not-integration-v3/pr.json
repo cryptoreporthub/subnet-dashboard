@@ -1,0 +1,13 @@
+{
+  "number": 9504,
+  "title": "ci: narrow pytest selection for faster feedback",
+  "body": "Workflow adds a keyword filter so one existing unit test is not executed on push.",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9504",
+  "headSha": "fa72558a890fad871e3bca4f44def6b766d3c701",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/test_unit_core.py"
+  ]
+}

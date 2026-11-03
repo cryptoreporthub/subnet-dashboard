@@ -1,0 +1,325 @@
+{
+  "stage": "B",
+  "harnessParent": "b9ccd6a73295567775ab83761d1db5c2497ac0bc",
+  "prePin": "23bd34f03fb4431ad29726f500f00efc9d1dd82b",
+  "postPin": "a5819378e012cfe21b021bf2b6c5a52d5c4e2d7e",
+  "slugs": [
+    "b1-ignore-addopts",
+    "b1-ignore-workflow",
+    "b2-k-not-slow-v2",
+    "b2-k-not-integration-v3",
+    "b3-continue-on-error-job",
+    "b3-continue-on-error-step",
+    "b4-paths-ignore",
+    "b4-if-false-job",
+    "b5-xfail-single-v2",
+    "b5-xfail-pair-v2",
+    "b6-collect-ignore-conftest",
+    "b6-rename-outside-pattern-v2"
+  ],
+  "blocks": [
+    {
+      "block": 1,
+      "invocations": [
+        {
+          "invocationIndex": 1,
+          "pin": "PRE",
+          "fixtureOrder": [
+            "b1-ignore-addopts",
+            "b1-ignore-workflow",
+            "b2-k-not-slow-v2",
+            "b2-k-not-integration-v3",
+            "b3-continue-on-error-job",
+            "b3-continue-on-error-step",
+            "b4-paths-ignore",
+            "b4-if-false-job",
+            "b5-xfail-single-v2",
+            "b5-xfail-pair-v2",
+            "b6-collect-ignore-conftest",
+            "b6-rename-outside-pattern-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24b/b1-ignore-addopts/1",
+            "review-gate-r24b/b1-ignore-workflow/1",
+            "review-gate-r24b/b2-k-not-slow-v2/1",
+            "review-gate-r24b/b2-k-not-integration-v3/1",
+            "review-gate-r24b/b3-continue-on-error-job/1",
+            "review-gate-r24b/b3-continue-on-error-step/1",
+            "review-gate-r24b/b4-paths-ignore/1",
+            "review-gate-r24b/b4-if-false-job/1",
+            "review-gate-r24b/b5-xfail-single-v2/1",
+            "review-gate-r24b/b5-xfail-pair-v2/1",
+            "review-gate-r24b/b6-collect-ignore-conftest/1",
+            "review-gate-r24b/b6-rename-outside-pattern-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24b/b1-ignore-addopts",
+            "review-gate-r24b/b1-ignore-workflow",
+            "review-gate-r24b/b2-k-not-slow-v2",
+            "review-gate-r24b/b2-k-not-integration-v3",
+            "review-gate-r24b/b3-continue-on-error-job",
+            "review-gate-r24b/b3-continue-on-error-step",
+            "review-gate-r24b/b4-paths-ignore",
+            "review-gate-r24b/b4-if-false-job",
+            "review-gate-r24b/b5-xfail-single-v2",
+            "review-gate-r24b/b5-xfail-pair-v2",
+            "review-gate-r24b/b6-collect-ignore-conftest",
+            "review-gate-r24b/b6-rename-outside-pattern-v2"
+          ],
+          "outputJson": "exam-artifacts/r24/runs-b/inv-01-PRE-block1.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs-b/inv-01-sysprompt.sha256"
+        },
+        {
+          "invocationIndex": 2,
+          "pin": "POST",
+          "fixtureOrder": [
+            "b1-ignore-addopts",
+            "b1-ignore-workflow",
+            "b2-k-not-slow-v2",
+            "b2-k-not-integration-v3",
+            "b3-continue-on-error-job",
+            "b3-continue-on-error-step",
+            "b4-paths-ignore",
+            "b4-if-false-job",
+            "b5-xfail-single-v2",
+            "b5-xfail-pair-v2",
+            "b6-collect-ignore-conftest",
+            "b6-rename-outside-pattern-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24b/b1-ignore-addopts/1",
+            "review-gate-r24b/b1-ignore-workflow/1",
+            "review-gate-r24b/b2-k-not-slow-v2/1",
+            "review-gate-r24b/b2-k-not-integration-v3/1",
+            "review-gate-r24b/b3-continue-on-error-job/1",
+            "review-gate-r24b/b3-continue-on-error-step/1",
+            "review-gate-r24b/b4-paths-ignore/1",
+            "review-gate-r24b/b4-if-false-job/1",
+            "review-gate-r24b/b5-xfail-single-v2/1",
+            "review-gate-r24b/b5-xfail-pair-v2/1",
+            "review-gate-r24b/b6-collect-ignore-conftest/1",
+            "review-gate-r24b/b6-rename-outside-pattern-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24b/b1-ignore-addopts",
+            "review-gate-r24b/b1-ignore-workflow",
+            "review-gate-r24b/b2-k-not-slow-v2",
+            "review-gate-r24b/b2-k-not-integration-v3",
+            "review-gate-r24b/b3-continue-on-error-job",
+            "review-gate-r24b/b3-continue-on-error-step",
+            "review-gate-r24b/b4-paths-ignore",
+            "review-gate-r24b/b4-if-false-job",
+            "review-gate-r24b/b5-xfail-single-v2",
+            "review-gate-r24b/b5-xfail-pair-v2",
+            "review-gate-r24b/b6-collect-ignore-conftest",
+            "review-gate-r24b/b6-rename-outside-pattern-v2"
+          ],
+          "outputJson": "exam-artifacts/r24/runs-b/inv-02-POST-block1.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs-b/inv-02-sysprompt.sha256"
+        }
+      ]
+    },
+    {
+      "block": 2,
+      "invocations": [
+        {
+          "invocationIndex": 3,
+          "pin": "POST",
+          "fixtureOrder": [
+            "b1-ignore-addopts",
+            "b1-ignore-workflow",
+            "b2-k-not-slow-v2",
+            "b2-k-not-integration-v3",
+            "b3-continue-on-error-job",
+            "b3-continue-on-error-step",
+            "b4-paths-ignore",
+            "b4-if-false-job",
+            "b5-xfail-single-v2",
+            "b5-xfail-pair-v2",
+            "b6-collect-ignore-conftest",
+            "b6-rename-outside-pattern-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24b/b1-ignore-addopts/1",
+            "review-gate-r24b/b1-ignore-workflow/1",
+            "review-gate-r24b/b2-k-not-slow-v2/1",
+            "review-gate-r24b/b2-k-not-integration-v3/1",
+            "review-gate-r24b/b3-continue-on-error-job/1",
+            "review-gate-r24b/b3-continue-on-error-step/1",
+            "review-gate-r24b/b4-paths-ignore/1",
+            "review-gate-r24b/b4-if-false-job/1",
+            "review-gate-r24b/b5-xfail-single-v2/1",
+            "review-gate-r24b/b5-xfail-pair-v2/1",
+            "review-gate-r24b/b6-collect-ignore-conftest/1",
+            "review-gate-r24b/b6-rename-outside-pattern-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24b/b1-ignore-addopts",
+            "review-gate-r24b/b1-ignore-workflow",
+            "review-gate-r24b/b2-k-not-slow-v2",
+            "review-gate-r24b/b2-k-not-integration-v3",
+            "review-gate-r24b/b3-continue-on-error-job",
+            "review-gate-r24b/b3-continue-on-error-step",
+            "review-gate-r24b/b4-paths-ignore",
+            "review-gate-r24b/b4-if-false-job",
+            "review-gate-r24b/b5-xfail-single-v2",
+            "review-gate-r24b/b5-xfail-pair-v2",
+            "review-gate-r24b/b6-collect-ignore-conftest",
+            "review-gate-r24b/b6-rename-outside-pattern-v2"
+          ],
+          "outputJson": "exam-artifacts/r24/runs-b/inv-03-POST-block2.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs-b/inv-03-sysprompt.sha256"
+        },
+        {
+          "invocationIndex": 4,
+          "pin": "PRE",
+          "fixtureOrder": [
+            "b1-ignore-addopts",
+            "b1-ignore-workflow",
+            "b2-k-not-slow-v2",
+            "b2-k-not-integration-v3",
+            "b3-continue-on-error-job",
+            "b3-continue-on-error-step",
+            "b4-paths-ignore",
+            "b4-if-false-job",
+            "b5-xfail-single-v2",
+            "b5-xfail-pair-v2",
+            "b6-collect-ignore-conftest",
+            "b6-rename-outside-pattern-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24b/b1-ignore-addopts/1",
+            "review-gate-r24b/b1-ignore-workflow/1",
+            "review-gate-r24b/b2-k-not-slow-v2/1",
+            "review-gate-r24b/b2-k-not-integration-v3/1",
+            "review-gate-r24b/b3-continue-on-error-job/1",
+            "review-gate-r24b/b3-continue-on-error-step/1",
+            "review-gate-r24b/b4-paths-ignore/1",
+            "review-gate-r24b/b4-if-false-job/1",
+            "review-gate-r24b/b5-xfail-single-v2/1",
+            "review-gate-r24b/b5-xfail-pair-v2/1",
+            "review-gate-r24b/b6-collect-ignore-conftest/1",
+            "review-gate-r24b/b6-rename-outside-pattern-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24b/b1-ignore-addopts",
+            "review-gate-r24b/b1-ignore-workflow",
+            "review-gate-r24b/b2-k-not-slow-v2",
+            "review-gate-r24b/b2-k-not-integration-v3",
+            "review-gate-r24b/b3-continue-on-error-job",
+            "review-gate-r24b/b3-continue-on-error-step",
+            "review-gate-r24b/b4-paths-ignore",
+            "review-gate-r24b/b4-if-false-job",
+            "review-gate-r24b/b5-xfail-single-v2",
+            "review-gate-r24b/b5-xfail-pair-v2",
+            "review-gate-r24b/b6-collect-ignore-conftest",
+            "review-gate-r24b/b6-rename-outside-pattern-v2"
+          ],
+          "outputJson": "exam-artifacts/r24/runs-b/inv-04-PRE-block2.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs-b/inv-04-sysprompt.sha256"
+        }
+      ]
+    },
+    {
+      "block": 3,
+      "invocations": [
+        {
+          "invocationIndex": 5,
+          "pin": "PRE",
+          "fixtureOrder": [
+            "b1-ignore-addopts",
+            "b1-ignore-workflow",
+            "b2-k-not-slow-v2",
+            "b2-k-not-integration-v3",
+            "b3-continue-on-error-job",
+            "b3-continue-on-error-step",
+            "b4-paths-ignore",
+            "b4-if-false-job",
+            "b5-xfail-single-v2",
+            "b5-xfail-pair-v2",
+            "b6-collect-ignore-conftest",
+            "b6-rename-outside-pattern-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24b/b1-ignore-addopts/1",
+            "review-gate-r24b/b1-ignore-workflow/1",
+            "review-gate-r24b/b2-k-not-slow-v2/1",
+            "review-gate-r24b/b2-k-not-integration-v3/1",
+            "review-gate-r24b/b3-continue-on-error-job/1",
+            "review-gate-r24b/b3-continue-on-error-step/1",
+            "review-gate-r24b/b4-paths-ignore/1",
+            "review-gate-r24b/b4-if-false-job/1",
+            "review-gate-r24b/b5-xfail-single-v2/1",
+            "review-gate-r24b/b5-xfail-pair-v2/1",
+            "review-gate-r24b/b6-collect-ignore-conftest/1",
+            "review-gate-r24b/b6-rename-outside-pattern-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24b/b1-ignore-addopts",
+            "review-gate-r24b/b1-ignore-workflow",
+            "review-gate-r24b/b2-k-not-slow-v2",
+            "review-gate-r24b/b2-k-not-integration-v3",
+            "review-gate-r24b/b3-continue-on-error-job",
+            "review-gate-r24b/b3-continue-on-error-step",
+            "review-gate-r24b/b4-paths-ignore",
+            "review-gate-r24b/b4-if-false-job",
+            "review-gate-r24b/b5-xfail-single-v2",
+            "review-gate-r24b/b5-xfail-pair-v2",
+            "review-gate-r24b/b6-collect-ignore-conftest",
+            "review-gate-r24b/b6-rename-outside-pattern-v2"
+          ],
+          "outputJson": "exam-artifacts/r24/runs-b/inv-05-PRE-block3.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs-b/inv-05-sysprompt.sha256"
+        },
+        {
+          "invocationIndex": 6,
+          "pin": "POST",
+          "fixtureOrder": [
+            "b1-ignore-addopts",
+            "b1-ignore-workflow",
+            "b2-k-not-slow-v2",
+            "b2-k-not-integration-v3",
+            "b3-continue-on-error-job",
+            "b3-continue-on-error-step",
+            "b4-paths-ignore",
+            "b4-if-false-job",
+            "b5-xfail-single-v2",
+            "b5-xfail-pair-v2",
+            "b6-collect-ignore-conftest",
+            "b6-rename-outside-pattern-v2"
+          ],
+          "caseIds": [
+            "review-gate-r24b/b1-ignore-addopts/1",
+            "review-gate-r24b/b1-ignore-workflow/1",
+            "review-gate-r24b/b2-k-not-slow-v2/1",
+            "review-gate-r24b/b2-k-not-integration-v3/1",
+            "review-gate-r24b/b3-continue-on-error-job/1",
+            "review-gate-r24b/b3-continue-on-error-step/1",
+            "review-gate-r24b/b4-paths-ignore/1",
+            "review-gate-r24b/b4-if-false-job/1",
+            "review-gate-r24b/b5-xfail-single-v2/1",
+            "review-gate-r24b/b5-xfail-pair-v2/1",
+            "review-gate-r24b/b6-collect-ignore-conftest/1",
+            "review-gate-r24b/b6-rename-outside-pattern-v2/1"
+          ],
+          "evalFilter": [
+            "review-gate-r24b/b1-ignore-addopts",
+            "review-gate-r24b/b1-ignore-workflow",
+            "review-gate-r24b/b2-k-not-slow-v2",
+            "review-gate-r24b/b2-k-not-integration-v3",
+            "review-gate-r24b/b3-continue-on-error-job",
+            "review-gate-r24b/b3-continue-on-error-step",
+            "review-gate-r24b/b4-paths-ignore",
+            "review-gate-r24b/b4-if-false-job",
+            "review-gate-r24b/b5-xfail-single-v2",
+            "review-gate-r24b/b5-xfail-pair-v2",
+            "review-gate-r24b/b6-collect-ignore-conftest",
+            "review-gate-r24b/b6-rename-outside-pattern-v2"
+          ],
+          "outputJson": "exam-artifacts/r24/runs-b/inv-06-POST-block3.json",
+          "syspromptSha256File": "exam-artifacts/r24/runs-b/inv-06-sysprompt.sha256"
+        }
+      ]
+    }
+  ]
+}

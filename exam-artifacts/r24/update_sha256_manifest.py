@@ -18,15 +18,26 @@ def main() -> None:
     existing = json.loads(MANIFEST_PATH.read_text())
     extra = [
         "review-gate-bot/evals/review-gate-r24.eval.ts",
+        "review-gate-bot/evals/review-gate-r24b.eval.ts",
         "review-gate-bot/evals/r24-prompts.ts",
         "exam-artifacts/r24/run-plan.json",
+        "exam-artifacts/r24/run-plan-rerun.json",
+        "exam-artifacts/r24/run-plan-b.json",
         "exam-artifacts/r24/dry-run-synthetic.json",
         "exam-artifacts/r24/dry-run-scorer-output.json",
+        "exam-artifacts/r24/dry-run-b-synthetic.json",
+        "exam-artifacts/r24/dry-run-b-scorer-output.json",
         "exam-artifacts/r24/dry-run.log",
+        "exam-artifacts/r24/dry-run-b.log",
         "exam-artifacts/r24/dry-run-eval-list.txt",
+        "exam-artifacts/r24/dry-run-b-eval-list.txt",
         "exam-artifacts/r24/worktree-proof.log",
+        "exam-artifacts/r24/worktree-proof-b.log",
         "exam-artifacts/r24/worktree-model-config.log",
+        "exam-artifacts/r24/worktree-model-config-b.log",
         "exam-artifacts/r24/runs/README.md",
+        "exam-artifacts/r24/runs-rerun/README.md",
+        "exam-artifacts/r24/runs-b/README.md",
     ]
     for rel in extra:
         p = ROOT / rel
