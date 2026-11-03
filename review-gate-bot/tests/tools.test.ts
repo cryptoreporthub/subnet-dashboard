@@ -260,6 +260,16 @@ test("R0.8-1 eval read at base returns baseFiles text for a changed file; head r
   assert.equal((await at("head", "a.py")).text, "new\n");
 });
 
+test("R1 arm G: eval read_repo_file defaults at to head when omitted", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
+  );
+  const out = (await run(readRepoFile)({ path: "a.py" }, ctx)) as { ok: boolean; text?: string; sha?: string };
+  assert.equal(out.text, "new\n");
+  assert.equal(out.sha, HEAD);
+});
+
 test("R0.8-2 eval read of unchanged context file succeeds at base and head with equal text", async () => {
   const ctx = await evalBaseFixtureContext(
     { files: { "a.py": "new\n", "internal/context.py": "ctx\n" }, baseFiles: { "a.py": "old\n" } },
