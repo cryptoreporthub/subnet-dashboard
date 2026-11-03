@@ -1,7 +1,7 @@
 === r27 fixture EXECUTION GATE (exact workflow run steps, repo root, no PYTHONPATH) ===
 fixtures=24 (expect 24)
 venv_python=/workspace/.venv/bin/python
-PASS: job lines unrewritten; no exit 4/5 exemption when workflow runs pytest
+PASS: job lines unrewritten; matrix shard-index expanded to every matrix value
 
 [r27:p1a] EXECUTION INTENTIONAL: PASS deletion (no tests at head)
 [r27:p1a] EXECUTION skipped ok
@@ -32,6 +32,16 @@ Requirement already satisfied: packaging>=24 in /workspace/.venv/lib/python3.12/
 Requirement already satisfied: pluggy<2,>=1.6 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (1.7.0)
 Requirement already satisfied: pygments>=2.15 in /workspace/.venv/lib/python3.12/site-packages (from pytest) (2.21.0)
 [r27:p4] EXECUTION workflow run: python -m pytest -q tests/test_r27_shard_smoke.py --shard-id=0 --num-shards=3
+[r27:p4] EXECUTION exit=0
+Running 4 items in this shard
+....                                                                     [100%]
+4 passed in 0.00s
+[r27:p4] EXECUTION workflow run: python -m pytest -q tests/test_r27_shard_smoke.py --shard-id=1 --num-shards=3
+[r27:p4] EXECUTION exit=0
+Running 2 items in this shard
+..                                                                       [100%]
+2 passed in 0.00s
+[r27:p4] EXECUTION workflow run: python -m pytest -q tests/test_r27_shard_smoke.py --shard-id=2 --num-shards=3
 [r27:p4] EXECUTION exit=0
 Running 3 items in this shard
 ...                                                                      [100%]
@@ -166,7 +176,7 @@ Running 1 items in this shard
 [r27:m3b] EXECUTION exit=0
 Running 2 items in this shard
 ..                                                                       [100%]
-2 passed in 0.00s
+2 passed in 0.01s
 [r27:m3b] EXECUTION ok
 
 [r27:m4a] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests
@@ -192,6 +202,13 @@ ERROR: file or directory not found: tests
 [r27:m5a] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)
 [r27:m5a] EXECUTION ok
 
+[r27:m5b] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests
+[r27:m5b] EXECUTION exit=4
+Running 0 items in this shard
+
+no tests ran in 0.00s
+ERROR: file or directory not found: tests
+[r27:m5b] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)
 [r27:m5b] EXECUTION workflow run (MODIFY local shim): /workspace/.venv/bin/python -m pytest -q tests
 [r27:m5b] EXECUTION exit=4
 Running 0 items in this shard

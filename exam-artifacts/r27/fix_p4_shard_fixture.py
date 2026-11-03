@@ -50,9 +50,9 @@ def repo_for_p4() -> dict:
     )
     tests = (
         "import pytest\n\n\n"
-        "@pytest.mark.parametrize(\"n\", [0, 1, 2, 3, 4, 5])\n"
+        "@pytest.mark.parametrize(\"n\", list(range(9)))\n"
         "def test_shard_slot(n):\n"
-        "    assert n + n == 2 * n\n"
+        "    assert n * 2 == n + n\n"
     )
     return {
         "files": {
@@ -100,7 +100,7 @@ def main() -> None:
         "diffSha256": diff_sha,
         "changedPaths": changed,
         "behavior": {"expectedVerdict": "PASS"},
-        "labeling": {"note": "Diff changed for r27-GATE-DEFECT; Claude re-label required"},
+        "labeling": {"note": "r27-P4-FAIL fix: 9 cases / 3 shards; Claude re-label required"},
         "pytest": {"summary": "1 passed", "passed": 1, "failed": 0, "skipped": 0, "failingTests": []},
     }
     (FIX / "pr.json").write_text(json.dumps(pr, indent=2) + "\n", encoding="utf-8")

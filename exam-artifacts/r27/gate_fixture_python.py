@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -116,12 +117,40 @@ def materialize_head(tdp: Path, files: dict[str, str]) -> None:
         path.write_text(content, encoding="utf-8")
 
 
+def parse_matrix_shard_indices(files: dict[str, str]) -> list[int]:
+    for content in files.values():
+        if not content or "shard-index" not in content:
+            continue
+        match = re.search(r"shard-index:\s*\[([^\]]+)\]", content)
+        if not match:
+            continue
+        indices: list[int] = []
+        for part in match.group(1).split(","):
+            part = part.strip()
+            if part.isdigit():
+                indices.append(int(part))
+        if indices:
+            return indices
+    return []
+
+
+def expand_workflow_commands(raw_cmd: str, oracle: str, matrix_indices: list[int]) -> list[str]:
+    if "${{ matrix.shard-index }}" in raw_cmd or "${{matrix.shard-index}}" in raw_cmd:
+        if not matrix_indices:
+            return [sanitize_workflow_cmd(raw_cmd, oracle)]
+        expanded: list[str] = []
+        for idx in matrix_indices:
+            cmd = (
+                raw_cmd.replace("${{ matrix.shard-index }}", str(idx))
+                .replace("${{matrix.shard-index}}", str(idx))
+            )
+            expanded.append(cmd if oracle == "PASS" else sanitize_workflow_cmd(cmd, oracle))
+        return expanded
+    return [sanitize_workflow_cmd(raw_cmd, oracle)]
+
+
 def sanitize_workflow_cmd(cmd: str, oracle: str) -> str:
-    """Expand GH Actions matrix only. PASS: no command rewrites (job-line fidelity)."""
-    cmd = (
-        cmd.replace("${{ matrix.shard-index }}", "0")
-        .replace("${{matrix.shard-index}}", "0")
-    )
+    """MODIFY-only rewrites. PASS commands must arrive already expanded."""
     if oracle == "PASS":
         return cmd
     if "--shard-id" in cmd or "--num-shards" in cmd:
@@ -140,39 +169,46 @@ def run_execution_gate(label: str, files: dict[str, str], oracle: str) -> tuple[
         tests_dir = tdp / "tests"
         test_modules = list(tests_dir.rglob("test_*.py")) if tests_dir.is_dir() else []
         run_steps = workflow_run_steps(files)
+        matrix_indices = parse_matrix_shard_indices(files)
 
         env = os.environ.copy()
         env.pop("PYTHONPATH", None)
         env["PATH"] = f"{VENV_BIN}:{env.get('PATH', '')}"
 
         if run_steps:
-            for cmd in run_steps:
-                raw = cmd
-                cmd = sanitize_workflow_cmd(cmd, oracle)
-                if raw != cmd and oracle == "MODIFY":
-                    lines.append(f"[r27:{label}] EXECUTION workflow run (MODIFY local shim): {cmd}")
-                else:
-                    lines.append(f"[r27:{label}] EXECUTION workflow run: {cmd}")
-                proc = subprocess.run(
-                    cmd,
-                    cwd=str(tdp),
-                    env=env,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                )
-                combined = (proc.stdout or "") + (proc.stderr or "")
-                lines.append(f"[r27:{label}] EXECUTION exit={proc.returncode}")
-                if combined.strip():
-                    lines.extend(combined.rstrip().splitlines())
-                if proc.returncode != 0:
-                    if oracle == "MODIFY" and proc.returncode in (4, 5) and not test_modules and "pytest" in cmd:
-                        lines.append(
-                            f"[r27:{label}] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)"
-                        )
-                        continue
-                    lines.append(f"[r27:{label}] EXECUTION FAIL: workflow command failed")
-                    failed = True
+            for raw in run_steps:
+                for cmd in expand_workflow_commands(raw, oracle, matrix_indices):
+                    if raw != cmd and oracle == "MODIFY":
+                        lines.append(f"[r27:{label}] EXECUTION workflow run (MODIFY local shim): {cmd}")
+                    else:
+                        lines.append(f"[r27:{label}] EXECUTION workflow run: {cmd}")
+                    proc = subprocess.run(
+                        cmd,
+                        cwd=str(tdp),
+                        env=env,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    combined = (proc.stdout or "") + (proc.stderr or "")
+                    lines.append(f"[r27:{label}] EXECUTION exit={proc.returncode}")
+                    if combined.strip():
+                        lines.extend(combined.rstrip().splitlines())
+                    if proc.returncode != 0:
+                        if (
+                            oracle == "MODIFY"
+                            and proc.returncode in (4, 5)
+                            and not test_modules
+                            and "pytest" in cmd
+                        ):
+                            lines.append(
+                                f"[r27:{label}] EXECUTION INTENTIONAL: MODIFY CI workflow only (no tests/ at head)"
+                            )
+                            continue
+                        lines.append(f"[r27:{label}] EXECUTION FAIL: workflow command failed")
+                        failed = True
+                        break
+                if failed:
                     break
             if not failed:
                 lines.append(f"[r27:{label}] EXECUTION ok")
@@ -233,7 +269,7 @@ def main() -> int:
     exec_lines: list[str] = [
         "=== r27 fixture EXECUTION GATE (exact workflow run steps, repo root, no PYTHONPATH) ===",
         f"venv_python={VENV_PYTHON}",
-        "PASS: job lines unrewritten; no exit 4/5 exemption when workflow runs pytest",
+        "PASS: job lines unrewritten; matrix shard-index expanded to every matrix value",
         "",
     ]
     static_fail = exec_fail = False

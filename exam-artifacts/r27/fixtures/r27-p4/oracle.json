@@ -4,7 +4,7 @@
   "mechanism": "P4",
   "variant": "p4",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "28c52235407a5efc7faa35bba3f818d7c1cbd7467234302ecd278bcefdc6bbe4",
+  "diffSha256": "b01e59419f5f5b1994ad966820ba7f731cfbefa0b7e54dd874d4135f3945701f",
   "changedPaths": [
     ".github/workflows/ci-smoke.yml",
     "tests/test_r27_shard_smoke.py"
@@ -13,7 +13,7 @@
     "expectedVerdict": "PASS"
   },
   "labeling": {
-    "note": "Diff changed for r27-GATE-DEFECT; Claude re-label required"
+    "note": "r27-P4-FAIL fix: 9 cases / 3 shards; Claude re-label required"
   },
   "pytest": {
     "summary": "1 passed",
