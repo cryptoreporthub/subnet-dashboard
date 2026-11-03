@@ -953,8 +953,59 @@ def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
     release.set()
     assert finished.wait(timeout=1)
     recovered = sched._run_refresh_cycle_with_timeout()
+    deadline = time.time() + 2
+    while recovered.get("skipped") == "previous_cycle_inflight" and time.time() < deadline:
+        time.sleep(0.01)
+        recovered = sched._run_refresh_cycle_with_timeout()
     assert recovered.get("ok") is True
     assert recovered.get("skipped") != "cycle_in_flight"
+
+
+def test_resolver_worker_rss_end_logged_after_timeout_abandons_cycle(
+    caplog, monkeypatch, fresh_scheduler
+):
+    caplog.set_level(logging.INFO, logger="process_memory")
+    monkeypatch.setattr("internal.process_memory.read_rss_kb", lambda pid=None: 1000)
+    monkeypatch.setattr("internal.run_mode.get_run_mode", lambda: "worker")
+    started = threading.Event()
+    release = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=2)
+        return {"ok": True, "run_at": resolver_scheduler._now_iso()}
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _blocked,
+    )
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+
+    def _worker_lines() -> list[str]:
+        return [
+            r.getMessage()
+            for r in caplog.records
+            if "prediction_resolver_worker" in r.getMessage()
+        ]
+
+    timed_out = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(timed_out["error"])
+    assert any("phase=start" in line for line in _worker_lines())
+    assert not any("phase=end" in line for line in _worker_lines())
+
+    release.set()
+    deadline = time.time() + 2
+    while time.time() < deadline and not any("phase=end" in line for line in _worker_lines()):
+        time.sleep(0.01)
+    assert any("phase=end" in line for line in _worker_lines())
 
 
 def _patchd_payloads(caplog, prefix: str = "patchd_mutation"):
