@@ -1,0 +1,34 @@
+=== Stage C run start 2026-11-03T04:24:51Z RUN_TIP=ef45b46f6db3f27489438a5772466296da789e8a plan=/tmp/pr-1522-exam-r8-work/repo/exam-artifacts/r27/run-plan-c.json ===
+eval_build=
+0.3.0 model_id=composer-2.5 fast=false
+INV_01_A_START 2026-11-03T04:24:53Z arm=R23 cases=24
+INV_01_A_END 2026-11-03T04:34:03Z duration_s=550.0 exit=0
+INV_01_WROTE exam-artifacts/r27/runs-c/inv-01-R23-block1.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+INV_02_A_START 2026-11-03T04:34:03Z arm=C25 cases=24
+INV_02_A_END 2026-11-03T04:43:07Z duration_s=543.7 exit=0
+INV_02_WROTE exam-artifacts/r27/runs-c/inv-02-C25-block1.json sysprompt=a7c868485823d64e0512096f99c053558458874787a771dc7a0db68e4ac90f0c
+INV_03_A_START 2026-11-03T04:43:07Z arm=C25 cases=24
+INV_03_A_END 2026-11-03T04:51:53Z duration_s=526.4 exit=0
+INV_03_WROTE exam-artifacts/r27/runs-c/inv-03-C25-block2.json sysprompt=a7c868485823d64e0512096f99c053558458874787a771dc7a0db68e4ac90f0c
+INV_04_A_START 2026-11-03T04:51:54Z arm=R23 cases=24
+INV_04_A_END 2026-11-03T05:00:30Z duration_s=516.8 exit=0
+INV_04_WROTE exam-artifacts/r27/runs-c/inv-04-R23-block2.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+INV_05_A_START 2026-11-03T05:00:31Z arm=R23 cases=24
+INV_05_A_END 2026-11-03T05:09:33Z duration_s=542.6 exit=0
+INV_05_WROTE exam-artifacts/r27/runs-c/inv-05-R23-block3.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+INV_06_A_START 2026-11-03T05:09:33Z arm=C25 cases=24
+INV_06_A_END 2026-11-03T05:18:01Z duration_s=507.2 exit=0
+INV_06_WROTE exam-artifacts/r27/runs-c/inv-06-C25-block3.json sysprompt=a7c868485823d64e0512096f99c053558458874787a771dc7a0db68e4ac90f0c
+INV_07_A_START 2026-11-03T05:18:01Z arm=C25 cases=24
+INV_07_A_END 2026-11-03T05:28:25Z duration_s=624.2 exit=0
+INV_07_WROTE exam-artifacts/r27/runs-c/inv-07-C25-block4.json sysprompt=a7c868485823d64e0512096f99c053558458874787a771dc7a0db68e4ac90f0c
+INV_08_A_START 2026-11-03T05:28:25Z arm=R23 cases=24
+INV_08_A_END 2026-11-03T05:38:14Z duration_s=588.7 exit=0
+INV_08_WROTE exam-artifacts/r27/runs-c/inv-08-R23-block4.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+INV_09_A_START 2026-11-03T05:38:14Z arm=R23 cases=24
+INV_09_A_END 2026-11-03T05:48:14Z duration_s=600.5 exit=0
+INV_09_WROTE exam-artifacts/r27/runs-c/inv-09-R23-block5.json sysprompt=620baecc7515c08d4b08a5e761d0d340062ee0137a7f6cdbfb946bd7ad4742ab
+INV_10_A_START 2026-11-03T05:48:15Z arm=C25 cases=24
+INV_10_A_END 2026-11-03T05:58:41Z duration_s=626.8 exit=0
+INV_10_WROTE exam-artifacts/r27/runs-c/inv-10-C25-block5.json sysprompt=a7c868485823d64e0512096f99c053558458874787a771dc7a0db68e4ac90f0c
+=== Stage C run complete 2026-11-03T05:58:42Z ===
