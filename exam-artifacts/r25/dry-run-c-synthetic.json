@@ -99,8 +99,8 @@
       ]
     },
     {
-      "id": "review-gate-r25/p7-v2/1",
-      "evalCase": "review-gate-r25/p7-v2",
+      "id": "review-gate-r25/p7-v3/1",
+      "evalCase": "review-gate-r25/p7-v3",
       "toolCalls": [
         {
           "toolName": "post_verdict",

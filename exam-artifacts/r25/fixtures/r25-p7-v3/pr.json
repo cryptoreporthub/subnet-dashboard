@@ -1,7 +1,7 @@
 {
   "number": 9608,
-  "title": "test: relocate label weight check",
-  "body": "Moves a label-weight assertion into a new module while dropping the old file.",
+  "title": "test: move label weight case to sibling module",
+  "body": "Relocates a label-weight check into a new test module and drops the old file.",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9608",
   "headSha": "a25f000000000000000000000000000000000008",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",

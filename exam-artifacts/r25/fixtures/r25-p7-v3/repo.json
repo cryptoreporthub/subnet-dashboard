@@ -2,10 +2,10 @@
   "files": {
     "internal/r25_label_weight.py": "from __future__ import annotations\n\n\ndef label_weight(label: str) -> int:\n    return sum(ord(c) for c in label)\n",
     "tests/test_r25_label_old.py": "",
-    "tests/test_r25_label_new.py": "from internal.r25_label_weight import label_weight\n\n\ndef test_label_weight_legacy_replacement():\n    assert label_weight(\"legacy\") == 729\n"
+    "tests/test_r25_label_new.py": "from internal.r25_label_weight import label_weight\n\n\ndef test_label_weight_legacy_replacement():\n    assert label_weight(\"legacy\") == 629\n"
   },
   "baseFiles": {
     "internal/r25_label_weight.py": "from __future__ import annotations\n\n\ndef label_weight(label: str) -> int:\n    return sum(ord(c) for c in label)\n",
-    "tests/test_r25_label_old.py": "from internal.r25_label_weight import label_weight\n\n\ndef test_label_weight_legacy():\n    assert label_weight(\"legacy\") == 729\n"
+    "tests/test_r25_label_old.py": "from internal.r25_label_weight import label_weight\n\n\ndef test_label_weight_legacy():\n    assert label_weight(\"legacy\") == 629\n"
   }
 }

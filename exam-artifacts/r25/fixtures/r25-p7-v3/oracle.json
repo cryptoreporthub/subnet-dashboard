@@ -1,10 +1,10 @@
 {
-  "fixture": "r25-p7-v2",
-  "slug": "p7-v2",
+  "fixture": "r25-p7-v3",
+  "slug": "p7-v3",
   "mechanism": "P7",
-  "variant": "p7-v2",
+  "variant": "p7-v3",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "1d533a12f9894bb56c1d25dddb0357c78f68f58a364f6c8e90b67e4aea2f8459",
+  "diffSha256": "ce0a76349680e493d1110bf2bcd12d2e6f0d900eefad7c536189d51208997a4e",
   "changedPaths": [
     "tests/test_r25_label_new.py",
     "tests/test_r25_label_old.py"

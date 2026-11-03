@@ -1,55 +1,169 @@
+=== r25 fixture static gate ===
+
+
+
 [r25:p2] py_compile tests/layout/test_r25_layout_a.py exit=0
 [r25:p2] pyflakes tests/layout/test_r25_layout_a.py exit=0
+
 [r25:p3] py_compile tests/test_r25_pairs.py exit=0
 [r25:p3] pyflakes tests/test_r25_pairs.py exit=0
+
 [r25:p4] yaml_parse .github/workflows/ci-smoke.yml ok
+
 [r25:p5] yaml_parse .github/workflows/ci-audit.yml ok
 [r25:p5] py_compile internal/r25_audit_hook.py exit=0
 [r25:p5] pyflakes internal/r25_audit_hook.py exit=0
 [r25:p5] py_compile tests/test_r25_audit_hook.py exit=0
 [r25:p5] pyflakes tests/test_r25_audit_hook.py exit=0
+
 [r25:p6-v2] py_compile internal/r25_feature_flags.py exit=0
 [r25:p6-v2] pyflakes internal/r25_feature_flags.py exit=0
 [r25:p6-v2] py_compile tests/test_r25_feature_flags.py exit=0
 [r25:p6-v2] pyflakes tests/test_r25_feature_flags.py exit=0
-[r25:p7-v2] py_compile internal/r25_label_weight.py exit=0
-[r25:p7-v2] pyflakes internal/r25_label_weight.py exit=0
-[r25:p7-v2] py_compile tests/test_r25_label_new.py exit=0
-[r25:p7-v2] pyflakes tests/test_r25_label_new.py exit=0
+
+[r25:p7-v3] py_compile internal/r25_label_weight.py exit=0
+[r25:p7-v3] pyflakes internal/r25_label_weight.py exit=0
+[r25:p7-v3] py_compile tests/test_r25_label_new.py exit=0
+[r25:p7-v3] pyflakes tests/test_r25_label_new.py exit=0
+
 [r25:m1a] py_compile internal/r25_m1a_service.py exit=0
 [r25:m1a] pyflakes internal/r25_m1a_service.py exit=0
+
 [r25:m1b] py_compile internal/r25_m1b_service.py exit=0
 [r25:m1b] pyflakes internal/r25_m1b_service.py exit=0
 [r25:m1b] py_compile tests/test_r25_m1b_edges.py exit=0
 [r25:m1b] pyflakes tests/test_r25_m1b_edges.py exit=0
+
 [r25:m1c] py_compile internal/r25_m1c_service.py exit=0
 [r25:m1c] pyflakes internal/r25_m1c_service.py exit=0
 [r25:m1c] py_compile tests/test_r25_m1c_smoke.py exit=0
 [r25:m1c] pyflakes tests/test_r25_m1c_smoke.py exit=0
+
 [r25:m2a] py_compile tests/test_r25_m2a_layout.py exit=0
 [r25:m2a] pyflakes tests/test_r25_m2a_layout.py exit=0
+
 [r25:m2b] py_compile tests/test_r25_m2b_hook.py exit=0
 [r25:m2b] pyflakes tests/test_r25_m2b_hook.py exit=0
+
 [r25:m3a] py_compile tests/conftest.py exit=0
 [r25:m3a] pyflakes tests/conftest.py exit=0
 [r25:m3a] py_compile tests/test_r25_m3a_integration.py exit=0
 [r25:m3a] pyflakes tests/test_r25_m3a_integration.py exit=0
 [r25:m3a] py_compile tests/test_r25_m3a_unit.py exit=0
 [r25:m3a] pyflakes tests/test_r25_m3a_unit.py exit=0
+
 [r25:m3b] pytest_ini pytest.ini ok
 [r25:m3b] py_compile tests/test_r25_m3b_wide.py exit=0
 [r25:m3b] pyflakes tests/test_r25_m3b_wide.py exit=0
 [r25:m3b] py_compile tests/unit/test_r25_m3b_narrow.py exit=0
 [r25:m3b] pyflakes tests/unit/test_r25_m3b_narrow.py exit=0
+
 [r25:m4a] yaml_parse .github/workflows/ci-smoke.yml ok
 [r25:m4a] py_compile tests/test_r25_m4a_smoke.py exit=0
 [r25:m4a] pyflakes tests/test_r25_m4a_smoke.py exit=0
+
 [r25:m4b] yaml_parse .github/workflows/ci-smoke.yml ok
 [r25:m4b] py_compile tests/test_r25_m4b_smoke.py exit=0
 [r25:m4b] pyflakes tests/test_r25_m4b_smoke.py exit=0
+
 [r25:m5a] yaml_parse .github/workflows/ci-smoke.yml ok
+
 [r25:m5b] yaml_parse .github/workflows/ci-smoke.yml ok
+
 [r25:m6] py_compile internal/r25_m6_service.py exit=0
 [r25:m6] pyflakes internal/r25_m6_service.py exit=0
 [r25:m6] py_compile tests/test_r25_m6_scale.py exit=0
 [r25:m6] pyflakes tests/test_r25_m6_scale.py exit=0
+
+=== r25 fixture EXECUTION GATE (pytest @ head) ===
+pytest=/workspace/.venv/bin/pytest
+
+[r25:p1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r25:p1a] EXECUTION pytest skipped ok
+
+[r25:p1b] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r25:p1b] EXECUTION pytest skipped ok
+
+[r25:p2] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.00s
+[r25:p2] EXECUTION ok
+
+[r25:p3] EXECUTION pytest exit=0
+...                                                                      [100%]
+3 passed in 0.00s
+[r25:p3] EXECUTION ok
+
+[r25:p4] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r25:p4] EXECUTION pytest skipped ok
+
+[r25:p5] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:p5] EXECUTION ok
+
+[r25:p6-v2] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:p6-v2] EXECUTION ok
+
+[r25:p7-v3] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:p7-v3] EXECUTION ok
+
+[r25:m1a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r25:m1a] EXECUTION pytest skipped ok
+
+[r25:m1b] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:m1b] EXECUTION ok
+
+[r25:m1c] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:m1c] EXECUTION ok
+
+[r25:m2a] EXECUTION pytest exit=0
+.X                                                                       [100%]
+1 passed, 1 xpassed in 0.00s
+[r25:m2a] EXECUTION note: xpass present (expected for some MODIFY fixtures)
+[r25:m2a] EXECUTION ok
+
+[r25:m2b] EXECUTION pytest exit=5
+
+1 skipped in 0.00s
+[r25:m2b] EXECUTION INTENTIONAL: pytest exit 5 (e.g. module-level skip only)
+[r25:m2b] EXECUTION ok
+
+[r25:m3a] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:m3a] EXECUTION ok
+
+[r25:m3b] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.01s
+[r25:m3b] EXECUTION ok
+
+[r25:m4a] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:m4a] EXECUTION ok
+
+[r25:m4b] EXECUTION pytest exit=0
+.                                                                        [100%]
+1 passed in 0.00s
+[r25:m4b] EXECUTION ok
+
+[r25:m5a] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r25:m5a] EXECUTION pytest skipped ok
+
+[r25:m5b] EXECUTION INTENTIONAL: no test modules at head (empty/deleted tests or CI-only)
+[r25:m5b] EXECUTION pytest skipped ok
+
+[r25:m6] EXECUTION pytest exit=0
+..                                                                       [100%]
+2 passed in 0.01s
+[r25:m6] EXECUTION ok

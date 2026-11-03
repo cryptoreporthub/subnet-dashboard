@@ -35,7 +35,7 @@ def main() -> None:
         "exam-artifacts/r25/dry-run-c.log",
         "exam-artifacts/r25/worktree-proof.log",
         "exam-artifacts/r25/worktree-model-config.log",
-        "exam-artifacts/r25/fixture-gate-output.txt",
+        "exam-artifacts/r25/fixture-execution-gate-output.txt",
         "exam-artifacts/r25/gate_fixture_python.py",
         "exam-artifacts/r25/r25c_dry_run.py",
         "exam-artifacts/r25/pin_manifest.py",

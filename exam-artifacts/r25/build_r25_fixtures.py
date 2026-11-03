@@ -22,7 +22,7 @@ SLUGS = [
     "p4",
     "p5",
     "p6-v2",
-    "p7-v2",
+    "p7-v3",
     "m1a",
     "m1b",
     "m1c",
@@ -173,7 +173,7 @@ def fixture_meta(slug: str, idx: int) -> dict:
         "p4": "ci: add three-way pytest shard matrix",
         "p5": "test: add audit hook coverage job",
         "p6-v2": "chore: drop deprecated refresh toggle",
-        "p7-v2": "test: relocate label weight check",
+        "p7-v3": "test: move label weight case to sibling module",
         "m1a": "test: drop stale regression file",
         "m1b": "test: trim unused edge case",
         "m1c": "test: simplify hook smoke check",
@@ -195,7 +195,7 @@ def fixture_meta(slug: str, idx: int) -> dict:
         "p4": "Adds a complete 0-based shard matrix matching num-shards.",
         "p5": "Introduces audit hook tests and a workflow job that runs them.",
         "p6-v2": "Removes a deprecated toggle and its dedicated test without changing other behavior.",
-        "p7-v2": "Moves a label-weight assertion into a new module while dropping the old file.",
+        "p7-v3": "Relocates a label-weight check into a new test module and drops the old file.",
         "m1a": "Removes a regression test module; service code is unchanged.",
         "m1b": "Drops one test function from an existing module.",
         "m1c": "Leaves the test name but removes substantive assertions.",
@@ -387,7 +387,8 @@ def repo_for(slug: str) -> dict:
                 "tests/test_r25_feature_flags.py": tst_flag + "\n\n" + tst_stable,
             },
         }
-    if slug == "p7-v2":
+    if slug == "p7-v3":
+        expected = sum(ord(c) for c in "legacy")
         mod = (
             "from __future__ import annotations\n\n\n"
             "def label_weight(label: str) -> int:\n"
@@ -395,13 +396,13 @@ def repo_for(slug: str) -> dict:
         )
         old_t = (
             "from internal.r25_label_weight import label_weight\n\n\n"
-            "def test_label_weight_legacy():\n"
-            "    assert label_weight(\"legacy\") == 729\n"
+            f"def test_label_weight_legacy():\n"
+            f"    assert label_weight(\"legacy\") == {expected}\n"
         )
         new_t = (
             "from internal.r25_label_weight import label_weight\n\n\n"
-            "def test_label_weight_legacy_replacement():\n"
-            "    assert label_weight(\"legacy\") == 729\n"
+            f"def test_label_weight_legacy_replacement():\n"
+            f"    assert label_weight(\"legacy\") == {expected}\n"
         )
         return {
             "files": {
