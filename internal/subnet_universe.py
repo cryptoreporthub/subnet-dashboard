@@ -16,12 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from internal.chain_read import UNPINNED_BLOCK_HASH, ChainRead
-
-try:
-    from internal.process_memory import log_heavy_job_rss
-except ImportError:  # RSS bookends are observability; never block the universe refresh
-    def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
-        return None
+from internal.process_memory import log_heavy_job_rss
 
 logger = logging.getLogger(__name__)
 

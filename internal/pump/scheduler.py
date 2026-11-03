@@ -12,13 +12,8 @@ from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
+from internal.process_memory import log_heavy_job_rss
 from internal.pump.state import scan_all_subnets
-
-try:
-    from internal.process_memory import log_heavy_job_rss
-except ImportError:  # RSS bookends are observability; never fail the pump tick
-    def log_heavy_job_rss(*_args: Any, **_kwargs: Any) -> None:
-        return None
 
 logger = logging.getLogger(__name__)
 
