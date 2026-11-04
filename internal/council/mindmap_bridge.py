@@ -75,10 +75,19 @@ def pending_resolved_ids(persistence_path: str) -> List[Any]:
         return [rid for _, _, rid in _PENDING_TRAIL.get(_pending_key(persistence_path), []) if rid is not None]
 
 
-def _trail_key(entry: Any) -> Optional[Tuple[str, str]]:
-    """Identity of a trail row. Rows without a time cannot be matched, so they are never skipped."""
+def _trail_key(entry: Any) -> Optional[Tuple[str, ...]]:
+    """Identity of a trail row. Rows without a time cannot be matched, so they are never skipped.
+
+    A resolution is keyed by its prediction id: two resolutions can share one timestamp.
+    """
     if isinstance(entry, dict) and entry.get("time") is not None:
-        return str(entry.get("event_type")), str(entry["time"])
+        event_type = str(entry.get("event_type"))
+        evidence = entry.get("evidence")
+        if event_type == "prediction_resolved" and isinstance(evidence, dict):
+            prediction_id = evidence.get("prediction_id")
+            if prediction_id is not None:
+                return event_type, "prediction_id", str(prediction_id)
+        return event_type, "time", str(entry["time"])
     return None
 
 
@@ -96,11 +105,8 @@ def _replay_trail_rows(state: Dict[str, Any], rows: List[Tuple[Dict[str, Any], A
         trail = []
     present = {key for key in map(_trail_key, trail) if key is not None}
     for entry, resolved_prediction_id in rows:
-        key = _trail_key(entry)
-        if key is not None:
-            if key in present:
-                continue
-            present.add(key)
+        # The ledger id is recorded even when the row itself is a duplicate, so a row trimmed
+        # from the trail window cannot leave its resolution unrecorded.
         if resolved_prediction_id is not None:
             ledger = state.get("resolved_prediction_ids")
             if not isinstance(ledger, list):
@@ -108,6 +114,11 @@ def _replay_trail_rows(state: Dict[str, Any], rows: List[Tuple[Dict[str, Any], A
                 state["resolved_prediction_ids"] = ledger
             if resolved_prediction_id not in ledger:
                 ledger.append(resolved_prediction_id)
+        key = _trail_key(entry)
+        if key is not None:
+            if key in present:
+                continue
+            present.add(key)
         trail.append(entry)
     state["learning_trail"] = trail[-200:]
 

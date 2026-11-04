@@ -467,3 +467,105 @@ def test_row_already_committed_is_not_replayed_twice_by_a_later_write(tmp_path, 
     on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
     assert sorted(_prediction_ids(on_disk["learning_trail"])) == ["p-x", "p-y", "p-z"]
     assert sorted(on_disk["resolved_prediction_ids"]) == ["p-x", "p-y", "p-z"]
+
+
+def _resolution_row(prediction_id: str, time: str) -> dict:
+    return {
+        "time": time,
+        "event_type": "prediction_resolved",
+        "evidence": {"prediction_id": prediction_id},
+    }
+
+
+def _seed_soul_map(path, state: dict) -> None:
+    path.write_text(json.dumps({"soul_map_state": state}), encoding="utf-8")
+
+
+def _read_soul_map_state(path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))["soul_map_state"]
+
+
+def test_duplicate_row_with_missing_ledger_id_still_records_the_id(tmp_path, monkeypatch):
+    """A trail row on disk without its ledger id must gain the id when its duplicate replays."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    _seed_soul_map(soul_path, {"learning_trail": [_resolution_row("p-a", "T1")], "resolved_prediction_ids": []})
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+
+    _fail_first_replace(monkeypatch)
+    bridge.append_learning_trail(_resolution_row("p-a", "T1"), resolved_prediction_id="p-a")
+    bridge.append_learning_trail(_resolution_row("p-kept", "T2"), resolved_prediction_id="p-kept")
+
+    on_disk = _read_soul_map_state(soul_path)
+    assert _prediction_ids(on_disk["learning_trail"]) == ["p-a", "p-kept"]
+    assert sorted(on_disk["resolved_prediction_ids"]) == ["p-a", "p-kept"]
+
+
+def test_distinct_resolutions_sharing_a_timestamp_both_stay(tmp_path):
+    """Two different predictions resolved at the same timestamp must each keep their row and id."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    _seed_soul_map(soul_path, {})
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+
+    bridge.append_learning_trail(_resolution_row("p-b", "T2"), resolved_prediction_id="p-b")
+    bridge.append_learning_trail(_resolution_row("p-c", "T2"), resolved_prediction_id="p-c")
+
+    on_disk = _read_soul_map_state(soul_path)
+    assert sorted(_prediction_ids(on_disk["learning_trail"])) == ["p-b", "p-c"]
+    assert sorted(on_disk["resolved_prediction_ids"]) == ["p-b", "p-c"]
+
+
+def test_real_emitter_keeps_two_resolutions_stamped_in_the_same_instant(isolated, monkeypatch):
+    """The production emitter stamps rows with _now_z; two resolutions in one instant must both land."""
+    import internal.learning.trail_events as trail_events
+
+    _trace_path, soul_path = isolated
+    _seed_soul_map(soul_path, {})
+    monkeypatch.setattr(trail_events, "_now_z", lambda: "2026-07-01T01:00:00.000000Z")
+
+    for pid in ("p-d", "p-e"):
+        trail_events.emit_prediction_resolved(
+            {"id": pid, "name": "Subnet", "netuid": 7, "correct": True, "outcome": "hit"},
+            "alpha",
+        )
+
+    on_disk = _read_soul_map_state(soul_path)
+    assert sorted(_prediction_ids(on_disk["learning_trail"])) == ["p-d", "p-e"]
+    assert sorted(on_disk["resolved_prediction_ids"]) == ["p-d", "p-e"]
+
+
+def test_two_bridges_resolving_one_prediction_keep_one_row(tmp_path):
+    """Two bridges that each see the prediction unresolved must not write it into the trail twice."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    _seed_soul_map(soul_path, {})
+    first = MindmapBridge(persistence_path=str(soul_path))
+    second = MindmapBridge(persistence_path=str(soul_path))
+
+    first.append_learning_trail(_resolution_row("p-f", "T7a"), resolved_prediction_id="p-f")
+    second.append_learning_trail(_resolution_row("p-f", "T7b"), resolved_prediction_id="p-f")
+
+    on_disk = _read_soul_map_state(soul_path)
+    assert _prediction_ids(on_disk["learning_trail"]) == ["p-f"]
+    assert on_disk["resolved_prediction_ids"] == ["p-f"]
+
+
+def test_same_resolution_replayed_twice_records_one_row(tmp_path):
+    """Replaying an identical resolution row must leave one trail row and one ledger id."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    _seed_soul_map(soul_path, {})
+    first = MindmapBridge(persistence_path=str(soul_path))
+    second = MindmapBridge(persistence_path=str(soul_path))
+
+    first.append_learning_trail(_resolution_row("p-g", "T8"), resolved_prediction_id="p-g")
+    second.append_learning_trail(_resolution_row("p-g", "T8"), resolved_prediction_id="p-g")
+
+    on_disk = _read_soul_map_state(soul_path)
+    assert _prediction_ids(on_disk["learning_trail"]) == ["p-g"]
+    assert on_disk["resolved_prediction_ids"] == ["p-g"]
