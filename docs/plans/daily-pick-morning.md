@@ -4,7 +4,7 @@
 
 **Verification:** Code refs below from branch `cursor/daily-pick-morning-plan-3740` @ **`89d891c6`** (same tree as `main` for cited paths).
 
-**Goal:** Move authoritative daily pick generation to **13:05 UTC** (~06:05 America/Phoenix) with **13:00 UTC pick-day rollover**, without rewriting history on disk.
+**Goal:** Move authoritative daily pick generation to **14:05 UTC** (~07:05 America/Phoenix) with **14:00 UTC pick-day rollover**, without rewriting history on disk.
 
 ---
 
@@ -18,7 +18,7 @@
 | Selection time **restamped** each attempt | `daily_pick_engine.py:321`, `:364` — `"build_started_at": started` on every persist path |
 | Side paths can create early | `get_or_create_today_pick` callers (§4); scheduler `:328+` tick |
 
-**13:00–13:05 gap:** After rollover, `pick_day_str()` is **D** but no **D** row until 13:05 — readers must not show HOLD-only gap (§3).
+**14:00–14:05 gap:** After rollover, `pick_day_str()` is **D** but no **D** row until 14:05 — readers must not show HOLD-only gap (§3).
 
 ---
 
@@ -38,12 +38,12 @@
 
 | Constant | Default | Role |
 |----------|---------|------|
-| `PICK_DAY_ROLLOVER_UTC_HOUR` / `MINUTE` | `13` / `0` | Pick-day string advances |
-| `DAILY_PICK_SLOT_UTC_HOUR` / `MINUTE` | `13` / `5` (env at deploy) | Scheduler slot (existing env names) |
+| `PICK_DAY_ROLLOVER_UTC_HOUR` / `MINUTE` | `14` / `0` | Pick-day string advances |
+| `DAILY_PICK_SLOT_UTC_HOUR` / `MINUTE` | `14` / `5` (code defaults; env optional) | Scheduler slot (existing env names) |
 
-**Rollover (normative):** let `now_utc = now.astimezone(timezone.utc)`, `t = now_utc.time()`. If `t < time(13, 0)` (rollover constants env-overridable), **`pick_day_str(now) = (now_utc.date() - 1 day).isoformat()`**; else **`pick_day_str(now) = now_utc.date().isoformat()`**.
+**Rollover (normative):** let `now_utc = now.astimezone(timezone.utc)`, `t = now_utc.time()`. If `t < time(14, 0)` (rollover constants env-overridable), **`pick_day_str(now) = (now_utc.date() - 1 day).isoformat()`**; else **`pick_day_str(now) = now_utc.date().isoformat()`**.
 
-**Pick-day start:** **`pick_day_start_utc(pick_day)`** = **`datetime.combine(date.fromisoformat(pick_day), time(13, 0), tzinfo=timezone.utc)`** (rollover hour/minute from env).
+**Pick-day start:** **`pick_day_start_utc(pick_day)`** = **`datetime.combine(date.fromisoformat(pick_day), time(14, 0), tzinfo=timezone.utc)`** (rollover hour/minute from env).
 
 **Slot open instant (normative, one formula):** for **`pick_day = pick_day_str(now)`**,
 
@@ -56,9 +56,9 @@ slot_open_utc(pick_day) = datetime.combine(
 daily_pick_creation_open(now)  ⇔  now_utc >= slot_open_utc(pick_day)
 ```
 
-Default env → **`slot_open_utc = pick_day calendar date at 13:05:00 UTC`**. **`force=True` does not bypass.** At **`13:00:00 ≤ now < slot_open`**, pick day has already rolled but creation is **closed** (reader uses §3 prior published).
+Default env → **`slot_open_utc = pick_day calendar date at 14:05:00 UTC`**. **`force=True` does not bypass.** At **`14:00:00 ≤ now < slot_open`**, pick day has already rolled but creation is **closed** (reader uses §3 prior published).
 
-**Boundary tests (§7):** freeze **`2026-11-04 13:04:59 UTC`** → `pick_day_str` **`2026-11-04`**, **`daily_pick_creation_open` false**; **`13:05:00 UTC`** → **true**; **`13:00:00 UTC`** → pick day **`2026-11-04`**, creation **false**; **`12:59:59 UTC`** → pick day **`2026-11-03`**, creation **true** (slot for **`2026-11-03`** already passed).
+**Boundary tests (§7):** freeze **`2026-11-04 14:04:59 UTC`** → `pick_day_str` **`2026-11-04`**, **`daily_pick_creation_open` false**; **`14:05:00 UTC`** → **true**; **`14:00:00 UTC`** → pick day **`2026-11-04`**, creation **false**; **`13:59:59 UTC`** → pick day **`2026-11-03`**, creation **true** (slot for **`2026-11-03`** already passed).
 
 ### Published row
 
@@ -73,7 +73,7 @@ For current **`pick_day = pick_day_str()`**:
 3. **Legacy same-day exclusion:** if **any** published v2 row exists for **`pick_day`**, **or** after cutover deploy (v2 writes enabled), **never** present a legacy v1 row whose **`date == pick_day`** as the current pick — even if it is the newest legacy row for that calendar key. Legacy **`date == pick_day`** rows remain on disk but are **historical**, not hero.
 4. Meta **`prior_pick_day: true`** when displayed row’s effective pick day ≠ `pick_day`.
 
-**Pre/post cutover:** legacy v1 rows and v2 rows **coexist**; reader never requires migration. **13:00:30 UTC** test: show prior published row, not empty hero.
+**Pre/post cutover:** legacy v1 rows and v2 rows **coexist**; reader never requires migration. **14:00:30 UTC** test: show prior published row, not empty hero.
 
 **Migration gate removed:** hero uses **`last_good_published_pick`** / rule above always — no 503 for missing marker.
 
@@ -145,7 +145,7 @@ For current **`pick_day = pick_day_str()`**:
 | Area | Location | Action |
 |------|----------|--------|
 | Engine | `daily_pick_engine.py:140-155`, `:242`, `:312`, `:355` | `pick_day_str`; v2 fields on write |
-| Scheduler | `pick_scheduler.py:32-33`, `:273`, `:69-73` | Slot env **13:05** deploy; gate cold 45s |
+| Scheduler | `pick_scheduler.py:32-33`, `:273`, `:69-73` | Slot defaults **14:05**; gate cold 45s |
 | Server shed | `server.py:3312` | `pick_day_str` |
 | Server meta | `server.py:3212`, `3224`, `3321` (approx) | `pick_day_str` in API payloads |
 | Ledger / health | `ledger_heal.py:32`, `loop_health.py:67`, `readiness.py:99` | `pick_day_str` |
@@ -163,7 +163,7 @@ For current **`pick_day = pick_day_str()`**:
 | Read-only | `story_path`, `pick_explain`, `panel_summaries_lite`, `/api/daily-pick` hydrate | §3 only; no create before slot |
 | Wall-clock (no change) | `message_intel/rollup.py:520`, `2728`, `2735`; `brain_letter.py:232` | Document only |
 
-**Nightly audit:** **≥ 13:10 UTC**; gate on `daily_pick_creation_open()`; no `get_or_create` before slot.
+**Nightly audit:** **≥ 14:10 UTC**; gate on `daily_pick_creation_open()`; no `get_or_create` before slot.
 
 ---
 
@@ -171,12 +171,12 @@ For current **`pick_day = pick_day_str()`**:
 
 | Test | Assert |
 |------|--------|
-| `test_pick_day.py` | Rollover **12:59:59 / 13:00:00**; gate **13:04:59 / 13:05:00** on same calendar day; **`12:59:59` open** for prior pick day (§3 formula) |
-| Steady 13:00:30 | §3 shows prior published, not HOLD gap |
+| `test_pick_day.py` | Rollover **13:59:59 / 14:00:00**; gate **14:04:59 / 14:05:00** on same calendar day; **`13:59:59` open** for prior pick day (§3 formula) |
+| Steady 14:00:30 | §3 shows prior published, not HOLD gap |
 | v2 row | `selection_recorded_at_utc` set on first **published** persist only; unchanged after HOLD retry |
 | `force=True` before slot | **No** persist (`daily_pick_creation_open` enforced) |
 | Legacy same-day | v2 published for **D** exists → reader must not surface legacy **`date==D`** as current |
-| Legacy coexistence | Disk has legacy `date=D` + no v2; after 13:05 v2 created; reader prefers v2 when published |
+| Legacy coexistence | Disk has legacy `date=D` + no v2; after 14:05 v2 created; reader prefers v2 when published |
 | Upsert | Two writers same `pick_id` → one row (lock) |
 | Fence timeout | Revocation acquires lock **briefly** while resolver thread **hung outside lock** (simulate slow compute without lock); schedule disabled; **later** validate-then-commit at write site **rejected** (stale token) |
 | Cold boot | Creation closed → next slot, not 45s persist (`pick_scheduler`) |
@@ -191,7 +191,7 @@ For current **`pick_day = pick_day_str()`**:
 
 ## 8. Deploy & risks
 
-- **Env:** `DAILY_PICK_SLOT_UTC_HOUR=13`, `DAILY_PICK_SLOT_UTC_MINUTE=5`; rollover **13:00** documented in `DEPLOY.md`.
+- **Defaults:** code `DAILY_PICK_SLOT_UTC_HOUR=14`, `DAILY_PICK_SLOT_UTC_MINUTE=5`; rollover **14:00** (`pick_day.py` / `pick_scheduler.py` — Fly env optional).
 - **1 GB VM:** staging peak RSS for full morning tick (§8 legacy note in DEPLOY / scoring-caps — measure before human deploy).
 - **Risk:** dual schema on disk until old rows age out — mitigated by §3 reader; **no** one-shot rewrite.
 

@@ -26,7 +26,7 @@ def picks_path(tmp_path, monkeypatch):
     return path
 
 
-def test_reader_steady_130030_shows_prior_published(picks_path):
+def test_reader_steady_140030_shows_prior_published(picks_path):
     day = "2026-11-04"
     prior = {
         "pick_id": v2_pick_id("2026-11-03"),
@@ -37,7 +37,7 @@ def test_reader_steady_130030_shows_prior_published(picks_path):
         "pick": {"subnet": {"netuid": 1}, "final_confidence": 0.9},
     }
     picks_path.write_text(json.dumps([prior]), encoding="utf-8")
-    frozen = datetime(2026, 11, 4, 13, 0, 30, tzinfo=timezone.utc)
+    frozen = datetime(2026, 11, 4, 14, 0, 30, tzinfo=timezone.utc)
     with patch("internal.council.daily_pick_reader.pick_day_str", return_value=day):
         row, meta = resolve_current_daily_pick(json.loads(picks_path.read_text()))
     assert row is not None
@@ -46,7 +46,7 @@ def test_reader_steady_130030_shows_prior_published(picks_path):
 
 
 def test_force_true_before_slot_does_not_persist(picks_path, monkeypatch):
-    frozen = datetime(2026, 11, 4, 13, 0, 0, tzinfo=timezone.utc)
+    frozen = datetime(2026, 11, 4, 14, 0, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.daily_pick_creation_open",
         lambda now=None: False,

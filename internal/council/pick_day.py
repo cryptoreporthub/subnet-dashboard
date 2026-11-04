@@ -6,15 +6,15 @@ import os
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
-PICK_DAY_ROLLOVER_UTC_HOUR = int(os.environ.get("PICK_DAY_ROLLOVER_UTC_HOUR", "13"))
+PICK_DAY_ROLLOVER_UTC_HOUR = int(os.environ.get("PICK_DAY_ROLLOVER_UTC_HOUR", "14"))
 PICK_DAY_ROLLOVER_UTC_MINUTE = int(os.environ.get("PICK_DAY_ROLLOVER_UTC_MINUTE", "0"))
 
-DAILY_PICK_SLOT_UTC_HOUR = int(os.environ.get("DAILY_PICK_SLOT_UTC_HOUR", "13"))
+DAILY_PICK_SLOT_UTC_HOUR = int(os.environ.get("DAILY_PICK_SLOT_UTC_HOUR", "14"))
 DAILY_PICK_SLOT_UTC_MINUTE = int(os.environ.get("DAILY_PICK_SLOT_UTC_MINUTE", "5"))
 
 
 def pick_day_str(now: Optional[datetime] = None) -> str:
-    """ISO pick-day string with 13:00 UTC rollover (env-overridable)."""
+    """ISO pick-day string with 14:00 UTC rollover (env-overridable)."""
     now_utc = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     rollover = time(PICK_DAY_ROLLOVER_UTC_HOUR, PICK_DAY_ROLLOVER_UTC_MINUTE)
     if now_utc.time() < rollover:
