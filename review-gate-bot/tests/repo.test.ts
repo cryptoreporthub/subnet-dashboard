@@ -347,3 +347,18 @@ test("a credential-shaped path is scrubbed before it is returned", async () => {
   const diff = await diffOf(octokit);
   assert.equal(JSON.stringify(diff).includes(token), false);
 });
+
+test("bearer= and client_secret= lines in a patch are scrubbed before they leave", async () => {
+  const bearerVal = "supersecretbearer1234567890";
+  const secretVal = "clientsecretvalue1234567890";
+  const patch = `+def _bearer_ok(bearer=${bearerVal} | None) -> bool:\n+DEFAULT_CLIENT_SECRET=${secretVal}\n`;
+  const { octokit } = fake({
+    files: [{ filename: "internal/auth.py", status: "modified", additions: 2, deletions: 0, patch }],
+  });
+  const diff = await diffOf(octokit);
+  const body = JSON.stringify(diff);
+  assert.equal(body.includes(bearerVal), false);
+  assert.equal(body.includes(secretVal), false);
+  assert.match(String(diff.files[0]?.patch), /bearer=<redacted:bearer>/);
+  assert.match(String(diff.files[0]?.patch), /DEFAULT_CLIENT_SECRET=<redacted:DEFAULT_CLIENT_SECRET>/);
+});

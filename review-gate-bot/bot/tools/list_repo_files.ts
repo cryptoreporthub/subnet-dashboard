@@ -14,16 +14,11 @@ export default defineTool({
   description:
     "List repository files at this PR's head or base commit, optionally under a path prefix such as `internal/council/`. The commit is the PR's own, never a ref you choose. A cut listing is flagged; narrow the prefix.",
   inputSchema: z.object({
-    at: z
-      .enum(["head", "base"])
-      .optional()
-      .default("head")
-      .describe("`head` is the code under review; `base` is what it replaces. Defaults to head when omitted."),
+    at: z.enum(["head", "base"]).describe("`head` is the code under review; `base` is what it replaces."),
     prefix: z.string().max(300).optional(),
   }),
   effect: "read",
   async execute(input, ctx) {
-    const at = input.at ?? "head";
     if (ctx.session.purpose === "eval") {
       const [pr, repo] = await Promise.all([readPrFixture(ctx.workspaceDir), readRepoFixture(ctx.workspaceDir)]);
       if (pr === undefined || repo === undefined) {
@@ -31,11 +26,11 @@ export default defineTool({
       }
       const prefix = input.prefix ?? "";
       const paths =
-        at === "head"
+        input.at === "head"
           ? Object.keys(repo.files)
           : evalRepoPathsAtBase(repo, evalPrChangedPaths(pr));
       const capped = capListing(paths.filter((path) => path.startsWith(prefix)));
-      return { ok: true, sha: at === "head" ? pr.headSha : pr.baseSha, ...capped, source: "fixture" };
+      return { ok: true, sha: input.at === "head" ? pr.headSha : pr.baseSha, ...capped, source: "fixture" };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
@@ -44,7 +39,7 @@ export default defineTool({
     }
     const octokit = await ctx.host.github.getOctokit();
     const pr = await readPr(octokit, ref);
-    const sha = at === "head" ? pr.headSha : pr.baseSha;
+    const sha = input.at === "head" ? pr.headSha : pr.baseSha;
     return { ok: true, ...(await listRepoFiles(octokit, ref, sha, { prefix: input.prefix })), source: "github" };
   },
 });
