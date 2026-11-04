@@ -14,8 +14,13 @@ ART="$(cd "$(dirname "$0")" && pwd)"
 STUB_SLEEP="${ART}/r2-stub-eval-sleep.sh"
 STUB_IGNORE="${ART}/r2-stub-eval-ignore-term.sh"
 
-HERMETIC=(env -i HOME="$HOME" PATH="$PATH" USER="${USER:-ubuntu}" TMPDIR="${TMPDIR:-/tmp}"
-  CURSOR_API_KEY="${CURSOR_API_KEY:-repro-stub}" R2_METHOD_ARM="$METHOD_ARM")
+if [[ "${R2_REPRO_STUB_EVAL:-}" == "1" || "${R2_REPRO_STUB_EVAL:-}" == "2" ]]; then
+  HERMETIC=(env -i HOME="$HOME" PATH="$PATH" USER="${USER:-ubuntu}" TMPDIR="${TMPDIR:-/tmp}"
+    CURSOR_API_KEY="${CURSOR_API_KEY:-repro-stub}" R2_METHOD_ARM="$METHOD_ARM")
+else
+  HERMETIC=(env -i HOME="$HOME" PATH="$PATH" USER="${USER:-ubuntu}" TMPDIR="${TMPDIR:-/tmp}"
+    CURSOR_API_KEY="${CURSOR_API_KEY:?CURSOR_API_KEY required}" R2_METHOD_ARM="$METHOD_ARM")
+fi
 
 START_EPOCH="$(date +%s)"
 echo "LOOP_STALL_GUARD start_epoch=${START_EPOCH} slot_wall_s=${SLOT_WALL_SEC} eval_id=${EVAL_ID}" >>"$RUN_LOG"

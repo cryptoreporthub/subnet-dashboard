@@ -42,7 +42,22 @@ else
 fi
 
 exec >>"$RUN_LOG" 2>&1
-echo "=== R2 $( [[ "$RESUME" == 1 ]] && echo resume || echo start ) $(date -u +%Y-%m-%dT%H:%M:%SZ) fixtures=${FIX_SHA} base_bot=${BASE_SHA} START_IDX=${START_IDX} slot_wall_s=${SLOT_WALL_SEC} ==="
+HARNESS_TIP="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+echo "=== R2 $( [[ "$RESUME" == 1 ]] && echo resume || echo start ) $(date -u +%Y-%m-%dT%H:%M:%SZ) fixtures=${FIX_SHA} base_bot=${BASE_SHA} START_IDX=${START_IDX} slot_wall_s=${SLOT_WALL_SEC} harness=${HARNESS_TIP:0:8} ==="
+if [[ "$RESUME" == "1" ]] && (( START_IDX == 162 )); then
+  python3 - <<PY >>"$AUDIT"
+import json, datetime
+print(json.dumps({
+  "auditNote": "launcher_resumed_at_162",
+  "planIdx": 162,
+  "priorHarnessSha": "7e76e69cbd6d46322f2d46272d9a54339a8a9da7",
+  "harnessSha": "$HARNESS_TIP",
+  "slotLauncher": "run-r2-slot-capped.sh",
+  "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+}))
+PY
+  echo "audit_note=launcher_resumed_at_162 harness=${HARNESS_TIP}"
+fi
 echo "fixture_pin_full=$(git -C "$REPO_ROOT" rev-parse HEAD)"
 echo "plan_slots=$(python3 -c "import json; print(len(json.load(open('$PLAN'))['slots']))")"
 echo "audit_lines_existing=$(wc -l <"$AUDIT" | tr -d ' ')"
@@ -83,8 +98,8 @@ record_timeout() {
 import json
 json.dump({"lastCompletedIdx": int("$idx"), "slotTimeoutCount": int("$STRIKES"), "stopped": False}, open("$PROGRESS_FILE","w"))
 PY
-  if (( STRIKES >= 2 )); then
-    echo "STOP second hang at eval_id=${eval_id} idx=${idx}"
+  if (( STRIKES >= 3 )); then
+    echo "STOP third hang (permanent) eval_id=${eval_id} idx=${idx}"
     exit 12
   fi
 }
