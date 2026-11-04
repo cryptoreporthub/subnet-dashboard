@@ -30,8 +30,8 @@
 2. **Pick-day identity** (`date` on rows in `data/daily_picks.json`, audit filenames, ledger heal, loop health, conviction alerts, API meta) uses a **shared helper** with **13:00 UTC rollover**, not raw UTC calendar midnight.
 3. **Before the slot** on the current pick day: **no scoring persist** except explicit `force=True` (ops/scripts only). **Read paths** behave as follows:
    - If a row exists for `pick_day_str()`, return it (unchanged).
-   - If **no** row exists for `pick_day_str()` (always true during **13:00–13:05 UTC** on steady-state mornings, and true for the whole pre-slot window when the pick-day key has not yet been written for that day), **hero / hydrate / SSE / letter / conviction alerts** must fall back to the **latest stored row with `date < pick_day_str()`** that is **published** (`published=True` or equivalent finished LONG — **never** `scheduler_hold`, pending HOLD, or `write_scheduler_hold` rows). Same netuid the site showed an hour earlier — not a synthetic pending gap that hides the prior LONG.
-   - **Migration gate:** `latest_pick_row_before` and all §2.3 read fallbacks are **forbidden until pick-day migration has completed** (§6.1 marker). Until then, readiness/startup must block public read paths that depend on the fallback (or serve last-known-good from pre-migration contract — impl PR picks one; default **503/empty with ops banner**, not a HOLD row masquerading as hero).
+   - If **no** row exists for `pick_day_str()` (always true during **13:00–13:05 UTC** on steady-state mornings, and true for the whole pre-slot window when the pick-day key has not yet been written for that day), **hero / hydrate / SSE / letter / conviction alerts** must fall back per §2.3 migration gate: post-marker **`latest_pick_row_before`**; pre-marker **`last_good_published_pick`** — both **published-only** via **`is_published_daily_pick_row`** (`action` **LONG** or **BUY**, `pick` dict, no `scheduler_hold`).
+   - **Migration gate (reads):** Post-marker, §2.3 **`latest_pick_row_before`** (published-only) is allowed. **Before** `pick_day_migration_complete()`, public hero/hydrate/SSE/letter/conviction/tribunal preview must **not** use the pick-day fallback helpers — they serve **`last_good_published_pick(_load())`** (newest row on disk passing **`is_published_daily_pick_row`**, §3.2) with **`prior_pick_day: true`** meta when the displayed row’s stored `date` ≠ `pick_day_str()`. **Never** return 503 or empty hero for pick surfaces solely because migration is pending; **never** surface HOLD/`scheduler_hold` as the hero.
    - Internal **`get_or_create_today_pick(..., force=False)`** when creation is closed and no row for `pick_day_str()` may still return a **non-persisted** pending/HOLD dict for APIs that explicitly mean “today’s slot not written yet” — but **`/api/daily-pick` hydrate**, cockpit snapshot, and homepage hero must use the **prior-row fallback** above until 13:05 creates the new row (see §5).
 4. **Scheduler cold start** arms the **next slot** (or retry interval if today’s pick day row exists but is `scheduler_hold`), not a 45s “create today” tick when creation is not allowed.
 5. **Transition cutover** uses **Option A migration map only** (§6) so prod never has two competing rows for one logical pick day and accuracy ledger stays consistent.
@@ -68,9 +68,16 @@ def daily_pick_creation_open(now: datetime | None = None) -> bool:
 def read_pick_day_str_from_record(rec: dict) -> str | None:
     """Normalize legacy rows that used UTC-calendar date before cutover."""
 
+def is_published_daily_pick_row(rec: dict) -> bool:
+    """Published daily pick row (normative predicate for fallback + pre-marker hero).
+    True iff: not rec.get('scheduler_hold'); str(rec.get('action','')).upper() in ('LONG','BUY');
+    isinstance(rec.get('pick'), dict)."""
+
+def last_good_published_pick(picks: list) -> dict | None:
+    """Newest row in picks (any stored date) passing is_published_daily_pick_row; pre-marker hero path."""
+
 def latest_pick_row_before(picks: list, pick_day: str | None = None) -> dict | None:
-    """Newest **published** row with date < pick_day (default pick_day_str()); used by read paths in §2.3.
-    Excludes scheduler_hold, write_scheduler_hold placeholders, and unpublished HOLD rows."""
+    """Newest row passing is_published_daily_pick_row with stored date < pick_day (default pick_day_str())."""
 ```
 
 **Rollover rule (normative):**
@@ -85,15 +92,27 @@ def latest_pick_row_before(picks: list, pick_day: str | None = None) -> dict | N
 
 - `daily_pick_creation_open(now)` is true iff `now >= pick_day_start_utc(pick_day_str(now)) + slot offset` (slot defaults **13:05** on that pick day).
 
-**Pre-slot read fallback (normative):** when `_find_today` misses for `pick_day_str()` **and** `pick_day_migration_complete()` is true, read paths call `latest_pick_row_before(_load(), pick_day_str())` before synthesizing pending meta. Meta may include `prior_pick_day: true` or reuse stored `date` from the fallback row so clients do not treat the hero as “unpublished” during **13:00–13:05**. If migration is incomplete, do **not** run this fallback (§2.3 migration gate).
+**Pre-slot read fallback (normative):** when `_find_today` misses for `pick_day_str()` **and** `pick_day_migration_complete()` is true, read paths call `latest_pick_row_before(_load(), pick_day_str())` before synthesizing pending meta. **Before marker**, use `last_good_published_pick(_load())` instead (§2.3). Meta may include `prior_pick_day: true` when the displayed row’s stored `date` ≠ `pick_day_str()`.
 
-**Legacy row identity (normative, feeds §6.1):** a stored row with `date == X` (calendar) and selection instant `timestamp_utc` (or `created_at` if absent) **strictly before `X 13:00:00 UTC`** belongs to **pick day `X−1`**, not pick day `X`. `read_pick_day_str_from_record(rec)` must return that mapped pick day for `_find_today` / migration.
+**Published row (normative, single definition):** **`is_published_daily_pick_row(rec)`** — `scheduler_hold` is falsy; **`action`** is **`LONG`** or **`BUY`** (case-insensitive); **`pick`** is a **`dict`**. HOLD rows, `scheduler_hold: true`, and rows with `pick: null` are **not** published. All fallback readers and pre-marker hero paths use this predicate only (no parallel “published=True” boolean on disk today).
+
+**Legacy row identity (normative, feeds §6.1 — switchover window only):** when **`pick_day_relabel_applies(rec, cutover_deploy_date)`** is true (§6.1), a row with stored `date == X` and selection instant `timestamp_utc` (or `created_at` if absent) **strictly before `X 13:00:00 UTC`** belongs to **pick day `X−1`**. Outside the switchover window the row is **left unchanged** (log `pick_day_relabel_skipped`). `read_pick_day_str_from_record(rec)` returns the mapped pick day when relabeled, else stored `date` if it already equals a pick-day key.
 
 ### 3.3 Replace `_today_str()` in engine
 
 - `internal/council/daily_pick_engine.py`: delete local `_today_str`; import `pick_day_str` as the pick-day key for `_find_today`, `_upsert_today`, payloads, and `write_scheduler_hold`.
 - **`get_or_create_today_pick`:** at top, compute `day = pick_day_str()`. If not `force` and not `daily_pick_creation_open()` and no existing row for `day`, return a **non-persisted** pending dict (same shape as `_daily_pick_pending_hold`) or `None` per existing caller contracts — **must not** call `select_daily_pick` or `_save`. (Callers that need the visible hero must not rely on this alone; see §5.)
 - If row exists for `day`, behavior unchanged (stale HOLD regen, gates, etc.).
+
+### 3.4 Writer guards (normative — impl PR)
+
+**`_upsert_today` / all persist paths** (`select_daily_pick` save, `write_scheduler_hold`, shed guard):
+
+1. **Pre–pick-day-start overwrite refusal:** if an existing row for `payload["date"]` has `timestamp_utc` (parsed UTC) **strictly before `pick_day_start_utc(payload["date"])`**, **`_upsert_today` must not replace it** — return existing and log `pick_day_upsert_refused_pre_start`. This blocks catch-up / retry ticks from clobbering a relabeled legacy midnight row on cutover day.
+2. **Post-marker legacy-key refusal:** when **`pick_day_migration_complete()`**, **reject any persist** where **`payload["date"] != pick_day_str()`** (old 00:15 UTC writer used UTC-calendar `_today_str()`; after marker only pick-day keys are legal). Return without write; log `pick_day_legacy_write_refused`. Applies to scheduler, side paths, and ops scripts unless an explicit break-glass env (not planned for prod).
+3. **`force=True` on switchover pick day:** on the pick day recorded in the migration marker as **`cutover_pick_day`** (first pick day after marker write), **`force=True` is ignored** for persist — ops must not manual-heal over relabeled rows that day; log `pick_day_force_disabled_switchover`. After that pick day ends (next **13:00 UTC** rollover), normal force rules resume.
+
+**File lock (ponytail):** optional `fcntl` lock around relabel + marker write; idempotent relabel makes double-run safe — lock is race hygiene only.
 
 ---
 
@@ -135,10 +154,11 @@ These use UTC calendar date; confirm whether they mean **pick day** or **wall-cl
 
 | File | Lines (approx) | Risk / classification |
 |------|----------------|------------------------|
-| `internal/council/selector.py` | — | May tag selection artifacts — align if tied to daily pick |
-| `internal/ops/evidence.py` | — | Ops bundles — likely pick-day if referencing daily pick files |
-| `internal/preview/k3_hold.py`, `internal/preview/tribunal_hero.py` | — | Preview UI — align with hero pick read + §2.3 fallback |
-| `internal/simivision/caution_cells.py` | — | SimiVision cells — confirm product intent |
+| `internal/council/selector.py` | **`178`** | **Pick-day artifact** | **`date` field on daily-pick selection records → `pick_day_str()`** (not UTC calendar) |
+| `internal/ops/evidence.py` | **`65`** | **Pick-day audit path** | **`data/pick_audits/{pick_day_str()}.json`** — replace `_today()` |
+| `internal/preview/k3_hold.py` | **`37`** | **Preview hero meta** | Fixture `date` → `pick_day_str()`; prod read uses same **`_find_today` + `latest_pick_row_before`** as homepage hero |
+| `internal/preview/tribunal_hero.py` | **`148`**, **`840`** | **Preview / judge link** | **`840`** fixture only: use `pick_day_str()` for `date`; prod **`judge_scores_for_daily_pick`** matches rows by **`pick_day_str()`** identity, not `ts.date()` alone |
+| `internal/simivision/caution_cells.py` | **`26`**, **`56`** | **Pick-day desk tracking** | **`seen` / `_today()` keys → `pick_day_str()`** so caution cells align with today’s published call netuid |
 | `internal/message_intel/rollup.py` | **`520`**, **`2728`**, **`2735`** | **`date` = wall-clock “yesterday”** for Telegram/message-intel recap windows (`yesterday_start.date()`), **not** pick-day identity — document in code; do **not** blindly swap to `pick_day_str` unless product ties recap to pick day |
 | `internal/letter/brain_letter.py` | **`9`** `_today_utc()` (UTC calendar); **`137`** `_today_pick_block` match on `records`; **`189`** letter `date`; **`288`** desk header; **`411`** compose `date` — **`137/189/288/411` → `pick_day_str` + prior-row fallback** (published-only); **`232`** stays wall-clock yesterday for graded resolver rows |
 
@@ -174,11 +194,11 @@ These use UTC calendar date; confirm whether they mean **pick day** or **wall-cl
 | `server.py` | ~3212, ~3224, ~3321; shed ~3307–3312 | **Pick day API meta** | `pick_day_str` |
 | `internal/letter/brain_letter.py` | ~9, ~137, ~189, ~288, ~411 | **Pick day read** (232 wall-clock) | §4.3 |
 | `scripts/nightly_pick_audit.sh` | ~15, ~21 | **Pick day** | Import `pick_day_str` |
-| `internal/council/selector.py` | ~178 | **Pick-day artifact** | Align `date` with `pick_day_str` if row is daily pick |
-| `internal/ops/evidence.py` | ~65 | **Likely pick-day** | Confirm bundle ties to daily pick file → `pick_day_str` |
-| `internal/preview/k3_hold.py` | ~37 | **Preview hero** | Same read path as tribunal/pick hero → pick day + fallback |
-| `internal/preview/tribunal_hero.py` | ~148, ~840 | **Preview hero** | Pick day + fallback |
-| `internal/simivision/caution_cells.py` | ~26 | **SimiVision desk** | Pick day if cell references today’s daily pick row |
+| `internal/council/selector.py` | ~178 | **Pick-day artifact** | **`pick_day_str()`** on daily-pick-tied selection `date` (§4.3) |
+| `internal/ops/evidence.py` | ~65 | **Pick-day audit bundle** | **`pick_day_str()`** for `pick_audits` path (§4.3) |
+| `internal/preview/k3_hold.py` | ~37 | **Preview hero** | **`pick_day_str()`** + §2.3 fallback (§4.3) |
+| `internal/preview/tribunal_hero.py` | ~148, ~840 | **Preview hero / judges** | **`pick_day_str()`** row identity; fixture `840` uses pick day (§4.3) |
+| `internal/simivision/caution_cells.py` | ~26, ~56 | **Pick-day desk** | **`pick_day_str()`** for seen/call-day keys (§4.3) |
 | `internal/message_intel/rollup.py` | ~520, ~2728, ~2735 | **Wall-clock UTC “yesterday”** | Do **not** swap to `pick_day_str` unless product ties recap to pick day |
 | `internal/council/formula_evolution.py` | ~441 `strftime("%Y-%m-%d")` | **Wall-clock** (formula versioning) | No change unless tied to pick row |
 | `tests/*` (multiple) | see grep | **Tests only** | Update mocks to `pick_day_str` / freezegun when touching pick-day tests |
@@ -197,7 +217,7 @@ These use UTC calendar date; confirm whether they mean **pick day** or **wall-cl
 | Process restart | **New** process: `already running` false → 45s arms today. **Same** process: persisted `lifecycle=started` → `started: false, reason: already running` but **45s still schedules** (existing test) | After gate: restart with creation closed **skips** 45s early-create arm (waits for slot) — removes the accidental re-arm on duplicate `start()` when job already scheduled is a follow-up impl detail |
 | `fly.toml` / prod env | Slot env vars | Set `DAILY_PICK_SLOT_UTC_HOUR=13`, `DAILY_PICK_SLOT_UTC_MINUTE=5` at deploy (human-gated) |
 
-**Resolver interaction (boot):** `PICK_DAY_MIGRATION_BLOCK_RESOLVER` (default on until migration marker exists) must **also** defer **new** resolver cycles while a cycle is **`cycle_in_flight` / `previous_cycle_inflight`** (`resolver_scheduler.py` — do not abort mid-grade). Migration runs in the **same boot** before arming pick scheduler when deploy lands in **00:00–13:05 UTC**; resolver unblocks only after **migration marker written** and **in-flight resolver cycle finished** (§6.4).
+**Resolver interaction (boot):** resolver daily-pick mutations are **blocked until `pick_day_migration_complete()`** (§6.4 — gate reads **marker**, not a self-clearing env default). While blocked, **do not start a new resolver cycle**; if a cycle is **`cycle_in_flight`**, wait up to **`PICK_DAY_MIGRATION_RESOLVER_WAIT_SECONDS`** (default **3600**), then **fail-safe** (§6.4). Migration runs in the **same boot** before arming pick scheduler when deploy lands in **00:00–13:05 UTC**.
 
 ---
 
@@ -212,7 +232,10 @@ flowchart TD
   D --> E{row exists?}
   E -->|yes| F[Return stored row / enrich]
   E -->|no| P{Hero/read path?}
-  P -->|yes| Q[latest_pick_row_before date less than pick_day_str]
+  P -->|yes| M{p migration complete?}
+  M -->|no| L[last_good_published_pick]
+  L --> F
+  M -->|yes| Q[latest_pick_row_before date less than pick_day_str]
   Q --> R{found?}
   R -->|yes| F
   R -->|no| H[Pending HOLD payload no _save]
@@ -235,15 +258,16 @@ flowchart TD
 
 ### 6.1 Option A — migration map + cutover-day outcome (committed)
 
-**Legacy row rule (normative):** row with stored `date == X` and selection instant (`timestamp_utc`, else earliest known write time) **&lt; `X 13:00:00 UTC`** belongs to **pick day `X−1`**. Migration **must** rewrite stored `date` to `X−1` (single visible row per pick day) and append an entry to the migration log.
+**Legacy row rule (normative, switchover window only):** row with stored `date == X` and selection instant (`timestamp_utc`, else earliest known write time) **&lt; `X 13:00:00 UTC`** belongs to **pick day `X−1`** **only when** `pick_day_relabel_applies(rec, cutover_deploy_date)` is true. **`pick_day_relabel_applies`:** stored `date` is in the inclusive calendar range **`[cutover_deploy_date − 3 days, cutover_deploy_date + 1 day]`**, where **`cutover_deploy_date`** is the UTC calendar date of the deploy boot that first runs migration (persisted in the marker). Rows outside that window are **never** relabeled (log `pick_day_relabel_skipped`); late or ops-written rows with ambiguous timestamps stay on disk unchanged.
 
 **One-time migration marker (normative):**
 
 - Path: **`data/pick_day_migration_v1.json`**
-- Fields: `completed_at`, `schema_version: 1`, `legacy_rows_relabeled: [{from_date, to_date, timestamp_utc}]`
+- Fields: `completed_at`, `schema_version: 1`, **`cutover_deploy_date`**, **`cutover_pick_day`** (pick day string active when marker written), `legacy_rows_relabeled: [{from_date, to_date, timestamp_utc}]`
 - **`pick_day_migration_complete()`** returns true iff marker exists and `schema_version >= 1`
 - Migration is **idempotent**: safe on every boot until marker written; after marker, no-op
-- **Readiness:** `/health` or `/api/learning/health` exposes `pick_day_migration_complete`; public hero/hydrate/SSE/letter/**13:00–13:05 fallback** must not run until true (§2.3)
+- **Readiness:** `/health` or `/api/learning/health` exposes `pick_day_migration_complete`; post-marker hero uses §2.3 fallback; **pre-marker** serves **`last_good_published_pick`** (never 503 on pick hero)
+- **Failed migration:** if relabel runs but marker write fails, expose **`pick_day_migration_failed: true`** on health, page ops, and **retry marker write** on next boot — reads still use **`last_good_published_pick`**, not error surfaces
 
 **Cutover-day outcome (single choice — committed):** **Relabel legacy midnight rows, then score exactly one published pick at 13:05 for the new pick day.**
 
@@ -262,14 +286,17 @@ flowchart TD
 
 **Recommended cutover:** deploy during **America/Phoenix afternoon** (after **13:05 UTC** same day) when possible, **or**:
 
-1. **Freeze:** no manual edits to `data/daily_picks.json` / predictions during cutover window (communicate in MC).
-2. Run migration helper (§6.1) before serving traffic if deploy lands in **00:00–13:05 UTC**.
-3. **No duplicate pick:** `_upsert_today` replaces same `date` key — all writers use **`pick_day_str`** after migration.
-4. **Audit files:** `data/pick_audits/YYYY-MM-DD.json` uses pick-day string — night audit cron (`scripts/nightly_pick_audit.sh`) must run **after** slot (§6.6).
+**Deploy gate (enforced, not advisory):**
+
+1. **Confirm old process gone:** after `fly deploy`, verify **every** machine runs the new release SHA (`fly machines list` / platform status) **before** the next **00:15 UTC** tick on a morning-window deploy. No machine may run pre-migration code that still writes UTC-calendar `_today_str()` keys once the migration marker exists (§3.4.2).
+2. **Freeze:** no manual edits to `data/daily_picks.json` / predictions during cutover window (communicate in MC).
+3. Run migration helper (§6.1) before serving traffic if deploy lands in **00:00–13:05 UTC** (single boot: relabel → marker → then schedulers).
+4. **No duplicate pick:** `_upsert_today` §3.4 guards (pre-start refusal, post-marker legacy-key refusal); all writers use **`pick_day_str`** after migration.
+5. **Audit files:** `data/pick_audits/YYYY-MM-DD.json` uses pick-day string — night audit cron (**§6.6**, **13:10 UTC**) must run **after** slot.
 
 ### 6.3 Failed 13:05 tick (timeout / HOLD / worker down)
 
-**Rule (committed):** **Catch-up creation is allowed until the next pick-day rollover at 13:00 UTC** for the **current** `pick_day_str()` only once `daily_pick_creation_open()` is true. The scheduler keeps its post-slot retry cadence (`scheduler_hold`, errors, stall guard) until a **published** row for `pick_day_str()` is persisted or ops intervenes with `force=True` / `scripts/heal_daily_pick_ledger.py`. **Gap-as-final-state is not accepted** for prod.
+**Rule (committed):** **Catch-up creation is allowed until the next pick-day rollover at 13:00 UTC** for the **current** `pick_day_str()` only once `daily_pick_creation_open()` is true. The scheduler keeps its post-slot retry cadence (`scheduler_hold`, errors, stall guard) until a row passing **`is_published_daily_pick_row`** exists for `pick_day_str()` or ops intervenes — **`force=True` disabled on `cutover_pick_day`** (§3.4.3). **`scripts/heal_daily_pick_ledger.py`** must respect the same guards.
 
 **`pick_day_gap` (normative):** loop health / ops evidence flag set when **`daily_pick_creation_open()` was true for the entire pick day** (from slot through next **13:00 UTC**) and **no published row** exists for that pick day at rollover. **Not** set during **13:00–13:05** before first tick. **Not** set on cutover day when 13:05 persist succeeds.
 
@@ -280,7 +307,7 @@ flowchart TD
 During the first UTC morning after deploy, legacy rows and resolver cycles may disagree on “today” until migration runs:
 
 - **Ordering:** run **pick-day migration (§6.1)** in the same process boot **before** the resolver scheduler’s first tick that grades daily picks, **and before** arming the daily pick scheduler when deploy lands in **00:00–13:05 UTC**.
-- **Resolver block:** env **`PICK_DAY_MIGRATION_BLOCK_RESOLVER=1`** (default on) until **`pick_day_migration_complete()`**. While blocked, **do not start a new resolver cycle**; if a cycle is already **`cycle_in_flight`**, **wait for it to finish** (or fail cleanly) — **do not** abort mid-grade to run migration. Daily-pick ledger mutations from resolver wait until migration marker + idle resolver.
+- **Resolver block (normative):** **`pick_day_migration_blocks_resolver()`** returns true iff **`not pick_day_migration_complete()`**. The gate reads the **marker file**, not an env var that must be manually cleared. Env **`PICK_DAY_MIGRATION_BLOCK_RESOLVER`** is **override only:** `auto` (default) = marker-driven; `force_on` / `force_off` for break-glass. While blocked, **do not start a new resolver cycle**; if a cycle is already **`cycle_in_flight`**, poll until idle or **`PICK_DAY_MIGRATION_RESOLVER_WAIT_SECONDS`** (default **3600**) elapses, then **fail-safe:** log **`pick_day_migration_resolver_wait_exceeded`**, set health flag, **allow migration marker write and pick scheduler** to proceed (do not abort mid-grade cycle), and **do not** start new resolver cycles until marker complete + idle. Daily-pick ledger mutations from resolver wait until **`pick_day_migration_complete()`** and resolver idle.
 - **Heal:** `ledger_heal` / `loop_health` must read **`pick_day_str()` from the migrated row** in a **single commit** with the migration write — no window where heal targets UTC-calendar “today” while `_find_today` uses pick-day **D** and misses.
 - Verify with frozen-clock tests spanning **08:00 UTC** boot + migration + resolver stub (§7).
 
@@ -290,7 +317,20 @@ During the first UTC morning after deploy, legacy rows and resolver cycles may d
 
 ### 6.6 Nightly audit cron (**13:10 UTC**)
 
-Move audit from UTC **00:xx** to **≥ 13:10 UTC** (after slot + buffer). **Audit job must not read or score “today’s pick” before the slot write completes:** it should `_find_today` for `pick_day_str()` and, if missing, **wait/retry** (or exit non-zero for ops) rather than calling `get_or_create_today_pick` or `select_daily_pick` early. Same creation gate as scheduler.
+**Schedule (normative):** move `scripts/nightly_pick_audit.sh` from UTC **00:xx** to **`13:10 UTC` daily** (after **13:05** slot + buffer; Arizona ~6:10 AM). Document cron line in `DEPLOY.md` / Fly scheduler config in impl PR.
+
+**Behavior:** audit must not read or score “today’s pick” before the slot write completes — `_find_today` for `pick_day_str()`; if missing, **retry with backoff** up to **10 minutes**, then exit **`3`**. Must not call `get_or_create_today_pick` or `select_daily_pick` early (same creation gate as scheduler).
+
+**Exit codes (normative — extend `nightly_pick_audit.sh`):**
+
+| Code | Meaning | Ops |
+|------|---------|-----|
+| **0** | Audit saved; verdict not **`MISS`** | — |
+| **1** | Python exception / save failure | Page |
+| **2** | Verdict **`MISS`** (published pick not oracle #1 at decision time) | Evidence loop |
+| **3** | No row for **`pick_day_str()`** after slot + retries (pick not ready) | Pick scheduler / HOLD |
+| **4** | **`not pick_day_migration_complete()`** or stored pick `date` ≠ `pick_day_str()` | Migration / deploy |
+| **5** | Audit attempted before **`daily_pick_creation_open()`** for current pick day | Cron mis-scheduled |
 
 ---
 
@@ -298,10 +338,13 @@ Move audit from UTC **00:xx** to **≥ 13:10 UTC** (after slot + buffer). **Audi
 
 | Area | Action |
 |------|--------|
-| **New** `tests/test_pick_day.py` | Rollover at 12:59 vs 13:00 UTC; creation gate at 13:04 vs 13:05; **`latest_pick_row_before`** ordering; **published-only** (HOLD/`scheduler_hold` rows must lose) |
+| **New** `tests/test_pick_day.py` | Rollover at 12:59 vs 13:00 UTC; creation gate at 13:04 vs 13:05; **`is_published_daily_pick_row`**; **`latest_pick_row_before`** / **`last_good_published_pick`** ordering; HOLD/`scheduler_hold`/`action=HOLD` lose |
 | **New/extend** | **13:00:30 UTC (steady state):** disk row **D−1** published, none for **D**, migration complete → hydrate/cockpit/letter/conviction show **D−1**, not pending |
-| **New/extend** | **Cutover day D:** disk legacy row `date=D`, `timestamp_utc=D 00:15`, migration runs → relabeled **`D−1`**; freeze **13:06 UTC** → **exactly one published row** for **`D`**, **`select_daily_pick` invoked once**, **no second persist** at tick; freeze **13:00:30** → prior-row fallback shows **`D−1`**, not HOLD |
-| **New/extend** | **Migration gate:** before marker, fallback readers must **not** return HOLD masquerading as hero (readiness/503 per §2.3) |
+| **New/extend** | **Pre-marker:** migration incomplete → hero shows **`last_good_published_pick`**, HTTP **200**, not 503/HOLD |
+| **New/extend** | **Cutover day D:** disk legacy row `date=D`, `timestamp_utc=D 00:15`, migration runs → relabeled **`D−1`**; **`_upsert_today` refuses** overwrite of relabeled row; freeze **13:06 UTC** → **exactly one** row passing **`is_published_daily_pick_row`** for **`D`**, **`select_daily_pick` invoked once**; **`force=True` no-op** on **`cutover_pick_day`** |
+| **New/extend** | **Post-marker legacy write:** simulate old `_today_str()` persist after marker → **refused** (§3.4.2) |
+| **New/extend** | **Relabel window:** row outside `[cutover_deploy_date−3, cutover_deploy_date+1]` with pre-13:00 timestamp → **unchanged** |
+| **New/extend** | **Resolver wait:** in-flight cycle + wait timeout → fail-safe allows marker; health flag set |
 | **Update** `tests/test_pick_scheduler.py` | Cold start schedules ≥ slot when creation closed; retry when `scheduler_hold` after slot; catch-up after failed 13:05 tick |
 | **Update** `tests/test_daily_pick_shed_date_guard.py` | Shed guard uses `pick_day_str`, not UTC midnight (comment references 2026-08-30 incident) |
 | **Update** `tests/test_stale_boot_hold.py`, `test_pick_regen_full_universe.py` | Freeze time with pick-day helper |
@@ -322,7 +365,7 @@ Prod runs on a **single `shared-cpu-2x` machine with `memory = "1gb"`** (`fly.to
 
 **Requirements before human-gated deploy:**
 
-1. **Staging measurement:** run the **full** scheduler tick path (or scripted `get_or_create_today_pick` with production-like registry + scoring flags) on a **1 GB** Fly machine; record **peak RSS** and duration for the tick window **13:04–13:08 UTC**.
+1. **Staging measurement:** run the **full** scheduler tick path (or scripted `get_or_create_today_pick` with production-like registry + scoring flags) on a **1 GB** Fly machine; record **peak RSS** and duration for the tick window **13:04–13:08 UTC**. **Include the one-shot §6.1 relabel pass** in the same boot (rewrite `daily_picks.json` under migration lock) — that profile is the least understood co-resident with **13:05** tick, **`ledger_heal`**, and score-snapshot work.
 2. **Concurrency rule:** document whether **API cold miss** (hydrate + story_path + letter) can overlap the **13:05 scheduler tick** on one VM; if overlap raises RSS beyond soak baseline, **serialize** via existing pick-read executor / shed rules or defer non-critical reads — without raising `DAILY_PICK_TICK_TIMEOUT_SECONDS`.
 3. **Standing gate:** no timeout bump; deploy still via contract test + Fly Deploy Guard.
 
@@ -335,12 +378,15 @@ Prod runs on a **single `shared-cpu-2x` machine with `memory = "1gb"`** (`fly.to
 | Legacy rows keyed by UTC calendar date | **Option A migration map only** (§6.1) |
 | **13:00–13:05** empty hero | **`latest_pick_row_before`** (published-only) on read paths after migration (§2.3, §5, §7) |
 | Early pick via boot 45s tick | Cold-start schedule + creation gate; document duplicate `start()` still arms 45s today (§4.6) |
-| Fallback before migration | Readiness gate until `data/pick_day_migration_v1.json` (§6.1) |
-| Cutover duplicate / missing pick | §6.1 relabel + exactly one 13:05 persist; §7 cutover test |
+| Fallback before migration | **`last_good_published_pick`** on hero (§2.3); readiness exposes migration flags, not public 503 |
+| Old writer after marker | §3.4.2 refuse legacy-key persist; §6.2 deploy confirms all machines on new release before 00:15 UTC |
+| Cutover duplicate / missing pick | §6.1 relabel (window-bounded) + exactly one 13:05 persist; §3.4 upsert guards; §7 cutover test |
+| Resolver blocked forever | Marker-driven gate + **`PICK_DAY_MIGRATION_RESOLVER_WAIT_SECONDS`** fail-safe (§6.4) |
+| Phantom relabel on history | Legacy rule only **`[cutover_deploy_date−3, cutover_deploy_date+1]`** (§6.1) |
 | `pick_explain` / `story_path` scoring on first visitor | Read-only disk path + fallback |
 | Failed 13:05 tick | Catch-up retries §6.3; no timeout bump |
-| Cron / nightly audit at wrong UTC hour | **13:10+ UTC**; audit must not score early (§6.6) |
-| Migration-day ledger drift **00:00–13:00 UTC** | Resolver block + single-commit heal (§6.4) |
+| Cron / nightly audit at wrong UTC hour | **`13:10 UTC`**; exit codes **0–5** (§6.6) |
+| Migration-day ledger drift **00:00–13:00 UTC** | Marker-driven resolver block + wait fail-safe + single-commit heal (§6.4) |
 | Arizona vs UTC messaging | UI copy: “Daily pick publishes ~6:05 AM Arizona (13:05 UTC)” |
 | Env drift (web vs worker) | Same `[env]` in `fly.toml` for slot + rollover constants |
 | Partial deploy (old web, new worker) | Single deploy; pick-day module shared |
@@ -354,7 +400,7 @@ Prod runs on a **single `shared-cpu-2x` machine with `memory = "1gb"`** (`fly.to
 1. Land `pick_day.py` + engine/scheduler + tests (core).
 2. Migrate ledger/health/readiness/snapshot/server meta dates + read fallbacks.
 3. Switch side paths to read-only; add guard tests (incl. **13:00:30 UTC**).
-4. Land migration map + resolver block (wait in-flight cycle); ops: env defaults, audit cron **13:10 UTC**, cutover window + ledger dry-run.
+4. Land migration map + marker-driven resolver block (wait + fail-safe §6.4); ops: audit cron **13:10 UTC** + exit codes, cutover deploy gate §6.2, ledger dry-run.
 5. Staging 1 GB RSS measurement (§8); human-approved Fly deploy; post-deploy `/health`, `/api/daily-pick`, `/api/learning/health`.
 
 ---
@@ -368,7 +414,11 @@ Prod runs on a **single `shared-cpu-2x` machine with `memory = "1gb"`** (`fly.to
 - [ ] `/api/daily-pick` returns stored or prior-row fallback; never blocks on scoring.
 - [ ] `build_learning_loop_health` `daily_pick.date` matches pick-day row after migration.
 - [ ] Cutover day **D**: legacy **`D 00:15`** row relabeled to **`D−1`**, **one** published row for **`D`** after 13:05 tick, no double persist.
-- [ ] `pick_day_migration_v1.json` present before hero fallback active.
+- [ ] Pre-marker deploy: hero shows **`last_good_published_pick`** (`action` LONG/BUY + `pick` dict), not 503/HOLD.
+- [ ] Post-marker: legacy-key write attempt **refused**; all machines on new release before morning 00:15 UTC tick.
+- [ ] **`cutover_pick_day`:** `force=True` persist **refused**; `_upsert_today` **refuses** pre-start overwrite.
+- [ ] `pick_day_migration_v1.json` present before **`latest_pick_row_before`** active on hero.
+- [ ] Nightly audit at **13:10 UTC**; exit **3** when pick missing after retries.
 - [ ] Staging 1 GB peak RSS logged for full morning tick path (§8).
 
 ---
@@ -422,4 +472,4 @@ stateDiagram-v2
 | **Diagnosis** (whole change) | Env-only slot → 13:05 | `pick_day.py` + **13:00 rollover** + **13:05 slot** + shared `pick_day_str()` | **Diagnosis B** |
 | **Plan §6** (legacy rows on disk) | **Migration map** on first boot (§6.1) | Dual-read fallback (explicitly **out of scope**) | **§6 A** |
 
-**One line:** implement **diagnosis B + §6 A** — relabel legacy rows, **`pick_day_migration_v1.json` marker**, **13:05 cutover-day score exactly once**, published-only **13:00–13:05** fallback **after migration** — not env-only, not dual-read.
+**One line:** implement **diagnosis B + §6 A** — window-bounded relabel, **`pick_day_migration_v1.json` marker**, **13:05 cutover-day score exactly once**, **`is_published_daily_pick_row`** fallbacks, **pre-marker `last_good_published_pick` (never 503)**, post-marker **`latest_pick_row_before`**, writer guards §3.4 — not env-only, not dual-read.
