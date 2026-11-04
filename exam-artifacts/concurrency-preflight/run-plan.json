@@ -1,0 +1,17 @@
+{
+  "harnessSha": "5d884c476340e2d8d678b20a9039e3a8900a6f10",
+  "harnessShaShort": "5d884c47",
+  "fixturePinSha": "36d724b1b131bfd755a07f4a6dd412aaf1a8c107",
+  "fixturePinShaShort": "36d724b1",
+  "worktreeHarnessCommit": "be17418e8737d3e16bba6bdc923171d13da4f2b0",
+  "runLabel": "SD-105-concurrency-preflight",
+  "arm": "A",
+  "parallelSlots": 2,
+  "slotWallSec": 900,
+  "evalIds": [
+    "review-gate-r1packb-f3/f3-02/1",
+    "review-gate-r1packb-f3/f3-03/1"
+  ],
+  "preflightScript": "exam-artifacts/r1-f3/preflight-r1-packb-a.sh",
+  "noScoring": true
+}

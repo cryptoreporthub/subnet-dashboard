@@ -1,0 +1,35 @@
+=== concurrency-preflight start 2026-11-04T06:53:44Z parallel=2 no_scoring=true ===
+git_rev=be17418e8737d3e16bba6bdc923171d13da4f2b0
+plan={
+  "harnessSha": "5d884c476340e2d8d678b20a9039e3a8900a6f10",
+  "harnessShaShort": "5d884c47",
+  "fixturePinSha": "36d724b1b131bfd755a07f4a6dd412aaf1a8c107",
+  "fixturePinShaShort": "36d724b1",
+  "worktreeHarnessCommit": "be17418e8737d3e16bba6bdc923171d13da4f2b0",
+  "runLabel": "SD-105-concurrency-preflight",
+  "arm": "A",
+  "parallelSlots": 2,
+  "slotWallSec": 900,
+  "evalIds": [
+    "review-gate-r1packb-f3/f3-02/1",
+    "review-gate-r1packb-f3/f3-03/1"
+  ],
+  "preflightScript": "exam-artifacts/r1-f3/preflight-r1-packb-a.sh",
+  "noScoring": true
+}
+sysprompt_chars=6874
+sysprompt_sha256=46c634666738fa8f6eb61cb1e79d4dee5fb207d531a012513516601705e05feb
+model_object={"id":"composer-2.5","params":[{"id":"fast","value":"false"}]}
+preflight_ok
+PARALLEL_START at=2026-11-04T06:53:45Z eval_ids=review-gate-r1packb-f3/f3-02/1 review-gate-r1packb-f3/f3-03/1
+SLOT_1_START eval_id=review-gate-r1packb-f3/f3-03/1 at=2026-11-04T06:53:45Z
+SLOT_0_START eval_id=review-gate-r1packb-f3/f3-02/1 at=2026-11-04T06:53:45Z
+SLOT_1_START eval_id=review-gate-r1packb-f3/f3-03/1 at=2026-11-04T06:53:45Z
+SLOT_0_START eval_id=review-gate-r1packb-f3/f3-02/1 at=2026-11-04T06:53:45Z
+SLOT_1_END eval_id=review-gate-r1packb-f3/f3-03/1 at=2026-11-04T06:54:15Z exit=0 status=completed
+SLOT_1_END eval_id=review-gate-r1packb-f3/f3-03/1 at=2026-11-04T06:54:15Z exit=0 status=completed
+SLOT_0_END eval_id=review-gate-r1packb-f3/f3-02/1 at=2026-11-04T06:54:18Z exit=0 status=completed
+SLOT_0_END eval_id=review-gate-r1packb-f3/f3-02/1 at=2026-11-04T06:54:18Z exit=0 status=completed
+PARALLEL_END at=2026-11-04T06:54:18Z wall_seconds=33
+{"completed": 2, "timeout": 0, "failed": 0, "anyRateLimitSignal": false}
+=== concurrency-preflight complete 2026-11-04T06:54:18Z summary=/tmp/sd105-concurrency-preflight/exam-artifacts/concurrency-preflight/summary.json ===
