@@ -109,14 +109,14 @@ p.write_text(json.dumps(doc))
 PY
     continue
   fi
-  if [[ "$EC" -ne 0 ]] || [[ ! -s "$SLOT_JSON" ]]; then
+  if [[ ! -s "$SLOT_JSON" ]]; then
     FAIL_END="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     node "$APPEND" --audit "$AUDIT" --sysprompt-chars "$SYSPROMPT_CHARS" --sysprompt-sha "$SYSPROMPT_SHA" \
       --model-json "$MODEL_JSON" --fixture-pin "$FIX_FULL" --eval-id "$EVAL_ID" --case-id "$CASE_SLUG" \
       --iteration "$ITER_NUM" --condition "$CONDITION" --role "$ROLE" --bot-checkout-sha "$BOT_SHA" \
       --r2-method-arm "$METHOD_ARM" --plan-idx "$IDX" --slot-started-at "$SLOT_START" --slot-ended-at "$FAIL_END" \
-      --slot-failed true --slot-failed-reason "eval_exit_${EC}" ${SLOT_JSON:+--slot-json "$SLOT_JSON"}
-    echo "STOP slot_failed eval_id=${EVAL_ID} exit=${EC}"
+      --slot-failed true --slot-failed-reason "missing_slot_json_exit_${EC}"
+    echo "STOP slot_failed eval_id=${EVAL_ID} exit=${EC} (no slot json)"
     exit 11
   fi
   node "$MERGE" "$AGG" "$SLOT_JSON" "$EVAL_ID"
@@ -127,6 +127,9 @@ PY
     --slot-json "$SLOT_JSON"
   rm -f "$SLOT_JSON"
   echo "SLOT_END idx=${IDX} eval_id=${EVAL_ID} exit=${EC} at=${SLOT_END}"
+  if [[ "$EC" -ne 0 ]]; then
+    echo "NOTE: agent-sdk exit ${EC} (raw JSON published; Claude scores)"
+  fi
   python3 - <<PY
 import json
 from pathlib import Path

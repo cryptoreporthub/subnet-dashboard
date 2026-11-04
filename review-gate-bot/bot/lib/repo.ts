@@ -1,7 +1,5 @@
 import type { Octokit } from "@octokit/rest";
 import type { PrRef } from "./gh.js";
-import { scrubModelRepoReads } from "./model-read-redaction.js";
-import type { SessionPurpose } from "./method-variants.js";
 import { redactSecrets } from "./redact.js";
 
 /**
@@ -54,26 +52,31 @@ export const DIFF_FILE_CAP = 300;
 
 export type DiffRead = ({ ok: true } & Diff) | { ok: false; reason: "diff-incomplete"; detail: string };
 
-/** One changed file before scrubbing and size budgeting (GitHub compare or eval fixture). */
-export type DiffCompareFile = {
-  filename: string;
-  previous_filename?: string;
-  status: string;
-  additions: number;
-  deletions: number;
-  patch?: string;
-};
-
 /**
- * Scrub paths and patches, apply the diff char budget. Live GitHub reads and eval fixture reads
- * both go through here so the model sees the same redacted, capped diff.
+ * The PR's diff between two commits the caller has already checked. The compare is pinned to
+ * `base...head` by SHA, not read by PR number: `pulls.listFiles` answers for whatever head the PR
+ * has at the moment of the call, so a push after the head check would hand back another head's
+ * patches. A diff at the file cap is refused, since a cut list would read as the whole change.
  */
-export function presentDiffFiles(
-  all: readonly DiffCompareFile[],
-  options?: { paths?: readonly string[]; purpose?: SessionPurpose },
-): Diff {
-  const purpose = options?.purpose ?? "live";
-  const wanted = options?.paths === undefined ? undefined : new Set(options.paths);
+export async function readDiff(
+  octokit: Octokit,
+  ref: PrRef,
+  options: { head: string; base: string; paths?: string[] },
+): Promise<DiffRead> {
+  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
+    owner: ref.owner,
+    repo: ref.repo,
+    basehead: `${options.base}...${options.head}`,
+  });
+  const all = data.files ?? [];
+  if (all.length >= DIFF_FILE_CAP) {
+    return {
+      ok: false,
+      reason: "diff-incomplete",
+      detail: `the diff has ${DIFF_FILE_CAP} or more files, GitHub's compare limit; read the files you need with read_repo_file at head instead`,
+    };
+  }
+  const wanted = options.paths === undefined ? undefined : new Set(options.paths);
   const files: DiffFile[] = [];
   const omittedPaths: string[] = [];
   let budget = LIMITS.diffChars;
@@ -81,13 +84,8 @@ export function presentDiffFiles(
   for (const file of all) {
     // A rename is selected by either of its paths, and its paths are scrubbed before they leave this module:
     // a PR can name a file with a credential-shaped value, and the result goes to a model and to a public review.
-    const path = scrubModelRepoReads(purpose) ? redactSecrets(file.filename).text : file.filename;
-    const previous =
-      file.previous_filename === undefined
-        ? undefined
-        : scrubModelRepoReads(purpose)
-          ? redactSecrets(file.previous_filename).text
-          : file.previous_filename;
+    const path = redactSecrets(file.filename).text;
+    const previous = file.previous_filename === undefined ? undefined : redactSecrets(file.previous_filename).text;
     if (wanted !== undefined && !wanted.has(file.filename) && (file.previous_filename === undefined || !wanted.has(file.previous_filename))) {
       continue;
     }
@@ -103,8 +101,8 @@ export function presentDiffFiles(
     if (file.patch === undefined) {
       entry.patchOmitted = "GitHub gave no patch: the file is binary or too large to diff";
     } else {
-      // The budget is spent on what is returned; redacted text can be longer than raw (arm F uses raw length).
-      const text = scrubModelRepoReads(purpose) ? redactSecrets(file.patch).text : file.patch;
+      // The budget is spent on what is returned, so it is charged the redacted text's length, which can be longer.
+      const text = redactSecrets(file.patch).text;
       if (text.length > budget) {
         entry.patchOmitted = `over the remaining size budget (${text.length} chars); read the file at head instead`;
         omittedPaths.push(path);
@@ -117,58 +115,12 @@ export function presentDiffFiles(
   }
 
   return {
+    ok: true,
     totalFiles: all.length,
     files,
     truncated: omittedPaths.length > 0,
     omittedPaths,
   };
-}
-
-/** Map a stored eval diff entry into compare input (fixture stores raw paths and patches). */
-export function diffFixtureFilesToCompare(all: readonly DiffFile[]): DiffCompareFile[] {
-  return all.map((file) => ({
-    filename: file.path,
-    previous_filename: file.previousPath,
-    status: file.status,
-    additions: file.additions,
-    deletions: file.deletions,
-    patch: file.patch,
-  }));
-}
-
-/**
- * The PR's diff between two commits the caller has already checked. The compare is pinned to
- * `base...head` by SHA, not read by PR number: `pulls.listFiles` answers for whatever head the PR
- * has at the moment of the call, so a push after the head check would hand back another head's
- * patches. A diff at the file cap is refused, since a cut list would read as the whole change.
- */
-export async function readDiff(
-  octokit: Octokit,
-  ref: PrRef,
-  options: { head: string; base: string; paths?: string[]; purpose?: SessionPurpose },
-): Promise<DiffRead> {
-  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
-    owner: ref.owner,
-    repo: ref.repo,
-    basehead: `${options.base}...${options.head}`,
-  });
-  const all = data.files ?? [];
-  if (all.length >= DIFF_FILE_CAP) {
-    return {
-      ok: false,
-      reason: "diff-incomplete",
-      detail: `the diff has ${DIFF_FILE_CAP} or more files, GitHub's compare limit; read the files you need with read_repo_file at head instead`,
-    };
-  }
-  const sources: DiffCompareFile[] = all.map((file) => ({
-    filename: file.filename,
-    previous_filename: file.previous_filename,
-    status: file.status,
-    additions: file.additions,
-    deletions: file.deletions,
-    patch: file.patch,
-  }));
-  return { ok: true, ...presentDiffFiles(sources, { paths: options.paths, purpose: options.purpose }) };
 }
 
 export type FileRead =
@@ -233,18 +185,11 @@ const REDACTED_KEY_LINE = "<redacted:private-key>";
  * Scrubbing comes before the cap. Cutting first can leave the head of a secret at
  * the cap, and the scrubber does not match a head, so it would go out in the clear.
  */
-export function windowText(
-  content: string,
-  options: { startLine?: number; endLine?: number; purpose?: SessionPurpose },
-): TextWindow {
-  const purpose = options.purpose ?? "live";
+export function windowText(content: string, options: { startLine?: number; endLine?: number }): TextWindow {
   const lines = content.split("\n");
   const startLine = Math.max(1, options.startLine ?? 1);
   const endLine = Math.min(lines.length, options.endLine ?? lines.length);
-  const slice = lines.slice(startLine - 1, endLine).join("\n");
-  const scrubbed = scrubModelRepoReads(purpose)
-    ? redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text
-    : slice;
+  const scrubbed = redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text;
   const truncated = scrubbed.length > LIMITS.fileChars;
   const text = truncated ? scrubbed.slice(0, LIMITS.fileChars) : scrubbed;
   return {
@@ -261,7 +206,7 @@ export async function readRepoFile(
   ref: PrRef,
   sha: string,
   path: string,
-  options: { startLine?: number; endLine?: number; purpose?: SessionPurpose },
+  options: { startLine?: number; endLine?: number },
 ): Promise<FileRead> {
   if (!validRepoPath(path)) {
     return refusal(path, "not a repo-relative path");
@@ -290,7 +235,7 @@ export async function readRepoFile(
     ok: true,
     path,
     sha,
-    ...windowText(Buffer.from(entry.content, "base64").toString("utf8"), { ...options, purpose: options.purpose }),
+    ...windowText(Buffer.from(entry.content, "base64").toString("utf8"), options),
   };
 }
 

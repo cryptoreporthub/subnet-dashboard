@@ -3,7 +3,6 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { readPrFixture, readRepoFixture } from "../lib/fixtures.js";
-import { evalPrChangedPaths, evalRepoTextAtBase } from "../lib/eval-repo-fixture.js";
 import { readRepoFile, validRepoPath, windowText } from "../lib/repo.js";
 
 /**
@@ -29,20 +28,15 @@ export default defineTool({
 
     if (ctx.session.purpose === "eval") {
       const [pr, repo] = await Promise.all([readPrFixture(ctx.workspaceDir), readRepoFixture(ctx.workspaceDir)]);
-      if (pr === undefined || repo === undefined) {
-        return { ok: false, path: input.path, reason: "not in this fixture" };
-      }
-      const changed = evalPrChangedPaths(pr);
-      const text =
-        input.at === "head" ? repo.files[input.path] : evalRepoTextAtBase(repo, input.path, changed);
-      if (text === undefined) {
+      const text = repo?.files[input.path];
+      if (pr === undefined || text === undefined) {
         return { ok: false, path: input.path, reason: "not in this fixture" };
       }
       return {
         ok: true,
         path: input.path,
         sha: input.at === "head" ? pr.headSha : pr.baseSha,
-        ...windowText(text, { ...input, purpose: "eval" }),
+        ...windowText(text, input),
         source: "fixture",
       };
     }
@@ -54,6 +48,6 @@ export default defineTool({
     const octokit = await ctx.host.github.getOctokit();
     const pr = await readPr(octokit, ref);
     const sha = input.at === "head" ? pr.headSha : pr.baseSha;
-    return { ...(await readRepoFile(octokit, ref, sha, input.path, { ...input, purpose: "live" })), source: "github" };
+    return { ...(await readRepoFile(octokit, ref, sha, input.path, input)), source: "github" };
   },
 });

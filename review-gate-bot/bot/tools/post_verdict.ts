@@ -3,10 +3,6 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { redactSecrets } from "../lib/redact.js";
-import {
-  evalVerdictAlreadyAccepted,
-  markEvalVerdictAccepted,
-} from "../lib/eval-verdict-once.js";
 import { postVerdictComment } from "../lib/tag.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
@@ -18,15 +14,13 @@ const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
  */
 const BLOCKING_KINDS = ["never-expires", "overflow", "aborts-cycle", "poisons-later-row"] as const;
 
-const SkillsTable = z
-  .array(
-    z.object({
-      skill: z.string().min(1),
-      used: z.boolean(),
-      note: z.string().describe("What it found or changed, or `skipped: <reason>`."),
-    }),
-  )
-  .min(1);
+const SkillsRow = z.object({
+  skill: z.string().min(1),
+  used: z.boolean(),
+  note: z.string().describe("What it found or changed, or `skipped: <reason>`."),
+});
+
+const SkillsTable = z.array(SkillsRow).optional();
 
 function renderTable(skills: { skill: string; used: boolean; note: string }[]): string {
   const rows = skills.map((s) => `| \`${s.skill}\` | ${s.used ? "yes" : "no"} | ${s.note} |`);
@@ -56,21 +50,29 @@ export function composeVerdictBody(input: {
   verdict: "PASS" | "MODIFY" | "FAIL";
   headSha: string;
   body: string;
-  skills: { skill: string; used: boolean; note: string }[];
+  skills?: { skill: string; used: boolean; note: string }[];
 }): string {
-  return [
+  const skills = input.skills ?? [];
+  const parts = [
     `MC: **${input.verdict}** at \`${input.headSha}\``,
     "",
     withoutMarkers(input.body),
-    "",
-    "### Skills",
-    "",
-    renderTable(input.skills.map((s) => ({ ...s, skill: withoutMarkers(s.skill), note: withoutMarkers(s.note) }))),
+  ];
+  if (skills.length > 0) {
+    parts.push(
+      "",
+      "### Skills",
+      "",
+      renderTable(skills.map((s) => ({ ...s, skill: withoutMarkers(s.skill), note: withoutMarkers(s.note) }))),
+    );
+  }
+  parts.push(
     "",
     "---",
     "",
     "_Posted by the subnet-dashboard review gate. Review only: this bot never merges, deploys, restarts, sets secrets or labels._",
-  ].join("\n");
+  );
+  return parts.join("\n");
 }
 
 /**
@@ -83,7 +85,7 @@ export function composeVerdictBody(input: {
  */
 export default defineTool({
   description:
-    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required.",
+    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL.",
   inputSchema: z.object({
     headSha: Sha,
     verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
@@ -105,11 +107,7 @@ export default defineTool({
     }
 
     if (ctx.session.purpose === "eval") {
-      if (await evalVerdictAlreadyAccepted(ctx.host.kv, ctx.session.id)) {
-        return { posted: false, reason: "already-posted-eval", verdict: input.verdict };
-      }
-      await markEvalVerdictAccepted(ctx.host.kv, ctx.session.id);
-      return { posted: true, reason: "eval", verdict: input.verdict };
+      return { posted: false, reason: "eval", verdict: input.verdict };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
@@ -130,7 +128,7 @@ export default defineTool({
         verdict: input.verdict,
         headSha: input.headSha,
         body: input.body,
-        skills: input.skills,
+        skills: input.skills ?? [],
       }),
     );
 

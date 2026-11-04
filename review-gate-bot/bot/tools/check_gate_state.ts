@@ -1,6 +1,5 @@
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
-import { buildCheckGateStateOutput } from "../lib/check_gate_output.js";
 import { readGateState, readPr } from "../lib/gh.js";
 import { readGateFixture, readPrFixture } from "../lib/fixtures.js";
 
@@ -29,7 +28,7 @@ export default defineTool({
       if (gate.headSha !== pr.headSha) {
         throw new Error(`gate.json is pinned to ${gate.headSha}, not the PR head ${pr.headSha}`);
       }
-      return buildCheckGateStateOutput(pr, gate, "fixture");
+      return { ...pr, fileCount: pr.files.length, ...gate, source: "fixture" };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
@@ -39,6 +38,6 @@ export default defineTool({
     const octokit = await ctx.host.github.getOctokit();
     const pr = await readPr(octokit, ref);
     const state = await readGateState({ octokit, kv: ctx.host.kv, ref, headSha: pr.headSha });
-    return buildCheckGateStateOutput(pr, state, "github");
+    return { ...pr, fileCount: pr.files.length, ...state, source: "github" };
   },
 });

@@ -3,7 +3,7 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { readDiffFixture, readPrFixture } from "../lib/fixtures.js";
-import { diffFixtureFilesToCompare, presentDiffFiles, readDiff } from "../lib/repo.js";
+import { readDiff } from "../lib/repo.js";
 
 /**
  * The change itself: each file's patch, for the head the review is about.
@@ -28,11 +28,9 @@ export default defineTool({
       if (diff === undefined) {
         return { ok: false, reason: "no diff in this fixture" };
       }
-      const presented = presentDiffFiles(diffFixtureFilesToCompare(diff.files), {
-        paths: input.paths,
-        purpose: "eval",
-      });
-      return { ok: true, ...presented, source: "fixture" };
+      const wanted = input.paths === undefined ? undefined : new Set(input.paths);
+      const files = wanted === undefined ? diff.files : diff.files.filter((file) => wanted.has(file.path));
+      return { ok: true, ...diff, files, source: "fixture" };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
@@ -44,12 +42,7 @@ export default defineTool({
     if (pr.headSha !== input.headSha) {
       return { ok: false, reason: "stale-head", current: pr.headSha };
     }
-    const diff = await readDiff(octokit, ref, {
-      head: pr.headSha,
-      base: pr.baseSha,
-      paths: input.paths,
-      purpose: "live",
-    });
+    const diff = await readDiff(octokit, ref, { head: pr.headSha, base: pr.baseSha, paths: input.paths });
     return diff.ok ? { ...diff, source: "github" } : diff;
   },
 });
