@@ -324,14 +324,51 @@ def test_revive_honest_tick_in_progress_when_live_cycle_young(tmp_path, monkeypa
         rs.stop_prediction_resolver_scheduler()
 
 
-def test_force_release_cycle_lock_replaces_wedged_lock():
+def test_abandon_frees_wedged_cycle_lock():
     sched = rs.PredictionResolverScheduler(refresh_minutes=15)
     sched._cycle_lock.acquire()
+    sched._lock_owner_gen = sched._cycle_generation
     assert sched._cycle_lock.locked()
-    sched._force_release_cycle_lock(reason="test")
+    sched._abandon_inflight_cycle()
     assert not sched._cycle_lock.locked()
     assert sched._cycle_lock.acquire(blocking=False)
     sched._cycle_lock.release()
+
+
+def test_abandon_of_older_generation_keeps_lock_owned_by_current_generation():
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    current = sched._cycle_generation
+    sched._cycle_lock.acquire()
+    sched._lock_owner_gen = current
+    sched._abandon_inflight_cycle(submitted_gen=current - 1)
+    assert sched._cycle_lock.locked()
+    assert sched._lock_owner_gen == current
+    sched._abandon_inflight_cycle(submitted_gen=current)
+    assert not sched._cycle_lock.locked()
+
+
+def test_stale_revive_keeps_lock_a_new_cycle_takes_after_abandon(monkeypatch):
+    """Abandon frees the wedged lock; a cycle that takes it in that gap must keep it."""
+    monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
+    monkeypatch.setattr(rs, "_resolver_cycle_lock_stale", lambda *a, **k: True)
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._cycle_lock.acquire()
+    sched._lock_owner_gen = sched._cycle_generation
+    real_abandon = sched._abandon_inflight_cycle
+
+    def abandon_then_new_cycle_takes_lock(**kwargs):
+        real_abandon(**kwargs)
+        assert sched._cycle_lock.acquire(blocking=False)
+
+    monkeypatch.setattr(sched, "_abandon_inflight_cycle", abandon_then_new_cycle_takes_lock)
+    rs._scheduler = sched
+    try:
+        out = rs.revive_prediction_resolver_scheduler(force=True)
+        assert out.get("stale_lock_recycled") is True
+        assert sched._cycle_lock.locked()
+    finally:
+        rs.stop_prediction_resolver_scheduler()
 
 
 class _OrphanProbe:

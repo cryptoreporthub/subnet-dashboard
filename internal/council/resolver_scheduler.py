@@ -434,6 +434,13 @@ class PredictionResolverScheduler:
         self._cycle_generation = 0
         self._inflight_future: Optional[Any] = None
         self._persist_owner_gen: Optional[int] = None
+        # Generation of the cycle that holds ``_cycle_lock``. Only that
+        # generation may release it, so a late orphan cannot free a lock a
+        # newer cycle took after abandon.
+        self._lock_owner_gen: Optional[int] = None
+        # Serializes lock ownership changes (set / abandon / release / revive
+        # check). Lock order: ``_scheduler_lock`` then ``_release_guard``.
+        self._release_guard = threading.RLock()
         self._abandoned_live = 0
         self._revive_use_full_budget = False
         # Control-flow flag only (start/stop); health reporting goes through
@@ -753,27 +760,19 @@ class PredictionResolverScheduler:
         except Exception:
             pass
 
-    def _force_release_cycle_lock(self, *, reason: str = "force") -> bool:
-        """Best-effort unlock so revive/next tick can proceed after abandon.
+    def _release_cycle_lock_if_owner(self, gen: int) -> bool:
+        """Release ``_cycle_lock`` only if generation ``gen`` still owns it.
 
-        ponytail: ``threading.Lock`` has no owner introspection; if release
-        fails or the lock stays wedged, replace the object so recycle/revive
-        can acquire a fresh lock (orphan threads keep the old object).
+        ``threading.Lock`` cannot tell who holds it, so ownership is recorded
+        in ``_lock_owner_gen``. Check and release run under ``_release_guard``
+        so an abandon or a new cycle cannot slip between them.
         """
-        released = False
-        try:
+        with self._release_guard:
+            if self._lock_owner_gen != gen:
+                return False
+            self._lock_owner_gen = None
             self._cycle_lock.release()
-            released = True
-        except RuntimeError:
-            pass
-        if self._cycle_lock.locked():
-            self._cycle_lock = threading.Lock()
-            released = True
-            logger.warning(
-                "resolver cycle_lock replaced after wedged release reason=%s",
-                reason,
-            )
-        return released
+            return True
 
     def _abandon_inflight_cycle(
         self,
@@ -782,12 +781,14 @@ class PredictionResolverScheduler:
         resolver_cycle_id: Any = None,
     ) -> None:
         """Release wedge after cycle timeout; orphan thread must not double-release."""
-        abandoned_gen = (
-            submitted_gen if submitted_gen is not None else self._cycle_generation
-        )
-        self._cycle_generation += 1
-        # Phase 3: revoked persist ownership so abandoned orphans skip soul_map RMW.
-        self._persist_owner_gen = None
+        with self._release_guard:
+            abandoned_gen = (
+                submitted_gen if submitted_gen is not None else self._cycle_generation
+            )
+            self._cycle_generation += 1
+            # Phase 3: revoked persist ownership so abandoned orphans skip soul_map RMW.
+            self._persist_owner_gen = None
+            self._release_cycle_lock_if_owner(abandoned_gen)
         log_lifecycle(
             "abandon",
             trigger="resolver_cycle",
@@ -796,7 +797,6 @@ class PredictionResolverScheduler:
             abandoned=True,
             extra={"event": "abandon"},
         )
-        self._force_release_cycle_lock(reason="cycle_abandon")
 
     def _get_abandoned_live(self) -> int:
         """Return the count of cycles abandoned by the timeout boundary."""
@@ -834,8 +834,10 @@ class PredictionResolverScheduler:
             self._revive_use_full_budget = False
         if timeout <= 0:
             run_at = _now_iso()
-            gen = self._cycle_generation
-            self._persist_owner_gen = gen
+            with self._release_guard:
+                gen = self._cycle_generation
+                self._persist_owner_gen = gen
+                self._lock_owner_gen = gen
             cycle_id = make_resolver_cycle_id(gen, run_at)
             timing = _CycleTiming(abandoned_live)
             timing.set_owner_gen(gen)
@@ -854,11 +856,13 @@ class PredictionResolverScheduler:
             finally:
                 reset_patchd_context(ctx_token)
                 _cycle_timing.reset(token)
-                self._cycle_lock.release()
+                self._release_cycle_lock_if_owner(gen)
 
-        self._cycle_generation += 1
-        gen = self._cycle_generation
-        self._persist_owner_gen = gen
+        with self._release_guard:
+            self._cycle_generation += 1
+            gen = self._cycle_generation
+            self._persist_owner_gen = gen
+            self._lock_owner_gen = gen
         run_at = _now_iso()
         cycle_id = make_resolver_cycle_id(gen, run_at)
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
@@ -895,8 +899,7 @@ class PredictionResolverScheduler:
                 log_heavy_job_rss("prediction_resolver_worker", "end", started_at=_rss_t0)
                 _cycle_timing.reset(token)
                 reset_patchd_context(ctx_token)
-                if gen == self._cycle_generation:
-                    self._cycle_lock.release()
+                self._release_cycle_lock_if_owner(gen)
 
         submitted = False
         try:
@@ -936,7 +939,7 @@ class PredictionResolverScheduler:
                 return result
         except BaseException:
             if not submitted:
-                self._force_release_cycle_lock(reason="submit_failed")
+                self._release_cycle_lock_if_owner(gen)
             raise
         finally:
             with self._submit_lock:
@@ -1413,32 +1416,32 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
     stale_lock_recycled = False
     with _scheduler_lock:
         sched = _scheduler
-        if sched is not None and not sched._cycle_lock.acquire(blocking=False):
-            if _resolver_cycle_lock_stale(sched, age_before, force=force):
-                sched._abandon_inflight_cycle()
+        if sched is not None:
+            # Inspect only; never acquire or release here. A probe-acquire could
+            # take a lock a new cycle is entitled to, and an unconditional
+            # release could free it. Ownership changes go through the guard.
+            with sched._release_guard:
+                if sched._cycle_lock.locked():
+                    if not _resolver_cycle_lock_stale(sched, age_before, force=force):
+                        return {
+                            "revived": False,
+                            "reason": "tick_in_progress",
+                            "recycled": False,
+                            "age_before": age_before,
+                            "age_after": _resolver_tick_age_seconds(),
+                        }
+                    sched._abandon_inflight_cycle()
+                    stale_lock_recycled = True
+                    logger.warning(
+                        "resolver revive: recycled stale cycle_lock age_before=%s force=%s",
+                        age_before,
+                        force,
+                    )
+            if stale_lock_recycled:
                 with sched._submit_lock:
                     inflight = sched._inflight_future
                     if inflight is not None and inflight.done():
                         sched._inflight_future = None
-                stale_lock_recycled = True
-                logger.warning(
-                    "resolver revive: recycled stale cycle_lock age_before=%s force=%s",
-                    age_before,
-                    force,
-                )
-            else:
-                return {
-                    "revived": False,
-                    "reason": "tick_in_progress",
-                    "recycled": False,
-                    "age_before": age_before,
-                    "age_after": _resolver_tick_age_seconds(),
-                }
-        if sched is not None:
-            try:
-                sched._cycle_lock.release()
-            except RuntimeError:
-                pass
         if sched is not None and sched._active:
             sched.stop()
             _scheduler = None
