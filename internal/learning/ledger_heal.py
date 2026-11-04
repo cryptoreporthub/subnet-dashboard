@@ -135,15 +135,24 @@ def heal_daily_pick_ledger(
             "reference_price": subnet_row.get("price"),
         }
 
+    from internal.council.daily_pick_write_token import guarded_bounded_commit
     from internal.learning.prediction_loop import record_pick_prediction
 
     market_context = today_rec.get("market_context") if isinstance(today_rec, dict) else {}
-    stored = record_pick_prediction(
-        stored_pick,
-        subnet_row,
-        horizon_type="day",
-        market_context=market_context if isinstance(market_context, dict) else {},
-    )
+    stored_holder: Dict[str, Any] = {}
+
+    def _commit() -> None:
+        stored_holder["value"] = record_pick_prediction(
+            stored_pick,
+            subnet_row,
+            horizon_type="day",
+            market_context=market_context if isinstance(market_context, dict) else {},
+        )
+
+    if not guarded_bounded_commit(_commit):
+        return {"ok": False, "healed": False, "reason": "write_token_rejected", "netuid": netuid}
+
+    stored = stored_holder.get("value")
     if stored:
         logger.info("ledger heal: backfilled day row for SN%s", netuid)
         return {

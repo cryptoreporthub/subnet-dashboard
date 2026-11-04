@@ -1044,10 +1044,9 @@ class PredictionResolverScheduler:
 
             with timing.stage("ledger_heal", _persist_after_ledger):
                 try:
-                    from internal.council.daily_pick_write_token import guarded_bounded_commit
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
 
-                    guarded_bounded_commit(lambda: heal_daily_pick_ledger(dry_run=False))
+                    heal_daily_pick_ledger(dry_run=False)
                 except Exception as heal_exc:
                     import logging
                     logging.getLogger(__name__).warning(

@@ -48,9 +48,9 @@ def explain_subnet(
     if row is None:
         return {"status": "not_found", "netuid": int(netuid)}
 
-    from internal.council.daily_pick_engine import get_current_daily_pick
+    from internal.council.daily_pick_engine import get_today_only_daily_pick
 
-    today = get_current_daily_pick() or {}
+    today = get_today_only_daily_pick() or {}
     pick = today.get("pick") if isinstance(today.get("pick"), dict) else {}
     cand = today.get("candidate") if isinstance(today.get("candidate"), dict) else {}
     pick_sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}

@@ -277,7 +277,7 @@ def audit_row(
 
 
 def _find_row_for_date(records: List[Dict[str, Any]], date: str) -> Optional[Dict[str, Any]]:
-    from internal.council.daily_pick_reader import find_v2_row, load_current_daily_pick
+    from internal.council.daily_pick_reader import find_v2_row, legacy_row_counts_for_pick_day
     from internal.council.pick_day import v2_pick_id
 
     if date == _today_str():
@@ -290,6 +290,8 @@ def _find_row_for_date(records: List[Dict[str, Any]], date: str) -> Optional[Dic
             return rec
     for rec in reversed(records):
         if rec.get("date") == date or rec.get("pick_day") == date:
+            if not rec.get("pick_id") and not legacy_row_counts_for_pick_day(rec, date):
+                continue
             return rec
     return None
 

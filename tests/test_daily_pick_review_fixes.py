@@ -55,3 +55,62 @@ def test_panel_lite_ignores_prior_day_reader_fallback():
                 out = summarize_picks_lite()
     text = " ".join(out.get("sentences") or [])
     assert "Prior" not in text or "unavailable" in text.lower() or "HOLD" in text
+
+
+def test_loop_health_ignores_prior_day_fallback():
+    """Repro: loop_health must not treat prior published row as today's pick."""
+    from internal.learning.loop_health import _daily_pick_today
+
+    prior = {
+        "pick_id": v2_pick_id("2026-11-03"),
+        "schema_version": 2,
+        "pick_day": "2026-11-03",
+        "date": "2026-11-03",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 7}, "final_confidence": 0.9, "action": "long"},
+    }
+    import json
+    import tempfile
+    import os
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+        json.dump([prior], handle)
+        path = handle.name
+    try:
+        with patch("internal.council.pick_day.pick_day_str", return_value="2026-11-04"):
+            with patch("internal.council.daily_pick_reader.pick_day_str", return_value="2026-11-04"):
+                status = _daily_pick_today(path)
+        assert status.get("has_pick") is False
+    finally:
+        os.unlink(path)
+
+
+def test_pick_explain_prior_day_not_published_verdict(monkeypatch):
+    """Repro: explain must not mark SN7 published when only prior-day pick on disk."""
+    from internal.council.pick_explain import explain_subnet
+
+    prior = {
+        "pick_id": v2_pick_id("2026-11-03"),
+        "schema_version": 2,
+        "pick_day": "2026-11-03",
+        "date": "2026-11-03",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 7}, "final_confidence": 0.9, "action": "long"},
+    }
+
+    def _load():
+        return [prior]
+
+    monkeypatch.setattr("internal.council.daily_pick_engine._load", _load)
+    monkeypatch.setattr("internal.council.daily_pick_engine.pick_day_str", lambda: "2026-11-04")
+    monkeypatch.setattr("internal.council.daily_pick_reader.pick_day_str", lambda: "2026-11-04")
+    monkeypatch.setattr(
+        "internal.council.red_team.audit_daily_pick",
+        lambda row, subnets: {"adjusted_confidence": 0.5, "concerns": [], "approved": True},
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        lambda row, ctx: {"confidence": 0.5, "total_score": 50},
+    )
+    out = explain_subnet(7, [{"netuid": 7, "price": 1.0}], {})
+    assert out.get("verdict") != "published"

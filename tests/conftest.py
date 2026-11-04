@@ -102,8 +102,10 @@ def _daily_pick_write_token_for_tests():
         from internal.council.daily_pick_write_token import issue_daily_pick_write_token
 
         issue_daily_pick_write_token()
-    except Exception:
-        pass
+    except Exception as exc:
+        import pytest
+
+        pytest.fail(f"daily_pick_write_token fixture could not issue token: {exc}")
     yield
     try:
         import threading
@@ -155,6 +157,7 @@ def _stable_default_pick_day_str(monkeypatch, request):
             "internal.council.pick_day.pick_day_str",
             "internal.council.daily_pick_reader.pick_day_str",
             "internal.council.daily_pick_engine.pick_day_str",
+            "internal.council.daily_pick_engine._today_str",
             "internal.learning.loop_health.pick_day_str",
         ):
             try:

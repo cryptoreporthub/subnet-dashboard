@@ -19,7 +19,7 @@ def _today() -> str:
 
 def _slot_stamp(day: str | None = None) -> str:
     d = day or _today()
-    return f"{d}T14:05:00Z"
+    return f"{d}T19:05:00Z"
 
 
 def test_older_build_does_not_clobber_newer_today(tmp_path, monkeypatch):

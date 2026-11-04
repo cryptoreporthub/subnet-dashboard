@@ -81,8 +81,8 @@ def _daily_pick_today(path: Optional[str] = None) -> Dict[str, Any]:
         if not isinstance(records, list):
             return out
         records = [record for record in records if isinstance(record, dict)]
-        rec, _meta = load_current_daily_pick(records)
-        if not isinstance(rec, dict):
+        rec, meta = load_current_daily_pick(records)
+        if not isinstance(rec, dict) or meta.get("prior_pick_day"):
             return out
         action = str(rec.get("action") or "").upper() or None
         out["action"] = action
