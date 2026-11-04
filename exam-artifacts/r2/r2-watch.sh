@@ -62,5 +62,8 @@ Check tmux \`r2-run\`. Slot cap is 15m wall with process-group kill; this alert 
     else:
         print(f"r2-watch idle stall_for={stall_for}s lines={audit_lines}")
 PY
+  if (( NOW_EPOCH % 1800 < 300 )); then
+    bash "$REPO_ROOT/exam-artifacts/r2/r2-checkpoint-push.sh" >>"$ART/r2-checkpoint-push.log" 2>&1 || true
+  fi
   sleep 300
 done
