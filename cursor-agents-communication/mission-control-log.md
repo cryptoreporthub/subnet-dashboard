@@ -345,3 +345,9 @@
 - **Code/doc:** plan §3/§7/§8 → **19:00/19:05**; `summarize_picks` → `get_today_only_daily_pick`; repro test added.
 - **@claude** implementation ask posted @ `b53da884`; **@Replit** re-review comment posted @ new head after push.
 - **Gates:** morning **213×2**; **`comm-23`** re-run post-push.
+
+## 2026-11-04 — PR #1561 Claude MODIFY @ `d87d42ca`
+
+- **Blockers addressed:** PR title/body authoritative **19:05 UTC** (Joshua deploy catch-up); plan §1 slot table; resolver `_write_soul_map_guarded` passes captured **write_generation** + test; `write_scheduler_hold` requires explicit gen to persist.
+- **HEAD:** pushed after fixes (resolver_scheduler + engine + test + loop_health note).
+- **Gates:** morning **215×2**; **`comm-23`** post-push.
