@@ -96,10 +96,12 @@ class MindmapBridge:
             trail.append(entry)
             state["learning_trail"] = trail[-200:]
 
-        saved = write_soul_map(_apply, self.persistence_path)
-        latest = saved.get("soul_map_state")
-        if isinstance(latest, dict):
-            self.soul_map_state = latest
+        write_soul_map(_apply, self.persistence_path)
+        # Apply the same append to this bridge's memory. The write result is not copied back:
+        # on a failed write it is the pre-append snapshot, which would drop this row.
+        mirror: Dict[str, Any] = {"soul_map_state": self.soul_map_state}
+        _apply(mirror)
+        self.soul_map_state = mirror["soul_map_state"]
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

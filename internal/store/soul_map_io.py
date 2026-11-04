@@ -93,6 +93,18 @@ def _file_and_reader_locks(path: str) -> Iterator[None]:
         time.sleep(_READER_LOCK_WAIT_SECONDS)
 
 
+def _read_blob_for_write(path: str) -> Dict[str, Any]:
+    """Read the blob a write is about to replace. Only a missing file counts as empty."""
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError("soul map top level is not a JSON object")
+    return data
+
+
 def _read_blob(path: str) -> Dict[str, Any]:
     try:
         with open(path, "r") as f:
@@ -168,7 +180,23 @@ def write_soul_map(
         with _file_and_reader_locks(resolved):
             # Read disk, never the cache: another process may have written the file since
             # this process cached it. The file lock is held, so this read-modify-write is safe.
-            blob = _read_blob(resolved)
+            try:
+                blob = _read_blob_for_write(resolved)
+            except Exception as exc:
+                # Replacing a file we could not read would destroy its contents. Leave it as is.
+                logger.warning(
+                    "soul_map read failed before write path=%s error_type=%s error=%s",
+                    resolved,
+                    type(exc).__name__,
+                    exc,
+                    extra={
+                        "event": "soul_map_persistence_failed",
+                        "path": resolved,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                return {}
             prior = copy.deepcopy(blob)
             mutator(blob)
             temp_path = ""

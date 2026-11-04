@@ -59,3 +59,54 @@ def test_mutator_exception_propagates(tmp_path):
 
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"kept": 1}
     assert read_soul_map(str(soul_path)) == {"kept": 1}
+
+
+def test_write_leaves_unreadable_existing_file_untouched(tmp_path):
+    from internal.store import soul_map_io
+
+    path = tmp_path / "soul_map.json"
+    corrupt = '{"soul_map_state": {"learning_trail": [ TRUNCATED'
+    path.write_text(corrupt, encoding="utf-8")
+    calls = []
+
+    result = soul_map_io.write_soul_map(lambda blob: calls.append(blob) or blob.update(x=1), str(path))
+
+    assert path.read_text(encoding="utf-8") == corrupt
+    assert calls == []
+    assert result == {}
+
+
+def test_write_read_oserror_after_fresh_cache_keeps_all_fields(tmp_path, monkeypatch):
+    from internal.store import soul_map_io
+
+    path = tmp_path / "soul_map.json"
+    full = {"soul_map_state": {"learning_trail": [{"id": 1}]}, "feedback_logs": [{"n": 1}]}
+    path.write_text(json.dumps(full), encoding="utf-8")
+    assert read_soul_map(str(path)) == full  # fresh cache holds the full blob
+
+    real_open = open
+
+    def denied_for_soul_map(file, *args, **kwargs):
+        if str(file) == str(path):
+            raise PermissionError("denied")
+        return real_open(file, *args, **kwargs)
+
+    monkeypatch.setattr(soul_map_io, "open", denied_for_soul_map, raising=False)
+    calls = []
+
+    result = write_soul_map(lambda blob: calls.append(blob) or blob.update(x=1), str(path))
+
+    monkeypatch.undo()
+    assert calls == []
+    assert result == {}
+    assert json.loads(path.read_text(encoding="utf-8")) == full
+
+
+def test_write_creates_missing_file(tmp_path):
+    from internal.store import soul_map_io
+
+    path = tmp_path / "fresh" / "soul_map.json"
+
+    soul_map_io.write_soul_map(lambda blob: blob.update(x=1), str(path))
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {"x": 1}

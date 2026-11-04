@@ -255,3 +255,26 @@ def test_failed_save_keeps_selector_output_in_bridge_memory(tmp_path, monkeypatc
     bridge.update_soul_map(selector_output)
 
     assert bridge.soul_map_state["last_selector_output"] == selector_output
+
+
+def test_failed_append_keeps_trail_row_and_ledger_in_bridge_memory(tmp_path, monkeypatch):
+    """A trail append whose disk write fails must keep its row in the bridge's memory.
+
+    Copying the write result back would restore the pre-append snapshot and drop the row.
+    """
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+    entry = {"event_type": "prediction_resolved", "evidence": {"seq": 1}}
+
+    def _fail_replace(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(soul_map_io.os, "replace", _fail_replace)
+    bridge.append_learning_trail(entry, resolved_prediction_id="p-failed")
+
+    assert entry in bridge.soul_map_state["learning_trail"]
+    assert "p-failed" in bridge.soul_map_state["resolved_prediction_ids"]
