@@ -25,12 +25,20 @@ function loadSkillBody(name: string): string {
 /** R2 method arms on PR-head instructions.md (50e231f3); only `bot/instructions.ts` append differs. */
 export type MethodArm = "A" | "B" | "C" | "D";
 
+/** Full exam arm from env, including F (unredacted eval reads only; instructions stay arm A). */
+export type R2MethodArm = MethodArm | "F";
+
+export type SessionPurpose = "eval" | "live";
+
 export const METHOD_ARMS: readonly MethodArm[] = ["A", "B", "C", "D"];
 
-const ARM_ENV: Record<string, MethodArm> = {
+const R2_ARM_ENV: Record<string, R2MethodArm> = {
   A: "A",
   a: "A",
   none: "A",
+  F: "F",
+  f: "F",
+  "unredacted-reads": "F",
   B: "B",
   b: "B",
   "owner-rules": "B",
@@ -73,9 +81,15 @@ export function reviewMethodMarkdownForArm(arm: MethodArm): string {
   return [OWNER_RULES_ALWAYS_IN_FORCE_BLOCK, "", REVIEWER_STATE_FROM_GATE_BLOCK].join("\n");
 }
 
-export function methodArmFromEnv(): MethodArm {
+export function r2MethodArmFromEnv(): R2MethodArm {
   const raw = (process.env.R2_METHOD_ARM ?? "A").trim();
-  return ARM_ENV[raw] ?? "A";
+  return R2_ARM_ENV[raw] ?? "A";
+}
+
+/** Instruction append arm: F is prompt-neutral (maps to A). */
+export function methodArmFromEnv(): MethodArm {
+  const arm = r2MethodArmFromEnv();
+  return arm === "F" ? "A" : arm;
 }
 
 export function instructionsVariantManifest(): Record<

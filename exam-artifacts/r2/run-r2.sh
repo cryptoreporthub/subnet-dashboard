@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# R2 exam: 268 slots, 15m cap, per-slot bot checkout + R2_METHOD_ARM, stop on 2nd hang or V1 fail.
+# R2 exam: 268 slots, enforceable 15m cap + stall guard, resume via START_IDX / RESUME=1.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -14,25 +14,40 @@ AUDIT="$ART/slot-audit-r2-${TAG}.ndjson"
 AGG="$ART/runs/review-gate-r2-${TAG}.json"
 SYNC="$ART/sync-bot-checkout.sh"
 PREF="$ART/preflight-r2-slot.sh"
+SLOT_RUN="$ART/run-r2-slot-capped.sh"
 APPEND="$ART/append-slot-audit-line.mjs"
 MERGE="$ART/merge-slot-into-wave-json.mjs"
 STRIKE_FILE="$ART/.hang-strikes"
 PROGRESS_FILE="$ART/.run-progress.json"
 SLOT_WALL_SEC="${SLOT_WALL_SEC:-900}"
+RESUME="${RESUME:-0}"
+START_IDX="${START_IDX:-0}"
 
 mkdir -p "$ART/runs"
-: >"$AUDIT"
-echo '{"results":[]}' >"$AGG"
-echo 0 >"$STRIKE_FILE"
+if [[ "$RESUME" != "1" ]] && (( START_IDX == 0 )); then
+  : >"$AUDIT"
+  echo '{"results":[]}' >"$AGG"
+  echo 0 >"$STRIKE_FILE"
+else
+  touch "$AUDIT"
+  if [[ ! -f "$AGG" ]]; then
+    echo '{"results":[]}' >"$AGG"
+  fi
+  if [[ ! -f "$STRIKE_FILE" ]]; then
+    echo 0 >"$STRIKE_FILE"
+  fi
+  if [[ -f "$PROGRESS_FILE" ]] && [[ "$START_IDX" == "0" ]]; then
+    START_IDX="$(python3 -c "import json; print(json.load(open('$PROGRESS_FILE')).get('lastCompletedIdx',-1)+1)")"
+  fi
+fi
 
 exec >>"$RUN_LOG" 2>&1
-echo "=== R2 start $(date -u +%Y-%m-%dT%H:%M:%SZ) fixtures=${FIX_SHA} base_bot=${BASE_SHA} ==="
+echo "=== R2 $( [[ "$RESUME" == 1 ]] && echo resume || echo start ) $(date -u +%Y-%m-%dT%H:%M:%SZ) fixtures=${FIX_SHA} base_bot=${BASE_SHA} START_IDX=${START_IDX} slot_wall_s=${SLOT_WALL_SEC} ==="
 echo "fixture_pin_full=$(git -C "$REPO_ROOT" rev-parse HEAD)"
 echo "plan_slots=$(python3 -c "import json; print(len(json.load(open('$PLAN'))['slots']))")"
+echo "audit_lines_existing=$(wc -l <"$AUDIT" | tr -d ' ')"
 
 TOTAL="$(python3 -c "import json; print(len(json.load(open('$PLAN'))['slots']))")"
-START_IDX="${START_IDX:-0}"
-SLOT_IDX=0
 
 python3 - <<PY > /tmp/r2-slot-lines.tsv
 import json
@@ -53,11 +68,31 @@ PY
 cd "$BOT"
 npm ci --silent 2>/dev/null || npm install --silent
 
+record_timeout() {
+  local idx=$1 eval_id=$2 case_slug=$3 iter_num=$4 condition=$5 role=$6 bot_sha=$7 method_arm=$8
+  local slot_start=$9 slot_end=${10}
+  local sysprompt_chars=${11} sysprompt_sha=${12} model_json=${13} fix_full=${14}
+  STRIKES=$(($(cat "$STRIKE_FILE") + 1))
+  echo "$STRIKES" >"$STRIKE_FILE"
+  echo "slot_timeout=1 eval_id=${eval_id} idx=${idx} at=${slot_end} strikes=${STRIKES}" 
+  node "$APPEND" --audit "$AUDIT" --sysprompt-chars "$sysprompt_chars" --sysprompt-sha "$sysprompt_sha" \
+    --model-json "$model_json" --fixture-pin "$fix_full" --eval-id "$eval_id" --case-id "$case_slug" \
+    --iteration "$iter_num" --condition "$condition" --role "$role" --bot-checkout-sha "$bot_sha" \
+    --r2-method-arm "$method_arm" --slot-started-at "$slot_start" --slot-ended-at "$slot_end" --timed-out true
+  python3 - <<PY
+import json
+json.dump({"lastCompletedIdx": int("$idx"), "slotTimeoutCount": int("$STRIKES"), "stopped": False}, open("$PROGRESS_FILE","w"))
+PY
+  if (( STRIKES >= 2 )); then
+    echo "STOP second hang at eval_id=${eval_id} idx=${idx}"
+    exit 12
+  fi
+}
+
 while IFS=$'\t' read -r IDX EVAL_ID CONDITION ROLE BOT_SHA METHOD_ARM CASE_SLUG ITER_NUM; do
   if (( IDX < START_IDX )); then
     continue
   fi
-  SLOT_IDX=$((SLOT_IDX + 1))
   echo "PROGRESS slot=$((IDX + 1))/${TOTAL} idx=${IDX} eval_id=${EVAL_ID} condition=${CONDITION} bot=${BOT_SHA:0:8} arm=${METHOD_ARM}"
   bash "$SYNC" "$BOT_SHA"
   export R2_METHOD_ARM="$METHOD_ARM"
@@ -74,35 +109,18 @@ while IFS=$'\t' read -r IDX EVAL_ID CONDITION ROLE BOT_SHA METHOD_ARM CASE_SLUG 
   SLOT_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "SLOT_START idx=${IDX} eval_id=${EVAL_ID} at=${SLOT_START}"
   SLOT_JSON="$(mktemp /tmp/r2-slot-XXXX.json)"
-  STATE="/tmp/r2-slot-state-${IDX}-$$"
+  STATE="/tmp/r2-slot-state-${IDX}-$$-${RANDOM}"
   rm -rf "$STATE"
-  HERMETIC=(env -i HOME="$HOME" PATH="$PATH" USER="${USER:-ubuntu}" TMPDIR="${TMPDIR:-/tmp}"
-    CURSOR_API_KEY="${CURSOR_API_KEY:?CURSOR_API_KEY required}" R2_METHOD_ARM="$METHOD_ARM")
-  set +e
-  timeout --kill-after=30 "$SLOT_WALL_SEC" "${HERMETIC[@]}" bash -lc \
-    "cd '$BOT' && npx agent-sdk eval --dir . $(printf '%q' "$EVAL_ID") --json --no-stream --max-concurrency 1 --state-root '$STATE' --out '$SLOT_JSON'"
-  EC=$?
-  set -e
+
+  EC="$(bash "$SLOT_RUN" "$BOT" "$EVAL_ID" "$STATE" "$SLOT_JSON" "$METHOD_ARM" "$SLOT_WALL_SEC" "$RUN_LOG")"
   SLOT_END="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   rm -rf "$STATE"
 
   if [[ "$EC" -eq 124 ]] || [[ "$EC" -eq 137 ]]; then
-    STRIKES=$(($(cat "$STRIKE_FILE") + 1))
-    echo "$STRIKES" >"$STRIKE_FILE"
-    echo "slot_timeout eval_id=${EVAL_ID} at=${SLOT_END} strikes=${STRIKES}"
-    node "$APPEND" --audit "$AUDIT" --sysprompt-chars "$SYSPROMPT_CHARS" --sysprompt-sha "$SYSPROMPT_SHA" \
-      --model-json "$MODEL_JSON" --fixture-pin "$FIX_FULL" --eval-id "$EVAL_ID" --case-id "$CASE_SLUG" \
-      --iteration "$ITER_NUM" --condition "$CONDITION" --role "$ROLE" --bot-checkout-sha "$BOT_SHA" \
-      --r2-method-arm "$METHOD_ARM" --slot-started-at "$SLOT_START" --slot-ended-at "$SLOT_END" --timed-out true
+    record_timeout "$IDX" "$EVAL_ID" "$CASE_SLUG" "$ITER_NUM" "$CONDITION" "$ROLE" "$BOT_SHA" "$METHOD_ARM" \
+      "$SLOT_START" "$SLOT_END" "$SYSPROMPT_CHARS" "$SYSPROMPT_SHA" "$MODEL_JSON" "$FIX_FULL"
     rm -f "$SLOT_JSON"
-    python3 - <<PY
-import json
-json.dump({"lastCompletedIdx": $IDX, "slotTimeoutCount": $STRIKES, "stopped": False}, open("$PROGRESS_FILE","w"))
-PY
-    if (( STRIKES >= 2 )); then
-      echo "STOP second hang at eval_id=${EVAL_ID}"
-      exit 12
-    fi
+    echo "SLOT_END idx=${IDX} eval_id=${EVAL_ID} exit=timeout at=${SLOT_END}"
     continue
   fi
   if [[ "$EC" -ne 0 ]] || [[ ! -s "$SLOT_JSON" ]]; then
@@ -126,5 +144,5 @@ p.write_text(json.dumps(doc))
 PY
 done < /tmp/r2-slot-lines.tsv
 
-TO="$(grep -c slot_timeout "$RUN_LOG" 2>/dev/null || true)"
+TO="$(grep -c 'slot_timeout=1' "$RUN_LOG" 2>/dev/null || true)"
 echo "=== R2 complete $(date -u +%Y-%m-%dT%H:%M:%SZ) audit_lines=$(wc -l <"$AUDIT" | tr -d ' ') slot_timeout_count=${TO} ==="

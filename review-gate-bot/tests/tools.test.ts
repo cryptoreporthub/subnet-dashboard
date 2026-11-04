@@ -13,6 +13,8 @@ import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
 import { composeVerdictBody } from "../bot/tools/post_verdict.js";
 import listRepoFiles from "../bot/tools/list_repo_files.js";
 import readRepoFile from "../bot/tools/read_repo_file.js";
+import getPrDiff from "../bot/tools/get_pr_diff.js";
+import { readDiff } from "../bot/lib/repo.js";
 
 const HEAD = "a".repeat(40);
 const OLD = "b".repeat(40);
@@ -343,4 +345,104 @@ test("an eval compare_suite_runs stays not-clean when the fixture gate has no cl
     assert.equal(result.clean, false, suite);
     assert.equal(result.reason, "eval-no-runner", suite);
   }
+});
+
+// --- V3 tool fidelity: eval vs production output content (not only keys) ------
+// Scope: get_pr_diff only. check_gate_state V3 remains the output-key whitelist above.
+// read_repo_file and list_repo_files use the R0.8 base-read fidelity tests instead.
+
+type CompareFile = {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch?: string;
+  previous_filename?: string;
+};
+
+function compareOctokit(files: CompareFile[]): Octokit {
+  return {
+    rest: {
+      repos: {
+        compareCommitsWithBasehead: async () => ({ data: { files } }),
+      },
+    },
+  } as unknown as Octokit;
+}
+
+async function diffEvalContext(rawFiles: CompareFile[]): Promise<{ session: { purpose: string }; workspaceDir: string }> {
+  const dir = await mkdtemp(join(tmpdir(), "diff-eval-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({
+      number: 1522,
+      title: "t",
+      url: "u",
+      headSha: HEAD,
+      baseSha: BASE,
+      draft: false,
+      files: rawFiles.map((f) => f.filename),
+    }),
+  );
+  await writeFile(
+    join(dir, "diff.json"),
+    JSON.stringify({
+      totalFiles: rawFiles.length,
+      truncated: false,
+      omittedPaths: [],
+      files: rawFiles.map((f) => ({
+        path: f.filename,
+        status: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
+        patch: f.patch,
+        ...(f.previous_filename === undefined ? {} : { previousPath: f.previous_filename }),
+      })),
+    }),
+  );
+  return { session: { purpose: "eval" }, workspaceDir: dir };
+}
+
+test("V3 get_pr_diff eval output matches production readDiff content for the same raw compare", async () => {
+  const bearerVal = "evalparitybearer1234567890";
+  const secretVal = "evalparitysecret1234567890";
+  const patch = `+bearer=${bearerVal}\n+client_secret=${secretVal}\n`;
+  const rawFiles: CompareFile[] = [
+    { filename: "a.py", status: "modified", additions: 2, deletions: 0, patch },
+    { filename: "b.py", status: "modified", additions: 1, deletions: 0, patch: "+ok\n" },
+  ];
+  const ref = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+  const prod = await readDiff(compareOctokit(rawFiles), ref, { head: HEAD, base: BASE });
+  assert.equal(prod.ok, true);
+  if (!prod.ok) {
+    return;
+  }
+  const evalOut = (await run(getPrDiff)({ headSha: HEAD }, await diffEvalContext(rawFiles))) as Record<string, unknown>;
+  assert.equal(evalOut.ok, true);
+  assert.equal(evalOut.source, "fixture");
+  assert.equal(evalOut.totalFiles, prod.totalFiles);
+  assert.deepEqual(evalOut.files, prod.files);
+  assert.equal(evalOut.truncated, prod.truncated);
+  assert.deepEqual(evalOut.omittedPaths, prod.omittedPaths);
+});
+
+test("V3 get_pr_diff path filter matches production for the same raw compare", async () => {
+  const rawFiles: CompareFile[] = [
+    { filename: "a.py", status: "modified", additions: 1, deletions: 0, patch: "+a\n" },
+    { filename: "b.py", status: "modified", additions: 1, deletions: 0, patch: "+b\n" },
+  ];
+  const ref = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+  const prod = await readDiff(compareOctokit(rawFiles), ref, { head: HEAD, base: BASE, paths: ["b.py"] });
+  assert.equal(prod.ok, true);
+  if (!prod.ok) {
+    return;
+  }
+  const evalOut = (await run(getPrDiff)({ headSha: HEAD, paths: ["b.py"] }, await diffEvalContext(rawFiles))) as Record<
+    string,
+    unknown
+  >;
+  assert.deepEqual(
+    { totalFiles: evalOut.totalFiles, files: evalOut.files, truncated: evalOut.truncated, omittedPaths: evalOut.omittedPaths },
+    { totalFiles: prod.totalFiles, files: prod.files, truncated: prod.truncated, omittedPaths: prod.omittedPaths },
+  );
 });
