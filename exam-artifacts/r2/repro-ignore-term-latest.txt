@@ -1,0 +1,7 @@
+R2 ignore-SIGTERM repro 2026-11-04T20:07:36Z (setsid + PG backstop + timeout tail --pid)
+SLOT_WALL_SEC=900 max_ok=960s marker=repro_ignore_term_201821
+
+Run A (~13MB log): exit=124 wall=905s guard_elapsed=900s pgrep_survivors=NONE verdict=pass
+Run B (fresh log):  exit=124 wall=905s guard_elapsed=900s pgrep_survivors=NONE verdict=pass
+
+timeout_line: slot_timeout=1 stall_guard pg_backstop pgid=… elapsed_s=900

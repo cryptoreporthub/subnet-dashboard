@@ -1,0 +1,7 @@
+R2 stall-guard repro 2026-11-04T19:35:53Z (timeout --foreground harness)
+SLOT_WALL_SEC=900 max_ok=960s
+
+Run A (~13MB log): exit=124 wall_elapsed_s=900 guard_elapsed_s=900 verdict=pass log_bytes=12849488
+Run B (fresh log):  exit=124 wall_elapsed_s=900 guard_elapsed_s=900 verdict=pass log_bytes=42319
+
+Both slot_timeout=1 stall_guard timeout_exit=124 elapsed_s=900

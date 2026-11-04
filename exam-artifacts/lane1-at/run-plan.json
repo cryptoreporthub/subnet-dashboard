@@ -1,0 +1,541 @@
+{
+  "runLabel": "lane1-at",
+  "fixturePinSha": "d73456337d8ec70f4d9987885335e973dfdadaa0",
+  "freshABotSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+  "candidateBotSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+  "slotOrder": "iteration-major-two-wide-adjacent-pairs",
+  "expectedModel": {
+    "id": "composer-2.5",
+    "params": [
+      {
+        "id": "fast",
+        "value": "false"
+      }
+    ]
+  },
+  "slotCount": 58,
+  "slots": [
+    {
+      "evalId": "review-gate-hard/planted-grace-seconds/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-grace-seconds",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-grace-seconds/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-grace-seconds",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-tmc-over-chain/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-tmc-over-chain",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-tmc-over-chain/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-tmc-over-chain",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-env-logged/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-env-logged",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-env-logged/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-env-logged",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-failed-read-is-not-registered/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-failed-read-is-not-registered",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-failed-read-is-not-registered/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-failed-read-is-not-registered",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/trick-injection-body-and-comment/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "trick-injection-body-and-comment",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/trick-injection-body-and-comment/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "trick-injection-body-and-comment",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-grace-seconds/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-grace-seconds",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-grace-seconds/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-grace-seconds",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-tmc-over-chain/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-tmc-over-chain",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-tmc-over-chain/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-tmc-over-chain",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-env-logged/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-env-logged",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-env-logged/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-env-logged",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-failed-read-is-not-registered/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-failed-read-is-not-registered",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-failed-read-is-not-registered/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-failed-read-is-not-registered",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/trick-injection-body-and-comment/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "trick-injection-body-and-comment",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/trick-injection-body-and-comment/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "trick-injection-body-and-comment",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-grace-seconds/3",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-grace-seconds",
+      "iteration": 3,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-grace-seconds/3",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-grace-seconds",
+      "iteration": 3,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-tmc-over-chain/3",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-tmc-over-chain",
+      "iteration": 3,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-tmc-over-chain/3",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-tmc-over-chain",
+      "iteration": 3,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-env-logged/3",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-env-logged",
+      "iteration": 3,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-env-logged/3",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-env-logged",
+      "iteration": 3,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/planted-failed-read-is-not-registered/3",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "planted-failed-read-is-not-registered",
+      "iteration": 3,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/planted-failed-read-is-not-registered/3",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "planted-failed-read-is-not-registered",
+      "iteration": 3,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-hard/trick-injection-body-and-comment/3",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "trick-injection-body-and-comment",
+      "iteration": 3,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-hard/trick-injection-body-and-comment/3",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "trick-injection-body-and-comment",
+      "iteration": 3,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-01/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-01",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-01/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-01",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-03/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-03",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-03/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-03",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-04/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-04",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-04/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-04",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-05/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-05",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-05/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-05",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-06/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-06",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-06/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-06",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-02/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "f3-ctrl-02",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-02/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "f3-ctrl-02",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-03/1",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "f3-ctrl-03",
+      "iteration": 1,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-03/1",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "f3-ctrl-03",
+      "iteration": 1,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-01/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-01",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-01/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-01",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-03/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-03",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-03/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-03",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-04/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-04",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-04/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-04",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-05/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-05",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-05/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-05",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-06/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "wired-06",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/wired-06/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "wired-06",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-02/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "f3-ctrl-02",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-02/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "f3-ctrl-02",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-03/2",
+      "condition": "S",
+      "role": "candidate",
+      "caseSlug": "f3-ctrl-03",
+      "iteration": 2,
+      "botCheckoutSha": "f3c847669a99538966842a9e0fd189875f2d8d07",
+      "r2MethodArm": "G"
+    },
+    {
+      "evalId": "review-gate-r1packb/f3-ctrl-03/2",
+      "condition": "A",
+      "role": "freshA",
+      "caseSlug": "f3-ctrl-03",
+      "iteration": 2,
+      "botCheckoutSha": "532f3fbddc30f6f660211452da2da6461f36449a",
+      "r2MethodArm": "A"
+    }
+  ]
+}
