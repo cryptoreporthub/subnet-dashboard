@@ -330,3 +330,5 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+- **2026-11-04 PR #1544:** Claude reject @6645256182 (`c8600b66`) → recut `cursor/lane1-at-optional-c6f4` @ `b3cae98ecf53b7df924a7e5b5d5944f180f1f678` (arm G at-default, no eval hunks); not merged to `5846`.
