@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   OWNER_RULES_ALWAYS_IN_FORCE_BLOCK,
-  R23_SUITE_SHRINK_VERDICT_RULE,
   REVIEWER_STATE_FROM_GATE_BLOCK,
   prHeadInstructionsMarkdown,
 } from "./instruction-blocks.js";
@@ -24,14 +23,14 @@ function loadSkillBody(name: string): string {
 }
 
 /** R2 method arms on PR-head instructions.md (50e231f3); only `bot/instructions.ts` append differs. */
-export type MethodArm = "A" | "B" | "C" | "D" | "R";
+export type MethodArm = "A" | "B" | "C" | "D";
 
 /** Full exam arm from env, including F (unredacted eval reads only; instructions stay arm A). */
 export type R2MethodArm = MethodArm | "F";
 
 export type SessionPurpose = "eval" | "live";
 
-export const METHOD_ARMS: readonly MethodArm[] = ["A", "B", "C", "D", "R"];
+export const METHOD_ARMS: readonly MethodArm[] = ["A", "B", "C", "D"];
 
 const R2_ARM_ENV: Record<string, R2MethodArm> = {
   A: "A",
@@ -49,10 +48,6 @@ const R2_ARM_ENV: Record<string, R2MethodArm> = {
   D: "D",
   d: "D",
   "r4-bundle": "D",
-  R: "R",
-  r: "R",
-  r23: "R",
-  "suite-shrink": "R",
 };
 
 /** Markdown appended via `defineInstructions` (SDK joins after `bot/instructions.md`). */
@@ -82,9 +77,6 @@ export function reviewMethodMarkdownForArm(arm: MethodArm): string {
       "",
       settled,
     ].join("\n");
-  }
-  if (arm === "R") {
-    return R23_SUITE_SHRINK_VERDICT_RULE;
   }
   return [OWNER_RULES_ALWAYS_IN_FORCE_BLOCK, "", REVIEWER_STATE_FROM_GATE_BLOCK].join("\n");
 }

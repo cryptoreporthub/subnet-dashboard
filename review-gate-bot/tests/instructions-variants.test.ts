@@ -24,7 +24,7 @@ test("R2 arms A–D on PR-head base: distinct SHA256; A is control only", () => 
   for (const arm of METHOD_ARMS) {
     assert.match(manifest[arm].sha256, /^[a-f0-9]{64}$/);
   }
-  assert.equal(new Set(METHOD_ARMS.map((a) => manifest[a].sha256)).size, METHOD_ARMS.length);
+  assert.equal(new Set(METHOD_ARMS.map((a) => manifest[a].sha256)).size, 4);
   assert.equal(manifest.A.appendChars, 0);
   assert.equal(manifest.A.composedChars, manifest.A.baseChars);
   assert.ok(manifest.B.appendChars > 1000);
@@ -42,10 +42,4 @@ test("arm B is owner-rules block only; arm C is three skills; arm D adds reviewe
   const d = reviewMethodMarkdownForArm("D");
   assert.match(d, /Reviewer state comes from the gate/);
   assert.match(d, /Owner rules, always in force/);
-});
-
-test("arm R is the r23 suite-shrink verdict rule only", () => {
-  const r = reviewMethodMarkdownForArm("R");
-  assert.match(r, /reduces what the recorded full-suite comparison actually checks/);
-  assert.doesNotMatch(r, /Owner rules, always in force/);
 });
