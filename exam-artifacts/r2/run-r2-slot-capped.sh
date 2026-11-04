@@ -40,9 +40,10 @@ setsid "${HERMETIC[@]}" "${EVAL_CMD[@]}" >>"$RUN_LOG" 2>&1 &
 EVAL_PID=$!
 EVAL_PGID="$(ps -o pgid= -p "$EVAL_PID" 2>/dev/null | tr -d ' ')"
 
-(
-  sleep "$SLOT_WALL_SEC"
-  if kill -0 "$EVAL_PID" 2>/dev/null; then
+EC=0
+DEADLINE_EPOCH=$((START_EPOCH + SLOT_WALL_SEC))
+while kill -0 "$EVAL_PID" 2>/dev/null; do
+  if (( $(date +%s) >= DEADLINE_EPOCH )); then
     NOW="$(date +%s)"
     ELAPSED=$((NOW - START_EPOCH))
     echo "slot_timeout=1 stall_guard pg_backstop pgid=${EVAL_PGID} pid=${EVAL_PID} elapsed_s=${ELAPSED} eval_id=${EVAL_ID}" >>"$RUN_LOG"
@@ -55,18 +56,18 @@ EVAL_PGID="$(ps -o pgid= -p "$EVAL_PID" 2>/dev/null | tr -d ' ')"
       kill -KILL -- "-${EVAL_PGID}" 2>/dev/null || true
     fi
     kill -KILL "$EVAL_PID" 2>/dev/null || true
+    wait "$EVAL_PID" 2>/dev/null || true
+    EC=124
+    break
   fi
-) &
-WATCH_PID=$!
+  sleep 1
+done
+if (( EC == 0 )); then
+  wait "$EVAL_PID" 2>/dev/null
+  EC=$?
+fi
 
-timeout --foreground "$((SLOT_WALL_SEC + 60))s" tail --pid="$EVAL_PID" -f /dev/null >/dev/null 2>&1
-TO_EC=$?
-wait "$EVAL_PID" 2>/dev/null
-EC=$?
-kill "$WATCH_PID" 2>/dev/null || true
-wait "$WATCH_PID" 2>/dev/null || true
-
-if kill -0 "$EVAL_PID" 2>/dev/null || (( TO_EC == 124 )); then
+if kill -0 "$EVAL_PID" 2>/dev/null; then
   EC=124
   if [[ -n "${EVAL_PGID:-}" ]]; then
     kill -KILL -- "-${EVAL_PGID}" 2>/dev/null || true
