@@ -15,6 +15,7 @@ from internal.council.scheduler_cycle_state import read_last_cycle
 from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import SOUL_MAP_PATH
 from internal.learning.predictions_store import PREDICTIONS_PATH, load_predictions
+from internal.liveness import write_seq
 from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,8 @@ _SNAPSHOT_STALE_S = int(os.environ.get("LEARNING_SNAPSHOT_STALE_SECONDS", "2700"
 _RESOLVER_LIVENESS_CACHE_TTL_S = float(
     os.environ.get("RESOLVER_LIVENESS_CACHE_SECONDS", "5")
 )
-_RESOLVER_LIVENESS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_RESOLVER_LIVENESS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None, "seq": -1}
+_RESOLVER_TRACKER_NAME = "prediction_resolver"
 _RESOLVER_LIVENESS_CACHE_LOCK = threading.Lock()
 _RESOLVER_LIVENESS_BUILDING = False
 
@@ -338,16 +340,27 @@ def _build_resolver_liveness_view() -> Dict[str, Any]:
     }
 
 
+def _resolver_tracker_seq() -> int:
+    return write_seq(_RESOLVER_TRACKER_NAME)
+
+
 def _cached_resolver_liveness_view(*, allow_stale: bool = False) -> Optional[Dict[str, Any]]:
-    """Return the last shared resolver view without performing I/O."""
+    """Return the last shared resolver view without performing I/O.
+
+    A view is dropped as soon as the resolver tracker has been written in this
+    process, so a fresh tick shows up on the next read rather than after the TTL.
+    ``allow_stale`` ignores both the TTL and the write counter.
+    """
     now = time.monotonic()
     ttl = _RESOLVER_LIVENESS_CACHE_TTL_S if not allow_stale else float("inf")
     with _RESOLVER_LIVENESS_CACHE_LOCK:
         payload = _RESOLVER_LIVENESS_CACHE.get("payload")
         captured = float(_RESOLVER_LIVENESS_CACHE.get("at") or 0.0)
-        if isinstance(payload, dict) and now - captured <= ttl:
-            return dict(payload)
-    return None
+        if not isinstance(payload, dict) or now - captured > ttl:
+            return None
+        if not allow_stale and _RESOLVER_LIVENESS_CACHE.get("seq") != _resolver_tracker_seq():
+            return None
+        return dict(payload)
 
 
 def cached_resolver_liveness_view(*, allow_stale: bool = False) -> Optional[Dict[str, Any]]:
@@ -365,8 +378,10 @@ def _resolver_liveness_view() -> Dict[str, Any]:
 
     with _RESOLVER_LIVENESS_CACHE_LOCK:
         if _RESOLVER_LIVENESS_BUILDING:
+            # A payload from before the latest tracker write is not a valid answer,
+            # even while a rebuild is in flight. Fall through to the placeholder.
             stale = _RESOLVER_LIVENESS_CACHE.get("payload")
-            if isinstance(stale, dict):
+            if isinstance(stale, dict) and _RESOLVER_LIVENESS_CACHE.get("seq") == _resolver_tracker_seq():
                 return dict(stale)
             return {
                 "at": None,
@@ -383,11 +398,13 @@ def _resolver_liveness_view() -> Dict[str, Any]:
         _RESOLVER_LIVENESS_BUILDING = True
 
     try:
+        seq_before = _resolver_tracker_seq()
         view = _build_resolver_liveness_view()
         if isinstance(view, dict):
             with _RESOLVER_LIVENESS_CACHE_LOCK:
                 _RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
                 _RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
+                _RESOLVER_LIVENESS_CACHE["seq"] = seq_before
         return view
     finally:
         with _RESOLVER_LIVENESS_CACHE_LOCK:
