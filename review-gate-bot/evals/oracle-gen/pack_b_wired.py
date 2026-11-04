@@ -40,44 +40,45 @@ def test_sorted_removed_netuids_orders_and_dedupes():
     assert _sorted_removed_netuids([3, 1, 2], [2]) == [1, 3]
 """
 
-    max_tokens_helper = (
-        "\n\ndef read_max_tokens(default: int = 4096) -> int:\n"
-        '    raw = os.environ.get("MAX_TOKENS", str(default))\n'
-        "    try:\n"
-        "        return max(1, int(raw))\n"
-        "    except ValueError:\n"
+    parse_int_helper = (
+        "\n\ndef parse_bounded_int(raw: str | None, default: int) -> int:\n"
+        '    if raw is None or str(raw).strip() == "":\n'
         "        return default\n"
+        "    return int(str(raw).strip())\n"
     )
     w02_cov = sub(
         cov_base,
-        "PHASE1_COVERAGE_CAPTURE_MAX_SECONDS = max(\n    1,\n    env_int(\"PHASE1_COVERAGE_CAPTURE_MAX_SECONDS\", 600),\n)",
-        "PHASE1_COVERAGE_CAPTURE_MAX_SECONDS = max(\n    1,\n    min(env_int(\"PHASE1_COVERAGE_CAPTURE_MAX_SECONDS\", 600), read_max_tokens() // 8),\n)",
+        "def env_int(name: str, default: int) -> int:\n"
+        "    raw = os.environ.get(name)\n"
+        '    if raw is None or str(raw).strip() == "":\n'
+        "        return default\n"
+        "    return int(raw)",
+        parse_int_helper
+        + "def env_int(name: str, default: int) -> int:\n"
+        "    return parse_bounded_int(os.environ.get(name), default)",
     )
-    w02_cov = sub(w02_cov, "def env_int(name: str, default: int) -> int:", max_tokens_helper + "def env_int(name: str, default: int) -> int:")
     w02_tests = tests + """
 
-def test_read_max_tokens_default_from_snapshot_coverage():
-    from internal.council.snapshot_coverage import read_max_tokens
+def test_parse_bounded_int_uses_default_when_empty():
+    from internal.council.snapshot_coverage import parse_bounded_int
 
-    assert read_max_tokens() == 4096
+    assert parse_bounded_int("", 600) == 600
+    assert parse_bounded_int("42", 0) == 42
 """
 
-    token_helper = (
-        "\n\ndef token_count_for_log(text: str) -> int:\n"
-        "    return len((text or \"\").split())\n"
+    cycle_complete_helper = (
+        "\n\ndef _cycle_complete(coverage: Dict[str, Any]) -> bool:\n"
+        "    return bool(coverage.get(\"complete\"))\n"
     )
-    w03_cov = sub(cov_base, "def note_cycle(coverage: Dict[str, Any]) -> int:", token_helper + "def note_cycle(coverage: Dict[str, Any]) -> int:")
-    w03_cov = sub(
-        w03_cov,
-        "    _last_cycle = dict(coverage)\n",
-        "    _last_cycle = dict(coverage)\n    if token_count_for_log(str(coverage.get(\"reason\") or \"\")) > 64:\n        pass  # logging-only sizing guard\n",
-    )
+    w03_cov = sub(cov_base, "def note_cycle(coverage: Dict[str, Any]) -> int:", cycle_complete_helper + "def note_cycle(coverage: Dict[str, Any]) -> int:")
+    w03_cov = sub(w03_cov, "    if coverage.get(\"complete\"):", "    if _cycle_complete(coverage):")
     w03_tests = tests + """
 
-def test_token_count_for_log_words():
-    from internal.council.snapshot_coverage import token_count_for_log
+def test_cycle_complete_reads_coverage_flag():
+    from internal.council.snapshot_coverage import _cycle_complete
 
-    assert token_count_for_log("a b c") == 3
+    assert _cycle_complete({"complete": True}) is True
+    assert _cycle_complete({"complete": False}) is False
 """
 
     header_helper = (
@@ -103,43 +104,37 @@ def test_api_key_header_prefix_on_fetcher():
     assert api_key_header("secret").startswith("ApiKey ")
 """
 
-    key_ops_helper = (
-        "def _validity_key_count(validity_map: dict) -> int:\n"
-        "    return sum(1 for _k in validity_map.keys())\n\n\n"
+    member_netuids_helper = (
+        "def _member_netuids_from_map(validity_map: dict) -> list[int]:\n"
+        "    return sorted(int(k) for k in validity_map.keys())\n\n\n"
     )
     netuids_line = "    netuids = sorted(int(k) for k in validity_map.keys())\n"
-    w05_uni = sub(
-        uni,
-        netuids_line,
-        "    _validity_key_count(validity_map)\n" + netuids_line,
-    )
-    w05_uni = sub(w05_uni, "def _compute_membership(", key_ops_helper + "def _compute_membership(")
+    w05_uni = sub(uni, netuids_line, "    netuids = _member_netuids_from_map(validity_map)\n")
+    w05_uni = sub(w05_uni, "def _compute_membership(", member_netuids_helper + "def _compute_membership(")
     w05_tests = tests + """
 
-def test_validity_key_count_matches_map_size():
-    from internal.subnet_universe import _validity_key_count
+def test_member_netuids_from_map_sorted():
+    from internal.subnet_universe import _member_netuids_from_map
 
-    m = {str(i): {} for i in range(5)}
-    assert _validity_key_count(m) == 5
+    assert _member_netuids_from_map({"3": {}, "1": {}}) == [1, 3]
 """
 
-    batch_helper = (
-        "def _refresh_batch_count(netuid_count: int, *, batch_size: int = 32) -> int:\n"
-        "    if netuid_count <= 0:\n        return 0\n"
-        "    return (netuid_count + batch_size - 1) // batch_size\n\n\n"
+    probe_sort_helper = (
+        "def _sorted_probe_candidates(candidates: set[int]) -> list[int]:\n"
+        "    return sorted(candidates)\n\n\n"
     )
     w06_uni = sub(
         uni,
         "            probe_candidates = sorted(candidates)\n",
-        "            _refresh_batch_count(len(probe_candidates))\n            probe_candidates = sorted(candidates)\n",
+        "            probe_candidates = _sorted_probe_candidates(candidates)\n",
     )
-    w06_uni = sub(w06_uni, "def _compute_membership(", batch_helper + "def _compute_membership(")
+    w06_uni = sub(w06_uni, "def _compute_membership(", probe_sort_helper + "def _compute_membership(")
     w06_tests = tests + """
 
-def test_refresh_batch_count_for_sixty_four():
-    from internal.subnet_universe import _refresh_batch_count
+def test_sorted_probe_candidates_orders_netuids():
+    from internal.subnet_universe import _sorted_probe_candidates
 
-    assert _refresh_batch_count(64, batch_size=32) == 2
+    assert _sorted_probe_candidates({3, 1, 2}) == [1, 2, 3]
 """
 
     specs = [
@@ -152,16 +147,16 @@ def test_refresh_batch_count_for_sixty_four():
         ),
         (
             "r1b-wired-02",
-            "snapshot_coverage: parse MAX_TOKENS via read_max_tokens",
+            "snapshot_coverage: parse env ints via parse_bounded_int",
             [(cov_path, cov_base, w02_cov), (TEST, tests, w02_tests)],
-            "internal.council.snapshot_coverage.read_max_tokens",
+            "internal.council.snapshot_coverage.parse_bounded_int",
             _pytest(env, tests=w02_tests, extra_files={cov_path: w02_cov}),
         ),
         (
             "r1b-wired-03",
-            "snapshot_coverage: token_count_for_log on partial cycle notes",
+            "snapshot_coverage: detect complete cycles via _cycle_complete",
             [(cov_path, cov_base, w03_cov), (TEST, tests, w03_tests)],
-            "internal.council.snapshot_coverage.token_count_for_log",
+            "internal.council.snapshot_coverage._cycle_complete",
             _pytest(env, tests=w03_tests, extra_files={cov_path: w03_cov}),
         ),
         (
@@ -173,16 +168,16 @@ def test_refresh_batch_count_for_sixty_four():
         ),
         (
             "r1b-wired-05",
-            "universe: count validity_map keys before export",
+            "universe: export netuids via _member_netuids_from_map",
             [(U, uni, w05_uni), (TEST, tests, w05_tests)],
-            "internal.subnet_universe._validity_key_count",
+            "internal.subnet_universe._member_netuids_from_map",
             _pytest(env, w05_uni, tests=w05_tests),
         ),
         (
             "r1b-wired-06",
-            "universe: measure refresh batches via _refresh_batch_count",
+            "universe: sort probe candidates via _sorted_probe_candidates",
             [(U, uni, w06_uni), (TEST, tests, w06_tests)],
-            "internal.subnet_universe._refresh_batch_count",
+            "internal.subnet_universe._sorted_probe_candidates",
             _pytest(env, w06_uni, tests=w06_tests),
         ),
     ]

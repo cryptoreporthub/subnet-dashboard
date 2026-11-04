@@ -1,7 +1,7 @@
 {
   "fixture": "r1b-wired-06",
   "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
-  "diffSha256": "7546444bd0f2057f88ffb337b5143e2eaecfbaae733034f6c580f2daf9bd0685",
+  "diffSha256": "5b2a73bf3c8e790517de860d3d7e815ec5bbdcabe531c20d3b8c00145c95570d",
   "changedPaths": [
     "internal/subnet_universe.py",
     "tests/test_subnet_universe.py"
@@ -9,37 +9,15 @@
   "behavior": {
     "expectedVerdict": "PASS",
     "family": "wired-substantive-control",
-    "wiredImportPath": "internal.subnet_universe._refresh_batch_count",
+    "wiredImportPath": "internal.subnet_universe._sorted_probe_candidates",
     "replacesOrphanPattern": true
   },
   "pytest": {
-    "summary": "21 failed, 36 passed",
-    "passed": 36,
-    "failed": 21,
+    "summary": "57 passed",
+    "passed": 57,
+    "failed": 0,
     "skipped": 0,
     "deselected": 0,
-    "failingTests": [
-      "tests/test_subnet_universe.py::test_aged_negative_not_removed_when_probe_unobserved_incomplete",
-      "tests/test_subnet_universe.py::test_build_probes_full_range_when_tmc_complete",
-      "tests/test_subnet_universe.py::test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered",
-      "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
-      "tests/test_subnet_universe.py::test_cold_start_empty_tmc_emergency_registry",
-      "tests/test_subnet_universe.py::test_cold_start_empty_tmc_emergency_registry_via_provider",
-      "tests/test_subnet_universe.py::test_failed_chain_read_does_not_undo_a_chain_negative",
-      "tests/test_subnet_universe.py::test_lkg_empty_tmc_retains_full_snapshot_via_provider",
-      "tests/test_subnet_universe.py::test_negative_validity_removal_after_grace",
-      "tests/test_subnet_universe.py::test_no_price_on_one_positive_does_not_snapshot_freeze_membership",
-      "tests/test_subnet_universe.py::test_partial_chain_read_never_marks_a_tmc_listed_netuid_negative",
-      "tests/test_subnet_universe.py::test_provider_grace_removal_via_refresh_once",
-      "tests/test_subnet_universe.py::test_refresh_once_publishes_grace_removal_despite_incomplete_refresh",
-      "tests/test_subnet_universe.py::test_registered_netuid_missing_from_tmc_stays_positive",
-      "tests/test_subnet_universe.py::test_sn7_off_chain_but_tmc_listed_leaves_expected_at_127_and_keeps_its_row",
-      "tests/test_subnet_universe.py::test_t1_empty_state_emergency_registry",
-      "tests/test_subnet_universe.py::test_t2_shrink_regression_blocked",
-      "tests/test_subnet_universe.py::test_t4_no_truncation_above_max_netuids",
-      "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing",
-      "tests/test_subnet_universe.py::test_tmc_positive_without_price_retained",
-      "tests/test_subnet_universe.py::test_unregistered_netuid_leaves_after_grace_and_stays_gone"
-    ]
+    "failingTests": []
   }
 }
