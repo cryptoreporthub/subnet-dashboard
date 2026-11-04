@@ -148,3 +148,31 @@ def test_replayed_finalize_after_trail_compaction_records_no_second_trail_row(is
     _finalize_once()
 
     assert _trail_rows(soul_path) == []
+
+
+def test_concurrent_bridges_keep_both_resolved_ids_and_trail_rows(tmp_path, monkeypatch):
+    """Two bridges loaded from one file must not erase each other's appends.
+
+    The cache TTL is zeroed so every write reads the file as another process would see it.
+    """
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    monkeypatch.setattr(soul_map_io, "_CACHE_TTL", 0)
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    first = MindmapBridge(persistence_path=str(soul_path))
+    second = MindmapBridge(persistence_path=str(soul_path))
+
+    first.append_learning_trail(
+        {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-a"}},
+        resolved_prediction_id="p-a",
+    )
+    second.append_learning_trail(
+        {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-b"}},
+        resolved_prediction_id="p-b",
+    )
+
+    state = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert set(state["resolved_prediction_ids"]) == {"p-a", "p-b"}
+    assert {e["evidence"]["prediction_id"] for e in state["learning_trail"]} == {"p-a", "p-b"}

@@ -61,21 +61,33 @@ class MindmapBridge:
         A resolved prediction id is also recorded in ``resolved_prediction_ids`` in the same save.
         That ledger is never truncated, so a replay still matches after the trail window moves on.
         """
-        if resolved_prediction_id is not None:
-            ledger = self.soul_map_state.get("resolved_prediction_ids")
-            if not isinstance(ledger, list):
-                ledger = []
-                self.soul_map_state["resolved_prediction_ids"] = ledger
-            if resolved_prediction_id not in ledger:
-                ledger.append(resolved_prediction_id)
-        trail = self.soul_map_state.setdefault("learning_trail", [])
-        if not isinstance(trail, list):
-            trail = []
-            self.soul_map_state["learning_trail"] = trail
-        trail.append(entry)
-        if len(trail) > 200:
-            self.soul_map_state["learning_trail"] = trail[-200:]
-        self._save_to_disk()
+        def _apply(blob: Dict[str, Any]) -> None:
+            # Mutate the latest on-disk blob under the save lock, not this bridge's
+            # snapshot, so another bridge's earlier append survives this save.
+            state = blob.get("soul_map_state")
+            if not isinstance(state, dict):
+                state = {}
+                blob["soul_map_state"] = state
+            if resolved_prediction_id is not None:
+                ledger = state.get("resolved_prediction_ids")
+                if not isinstance(ledger, list):
+                    ledger = []
+                    state["resolved_prediction_ids"] = ledger
+                if resolved_prediction_id not in ledger:
+                    ledger.append(resolved_prediction_id)
+            trail = state.get("learning_trail")
+            if not isinstance(trail, list):
+                trail = []
+            trail.append(entry)
+            state["learning_trail"] = trail[-200:]
+
+        try:
+            saved = write_soul_map(_apply, self.persistence_path)
+        except Exception:
+            return
+        latest = saved.get("soul_map_state")
+        if isinstance(latest, dict):
+            self.soul_map_state = latest
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
