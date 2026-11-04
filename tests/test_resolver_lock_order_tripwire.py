@@ -12,7 +12,9 @@ for any narrower placement too.
 from __future__ import annotations
 
 import json
+import sys
 import threading
+import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -153,7 +155,15 @@ def _run_pass_under_guard(sched, gen: int):
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
     thread.join(PASS_TIMEOUT_SECONDS)
-    return thread.is_alive(), errors
+    if thread.is_alive():
+        # A Python thread cannot be killed. Name where it is stuck so the failure is diagnosable.
+        frame = sys._current_frames().get(thread.ident)
+        stack = "".join(traceback.format_stack(frame)) if frame is not None else "<no frame>"
+        pytest.fail(
+            f"resolver pass still running after {PASS_TIMEOUT_SECONDS}s (possible deadlock). "
+            f"The worker thread is still alive and stuck at:\n{stack}"
+        )
+    return errors
 
 
 def test_tripwire_flags_scheduler_lock_acquired_under_release_guard():
@@ -191,9 +201,8 @@ def test_learning_writes_under_release_guard_take_no_scheduler_lock(pass_env, mo
     _spy(monkeypatch, pick_history, "finalize_from_prediction", "pick_history", calls)
     _spy(monkeypatch, resolver, "atomic_finalize_resolution", "finalize", calls)
 
-    alive, errors = _run_pass_under_guard(sched, gen=1)
+    errors = _run_pass_under_guard(sched, gen=1)
 
-    assert not alive, f"resolver pass did not finish within {PASS_TIMEOUT_SECONDS}s (possible deadlock)"
     assert errors == []
     for name in ("expert", "impact", "signal", "scenario", "judge", "trace", "trail", "pick_history", "finalize"):
         assert name in calls, f"{name} never ran, so the pass does not cover it"

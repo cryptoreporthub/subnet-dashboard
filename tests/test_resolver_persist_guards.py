@@ -147,63 +147,149 @@ def test_revoked_finalize_writes_nothing(sched, monkeypatch):
     assert calls == []
 
 
-def test_abandon_waits_for_scenario_write_in_flight(sched, monkeypatch):
-    """The check and the write sit under the release guard, so abandon cannot slip between them."""
+class _ContentionProbe:
+    """Release-guard proxy that signals when a thread other than its creator reaches for the guard."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self._creator = threading.get_ident()
+        self.contended = threading.Event()
+
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        if threading.get_ident() != self._creator:
+            self.contended.set()
+        return self._inner.acquire(blocking, timeout)
+
+    def release(self) -> None:
+        self._inner.release()
+
+    def _is_owned(self) -> bool:
+        return self._inner._is_owned()
+
+    def __enter__(self) -> "_ContentionProbe":
+        self.acquire()
+        return self
+
+    def __exit__(self, *_exc: Any) -> bool:
+        self.release()
+        return False
+
+
+def _race_abandon_during_write(sched) -> tuple:
+    """Return (seen, abandon_thread, spy).
+
+    The spy runs inside a learning write. It starts abandon, waits until abandon has
+    reached the guard, then records whether the write still holds the guard and whether
+    abandon is still stuck. Nothing here depends on how fast the thread starts.
+    """
+    probe = _ContentionProbe(sched._release_guard)
+    sched._release_guard = probe
     abandon_thread = threading.Thread(target=sched._abandon_inflight_cycle)
     seen: Dict[str, Any] = {}
 
-    def record_outcome_while_abandon_races(*_args, **_kwargs):
+    def spy(*_args, **_kwargs):
         seen["revoked_at_write"] = resolver_scheduler.cycle_writes_revoked()
+        seen["guard_held_by_write"] = probe._is_owned()
         abandon_thread.start()
-        abandon_thread.join(0.2)
-        seen["abandon_blocked"] = abandon_thread.is_alive()
+        seen["abandon_reached_guard"] = probe.contended.wait(5)
+        seen["abandon_blocked"] = abandon_thread.is_alive() and sched._persist_owner_gen is not None
         return None
 
-    monkeypatch.setattr(resolver.scenario_memory, "record_outcome", record_outcome_while_abandon_races)
+    return seen, abandon_thread, spy
+
+
+_RACE_EXPECTED = {
+    "revoked_at_write": False,
+    "guard_held_by_write": True,
+    "abandon_reached_guard": True,
+    "abandon_blocked": True,
+}
+
+
+def test_abandon_waits_for_scenario_write_in_flight(sched, monkeypatch):
+    """The check and the write sit under the release guard, so abandon cannot slip between them."""
+    seen, abandon_thread, spy = _race_abandon_during_write(sched)
+    monkeypatch.setattr(resolver.scenario_memory, "record_outcome", spy)
 
     resolver._record_scenario_outcome(_prediction(), 3.0, "hit", True, "alpha")
     abandon_thread.join(5)
 
-    assert seen == {"revoked_at_write": False, "abandon_blocked": True}
+    assert seen == _RACE_EXPECTED
+    assert not abandon_thread.is_alive()
     assert sched._persist_owner_gen is None
 
 
 def test_abandon_waits_for_signal_write_in_flight(sched, monkeypatch):
-    abandon_thread = threading.Thread(target=sched._abandon_inflight_cycle)
-    seen: Dict[str, Any] = {}
-
-    def nudge_while_abandon_races(*_args, **_kwargs):
-        seen["revoked_at_write"] = resolver_scheduler.cycle_writes_revoked()
-        abandon_thread.start()
-        abandon_thread.join(0.2)
-        seen["abandon_blocked"] = abandon_thread.is_alive()
-        return None
-
-    monkeypatch.setattr(resolver, "nudge_signal_weight", nudge_while_abandon_races)
+    seen, abandon_thread, spy = _race_abandon_during_write(sched)
+    monkeypatch.setattr(resolver, "nudge_signal_weight", spy)
 
     resolver._nudge_signal_weights(_prediction(), True)
     abandon_thread.join(5)
 
-    assert seen == {"revoked_at_write": False, "abandon_blocked": True}
+    assert seen == _RACE_EXPECTED
+    assert not abandon_thread.is_alive()
     assert sched._persist_owner_gen is None
 
 
 def test_abandon_waits_for_expert_write_in_flight(sched, monkeypatch):
     _patch_expert_gate(monkeypatch)
-    abandon_thread = threading.Thread(target=sched._abandon_inflight_cycle)
-    seen: Dict[str, Any] = {}
-
-    def nudge_while_abandon_races(*_args, **_kwargs):
-        seen["revoked_at_write"] = resolver_scheduler.cycle_writes_revoked()
-        abandon_thread.start()
-        abandon_thread.join(0.2)
-        seen["abandon_blocked"] = abandon_thread.is_alive()
-        return None
-
-    monkeypatch.setattr(resolver, "_nudge_weights", nudge_while_abandon_races)
+    seen, abandon_thread, spy = _race_abandon_during_write(sched)
+    monkeypatch.setattr(resolver, "_nudge_weights", spy)
 
     resolver._stamp_and_nudge_expert(_prediction(), correct=True)
     abandon_thread.join(5)
 
-    assert seen == {"revoked_at_write": False, "abandon_blocked": True}
+    assert seen == _RACE_EXPECTED
+    assert not abandon_thread.is_alive()
+    assert sched._persist_owner_gen is None
+
+
+def _current_price_prediction() -> Dict[str, Any]:
+    row = _prediction()
+    row["reference_price"] = 100.0
+    return row
+
+
+def _stub_current_price_path(monkeypatch) -> None:
+    _patch_expert_gate(monkeypatch)
+    monkeypatch.setattr(resolver, "_nudge_weights", lambda *_a, **_k: None)
+    monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *_a, **_k: None)
+    monkeypatch.setattr(resolver, "atomic_finalize_resolution", lambda *_a, **_k: None)
+    monkeypatch.setattr(resolver, "_record_scenario_outcome", lambda *_a, **_k: None)
+    monkeypatch.setattr(resolver, "_nudge_signal_weights", lambda *_a, **_k: None)
+
+
+def test_revoked_current_price_impact_nudge_is_skipped(sched, monkeypatch):
+    _stub_current_price_path(monkeypatch)
+    calls: List[str] = []
+    monkeypatch.setattr(resolver, "nudge_impact_strength", _recorder(calls, "impact"))
+    sched._abandon_inflight_cycle()
+
+    resolver.resolve_prediction(_current_price_prediction(), current_price=102.0)
+
+    assert calls == []
+
+
+def test_live_current_price_impact_nudge_still_lands(sched, monkeypatch):
+    _stub_current_price_path(monkeypatch)
+    calls: List[str] = []
+    monkeypatch.setattr(resolver, "nudge_impact_strength", lambda *_a, **_k: calls.append("impact") or 0.5)
+    monkeypatch.setattr("internal.council.weights.load_impact_strength", lambda *_a, **_k: 0.5)
+
+    resolver.resolve_prediction(_current_price_prediction(), current_price=102.0)
+
+    assert calls == ["impact"]
+
+
+def test_abandon_waits_for_current_price_impact_write_in_flight(sched, monkeypatch):
+    _stub_current_price_path(monkeypatch)
+    seen, abandon_thread, spy = _race_abandon_during_write(sched)
+    monkeypatch.setattr(resolver, "nudge_impact_strength", lambda *_a, **_k: spy() or 0.5)
+    monkeypatch.setattr("internal.council.weights.load_impact_strength", lambda *_a, **_k: 0.5)
+
+    resolver.resolve_prediction(_current_price_prediction(), current_price=102.0)
+    abandon_thread.join(5)
+
+    assert seen == _RACE_EXPECTED
+    assert not abandon_thread.is_alive()
     assert sched._persist_owner_gen is None
