@@ -67,6 +67,23 @@ def test_revocation_is_read_from_issuing_instance_not_global(predictions_file, m
     assert json.loads(open(predictions_file, encoding="utf-8").read()) == {"marker": "owner"}
 
 
+def test_failed_revocation_check_fails_open(predictions_file, monkeypatch):
+    """A broken revocation check must not drop a legitimate write."""
+    def broken_check():
+        raise RuntimeError("revocation check unavailable")
+
+    monkeypatch.setattr(resolver_scheduler, "cycle_writes_revoked", broken_check)
+    sched = resolver_scheduler.PredictionResolverScheduler()
+    sched._persist_owner_gen = 1
+    token = _bind_cycle(sched, 1)
+    try:
+        resolver._save_json(predictions_file, {"marker": "owner"}, caller="test")
+    finally:
+        resolver_scheduler._cycle_timing.reset(token)
+
+    assert json.loads(open(predictions_file, encoding="utf-8").read()) == {"marker": "owner"}
+
+
 def test_unbound_thread_write_is_not_guarded(predictions_file):
     """Direct writers outside a scheduler cycle keep writing."""
     resolver._save_json(predictions_file, {"marker": "direct"}, caller="test")

@@ -284,6 +284,20 @@ def _load_json(path: str, default: Any) -> Any:
     return result
 
 
+def _cycle_writes_revoked_safe() -> bool:
+    """Return True only when this thread's resolver cycle was revoked.
+
+    Fails open: if the check itself raises, the write proceeds as it did before
+    the guard existed. A broken guard must not silently drop legitimate state.
+    """
+    try:
+        from internal.council.resolver_scheduler import cycle_writes_revoked
+
+        return bool(cycle_writes_revoked())
+    except Exception:
+        return False
+
+
 def _save_json(
     path: str,
     data: Any,
@@ -291,7 +305,11 @@ def _save_json(
     caller: Optional[str] = None,
     trigger: Optional[str] = None,
 ) -> None:
-    """Write JSON file atomically with caller attribution."""
+    """Write JSON atomically with caller attribution.
+
+    Skips the write when the calling thread is bound to a resolver cycle whose
+    persist ownership was revoked. Writes from unbound threads are not guarded.
+    """
     from internal.ops.mutation_log import log_mutation
 
     reason = trigger or "resolver_save"
@@ -303,7 +321,6 @@ def _save_json(
         caller=caller,
     )
     try:
-        from internal.council.resolver_scheduler import cycle_writes_revoked
         from internal.file_utils import safe_write_json
         from internal.learning.predictions_store import locked_predictions_file
 
@@ -311,7 +328,7 @@ def _save_json(
             # A cycle abandoned by timeout or revive must not overwrite newer state.
             # Residual window: abandon does not take the predictions lock, so an
             # abandon between this check and the write is not covered.
-            if cycle_writes_revoked():
+            if _cycle_writes_revoked_safe():
                 log_mutation(
                     operation="skipped_abandoned",
                     path=path,
@@ -1068,6 +1085,10 @@ def resolve_prediction_at_horizon(
     cache: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Grade at ``resolve_at`` price; expire late rows; never use stale live price."""
+    # An abandoned cycle must not nudge learning state. Its predictions save is
+    # skipped by _save_json, so the revived cycle would grade and nudge this row again.
+    if _cycle_writes_revoked_safe():
+        return prediction
     if _already_graded(prediction):
         return prediction
     now = now or datetime.now(timezone.utc)
