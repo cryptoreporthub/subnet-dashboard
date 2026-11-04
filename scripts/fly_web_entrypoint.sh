@@ -150,4 +150,4 @@ case "${ENABLE_INLINE_WORKER:-1}" in
 esac
 
 _supervise_inline_worker
-exec env ${WEB_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WEB_MALLOC_ARENA_MAX}} python scripts/run_web_with_guard.py
+exec env -u WEB_MALLOC_ARENA_MAX -u MALLOC_ARENA_MAX ${WEB_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WEB_MALLOC_ARENA_MAX}} python scripts/run_web_with_guard.py

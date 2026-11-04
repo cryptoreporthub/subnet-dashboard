@@ -124,3 +124,15 @@ def test_web_boot_breakdown_reports_arena_max(caplog, monkeypatch):
     end = [r.getMessage() for r in caplog.records if "phase=end" in r.getMessage()]
     assert end and "arena_max=2" in end[-1] and "web_boot:homepage-warm-boot" in end[-1]
     assert '_rss_scoped("web_boot:' in (ROOT / "server.py").read_text()
+
+
+def test_end_to_end_inherited_web_toggle_not_exported_to_web():
+    got = _run_whole_entrypoint_env({"WEB_MALLOC_ARENA_MAX": "3"})
+    assert got.get("MALLOC_ARENA_MAX") == "3"
+    assert "WEB_MALLOC_ARENA_MAX" not in got
+
+
+@pytest.mark.parametrize("toggle", ["", "0", "abc"])
+def test_end_to_end_off_clears_inherited_malloc_arena_max(toggle):
+    got = _run_whole_entrypoint_env({"WEB_MALLOC_ARENA_MAX": toggle, "MALLOC_ARENA_MAX": "8"})
+    assert "MALLOC_ARENA_MAX" not in got

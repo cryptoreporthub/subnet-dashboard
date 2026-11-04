@@ -513,7 +513,7 @@ def test_fly_v2_cutover_gate_script_exists():
 
 
 # memory fix 2 (#1538): web launch carries the WEB_MALLOC_ARENA_MAX opt-in prefix.
-_WEB_EXEC_LINE = "exec env ${WEB_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WEB_MALLOC_ARENA_MAX}} python scripts/run_web_with_guard.py"
+_WEB_EXEC_LINE = "exec env -u WEB_MALLOC_ARENA_MAX -u MALLOC_ARENA_MAX ${WEB_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WEB_MALLOC_ARENA_MAX}} python scripts/run_web_with_guard.py"
 
 
 def _run_web_entrypoint_skip_only(env: dict[str, str]) -> str:
