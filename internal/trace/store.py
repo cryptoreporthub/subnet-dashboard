@@ -117,6 +117,22 @@ def get_record(trace_id: str, path: Optional[str] = None) -> Optional[Dict[str, 
     return None
 
 
+def has_decision_row(decision_type: str, prediction_id: Any, path: Optional[str] = None) -> bool:
+    """True when the JSON store already holds a row of this type for this prediction.
+
+    Reads the same file append_record writes, so a replayed write sees what it would duplicate.
+    Only the last MAX_RECORDS rows are retained, so the check covers that window.
+    """
+    for row in _load_json_store(_resolve_path(path)).get("records") or []:
+        if not isinstance(row, dict) or row.get("decision_type") != decision_type:
+            continue
+        decision = row.get("decision")
+        # Legacy rows may carry a non-dict decision; they cannot match, and must not raise.
+        if isinstance(decision, dict) and decision.get("prediction_id") == prediction_id:
+            return True
+    return False
+
+
 def append_record(record: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
     store_path = _resolve_path(path)
     data = _load_json_store(store_path)
