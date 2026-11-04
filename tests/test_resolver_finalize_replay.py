@@ -132,3 +132,19 @@ def test_legacy_trail_row_with_non_dict_evidence_does_not_block_trail(isolated):
     _finalize_once()
 
     assert len(_trail_rows(soul_path)) == 1
+
+
+def test_replayed_finalize_after_trail_compaction_records_no_second_trail_row(isolated):
+    """The trail keeps only its newest 200 rows, so the first row can be compacted away before a replay."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    _trace_path, soul_path = isolated
+    _finalize_once()
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+    for i in range(200):
+        bridge.append_learning_trail({"event_type": "rotation_tokens_update", "evidence": {"seq": i}})
+    assert _trail_rows(soul_path) == []
+
+    _finalize_once()
+
+    assert _trail_rows(soul_path) == []

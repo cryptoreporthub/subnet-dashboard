@@ -55,8 +55,19 @@ class MindmapBridge:
         except Exception:
             pass
 
-    def append_learning_trail(self, entry: Dict[str, Any]) -> None:
-        """Append a mind-map learning trail row (pick/resolve/rotation events)."""
+    def append_learning_trail(self, entry: Dict[str, Any], *, resolved_prediction_id: Any = None) -> None:
+        """Append a mind-map learning trail row (pick/resolve/rotation events).
+
+        A resolved prediction id is also recorded in ``resolved_prediction_ids`` in the same save.
+        That ledger is never truncated, so a replay still matches after the trail window moves on.
+        """
+        if resolved_prediction_id is not None:
+            ledger = self.soul_map_state.get("resolved_prediction_ids")
+            if not isinstance(ledger, list):
+                ledger = []
+                self.soul_map_state["resolved_prediction_ids"] = ledger
+            if resolved_prediction_id not in ledger:
+                ledger.append(resolved_prediction_id)
         trail = self.soul_map_state.setdefault("learning_trail", [])
         if not isinstance(trail, list):
             trail = []
