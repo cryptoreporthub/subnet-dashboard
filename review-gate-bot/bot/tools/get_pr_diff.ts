@@ -3,6 +3,7 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { readDiffFixture, readPrFixture } from "../lib/fixtures.js";
+import { attachGuardsSection } from "../lib/guards-removed-relaxed.js";
 import { diffFixtureFilesToCompare, presentDiffFiles, readDiff } from "../lib/repo.js";
 
 /**
@@ -13,7 +14,7 @@ import { diffFixtureFilesToCompare, presentDiffFiles, readDiff } from "../lib/re
  */
 export default defineTool({
   description:
-    "Read this PR's diff: path, status, counts and patch per changed file. Pass the head SHA from check_gate_state; refused if the head has moved. Name paths to read only some files. A cut or missing patch is flagged; read the file at head instead. A diff of 300 or more files is refused: read the files you need at head.",
+    "Read this PR's diff: path, status, counts and patch per changed file, plus `guardsRemovedOrRelaxed` (markdown listing guard conditions removed or relaxed in the patches). Pass the head SHA from check_gate_state; refused if the head has moved. Name paths to read only some files. A cut or missing patch is flagged; read the file at head instead. A diff of 300 or more files is refused: read the files you need at head.",
   inputSchema: z.object({
     headSha: z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA"),
     paths: z.array(z.string().min(1).max(300)).max(50).optional().describe("Only these changed files."),
@@ -32,7 +33,7 @@ export default defineTool({
         paths: input.paths,
         purpose: "eval",
       });
-      return { ok: true, ...presented, source: "fixture" };
+      return attachGuardsSection({ ok: true, ...presented, source: "fixture" as const });
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
@@ -50,6 +51,6 @@ export default defineTool({
       paths: input.paths,
       purpose: "live",
     });
-    return diff.ok ? { ...diff, source: "github" } : diff;
+    return diff.ok ? attachGuardsSection({ ...diff, source: "github" as const }) : diff;
   },
 });
