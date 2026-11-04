@@ -456,3 +456,30 @@ def test_scheduler_cold_start_1445_utc_first_tick_publishes_v2(picks_path, monke
     assert len([r for r in disk if r.get("pick_id") == v2_pick_id("2026-11-04")]) == 1
     hero, _ = load_current_daily_pick(disk)
     assert hero.get("pick_id") == v2_pick_id("2026-11-04")
+
+
+@pytest.mark.pick_day_boundaries
+def test_prior_day_tiebreak_v2_wins_over_legacy_on_2026_11_05_gap():
+    """14:02 UTC 2026-11-05 (post-rollover, pre-slot): v2:2026-11-04 beats legacy same date."""
+    day = "2026-11-05"
+    legacy = {
+        "date": "2026-11-04",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 99}, "final_confidence": 0.91, "action": "long"},
+        "timestamp_utc": "2026-11-04T00:15:00Z",
+    }
+    v2_row = {
+        "pick_id": v2_pick_id("2026-11-04"),
+        "schema_version": 2,
+        "pick_day": "2026-11-04",
+        "date": "2026-11-04",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 12}, "final_confidence": 0.6, "action": "long"},
+        "build_started_at": "2026-11-04T14:05:00Z",
+    }
+    records = [legacy, v2_row]
+    with patch("internal.council.daily_pick_reader.pick_day_str", return_value=day):
+        row, meta = load_current_daily_pick(records)
+    assert row is not None
+    assert row.get("pick_id") == v2_pick_id("2026-11-04")
+    assert meta.get("prior_pick_day") is True

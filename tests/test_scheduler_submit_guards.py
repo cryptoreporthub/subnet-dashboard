@@ -32,7 +32,7 @@ def test_hung_daily_pick_refuses_second_submit(monkeypatch):
     monkeypatch.setattr(pick_scheduler, "DAILY_PICK_TICK_TIMEOUT_SECONDS", 5)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: {"action": "HOLD", "date": "2026-09-23"},
+        lambda reason, **kwargs: {"action": "HOLD", "date": "2026-09-23"},
     )
 
     sched = pick_scheduler.DailyPickScheduler()

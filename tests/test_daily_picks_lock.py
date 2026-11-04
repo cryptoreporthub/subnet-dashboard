@@ -101,7 +101,13 @@ def test_timeout_hold_beats_abandoned_worker(tmp_path, monkeypatch):
     thread = threading.Thread(target=run)
     thread.start()
     assert started.wait(timeout=5)
-    hold = engine.write_scheduler_hold("daily pick tick timed out after 90s")
+    from internal.council.daily_pick_write_token import current_write_generation
+
+    tick_gen = current_write_generation()
+    hold = engine.write_scheduler_hold(
+        "daily pick tick timed out after 90s",
+        write_generation=tick_gen,
+    )
     release.set()
     thread.join(timeout=5)
     assert thread.is_alive() is False
@@ -111,7 +117,7 @@ def test_timeout_hold_beats_abandoned_worker(tmp_path, monkeypatch):
     assert len(today) == 1
     assert today[0]["scheduler_hold"] is True
     assert today[0]["reason"] == hold["reason"]
-    assert holder["out"]["scheduler_hold"] is True
+    assert holder["out"] is None
     assert recorded["n"] == 0
 
 

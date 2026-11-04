@@ -36,6 +36,16 @@ def isolate_liveness_persistence(tmp_path, monkeypatch):
     monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
 
 
+@pytest.fixture(autouse=True)
+def _drain_daily_pick_worker_threads():
+    yield
+    pick_scheduler.stop_pick_schedulers()
+    for thread in threading.enumerate():
+        name = thread.name or ""
+        if "daily-pick" in name and thread is not threading.current_thread():
+            thread.join(timeout=20.0)
+
+
 def test_pick_scheduler_disabled(monkeypatch):
     monkeypatch.setenv("PICK_SCHEDULER_ENABLED", "off")
     pick_scheduler.stop_pick_schedulers()
@@ -204,7 +214,7 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: holds.append(reason) or {
+        lambda reason, **kwargs: holds.append(reason) or {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,
@@ -280,7 +290,7 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: holds.append(reason) or {
+        lambda reason, **kwargs: holds.append(reason) or {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,
@@ -328,7 +338,7 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch, 
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: {
+        lambda reason, **kwargs: {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,
@@ -376,7 +386,7 @@ def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: {
+        lambda reason, **kwargs: {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,

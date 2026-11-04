@@ -360,8 +360,14 @@ class DailyPickScheduler:
             return result
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
+        write_gen: Optional[int] = None
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
+            from internal.council.daily_pick_write_token import current_write_generation
+
+            write_gen = current_write_generation()
+            with self._work_lock:
+                self._work_generation += 1
 
             with _rss_bookend("daily_pick_scheduler:load_subnets"):
                 subnets = _load_subnets()
@@ -369,11 +375,6 @@ class DailyPickScheduler:
                 ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
-            from internal.council.daily_pick_write_token import current_write_generation
-
-            write_gen = current_write_generation()
-            with self._work_lock:
-                self._work_generation += 1
 
             def _run_pick() -> Optional[Dict[str, Any]]:
                 import contextlib
@@ -408,11 +409,15 @@ class DailyPickScheduler:
             try:
                 payload = fut.result(timeout=timeout)
             except FuturesTimeoutError:
-                from internal.council.daily_pick_write_token import bump_write_generation
+                from internal.council.daily_pick_write_token import (
+                    bump_write_generation,
+                    current_write_generation,
+                )
 
                 with self._work_lock:
                     self._work_generation += 1
                 bump_write_generation(reason="daily pick tick timed out")
+                write_gen = current_write_generation()
                 result["error"] = f"daily pick tick timed out after {timeout}s"
                 result["stall"] = stage_trace.describe_stall(trace)
                 logger.warning("%s (worker abandoned)", result["error"])
@@ -441,7 +446,7 @@ class DailyPickScheduler:
                 try:
                     from internal.council.daily_pick_engine import write_scheduler_hold
 
-                    hold = write_scheduler_hold(str(result["error"]))
+                    hold = write_scheduler_hold(str(result["error"]), write_generation=write_gen)
                     result["scheduler_hold"] = True
                     result["action"] = hold.get("action")
                     result["date"] = hold.get("date")
@@ -458,7 +463,7 @@ class DailyPickScheduler:
                 try:
                     from internal.council.daily_pick_engine import write_scheduler_hold
 
-                    write_scheduler_hold(str(exc))
+                    write_scheduler_hold(str(exc), write_generation=write_gen)
                     result["scheduler_hold"] = True
                 except Exception as hold_exc:
                     logger.warning("scheduler hold write failed: %s", hold_exc)

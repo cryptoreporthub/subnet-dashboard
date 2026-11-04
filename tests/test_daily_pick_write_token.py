@@ -145,7 +145,7 @@ def test_pick_tick_timeout_does_not_revoke_write_token(monkeypatch):
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: {"action": "HOLD", "date": "2026-08-03", "scheduler_hold": True},
+        lambda reason, **kwargs: {"action": "HOLD", "date": "2026-08-03", "scheduler_hold": True},
     )
     monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
@@ -212,6 +212,76 @@ def test_stop_pick_schedulers_bumps_generation(monkeypatch):
     assert tok.guarded_bounded_commit(commit_fn) is True
     assert ran["v"] is True
     pick_scheduler.stop_pick_schedulers()
+
+
+def test_stop_during_subnet_load_cannot_commit_stale_generation(monkeypatch, tmp_path):
+    """P1-b: generation captured at tick start; stop during load bumps gen → no commit."""
+    import json
+    import threading
+
+    import internal.council.pick_scheduler as pick_scheduler
+
+    path = tmp_path / "daily_picks.json"
+    path.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr("internal.council.daily_pick_engine.DAILY_PICKS_PATH", str(path))
+    monkeypatch.setattr(
+        "internal.council.daily_pick_write_token.fence_revoke_if_resolver_wait_exceeded",
+        lambda **_k: True,
+    )
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+
+    load_started = threading.Event()
+    release_load = threading.Event()
+
+    def _slow_load():
+        load_started.set()
+        release_load.wait(timeout=5)
+        return [{"netuid": 1, "price": 1.0}]
+
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", _slow_load)
+
+    commits = {"n": 0}
+    real_save = __import__(
+        "internal.council.daily_pick_engine", fromlist=["_save"]
+    )._save
+
+    def _counting_save(records, path=None, *, write_generation=None):
+        ok = real_save(records, path, write_generation=write_generation)
+        if ok:
+            commits["n"] += 1
+        return ok
+
+    monkeypatch.setattr("internal.council.daily_pick_engine._save", _counting_save)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.select_daily_pick",
+        lambda subnets, ctx: {
+            "subnet": {"netuid": 1, "name": "X"},
+            "final_confidence": 0.9,
+            "action": "long",
+        },
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
+    monkeypatch.setattr("internal.council.daily_pick_engine.publish_gate_fraction", lambda: 0.0)
+
+    sched = pick_scheduler.DailyPickScheduler()
+
+    def _run_tick():
+        sched._tick(reschedule=False)
+
+    worker = threading.Thread(target=_run_tick, name="daily-pick-tick-test")
+    worker.start()
+    assert load_started.wait(timeout=3)
+    sched.stop()
+    release_load.set()
+    worker.join(timeout=15)
+    assert commits["n"] == 0
+    assert json.loads(path.read_text()) == []
 
 
 def test_start_pick_schedulers_does_not_reissue_token_after_fence_revoke(monkeypatch):

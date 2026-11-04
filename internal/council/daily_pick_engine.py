@@ -346,11 +346,11 @@ def write_scheduler_hold(
     records = _upsert_today(records, payload)
     gen = write_generation
     if gen is None:
-        from internal.council.daily_pick_write_token import current_write_generation
-
-        gen = current_write_generation()
+        existing = _find_today(_load())
+        return existing if isinstance(existing, dict) else {}
     if not _save(records, write_generation=gen):
-        return _find_today(_load()) or existing or payload
+        existing = _find_today(_load())
+        return existing if isinstance(existing, dict) else {}
     return payload
 
 
@@ -424,7 +424,7 @@ def get_or_create_today_pick(
         payload = _merge_selection_recorded_at(payload, existing)
         records = _upsert_today(records, payload)
         if not _save(records, write_generation=write_generation):
-            return _find_today(_load()) or payload
+            return None
         try:
             from internal.learning.prediction_loop import record_hold_decision
 
@@ -476,7 +476,7 @@ def get_or_create_today_pick(
     with stage("save"):
         saved = _save(records, write_generation=write_generation)
     if not saved:
-        return _find_today(_load()) or payload
+        return None
 
     if stored_pick is not None:
         try:

@@ -104,6 +104,22 @@ def _daily_pick_write_token_for_tests():
         issue_daily_pick_write_token()
     except Exception:
         pass
+    yield
+    try:
+        import threading
+
+        import internal.council.pick_scheduler as pick_scheduler
+        from internal.council.daily_pick_write_token import revoke_daily_pick_write_token
+
+        pick_scheduler.stop_pick_schedulers()
+        revoke_daily_pick_write_token(reason="pytest teardown")
+        for thread in threading.enumerate():
+            name = thread.name or ""
+            if "daily-pick" in name and thread is not threading.current_thread():
+                thread.join(timeout=2.0)
+        issue_daily_pick_write_token()
+    except Exception:
+        pass
 
 
 @pytest.fixture(autouse=True)

@@ -63,10 +63,6 @@ def legacy_row_counts_for_pick_day(rec: Dict[str, Any], pick_day: str) -> bool:
         return False
     instant = legacy_row_original_instant(rec)
     if instant is None:
-        instant = _parse_utc_instant(rec.get("build_started_at"))
-        if instant is not None:
-            instant = instant.astimezone(timezone.utc)
-    if instant is None:
         return False
     return instant >= pick_day_start_utc(pick_day)
 
@@ -81,6 +77,29 @@ def row_write_instant(rec: Dict[str, Any]) -> Optional[datetime]:
     if instant is not None:
         return instant
     return _parse_utc_instant(rec.get("timestamp_utc"))
+
+
+def _published_row_beats(a: Dict[str, Any], b: Optional[Dict[str, Any]]) -> bool:
+    """True when ``a`` should win over ``b`` for the same effective pick_day (§3 tie-break)."""
+    if b is None:
+        return True
+    day_a = _effective_pick_day(a)
+    day_b = _effective_pick_day(b)
+    if day_a != day_b:
+        return day_a > day_b
+    a_v2 = bool(a.get("pick_id"))
+    b_v2 = bool(b.get("pick_id"))
+    if a_v2 and not b_v2:
+        return True
+    if b_v2 and not a_v2:
+        return False
+    stamp_a = row_write_instant(a)
+    stamp_b = row_write_instant(b)
+    if stamp_a is not None and stamp_b is not None:
+        return stamp_a > stamp_b
+    if stamp_a is not None:
+        return True
+    return False
 
 
 def _today_row_read_fallback(rec: Dict[str, Any]) -> bool:
@@ -111,34 +130,26 @@ def resolve_current_daily_pick(
 
     if not v2_published_for_day:
         same_day: Optional[Dict[str, Any]] = None
-        same_stamp: Optional[datetime] = None
         for rec in records:
             if not is_published_daily_pick_row(rec):
                 continue
             eff = _effective_pick_day(rec)
             if eff != pick_day:
                 continue
-            stamp = row_write_instant(rec)
-            if same_day is None:
+            if _published_row_beats(rec, same_day):
                 same_day = rec
-                same_stamp = stamp
-            elif stamp is not None and (same_stamp is None or stamp > same_stamp):
-                same_day = rec
-                same_stamp = stamp
         if same_day is not None:
             return same_day, meta
 
     best: Optional[Dict[str, Any]] = None
-    best_day = ""
     for rec in records:
         if not is_published_daily_pick_row(rec):
             continue
         eff = _effective_pick_day(rec)
         if not eff or eff >= pick_day:
             continue
-        if eff > best_day:
+        if _published_row_beats(rec, best):
             best = rec
-            best_day = eff
 
     if best is not None:
         meta["prior_pick_day"] = True

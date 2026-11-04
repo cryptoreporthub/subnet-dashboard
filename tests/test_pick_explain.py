@@ -1,6 +1,5 @@
 """§32 — pick explain API."""
 
-from datetime import datetime, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -28,7 +27,7 @@ _LIVE_SCORE_CAL = {
     "method": "live-rescore",
 }
 
-_TODAY = datetime.now(timezone.utc).date().isoformat()
+_TODAY = "2026-11-04"
 
 # Persisted pick record (as returned by _find_today from the JSON store).
 # judge_scores_at_creation is pre-populated so attach_judge_scores_to_daily_pick
