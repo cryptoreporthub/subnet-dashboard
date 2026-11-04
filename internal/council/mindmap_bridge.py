@@ -46,10 +46,11 @@ class MindmapBridge:
             os.makedirs(dir_name, exist_ok=True)
 
         def _apply(blob: Dict[str, Any]) -> None:
-            # Union the persisted resolved-id ledger with this bridge's copy, so a stale
-            # snapshot cannot drop an id another bridge recorded (replay guard).
+            # This bridge's snapshot is stale. Keep the persisted ledger and trail rows that other
+            # bridges wrote, and union this bridge's own ledger ids (replay guard).
             current = blob.get("soul_map_state")
-            current_ledger = current.get("resolved_prediction_ids") if isinstance(current, dict) else None
+            current_state = current if isinstance(current, dict) else {}
+            current_ledger = current_state.get("resolved_prediction_ids")
             own_ledger = self.soul_map_state.get("resolved_prediction_ids")
             if isinstance(current_ledger, list) or isinstance(own_ledger, list):
                 merged: list = list(current_ledger) if isinstance(current_ledger, list) else []
@@ -57,13 +58,20 @@ class MindmapBridge:
                     if prediction_id not in merged:
                         merged.append(prediction_id)
                 self.soul_map_state["resolved_prediction_ids"] = merged
+            if "learning_trail" in current_state:
+                self.soul_map_state["learning_trail"] = current_state["learning_trail"]
+            else:
+                self.soul_map_state.pop("learning_trail", None)
             blob["soul_map_state"] = self.soul_map_state
             blob["feedback_logs"] = self.feedback_logs
 
         try:
-            write_soul_map(_apply, self.persistence_path)
+            saved = write_soul_map(_apply, self.persistence_path)
         except Exception:
-            pass
+            return
+        latest = saved.get("soul_map_state")
+        if isinstance(latest, dict):
+            self.soul_map_state = latest
 
     def append_learning_trail(self, entry: Dict[str, Any], *, resolved_prediction_id: Any = None) -> None:
         """Append a mind-map learning trail row (pick/resolve/rotation events).
@@ -91,10 +99,7 @@ class MindmapBridge:
             trail.append(entry)
             state["learning_trail"] = trail[-200:]
 
-        try:
-            saved = write_soul_map(_apply, self.persistence_path)
-        except Exception:
-            return
+        saved = write_soul_map(_apply, self.persistence_path)
         latest = saved.get("soul_map_state")
         if isinstance(latest, dict):
             self.soul_map_state = latest

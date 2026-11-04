@@ -166,10 +166,9 @@ def write_soul_map(
     resolved = _resolve_path(path)
     with _lock_for(resolved + ".writers"):
         with _file_and_reader_locks(resolved):
-            now = time.monotonic()
-            cached = _cache_get_fresh(resolved, now)
-            # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
-            blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
+            # Read disk, never the cache: another process may have written the file since
+            # this process cached it. The file lock is held, so this read-modify-write is safe.
+            blob = _read_blob(resolved)
             prior = copy.deepcopy(blob)
             mutator(blob)
             temp_path = ""

@@ -201,3 +201,34 @@ def test_stale_bridge_save_keeps_resolved_id_recorded_by_another_bridge(tmp_path
 
     state = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
     assert "p-a" in state["resolved_prediction_ids"]
+    assert {e["evidence"]["prediction_id"] for e in state["learning_trail"]} == {"p-a"}
+
+
+def test_append_after_external_write_within_cache_ttl_keeps_external_trail_row(tmp_path, monkeypatch):
+    """Another process writes the file inside this process's cache TTL. Our append must keep its row.
+
+    The bridge primes the cache when it loads. The external row exists only on disk, so a writer
+    that starts from the cached blob would replace the file and drop it.
+    """
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    monkeypatch.setattr(soul_map_io, "_CACHE_TTL", 60)
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+
+    soul_path.write_text(
+        json.dumps(
+            {"soul_map_state": {"learning_trail": [{"event_type": "external", "evidence": {}}]}}
+        ),
+        encoding="utf-8",
+    )
+    bridge.append_learning_trail(
+        {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-own"}},
+        resolved_prediction_id="p-own",
+    )
+
+    state = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert {e["event_type"] for e in state["learning_trail"]} == {"external", "prediction_resolved"}
+    assert "p-own" in state["resolved_prediction_ids"]
