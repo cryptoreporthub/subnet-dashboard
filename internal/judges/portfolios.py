@@ -161,6 +161,12 @@ def close_position(
     pred_id = prediction.get("id")
     netuid = prediction.get("netuid")
 
+    # A replayed resolution must not append a second closed entry or nudge the judge again.
+    if pred_id is not None and any(
+        c.get("id") == pred_id for c in judge.get("closed_positions", [])
+    ):
+        return None
+
     idx = next(
         (
             i
