@@ -94,9 +94,11 @@ _TRIM_AFTER_JOBS = frozenset({"daily_pick_scheduler", "pump_ladder_scan"})
 
 
 def _read_mallinfo2() -> str:
-    """glibc mallinfo2 in KB (arena=brk heap, hblkhd=mmap'd, uordblks=in use, fordblks=free, keepcost=top trimmable).
+    """glibc mallinfo2 in KB (arena=brk heap, hblkhd=mmap'd, uordblks=in use, fordblks=free, keepcost=main-arena top chunk only).
 
     Tells allocator fragmentation (fordblks large) apart from a live object graph (uordblks large).
+    mi_keep_main_kb is glibc keepcost: the MAIN arena's top chunk only. It is NOT total trimmable memory
+    (other arenas' free tops are not included), so do not read it as "what malloc_trim could return".
     "unknown" on non-glibc, glibc < 2.33 (no mallinfo2) or any ctypes failure.
     """
     try:
@@ -116,14 +118,17 @@ def _read_mallinfo2() -> str:
         kb = {n: getattr(mi, n) // 1024 for n in ("arena", "hblkhd", "uordblks", "fordblks", "keepcost")}
         return (
             f"mi_arena_kb={kb['arena']} mi_hblkhd_kb={kb['hblkhd']} mi_uord_kb={kb['uordblks']} "
-            f"mi_ford_kb={kb['fordblks']} mi_keep_kb={kb['keepcost']}"
+            f"mi_ford_kb={kb['fordblks']} mi_keep_main_kb={kb['keepcost']}"
         )
     except Exception:
-        return "mi_arena_kb=unknown mi_hblkhd_kb=unknown mi_uord_kb=unknown mi_ford_kb=unknown mi_keep_kb=unknown"
+        return "mi_arena_kb=unknown mi_hblkhd_kb=unknown mi_uord_kb=unknown mi_ford_kb=unknown mi_keep_main_kb=unknown"
 
 
 def _read_mem_breakdown() -> str:
-    """End-of-job fields: anon/file RSS, smaps read time, thread count, gc counts, glibc mallinfo2, arena cap."""
+    """End-of-job fields: anon RSS, file-backed PSS, whole-read time (breakdown_ms), thread count, gc counts, glibc mallinfo2, arena cap."""
+    # anon_kb is resident anonymous memory (RSS basis). pss_file_kb is Pss_File: the proportional-share
+    # of file-backed pages (shared file mappings are prorated), so it is NOT file RSS and is not
+    # directly additive with rss_kb.
     parts = []
     t0 = time.perf_counter()
     try:
@@ -131,14 +136,15 @@ def _read_mem_breakdown() -> str:
             kb = {
                 ln.split(":")[0]: ln.split()[1] for ln in handle if ":" in ln and len(ln.split()) >= 2
             }
-        parts.append(f"anon_kb={kb['Anonymous']} file_kb={kb['Pss_File']}")
+        parts.append(f"anon_kb={kb['Anonymous']} pss_file_kb={kb['Pss_File']}")
     except (OSError, KeyError, IndexError, ValueError):  # ValueError incl. UnicodeDecodeError
-        parts.append("anon_kb=unknown file_kb=unknown")
-    parts.append(f"smaps_ms={(time.perf_counter() - t0) * 1000.0:.2f}")
+        parts.append("anon_kb=unknown pss_file_kb=unknown")
     import gc
 
     parts.append(f"threads={threading.active_count()} gc={'/'.join(map(str, gc.get_count()))}")
     parts.append(_read_mallinfo2())
+    # breakdown_ms wraps the WHOLE memory read (smaps_rollup + gc + mallinfo2), so slow reads are visible.
+    parts.append(f"breakdown_ms={(time.perf_counter() - t0) * 1000.0:.2f}")
     parts.append(f"arena_max={os.environ.get('MALLOC_ARENA_MAX') or 'unset'}")
     return " ".join(parts)
 
