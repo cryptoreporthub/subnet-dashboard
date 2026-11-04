@@ -569,3 +569,38 @@ def test_same_resolution_replayed_twice_records_one_row(tmp_path):
     on_disk = _read_soul_map_state(soul_path)
     assert _prediction_ids(on_disk["learning_trail"]) == ["p-g"]
     assert on_disk["resolved_prediction_ids"] == ["p-g"]
+
+
+def test_resolution_survives_row_cap_eviction_until_commit(tmp_path, monkeypatch):
+    """Overflowing the pending cap must not forget a resolution that has not reached disk.
+
+    Sixty resolutions fail to write, so the 50-row cap evicts the earliest rows. The earliest
+    resolved id stays pending for the dedupe guard and lands in the ledger on the next commit.
+    """
+    import internal.council.mindmap_bridge as mindmap_bridge
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.mindmap_bridge import MindmapBridge, pending_resolved_ids
+
+    monkeypatch.setattr(soul_map_io, "_CACHE_TTL", 0)
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+
+    real_replace = soul_map_io.os.replace
+
+    def _always_fail(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(soul_map_io.os, "replace", _always_fail)
+    for i in range(mindmap_bridge._PENDING_TRAIL_MAX + 10):
+        bridge.append_learning_trail(_timed_row(f"p-{i}"), resolved_prediction_id=f"p-{i}")
+
+    assert "p-0" in pending_resolved_ids(str(soul_path))
+
+    monkeypatch.setattr(soul_map_io.os, "replace", real_replace)
+    bridge.append_learning_trail(_timed_row("p-final"), resolved_prediction_id="p-final")
+
+    assert pending_resolved_ids(str(soul_path)) == []
+    on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert "p-0" in on_disk["resolved_prediction_ids"]
+    assert "p-final" in on_disk["resolved_prediction_ids"]

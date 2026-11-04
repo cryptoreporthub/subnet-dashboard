@@ -27,6 +27,9 @@ FEEDBACK_LOGS_MAX = 10
 # cannot grow memory without bound; overflow drops the oldest rows and logs the count.
 _PENDING_TRAIL_MAX = 50
 _PENDING_TRAIL: Dict[str, List[Tuple[int, Dict[str, Any], Any]]] = {}
+# Resolved ids are kept apart from the trail rows: the cap evicts rows, but an evicted row's
+# resolution must still reach the ledger and still count as pending for the dedupe guard.
+_PENDING_RESOLVED: Dict[str, List[Tuple[int, Any]]] = {}
 _PENDING_TRAIL_LOCK = threading.Lock()
 _PENDING_SEQ = itertools.count(1)
 
@@ -37,8 +40,11 @@ def _pending_key(persistence_path: str) -> str:
 
 def _enqueue_pending(key: str, entry: Dict[str, Any], resolved_prediction_id: Any) -> None:
     with _PENDING_TRAIL_LOCK:
+        seq = next(_PENDING_SEQ)
         rows = _PENDING_TRAIL.setdefault(key, [])
-        rows.append((next(_PENDING_SEQ), entry, resolved_prediction_id))
+        rows.append((seq, entry, resolved_prediction_id))
+        if resolved_prediction_id is not None:
+            _PENDING_RESOLVED.setdefault(key, []).append((seq, resolved_prediction_id))
         dropped = len(rows) - _PENDING_TRAIL_MAX
         if dropped > 0:
             del rows[:dropped]
@@ -47,32 +53,33 @@ def _enqueue_pending(key: str, entry: Dict[str, Any], resolved_prediction_id: An
             )
 
 
-def _snapshot_pending(key: str) -> Tuple[int, List[Tuple[Dict[str, Any], Any]]]:
-    """Return (highest seq in the buffer, rows) for `key`. The seq bounds what a commit covers."""
+def _snapshot_pending(key: str) -> Tuple[int, List[Tuple[Dict[str, Any], Any]], List[Any]]:
+    """Return (highest seq buffered, rows, resolved ids) for `key`. The seq bounds what a commit covers."""
     with _PENDING_TRAIL_LOCK:
         rows = _PENDING_TRAIL.get(key, [])
-        if not rows:
-            return 0, []
-        return rows[-1][0], [(entry, rid) for _, entry, rid in rows]
+        resolved = _PENDING_RESOLVED.get(key, [])
+        through = max(rows[-1][0] if rows else 0, resolved[-1][0] if resolved else 0)
+        return through, [(entry, rid) for _, entry, rid in rows], [rid for _, rid in resolved]
 
 
 def _drop_pending_through(key: str, seq: int) -> None:
-    """Drop rows a committed write carried. Rows appended after that write stay buffered."""
+    """Drop rows and resolved ids a committed write carried. Later appends stay buffered."""
     with _PENDING_TRAIL_LOCK:
-        rows = _PENDING_TRAIL.get(key)
-        if rows is None:
-            return
-        remaining = [row for row in rows if row[0] > seq]
-        if remaining:
-            _PENDING_TRAIL[key] = remaining
-        else:
-            del _PENDING_TRAIL[key]
+        for buffer in (_PENDING_TRAIL, _PENDING_RESOLVED):
+            rows = buffer.get(key)
+            if rows is None:
+                continue
+            remaining = [row for row in rows if row[0] > seq]
+            if remaining:
+                buffer[key] = remaining
+            else:
+                del buffer[key]
 
 
 def pending_resolved_ids(persistence_path: str) -> List[Any]:
-    """Resolved prediction ids whose rows are buffered (not yet on disk) for this path."""
+    """Resolved prediction ids not yet on disk for this path, including ones whose rows were evicted."""
     with _PENDING_TRAIL_LOCK:
-        return [rid for _, _, rid in _PENDING_TRAIL.get(_pending_key(persistence_path), []) if rid is not None]
+        return [rid for _, rid in _PENDING_RESOLVED.get(_pending_key(persistence_path), [])]
 
 
 def _trail_key(entry: Any) -> Optional[Tuple[str, ...]]:
@@ -89,6 +96,19 @@ def _trail_key(entry: Any) -> Optional[Tuple[str, ...]]:
                 return event_type, "prediction_id", str(prediction_id)
         return event_type, "time", str(entry["time"])
     return None
+
+
+def _record_resolved_ids(state: Dict[str, Any], prediction_ids: List[Any]) -> None:
+    """Add resolved prediction ids to the never-truncated ledger. Idempotent."""
+    if not prediction_ids:
+        return
+    ledger = state.get("resolved_prediction_ids")
+    if not isinstance(ledger, list):
+        ledger = []
+        state["resolved_prediction_ids"] = ledger
+    for prediction_id in prediction_ids:
+        if prediction_id not in ledger:
+            ledger.append(prediction_id)
 
 
 def _replay_trail_rows(state: Dict[str, Any], rows: List[Tuple[Dict[str, Any], Any]]) -> None:
@@ -108,12 +128,7 @@ def _replay_trail_rows(state: Dict[str, Any], rows: List[Tuple[Dict[str, Any], A
         # The ledger id is recorded even when the row itself is a duplicate, so a row trimmed
         # from the trail window cannot leave its resolution unrecorded.
         if resolved_prediction_id is not None:
-            ledger = state.get("resolved_prediction_ids")
-            if not isinstance(ledger, list):
-                ledger = []
-                state["resolved_prediction_ids"] = ledger
-            if resolved_prediction_id not in ledger:
-                ledger.append(resolved_prediction_id)
+            _record_resolved_ids(state, [resolved_prediction_id])
         key = _trail_key(entry)
         if key is not None:
             if key in present:
@@ -173,8 +188,9 @@ class MindmapBridge:
                 self.soul_map_state.pop("learning_trail", None)
             # Rows whose earlier save failed never reached disk. Replay the buffered rows onto the
             # disk trail so this save keeps them.
-            through, rows = _snapshot_pending(key)
+            through, rows, resolved = _snapshot_pending(key)
             flushed["through"] = through
+            _record_resolved_ids(self.soul_map_state, resolved)
             _replay_trail_rows(self.soul_map_state, rows)
             blob["soul_map_state"] = self.soul_map_state
             blob["feedback_logs"] = self.feedback_logs
@@ -203,8 +219,9 @@ class MindmapBridge:
             if not isinstance(state, dict):
                 state = {}
                 blob["soul_map_state"] = state
-            through, rows = _snapshot_pending(key)
+            through, rows, resolved = _snapshot_pending(key)
             flushed["through"] = through
+            _record_resolved_ids(state, resolved)
             _replay_trail_rows(state, rows)
 
         committed, result = write_soul_map_committed(_apply, self.persistence_path)
