@@ -232,3 +232,26 @@ def test_append_after_external_write_within_cache_ttl_keeps_external_trail_row(t
     state = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
     assert {e["event_type"] for e in state["learning_trail"]} == {"external", "prediction_resolved"}
     assert "p-own" in state["resolved_prediction_ids"]
+
+
+def test_failed_save_keeps_selector_output_in_bridge_memory(tmp_path, monkeypatch):
+    """A save that fails on disk must not roll back the bridge's in-memory state.
+
+    A long-lived bridge keeps running after a failed write, so its in-memory copy is the only
+    copy of the pending update.
+    """
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+    selector_output = {"decisions": [{"subnet_id": 7, "recommended_action": "hold"}]}
+
+    def _fail_replace(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(soul_map_io.os, "replace", _fail_replace)
+    bridge.update_soul_map(selector_output)
+
+    assert bridge.soul_map_state["last_selector_output"] == selector_output

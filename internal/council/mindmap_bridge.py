@@ -66,12 +66,9 @@ class MindmapBridge:
             blob["feedback_logs"] = self.feedback_logs
 
         try:
-            saved = write_soul_map(_apply, self.persistence_path)
+            write_soul_map(_apply, self.persistence_path)
         except Exception:
             return
-        latest = saved.get("soul_map_state")
-        if isinstance(latest, dict):
-            self.soul_map_state = latest
 
     def append_learning_trail(self, entry: Dict[str, Any], *, resolved_prediction_id: Any = None) -> None:
         """Append a mind-map learning trail row (pick/resolve/rotation events).
