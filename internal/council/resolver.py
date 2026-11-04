@@ -303,6 +303,21 @@ def _save_json(
         caller=caller,
     )
     try:
+        from internal.council.resolver_scheduler import resolver_cycle_owns_persist_write
+
+        if not resolver_cycle_owns_persist_write():
+            log_mutation(
+                operation="failed",
+                path=path,
+                writer_function="resolver._save_json",
+                trigger=reason,
+                caller=caller,
+            )
+            logger.info(
+                "resolver._save_json skipped: resolver cycle no longer owns persist (%s)",
+                os.path.basename(path),
+            )
+            return
         from internal.file_utils import safe_write_json
         from internal.learning.predictions_store import locked_predictions_file
 

@@ -413,13 +413,22 @@ class DailyPickScheduler:
                     current_write_generation,
                 )
 
-                with self._work_lock:
-                    self._work_generation += 1
-                bump_write_generation(reason="daily pick tick timed out")
-                write_gen = current_write_generation()
-                result["error"] = f"daily pick tick timed out after {timeout}s"
-                result["stall"] = stage_trace.describe_stall(trace)
-                logger.warning("%s (worker abandoned)", result["error"])
+                superseded = False
+                with self._submit_lock:
+                    if self._inflight_future is not fut:
+                        superseded = True
+                if superseded:
+                    result["error"] = "daily pick tick superseded before timeout handling"
+                    logger.warning(result["error"])
+                    write_gen = None
+                else:
+                    with self._work_lock:
+                        self._work_generation += 1
+                    bump_write_generation(reason="daily pick tick timed out")
+                    write_gen = current_write_generation()
+                    result["error"] = f"daily pick tick timed out after {timeout}s"
+                    result["stall"] = stage_trace.describe_stall(trace)
+                    logger.warning("%s (worker abandoned)", result["error"])
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
             result["stages"] = trace.report()
@@ -441,7 +450,7 @@ class DailyPickScheduler:
                 # ponytail: timeout/error ticks must retry soon — abandoned worker
                 # writes to disk must not defer scheduling to tomorrow's UTC slot.
                 today_ready = False
-            if not today_ready and result.get("error"):
+            if not today_ready and result.get("error") and write_gen is not None:
                 try:
                     from internal.council.daily_pick_engine import write_scheduler_hold
 

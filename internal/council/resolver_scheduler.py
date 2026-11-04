@@ -224,6 +224,7 @@ class _CycleTiming:
         # Phase 3: cycle generation that owns persist writes for this timing.
         self._owner_gen: Optional[int] = None
         self._owner_write_gen: Optional[int] = None
+        self._scheduler: Optional[Any] = None
         # Dark-region sub-timers inside persist_partial (ms).
         self._persist_apply_ms: float = 0.0
         self._persist_rmw_ms: float = 0.0
@@ -306,6 +307,14 @@ class _CycleTiming:
     def owner_write_gen(self) -> Optional[int]:
         with self._lock:
             return self._owner_write_gen
+
+    def bind_scheduler(self, sched: Any) -> None:
+        with self._lock:
+            self._scheduler = sched
+
+    def scheduler(self) -> Optional[Any]:
+        with self._lock:
+            return self._scheduler
 
     def record_persist_subtimer(self, name: str, duration_ms: float) -> None:
         with self._lock:
@@ -450,6 +459,24 @@ def active_cycle_write_generation() -> Optional[int]:
     if timing is None:
         return None
     return timing.owner_write_gen()
+
+
+def resolver_cycle_owns_persist_write() -> bool:
+    """True when resolver worker may commit tick side effects (heal, predictions RMW)."""
+    timing = _cycle_timing.get()
+    if timing is None:
+        return True
+    if timing.is_abandoned():
+        return False
+    owner = timing.owner_gen()
+    if owner is None:
+        return True
+    sched = timing.scheduler()
+    if sched is None:
+        sched = get_prediction_resolver_scheduler()
+    if sched is None:
+        return False
+    return sched._persist_owner_gen == owner
 
 
 class PredictionResolverScheduler:
@@ -905,6 +932,7 @@ class PredictionResolverScheduler:
             from internal.council.daily_pick_write_token import current_write_generation
 
             timing.set_owner_write_gen(current_write_generation())
+            timing.bind_scheduler(self)
             token = _cycle_timing.set(timing)
             ctx_token = bind_patchd_context(
                 cycle_generation=gen,
@@ -933,6 +961,7 @@ class PredictionResolverScheduler:
         from internal.council.daily_pick_write_token import current_write_generation
 
         timing.set_owner_write_gen(current_write_generation())
+        timing.bind_scheduler(self)
 
         cycle_write_gen = timing.owner_write_gen()
 
@@ -1215,10 +1244,10 @@ class PredictionResolverScheduler:
                 timing.mark_closing_stamp()
                 self._apply_cycle_timing(result, timing)
                 self._persist_cycle_summary(
-                result,
-                owner_gen=owner,
-                write_generation=timing.owner_write_gen(),
-            )
+                    result,
+                    owner_gen=owner,
+                    write_generation=timing.owner_write_gen(),
+                )
         return result
 
     def _persist_cycle_summary(
@@ -1240,6 +1269,8 @@ class PredictionResolverScheduler:
             if not force and owner_gen is not None:
                 if self._persist_owner_gen != owner_gen:
                     return
+            if force and write_generation is None:
+                return
             self._persist_cycle_summary_locked(
                 result,
                 write_generation=write_generation,

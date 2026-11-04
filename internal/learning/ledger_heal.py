@@ -139,6 +139,10 @@ def heal_daily_pick_ledger(
         current_write_generation,
         guarded_bounded_commit,
     )
+    from internal.council.resolver_scheduler import (
+        active_cycle_write_generation,
+        resolver_cycle_owns_persist_write,
+    )
     from internal.learning.prediction_loop import record_pick_prediction
 
     market_context = today_rec.get("market_context") if isinstance(today_rec, dict) else {}
@@ -152,13 +156,10 @@ def heal_daily_pick_ledger(
             market_context=market_context if isinstance(market_context, dict) else {},
         )
 
-    write_gen: Optional[int] = None
-    try:
-        from internal.council.resolver_scheduler import active_cycle_write_generation
+    if not resolver_cycle_owns_persist_write():
+        return {"ok": False, "healed": False, "reason": "resolver_cycle_abandoned", "netuid": netuid}
 
-        write_gen = active_cycle_write_generation()
-    except Exception:
-        write_gen = None
+    write_gen = active_cycle_write_generation()
     if write_gen is None:
         write_gen = current_write_generation()
 

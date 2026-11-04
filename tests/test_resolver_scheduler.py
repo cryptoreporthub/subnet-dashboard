@@ -866,28 +866,48 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     assert "resolver lifecycle event=timeout" in caplog.text
 
 
-def test_resolver_timeout_summary_not_committed_after_mid_cycle_write_bump(
+def test_resolver_timeout_blocks_late_heal_and_orphan_predictions(
     monkeypatch, fresh_scheduler, tmp_path
 ):
-    """Timeout soul-map persist must use captured cycle gen; bump mid-cycle blocks it."""
-    from internal.council import daily_pick_write_token as tok
+    """Real timeout: abandoned worker must not heal or overwrite predictions."""
     from internal.council.resolver_scheduler import _now_iso
+    from internal.learning import ledger_heal
 
-    marker = {
-        "prediction_resolver_scheduler": {
-            "last_cycle": {"run_at": "MARKER-UNCHANGED", "ok": True},
-        }
-    }
     soul_path = tmp_path / "soul_map.json"
-    soul_path.write_text(json.dumps(marker), encoding="utf-8")
+    soul_path.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": {"run_at": "MARKER-UNCHANGED", "ok": True},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    pred_path = tmp_path / "predictions.json"
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}), encoding="utf-8")
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(pred_path))
 
-    started = threading.Event()
-    release = threading.Event()
+    heal_entered = threading.Event()
+    heal_release = threading.Event()
+    real_heal = ledger_heal.heal_daily_pick_ledger
 
-    def _hang(self):
-        started.set()
-        release.wait(timeout=10)
-        time.sleep(5)
+    def _slow_heal(**kwargs):
+        heal_entered.set()
+        heal_release.wait(timeout=10)
+        return real_heal(**kwargs)
+
+    monkeypatch.setattr(ledger_heal, "heal_daily_pick_ledger", _slow_heal)
+
+    def _cycle_with_late_save(self):
+        heal_entered.wait(timeout=5)
+        resolver._save_json(
+            str(pred_path),
+            {"predictions": [{"id": "orphan"}], "resolved": [], "stats": {}},
+            caller="resolver",
+        )
+        heal_release.set()
+        time.sleep(2)
         return {
             "ok": True,
             "run_at": _now_iso(),
@@ -896,33 +916,22 @@ def test_resolver_timeout_summary_not_committed_after_mid_cycle_write_bump(
             "pending": 0,
         }
 
-    def _bump_when_cycle_starts():
-        started.wait(timeout=5)
-        tok.bump_write_generation(reason="mid-cycle resolver test")
-        release.set()
-
-    monkeypatch.setattr(
-        "internal.learning.ledger_heal.heal_daily_pick_ledger",
-        lambda **_: {"ok": True, "healed": False},
-    )
-    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 1)
-    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
     monkeypatch.setattr(
         resolver_scheduler.PredictionResolverScheduler,
         "_run_refresh_cycle",
-        _hang,
+        _cycle_with_late_save,
     )
-    threading.Thread(target=_bump_when_cycle_starts, daemon=True).start()
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
     sched._active = True
     sched._first_tick_pending = True
-    sched._tick()
-    soul = json.loads(soul_path.read_text(encoding="utf-8"))
-    last = soul["prediction_resolver_scheduler"]["last_cycle"]
-    assert last["run_at"] == "MARKER-UNCHANGED"
-    assert "cycle_timeout" not in str(last.get("error") or "")
+    timed_out = sched._run_refresh_cycle_with_timeout()
+    assert "cycle_timeout" in str(timed_out.get("error"))
+    pred_data = json.loads(pred_path.read_text(encoding="utf-8"))
+    assert pred_data.get("predictions") == []
 
 
 def test_resolver_timeout_persists_partial_timing_and_abandoned_live(
@@ -1214,10 +1223,11 @@ def test_patchd_abandoned_worker_keeps_submitted_gen(
         if writes:
             break
         time.sleep(0.02)
-    assert writes
-    assert writes[-1]["cycle_generation"] == submitted_gen
-    assert writes[-1]["resolver_cycle_id"] == cycle_id
-    assert writes[-1]["thread_id"] != threading.get_ident()
+    assert not writes, "orphan resolver._save_json must not complete after cycle abandon"
+    if pred_path.exists():
+        data = json.loads(pred_path.read_text(encoding="utf-8"))
+        assert data.get("orphan") is None
+        assert data.get("predictions") == []
 
 
 def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):

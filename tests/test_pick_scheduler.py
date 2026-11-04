@@ -311,6 +311,58 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     assert "timed out" in str(result.get("error") or holds[0])
 
 
+def test_daily_tick_timeout_superseded_skips_bump_and_hold(monkeypatch):
+    """If inflight was replaced before timeout handling, do not bump gen or HOLD."""
+    from concurrent.futures import TimeoutError as FuturesTimeoutError
+
+    from internal.council import daily_pick_write_token as tok
+
+    pick_scheduler.stop_pick_schedulers()
+    holds = []
+    gen_before = tok.current_write_generation()
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason, **kwargs: holds.append((reason, kwargs)) or {
+            "action": "HOLD",
+            "scheduler_hold": True,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_write_token.fence_revoke_if_resolver_wait_exceeded",
+        lambda **_: True,
+    )
+
+    sched = pick_scheduler.DailyPickScheduler()
+    _arm_daily_sched(sched)
+
+    class _SupersededFuture:
+        def result(self, timeout=None):
+            sched._inflight_future = object()
+            raise FuturesTimeoutError()
+
+    fake = _SupersededFuture()
+
+    class _Pool:
+        def submit(self, fn):
+            return fake
+
+        def shutdown(self, wait=False, cancel_futures=False):
+            return None
+
+    monkeypatch.setattr(pick_scheduler, "ThreadPoolExecutor", lambda **kwargs: _Pool())
+
+    result = sched._tick(reschedule=False)
+    assert "superseded" in str(result.get("error") or "").lower()
+    assert holds == []
+    assert tok.current_write_generation() == gen_before
+
+
 def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch, caplog):
     """After timeout, the next tick must start fresh work — not skip forever."""
     import logging
