@@ -30,7 +30,7 @@ from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple
+from typing import Any, Callable, ContextManager, Dict, Iterator, Optional, Tuple
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
@@ -412,6 +412,10 @@ class _CycleTiming:
         with self._lock:
             return self._owner_gen
 
+    def owner_sched(self) -> Optional["PredictionResolverScheduler"]:
+        with self._lock:
+            return self._owner_sched
+
     def writes_revoked(self) -> bool:
         """True once the issuing scheduler has revoked this cycle's persist ownership.
 
@@ -565,6 +569,17 @@ def cycle_writes_revoked() -> bool:
     """True when the cycle bound to this thread has lost its persist ownership."""
     timing = _cycle_timing.get()
     return timing is not None and timing.writes_revoked()
+
+
+def cycle_persist_guard() -> ContextManager[Any]:
+    """Hold the issuing scheduler's ``_release_guard`` for a bound cycle, else a no-op.
+
+    Abandon takes the same guard before it revokes ownership, so a check made
+    under this context cannot be overtaken by an abandon before the write lands.
+    """
+    timing = _cycle_timing.get()
+    sched = timing.owner_sched() if timing is not None else None
+    return sched._release_guard if sched is not None else nullcontext()
 
 
 class PredictionResolverScheduler:
