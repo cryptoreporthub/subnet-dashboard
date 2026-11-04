@@ -404,15 +404,6 @@ class DailyPickScheduler:
                 result["error"] = f"daily pick tick timed out after {timeout}s"
                 result["stall"] = stage_trace.describe_stall(trace)
                 logger.warning("%s (worker abandoned)", result["error"])
-                try:
-                    from internal.council.daily_pick_write_token import revoke_daily_pick_write_token
-
-                    revoke_daily_pick_write_token(
-                        fence_timeout=True,
-                        reason=result["error"],
-                    )
-                except Exception as revoke_exc:
-                    logger.warning("daily pick write token revoke failed: %s", revoke_exc)
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
             result["stages"] = trace.report()
@@ -595,16 +586,18 @@ class HourPickScheduler:
 def start_pick_schedulers(immediate: bool = False) -> Dict[str, Any]:
     if not _enabled():
         return {"started": False, "reason": "disabled"}
-    from internal.council.daily_pick_write_token import issue_daily_pick_write_token
-
-    issue_daily_pick_write_token()
     global _daily, _hour
     with _lock:
+        first_boot = _daily is None
         if _daily is None:
             _daily = DailyPickScheduler()
         if _hour is None:
             _hour = HourPickScheduler()
         daily, hour = _daily, _hour
+    if first_boot:
+        from internal.council.daily_pick_write_token import issue_daily_pick_write_token
+
+        issue_daily_pick_write_token()
     return {
         "started": True,
         "daily": daily.start(immediate=immediate),

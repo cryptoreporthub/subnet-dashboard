@@ -92,3 +92,95 @@ def test_fence_timeout_health_flag():
     flags = tok.health_flags()
     assert flags.get("daily_pick_write_fence_timeout") is True
     assert flags.get("daily_pick_schedule_disabled") is True
+
+
+def test_orphaned_commit_rejected_after_resolver_fence_revoke(monkeypatch):
+    class _Sched:
+        _inflight_future = None
+
+        def __init__(self):
+            self._cycle_lock = threading.Lock()
+            self._cycle_lock.acquire()
+
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler",
+        lambda: _Sched(),
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_write_token.resolver_fence_wait_seconds",
+        lambda: 0.05,
+    )
+    monkeypatch.setattr("internal.council.daily_pick_write_token.time.sleep", lambda _: None)
+
+    assert tok.fence_revoke_if_resolver_wait_exceeded(reason="test") is False
+    ran = {"v": False}
+
+    def commit_fn():
+        ran["v"] = True
+
+    assert tok.guarded_bounded_commit(commit_fn) is False
+    assert ran["v"] is False
+    assert tok.is_daily_pick_schedule_disabled() is True
+
+
+def test_pick_tick_timeout_does_not_revoke_write_token(monkeypatch):
+    """90s pick-tick timeout must not fence-revoke; later guarded commits still succeed."""
+    import internal.council.pick_scheduler as pick_scheduler
+
+    pick_scheduler.stop_pick_schedulers()
+    monkeypatch.setattr(
+        "internal.council.daily_pick_write_token.fence_revoke_if_resolver_wait_exceeded",
+        lambda **_: True,
+    )
+
+    def _hang(*_a, **_k):
+        import time
+
+        time.sleep(12)
+        return {"action": "HOLD"}
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        _hang,
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason: {"action": "HOLD", "date": "2026-08-03", "scheduler_hold": True},
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+    pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
+
+    sched = pick_scheduler.DailyPickScheduler()
+    result = sched._tick(reschedule=False)
+    assert "timed out" in str(result.get("error") or "")
+    assert tok.daily_pick_write_token_allowed() is True
+    assert tok.is_daily_pick_schedule_disabled() is False
+
+    committed = {"v": False}
+
+    def commit_fn():
+        committed["v"] = True
+
+    assert tok.guarded_bounded_commit(commit_fn) is True
+    assert committed["v"] is True
+    pick_scheduler.stop_pick_schedulers()
+
+
+def test_start_pick_schedulers_does_not_reissue_token_after_fence_revoke(monkeypatch):
+    monkeypatch.setenv("PICK_SCHEDULER_ENABLED", "on")
+    import internal.council.pick_scheduler as pick_scheduler
+    from unittest.mock import MagicMock
+
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", MagicMock())
+    pick_scheduler.stop_pick_schedulers()
+    pick_scheduler.start_pick_schedulers(immediate=False)
+    tok.revoke_daily_pick_write_token(fence_timeout=True, reason="fence")
+    assert tok.is_daily_pick_schedule_disabled() is True
+    pick_scheduler.start_pick_schedulers(immediate=False)
+    assert tok.is_daily_pick_schedule_disabled() is True
+    assert tok.daily_pick_write_token_allowed() is False
+    pick_scheduler.stop_pick_schedulers()
