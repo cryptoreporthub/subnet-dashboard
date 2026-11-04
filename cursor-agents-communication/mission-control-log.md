@@ -330,3 +330,7 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-11-04 — PR #1544 lane1-at ship (Claude @6645294528)
+
+- Arm G at-default ship `cursor/lane1-at-optional-c6f4` @ `d71343a20b3773c0f5bed7424e816175ecfba009` (2 tool files vs `2c71b4ae` only); mission-control entry on `cursor/mission-control-pr1544-c6f4`, not ship branch; not merged to `5846`.
