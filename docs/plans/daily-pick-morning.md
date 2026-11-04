@@ -93,25 +93,31 @@ For current **`pick_day = pick_day_str()`**:
 
 **Pattern (existing):** `PredictionResolverScheduler` uses **`_cycle_generation`** / **`_persist_owner_gen`** (`internal/council/resolver_scheduler.py:434-436`, `:778-790`, owner checks `:1014`, `:1126`, `:1156`).
 
+**Single lock (normative):** one process-wide **`threading.Lock`** — **`daily_pick_write_token_lock`** — shared by **token issue**, **revocation**, **validation**, and **every guarded write** (pick RMW + resolver sites below). Impl may nest **`daily_picks.json` fcntl** inside this lock for pick file only, but **must not** read token state outside the lock.
+
+**Atomic per site:** each row in the table below follows **`with daily_pick_write_token_lock: if not daily_pick_write_token_allowed(): return; <write>`** — no check-then-write across threads without holding the lock.
+
+**Revocation (normative):** **`revoke_daily_pick_write_token()`** runs **`with daily_pick_write_token_lock:`** — clear owner gen / set revoked flag / mirror `_abandon_inflight_cycle` (`resolver_scheduler.py:778-790`) **before** releasing lock.
+
 **Normative:**
 
-- Under **same lock as pick JSON RMW** (`daily_picks.json.lock`), pick persist checks **active write token** (shared with resolver persist gate — impl names **`daily_pick_write_token`**).
 - **Bounded wait** (default **3600s**, env) for in-flight resolver cycle before pick slot write.
-- **On timeout:** **revoke token** (mirror `_abandon_inflight_cycle`, `resolver_scheduler.py:778-790`); **do not block boot**; **disable** new daily pick schedule until token re-armed; **continue serving** §3; `/health` **`daily_pick_write_fence_timeout: true`**.
+- **On timeout:** call **`revoke_daily_pick_write_token()`** (under lock); **do not block boot**; **disable** new daily pick schedule until token re-armed; **continue serving** §3; `/health` **`daily_pick_write_fence_timeout: true`**.
 
-**After revocation, every resolver-owned disk write must no-op** until a new cycle owns the token — wrap **`daily_pick_write_token_allowed()`** (same check as pick RMW):
+**After revocation, every resolver-owned disk write must no-op** — always **`with daily_pick_write_token_lock:`** then **`daily_pick_write_token_allowed()`** then write (same lock revocation uses):
 
-| Write site | Location @ `89d891c6` |
-|------------|------------------------|
-| Predictions persist | `internal/council/resolver.py:1323`, `:1383`, `:1523`, `:1673` — `_save_json(PREDICTIONS_PATH, …)` |
-| Cycle summary + soul_map RMW | `internal/council/resolver_scheduler.py:1141-1158` → `:1219` `write_soul_map(...)` in `_persist_cycle_summary_locked` |
-| Partial / stage persists | `resolver_scheduler.py:1010-1021` `persist_partial` → `_persist_cycle_summary` |
-| Cycle `finally` persist | `resolver_scheduler.py:1124-1138` |
-| Skipped / timeout summary | `resolver_scheduler.py:605`, `:823`, `:935` — `_persist_cycle_summary(...)` |
-| Lifecycle state on soul_map | `resolver_scheduler.py:740-752` `_persist_lifecycle_state` → `write_soul_map` |
-| Ledger heal (mutates daily pick) | `resolver_scheduler.py:1030-1034` `heal_daily_pick_ledger(dry_run=False)` |
-| Grading entrypoints | `resolver_scheduler.py:1074-1075` `resolve_due_predictions`; `:1093-1100` `expire_stale_predictions` (must not reach `_save_json` when token revoked) |
-| Auto-retrain side effects | `resolver_scheduler.py:1112-1118` `maybe_trigger_auto_retrain` (no disk write that touches picks/predictions/soul_map when revoked) |
+| Write site | Location @ `89d891c6` | Lock pattern |
+|------------|------------------------|--------------|
+| Pick JSON RMW | `daily_pick_engine.py:96-137` `_save` / upsert | lock → allowed → fcntl → write |
+| Predictions persist | `resolver.py:1323`, `:1383`, `:1523`, `:1673` | lock → allowed → `_save_json` |
+| Cycle summary + soul_map RMW | `resolver_scheduler.py:1154-1158`, `:1219` | lock → allowed → `write_soul_map` |
+| Partial / stage persists | `resolver_scheduler.py:1010-1021` | lock → allowed → `_persist_cycle_summary` |
+| Cycle `finally` persist | `resolver_scheduler.py:1124-1138` | lock → allowed → persist |
+| Skipped / timeout summary | `resolver_scheduler.py:605`, `:823`, `:935` | lock → allowed → `_persist_cycle_summary` |
+| Lifecycle state on soul_map | `resolver_scheduler.py:740-752` | lock → allowed → `write_soul_map` |
+| Ledger heal | `resolver_scheduler.py:1030-1034` | lock → allowed → `heal_daily_pick_ledger` |
+| Grading | `resolver_scheduler.py:1074-1075`, `:1093-1100` | lock → allowed → call resolver (no `_save_json` if false) |
+| Auto-retrain | `resolver_scheduler.py:1112-1118` | lock → allowed → side effects |
 
 - **Never** unbounded wait.
 
@@ -150,14 +156,14 @@ For current **`pick_day = pick_day_str()`**:
 
 | Test | Assert |
 |------|--------|
-| `test_pick_day.py` | Rollover 12:59 vs 13:00; gate 13:04 vs 13:05 |
+| `test_pick_day.py` | Rollover **12:59:59 / 13:00:00**; gate **13:04:59 / 13:05:00** on same calendar day; **`12:59:59` open** for prior pick day (§3 formula) |
 | Steady 13:00:30 | §3 shows prior published, not HOLD gap |
 | v2 row | `selection_recorded_at_utc` set on first **published** persist only; unchanged after HOLD retry |
 | `force=True` before slot | **No** persist (`daily_pick_creation_open` enforced) |
 | Legacy same-day | v2 published for **D** exists → reader must not surface legacy **`date==D`** as current |
 | Legacy coexistence | Disk has legacy `date=D` + no v2; after 13:05 v2 created; reader prefers v2 when published |
 | Upsert | Two writers same `pick_id` → one row (lock) |
-| Fence timeout | Token revoked; schedule disabled; boot completes; hero still §3 |
+| Fence timeout | Token revoked **under `daily_pick_write_token_lock`**; concurrent write attempt fails allowed check; schedule disabled |
 | Cold boot | Creation closed → next slot, not 45s persist (`pick_scheduler`) |
 | Read-only paths | No `select_daily_pick` before slot (homepage / story_path pattern) |
 | Contract | `tests/test_endpoint_contract.py` unchanged |
