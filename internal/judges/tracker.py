@@ -133,7 +133,8 @@ def on_prediction_resolved(
             except Exception:
                 pass
         postmortem = None
-        if wrong:
+        # close_position returns None only on replay, so a replay must not append a second postmortem.
+        if wrong and closed:
             postmortem = judge.record_postmortem(prediction, actual_pct)
         summary["judges"][judge.name] = {
             "closed": closed,

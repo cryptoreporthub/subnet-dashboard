@@ -8,6 +8,7 @@ import pytest
 
 import internal.judges.portfolios as portfolios
 import internal.judges.tracker as tracker
+import internal.judges.postmortems as postmortems
 import internal.judges.weights as judge_weights
 
 
@@ -64,3 +65,24 @@ def test_close_position_returns_none_on_replay(portfolio_path):
     assert second is None
     closed = json.loads(portfolio_path.read_text(encoding="utf-8"))["oracle"]["closed_positions"]
     assert len(closed) == 1
+
+
+def test_replayed_wrong_pick_records_one_postmortem_per_judge(portfolio_path, monkeypatch, tmp_path):
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(tmp_path / "postmortems"))
+    monkeypatch.setattr(judge_weights, "nudge_judge", lambda *_a, **_k: None)
+    prediction = {
+        **_prediction(),
+        "id": "pred-replay-wrong-1",
+        "outcome": "miss",
+        "correct": False,
+        "resolved_price": 95.0,
+    }
+    for judge in tracker.all_judges():
+        judge.open_position(prediction, size=1.0)
+
+    tracker.on_prediction_resolved(prediction)
+    tracker.on_prediction_resolved(prediction)
+
+    for judge in tracker.all_judges():
+        entries = postmortems.list_for_judge(judge.name)
+        assert len(entries) == 1, judge.name
