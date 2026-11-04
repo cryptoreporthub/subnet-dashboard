@@ -7,7 +7,12 @@ set -eu
 
 # ARENA-CAP TOGGLE (memory fix 1, #1538): default ON (=2) for capture 2. Change -2 to - to turn the default off. Env override wins (set it EMPTY to turn the cap off without a code change); non-numeric values are ignored.
 WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX-2}"
-case "$WORKER_MALLOC_ARENA_MAX" in *[!0-9]*) echo "ignoring non-numeric WORKER_MALLOC_ARENA_MAX" >&2; WORKER_MALLOC_ARENA_MAX="" ;; esac
+# Validation MUST run before the ${VAR:+MALLOC_ARENA_MAX=$VAR} expansion below: the expansion is unquoted, so an unvalidated value would word-split into extra env args.
+case "$WORKER_MALLOC_ARENA_MAX" in "") ;; *[!0-9]*|0*) echo "ignoring invalid WORKER_MALLOC_ARENA_MAX (need 1-9 then digits)" >&2; WORKER_MALLOC_ARENA_MAX="" ;; esac
+# WEB ARENA-CAP TOGGLE (memory fix 2, #1538): web (uvicorn) only, default ON (=2). Same rules as the worker knob:
+# env override wins, EMPTY turns it off, non-numeric is ignored. Applied only on the final exec line below, never to the inline worker.
+WEB_MALLOC_ARENA_MAX="${WEB_MALLOC_ARENA_MAX-2}"
+case "$WEB_MALLOC_ARENA_MAX" in "") ;; *[!0-9]*|0*) echo "ignoring invalid WEB_MALLOC_ARENA_MAX (need 1-9 then digits)" >&2; WEB_MALLOC_ARENA_MAX="" ;; esac
 INLINE_WORKER_PIDFILE="${INLINE_WORKER_PIDFILE:-/tmp/inline_worker.pid}"
 INLINE_WORKER_STOP_GRACE_SECONDS="${INLINE_WORKER_STOP_GRACE_SECONDS:-15}"
 INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS="${INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS:-90}"
@@ -90,7 +95,7 @@ _start_inline_worker() {
     rm -f "$INLINE_WORKER_PIDFILE"
   fi
   echo "starting inline background worker (RUN_MODE=worker, WORKER_HEAVY=${WORKER_HEAVY:-essential})..."
-  nice -n 10 env RUN_MODE=worker ${WORKER_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WORKER_MALLOC_ARENA_MAX}} WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
+  nice -n 10 env -u WEB_MALLOC_ARENA_MAX RUN_MODE=worker ${WORKER_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WORKER_MALLOC_ARENA_MAX}} WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
   echo $! > "$INLINE_WORKER_PIDFILE"
   echo "inline worker pgid=$(cat "$INLINE_WORKER_PIDFILE")"
 }
@@ -145,4 +150,4 @@ case "${ENABLE_INLINE_WORKER:-1}" in
 esac
 
 _supervise_inline_worker
-exec python scripts/run_web_with_guard.py
+exec env -u WEB_MALLOC_ARENA_MAX -u MALLOC_ARENA_MAX ${WEB_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WEB_MALLOC_ARENA_MAX}} python scripts/run_web_with_guard.py
