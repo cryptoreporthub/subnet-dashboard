@@ -137,14 +137,14 @@ def summarize_picks() -> Dict[str, Any]:
     parts: List[str] = []
     try:
         from internal.subnets.feed import load_pick_subnets
-        from internal.council.daily_pick_engine import get_current_daily_pick
+        from internal.council.daily_pick_engine import get_today_only_daily_pick
         from internal.council.hourly_pick import select_hourly_pick
         from internal.council.weights import load_weights
 
         subnets = load_pick_subnets()
         ctx = {"tao_change_24h": 0.0, "weights": load_weights()}
         hour_pick = select_hourly_pick(subnets, ctx) if subnets else {}
-        daily = get_current_daily_pick() or {}
+        daily = get_today_only_daily_pick() or {}
     except Exception as exc:
         return _sentences([f"Pick engine could not load live state: {exc}"])
 

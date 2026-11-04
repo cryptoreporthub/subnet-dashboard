@@ -9,7 +9,7 @@ import pytest
 
 from internal.council.daily_pick_reader import load_current_daily_pick, resolve_current_daily_pick
 from internal.council.pick_day import v2_pick_id
-from internal.learning.panel_summaries import summarize_picks_lite
+from internal.learning.panel_summaries import summarize_picks, summarize_picks_lite
 
 
 def test_malformed_null_row_does_not_break_reader():
@@ -55,6 +55,35 @@ def test_panel_lite_ignores_prior_day_reader_fallback():
                 out = summarize_picks_lite()
     text = " ".join(out.get("sentences") or [])
     assert "Prior" not in text or "unavailable" in text.lower() or "HOLD" in text
+
+
+def test_panel_live_ignores_prior_day_reader_fallback():
+    """Repro: full panel summary must not label yesterday's LONG as today's pick."""
+    day = "2026-11-04"
+    prior = {
+        "pick_id": v2_pick_id("2026-11-03"),
+        "schema_version": 2,
+        "pick_day": "2026-11-03",
+        "date": "2026-11-03",
+        "action": "LONG",
+        "pick": {
+            "subnet": {"netuid": 7, "name": "Prior"},
+            "final_confidence": 0.9,
+            "action": "long",
+            "audit": {"approved": True, "concerns": []},
+        },
+    }
+
+    def _load():
+        return [prior]
+
+    with patch("internal.council.daily_pick_engine._load", _load):
+        with patch("internal.council.daily_pick_engine.pick_day_str", return_value=day):
+            with patch("internal.council.daily_pick_reader.pick_day_str", return_value=day):
+                with patch("internal.subnets.feed.load_pick_subnets", return_value=[]):
+                    out = summarize_picks()
+    text = " ".join(out.get("sentences") or [])
+    assert "Prior" not in text or "HOLD" in text
 
 
 def test_loop_health_ignores_prior_day_fallback():
