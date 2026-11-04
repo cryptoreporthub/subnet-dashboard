@@ -11,7 +11,7 @@ import json
 import logging
 import math
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Optional, Tuple
@@ -298,6 +298,19 @@ def _cycle_writes_revoked_safe() -> bool:
         return False
 
 
+def _cycle_persist_guard_safe():
+    """Return the bound cycle's release guard, or a no-op context.
+
+    Fails open to a no-op so a broken guard never blocks a legitimate write.
+    """
+    try:
+        from internal.council.resolver_scheduler import cycle_persist_guard
+
+        return cycle_persist_guard()
+    except Exception:
+        return nullcontext()
+
+
 def _save_json(
     path: str,
     data: Any,
@@ -324,10 +337,12 @@ def _save_json(
         from internal.file_utils import safe_write_json
         from internal.learning.predictions_store import locked_predictions_file
 
-        with locked_predictions_file():
+        # The scheduler's release guard is held across the check and the write, so
+        # an abandon cannot revoke ownership between them. Lock order is release
+        # guard, then predictions lock; nothing takes the guard while holding the
+        # predictions lock.
+        with _cycle_persist_guard_safe(), locked_predictions_file():
             # A cycle abandoned by timeout or revive must not overwrite newer state.
-            # Residual window: abandon does not take the predictions lock, so an
-            # abandon between this check and the write is not covered.
             if _cycle_writes_revoked_safe():
                 log_mutation(
                     operation="skipped_abandoned",
