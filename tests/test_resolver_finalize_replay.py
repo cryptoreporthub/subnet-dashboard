@@ -278,3 +278,31 @@ def test_failed_append_keeps_trail_row_and_ledger_in_bridge_memory(tmp_path, mon
 
     assert entry in bridge.soul_map_state["learning_trail"]
     assert "p-failed" in bridge.soul_map_state["resolved_prediction_ids"]
+
+
+def test_successful_append_shows_other_bridges_rows_in_bridge_memory(tmp_path, monkeypatch):
+    """A successful append must leave the bridge holding every row now on disk, not just its own.
+
+    The other bridge's append lands after this bridge loaded, so this bridge's snapshot is stale.
+    """
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    monkeypatch.setattr(soul_map_io, "_CACHE_TTL", 0)
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    stale = MindmapBridge(persistence_path=str(soul_path))
+    other = MindmapBridge(persistence_path=str(soul_path))
+
+    other.append_learning_trail(
+        {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-other"}},
+        resolved_prediction_id="p-other",
+    )
+    stale.append_learning_trail(
+        {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-own"}},
+        resolved_prediction_id="p-own",
+    )
+
+    memory = stale.soul_map_state
+    assert {e["evidence"]["prediction_id"] for e in memory["learning_trail"]} == {"p-other", "p-own"}
+    assert set(memory["resolved_prediction_ids"]) == {"p-other", "p-own"}

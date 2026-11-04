@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from internal.store.soul_map_io import read_soul_map, write_soul_map
+from internal.store.soul_map_io import read_soul_map, write_soul_map, write_soul_map_committed
 
 # Mirror CYCLE_HISTORY_MAX=10 / learning_trail[-200:] — memory-only heal; on-disk
 # shrink is the compaction operation (Runbook v4), not this constant alone.
@@ -96,12 +96,23 @@ class MindmapBridge:
             trail.append(entry)
             state["learning_trail"] = trail[-200:]
 
-        write_soul_map(_apply, self.persistence_path)
-        # Apply the same append to this bridge's memory. The write result is not copied back:
-        # on a failed write it is the pre-append snapshot, which would drop this row.
-        mirror: Dict[str, Any] = {"soul_map_state": self.soul_map_state}
-        _apply(mirror)
-        self.soul_map_state = mirror["soul_map_state"]
+        committed, result = write_soul_map_committed(_apply, self.persistence_path)
+        if committed:
+            # The disk write landed. Sync the rows and ledger to the merged on-disk state,
+            # so rows other bridges appended since this bridge loaded are visible here too.
+            committed_state = result.get("soul_map_state")
+            committed_state = committed_state if isinstance(committed_state, dict) else {}
+            for key in ("learning_trail", "resolved_prediction_ids"):
+                if key in committed_state:
+                    self.soul_map_state[key] = committed_state[key]
+                else:
+                    self.soul_map_state.pop(key, None)
+        else:
+            # The disk write failed. Keep this append in memory; the returned blob is the
+            # pre-append snapshot and would drop the row.
+            mirror: Dict[str, Any] = {"soul_map_state": self.soul_map_state}
+            _apply(mirror)
+            self.soul_map_state = mirror["soul_map_state"]
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

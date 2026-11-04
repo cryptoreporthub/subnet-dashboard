@@ -164,16 +164,28 @@ def write_soul_map(
     mutator: Callable[[Dict[str, Any]], None],
     path: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Thread-safe read-modify-write. Returns the blob that write_soul_map_committed reports."""
+    return write_soul_map_committed(mutator, path)[1]
+
+
+def write_soul_map_committed(
+    mutator: Callable[[Dict[str, Any]], None],
+    path: Optional[str] = None,
+) -> Tuple[bool, Dict[str, Any]]:
     """Thread-safe read-modify-write under a per-path lock.
 
     Resolves path=None to weights.SOUL_MAP_PATH (lazy import).
     Acquires a lock for this path, reads current blob ({} if missing/bad),
     calls mutator(blob) which mutates the dict in place, then atomically
     writes it back. Exceptions from mutator propagate. Never raises from I/O.
-    On a disk-write failure, logs a warning and returns the pre-mutation blob
-    without updating the cache. Successful writes immediately refresh the
-    in-process cache, so a write followed by a read in the same process
-    always sees the new data.
+    Returns (committed, blob):
+      - (True, committed blob) when the write reached disk. The blob includes every
+        writer's changes, so a caller can sync its memory to it.
+      - (False, pre-mutation blob) when the disk write failed.
+      - (False, {}) when the existing file could not be read; the file is left unchanged.
+    On a disk-write failure, logs a warning without updating the cache. Successful writes
+    immediately refresh the in-process cache, so a write followed by a read in the same
+    process always sees the new data.
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved + ".writers"):
@@ -196,7 +208,7 @@ def write_soul_map(
                         "error": str(exc),
                     },
                 )
-                return {}
+                return False, {}
             prior = copy.deepcopy(blob)
             mutator(blob)
             temp_path = ""
@@ -223,11 +235,11 @@ def write_soul_map(
                         "error": str(exc),
                     },
                 )
-                return prior
+                return False, prior
             finally:
                 if temp_path and os.path.exists(temp_path):
                     try:
                         os.unlink(temp_path)
                     except Exception:
                         pass
-            return blob
+            return True, blob
