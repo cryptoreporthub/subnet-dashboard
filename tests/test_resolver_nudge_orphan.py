@@ -115,3 +115,50 @@ def test_abandoned_cycle_lands_no_impact_nudge(harness, monkeypatch):
     orphan = [n for n in nudges if n["revoked"]]
     print(f"\n[NUDGE_COUNT] total={len(nudges)} orphan={len(orphan)} calls={nudges}")
     assert orphan == []
+
+
+@pytest.mark.parametrize("revoke_at", ["expert", "impact", "scenario", "signal"])
+def test_revoked_cycle_applies_no_later_learning_write(harness, monkeypatch, revoke_at):
+    """Revocation landing mid-row must stop every later learning write for that cycle."""
+    # The harness rows carry no council evidence, so the expert nudge is gated off.
+    # Open that gate here so the expert write point is reachable.
+    import internal.council.expert_attribution as expert_attribution
+    import internal.council.signal_expert as signal_expert
+    import internal.learning.evidence as evidence
+
+    monkeypatch.setattr(
+        expert_attribution, "resolve_expert_attribution", lambda *_a, **_k: ("alpha", "existing")
+    )
+    monkeypatch.setattr(signal_expert, "expert_for_replay_row", lambda *_a, **_k: "alpha")
+    monkeypatch.setattr(evidence, "evidence_population", lambda *_a, **_k: "council_published")
+    sched = resolver_scheduler.PredictionResolverScheduler()
+    sched._persist_owner_gen = 1
+    timing = resolver_scheduler._CycleTiming()
+    timing.set_owner_gen(1, sched)
+    token = resolver_scheduler._cycle_timing.set(timing)
+    writes: List[Dict[str, Any]] = []
+    revoke_point_ran = {"ran": False}
+
+    def recorder(name):
+        def spy(*_args, **_kwargs):
+            writes.append({"name": name, "revoked": resolver_scheduler.cycle_writes_revoked()})
+            if name == revoke_at:
+                revoke_point_ran["ran"] = True
+                sched._abandon_inflight_cycle()
+            return 0.5
+
+        return spy
+
+    monkeypatch.setattr(resolver, "_nudge_weights", recorder("expert"))
+    monkeypatch.setattr(resolver, "nudge_impact_strength", recorder("impact"))
+    monkeypatch.setattr(resolver, "_record_scenario_outcome", recorder("scenario"))
+    monkeypatch.setattr(resolver, "_nudge_signal_weights", recorder("signal"))
+    try:
+        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+    finally:
+        resolver_scheduler._cycle_timing.reset(token)
+
+    assert revoke_point_ran["ran"], f"{revoke_at} write never ran, so the test proves nothing"
+    after_revoke = [w["name"] for w in writes if w["revoked"]]
+    print(f"\n[WRITES] revoke_at={revoke_at} calls={writes}")
+    assert after_revoke == []

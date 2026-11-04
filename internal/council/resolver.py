@@ -1127,11 +1127,16 @@ def resolve_prediction_at_horizon(
     correct, outcome = grade_prediction(prediction, actual_pct)
     capture = stamp_capture_fields(prediction, actual_pct)
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
+    # Revocation can land after the entry check, so every learning write re-checks.
+    if _cycle_writes_revoked_safe():
+        return prediction
     expert, _nudge_expert = _stamp_and_nudge_expert(
         prediction, correct=bool(correct), capture=capture
     )
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
+    if _cycle_writes_revoked_safe():
+        return prediction
     # Impact dial before finalize so prediction_resolved trail includes after value.
     if not _skip_council_learning(prediction):
         _nudge_impact_strength(prediction, bool(correct))
@@ -1146,7 +1151,11 @@ def resolve_prediction_at_horizon(
         apply_judge_nudge=apply_judge_nudge,
     )
     if not _skip_council_learning(prediction):
+        if _cycle_writes_revoked_safe():
+            return prediction
         _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
+        if _cycle_writes_revoked_safe():
+            return prediction
         _nudge_signal_weights(prediction, bool(correct), capture=capture)
     else:
         try:
