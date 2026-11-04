@@ -52,7 +52,10 @@ maybe_restart_dead_runner() {
     return 0
   fi
   echo "r2-watch RESTART dead_runner idx=${inflight_idx} inflight_sec=${inflight_sec} threshold=${DEAD_INFLIGHT_SEC}"
-  bash "$RESTART" "$inflight_idx" >>"$RUN_LOG" 2>&1
+  if ! bash "$RESTART" "$inflight_idx" >>"$RUN_LOG" 2>&1; then
+    echo "r2-watch RESTART_ABORT idx=${inflight_idx} (harness gate or restart failed)" >>"$RUN_LOG"
+    return 0
+  fi
   python3 - <<PY
 import json, time
 s=json.load(open("$STATE")) if __import__("os").path.isfile("$STATE") else {}
