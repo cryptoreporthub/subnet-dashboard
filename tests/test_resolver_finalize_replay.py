@@ -365,3 +365,105 @@ def test_failed_append_row_reaches_disk_on_next_save_to_disk(tmp_path, monkeypat
     on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
     assert _prediction_ids(on_disk["learning_trail"]) == ["p-failed"]
     assert on_disk["resolved_prediction_ids"] == ["p-failed"]
+
+
+def test_failed_append_row_reaches_disk_through_a_fresh_bridge_per_event(tmp_path, monkeypatch):
+    """Production builds a new bridge for every trail event, so a failed row must outlive its bridge."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    failed = {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-failed"}}
+    kept = {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-kept"}}
+
+    _fail_first_replace(monkeypatch)
+    MindmapBridge(persistence_path=str(soul_path)).append_learning_trail(
+        failed, resolved_prediction_id="p-failed"
+    )
+    MindmapBridge(persistence_path=str(soul_path)).append_learning_trail(
+        kept, resolved_prediction_id="p-kept"
+    )
+
+    on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert _prediction_ids(on_disk["learning_trail"]) == ["p-failed", "p-kept"]
+    assert on_disk["resolved_prediction_ids"] == ["p-failed", "p-kept"]
+
+
+def test_row_committed_by_another_bridge_during_save_is_written_once(tmp_path, monkeypatch):
+    """A pending row must not be replayed again after another bridge already committed it.
+
+    The second bridge's commit runs inside the first bridge's save, after the first bridge
+    queued its row. The first bridge's own write must then see that the row is already on disk.
+    """
+    import internal.council.mindmap_bridge as mindmap_bridge
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    first = MindmapBridge(persistence_path=str(soul_path))
+    second = MindmapBridge(persistence_path=str(soul_path))
+    real_write = mindmap_bridge.write_soul_map_committed
+    interleaved = []
+
+    def _write_after_second_commits(mutator, path):
+        if not interleaved:
+            interleaved.append(True)
+            second.append_learning_trail(
+                {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-second"}},
+                resolved_prediction_id="p-second",
+            )
+        return real_write(mutator, path)
+
+    monkeypatch.setattr(mindmap_bridge, "write_soul_map_committed", _write_after_second_commits)
+    first.append_learning_trail(
+        {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-first"}},
+        resolved_prediction_id="p-first",
+    )
+
+    on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert sorted(_prediction_ids(on_disk["learning_trail"])) == ["p-first", "p-second"]
+    assert sorted(on_disk["resolved_prediction_ids"]) == ["p-first", "p-second"]
+
+
+def _timed_row(prediction_id: str) -> dict:
+    # Replay dedupes on (event_type, time). A row without a time is never deduped, so set one.
+    return {
+        "time": f"t-{prediction_id}",
+        "event_type": "prediction_resolved",
+        "evidence": {"prediction_id": prediction_id},
+    }
+
+
+def test_row_already_committed_is_not_replayed_twice_by_a_later_write(tmp_path, monkeypatch):
+    """A pending row that a commit already carried must stay once in trail and ledger.
+
+    X fails to reach disk. The next append commits X with its own row. Another bridge then
+    appends inside the window after that commit and before the drop, so the replay of X runs again.
+    """
+    import internal.council.mindmap_bridge as mindmap_bridge
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+    later = MindmapBridge(persistence_path=str(soul_path))
+
+    _fail_first_replace(monkeypatch)
+    bridge.append_learning_trail(_timed_row("p-x"), resolved_prediction_id="p-x")
+
+    real_write = mindmap_bridge.write_soul_map_committed
+    injected = []
+
+    def _write_then_later_appends(mutator, path):
+        result = real_write(mutator, path)
+        if not injected:
+            injected.append(True)
+            later.append_learning_trail(_timed_row("p-y"), resolved_prediction_id="p-y")
+        return result
+
+    monkeypatch.setattr(mindmap_bridge, "write_soul_map_committed", _write_then_later_appends)
+    bridge.append_learning_trail(_timed_row("p-z"), resolved_prediction_id="p-z")
+
+    on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert sorted(_prediction_ids(on_disk["learning_trail"])) == ["p-x", "p-y", "p-z"]
+    assert sorted(on_disk["resolved_prediction_ids"]) == ["p-x", "p-y", "p-z"]

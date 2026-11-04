@@ -220,7 +220,6 @@ def write_soul_map_committed(
                 with os.fdopen(fd, "w") as f:
                     json.dump(blob, f, indent=2)
                 os.replace(temp_path, resolved)
-                _cache_put(resolved, blob, time.monotonic())
                 temp_path = ""
             except Exception as exc:
                 logger.warning(
@@ -242,4 +241,16 @@ def write_soul_map_committed(
                         os.unlink(temp_path)
                     except Exception:
                         pass
+            # The disk write has landed. A cache failure here must not report the write as failed,
+            # so drop the cache entry and let the next read reload from disk.
+            try:
+                _cache_put(resolved, blob, time.monotonic())
+            except Exception as exc:
+                _cache.pop(resolved, None)
+                logger.warning(
+                    "soul_map cache refresh failed after commit path=%s error_type=%s error=%s",
+                    resolved,
+                    type(exc).__name__,
+                    exc,
+                )
             return True, blob

@@ -57,9 +57,12 @@ def _prediction_resolved_recorded(prediction_id: Any) -> bool:
     The resolved-id ledger never truncates, so it outlives the trail window. The trail scan
     covers rows written before the ledger existed.
     """
-    from internal.council.mindmap_bridge import MindmapBridge
+    from internal.council.mindmap_bridge import MindmapBridge, pending_resolved_ids
     from internal.council.weights import SOUL_MAP_PATH
 
+    # A row whose disk write failed is buffered until a write carries it. Check the buffer first.
+    if prediction_id in pending_resolved_ids(SOUL_MAP_PATH):
+        return True
     state = MindmapBridge(persistence_path=SOUL_MAP_PATH).soul_map_state
     ledger = state.get("resolved_prediction_ids")
     if isinstance(ledger, list) and prediction_id in ledger:
