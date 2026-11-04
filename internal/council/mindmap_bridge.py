@@ -8,13 +8,30 @@ Mindmap-integrated Engine.
 import os
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from internal.store.soul_map_io import read_soul_map, write_soul_map, write_soul_map_committed
+from internal.store.soul_map_io import read_soul_map, write_soul_map_committed
 
 # Mirror CYCLE_HISTORY_MAX=10 / learning_trail[-200:] — memory-only heal; on-disk
 # shrink is the compaction operation (Runbook v4), not this constant alone.
 FEEDBACK_LOGS_MAX = 10
+
+
+def _replay_trail_rows(state: Dict[str, Any], rows: List[Tuple[Dict[str, Any], Any]]) -> None:
+    """Apply learning-trail rows and their resolved ids to a soul_map_state dict in order."""
+    for entry, resolved_prediction_id in rows:
+        if resolved_prediction_id is not None:
+            ledger = state.get("resolved_prediction_ids")
+            if not isinstance(ledger, list):
+                ledger = []
+                state["resolved_prediction_ids"] = ledger
+            if resolved_prediction_id not in ledger:
+                ledger.append(resolved_prediction_id)
+        trail = state.get("learning_trail")
+        if not isinstance(trail, list):
+            trail = []
+        trail.append(entry)
+        state["learning_trail"] = trail[-200:]
 
 
 class MindmapBridge:
@@ -23,6 +40,9 @@ class MindmapBridge:
         self.registry_path = registry_path
         self.soul_map_state: Dict[str, Any] = {}
         self.feedback_logs: list = []
+        # Trail rows whose disk write failed. Every disk mutation replays them, so a later
+        # successful save persists them too. Cleared only after a committed write.
+        self._pending_trail: List[Tuple[Dict[str, Any], Any]] = []
         self._load_from_disk()
 
     def _load_from_disk(self):
@@ -62,13 +82,18 @@ class MindmapBridge:
                 self.soul_map_state["learning_trail"] = current_state["learning_trail"]
             else:
                 self.soul_map_state.pop("learning_trail", None)
+            # Rows whose earlier save failed never reached disk. Replay them onto the
+            # disk trail so this save keeps them.
+            _replay_trail_rows(self.soul_map_state, self._pending_trail)
             blob["soul_map_state"] = self.soul_map_state
             blob["feedback_logs"] = self.feedback_logs
 
         try:
-            write_soul_map(_apply, self.persistence_path)
+            committed, _ = write_soul_map_committed(_apply, self.persistence_path)
         except Exception:
             return
+        if committed:
+            self._pending_trail.clear()
 
     def append_learning_trail(self, entry: Dict[str, Any], *, resolved_prediction_id: Any = None) -> None:
         """Append a mind-map learning trail row (pick/resolve/rotation events).
@@ -76,6 +101,8 @@ class MindmapBridge:
         A resolved prediction id is also recorded in ``resolved_prediction_ids`` in the same save.
         That ledger is never truncated, so a replay still matches after the trail window moves on.
         """
+        self._pending_trail.append((entry, resolved_prediction_id))
+
         def _apply(blob: Dict[str, Any]) -> None:
             # Mutate the latest on-disk blob under the save lock, not this bridge's
             # snapshot, so another bridge's earlier append survives this save.
@@ -83,23 +110,13 @@ class MindmapBridge:
             if not isinstance(state, dict):
                 state = {}
                 blob["soul_map_state"] = state
-            if resolved_prediction_id is not None:
-                ledger = state.get("resolved_prediction_ids")
-                if not isinstance(ledger, list):
-                    ledger = []
-                    state["resolved_prediction_ids"] = ledger
-                if resolved_prediction_id not in ledger:
-                    ledger.append(resolved_prediction_id)
-            trail = state.get("learning_trail")
-            if not isinstance(trail, list):
-                trail = []
-            trail.append(entry)
-            state["learning_trail"] = trail[-200:]
+            _replay_trail_rows(state, self._pending_trail)
 
         committed, result = write_soul_map_committed(_apply, self.persistence_path)
         if committed:
             # The disk write landed. Sync the rows and ledger to the merged on-disk state,
             # so rows other bridges appended since this bridge loaded are visible here too.
+            self._pending_trail.clear()
             committed_state = result.get("soul_map_state")
             committed_state = committed_state if isinstance(committed_state, dict) else {}
             for key in ("learning_trail", "resolved_prediction_ids"):
@@ -108,11 +125,10 @@ class MindmapBridge:
                 else:
                     self.soul_map_state.pop(key, None)
         else:
-            # The disk write failed. Keep this append in memory; the returned blob is the
-            # pre-append snapshot and would drop the row.
-            mirror: Dict[str, Any] = {"soul_map_state": self.soul_map_state}
-            _apply(mirror)
-            self.soul_map_state = mirror["soul_map_state"]
+            # The disk write failed. Keep this row in memory; the returned blob is the
+            # pre-append snapshot and would drop it. Earlier failed rows are already in
+            # memory from their own attempts, so only this row is added here.
+            _replay_trail_rows(self.soul_map_state, [(entry, resolved_prediction_id)])
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

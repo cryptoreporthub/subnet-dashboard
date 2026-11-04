@@ -306,3 +306,62 @@ def test_successful_append_shows_other_bridges_rows_in_bridge_memory(tmp_path, m
     memory = stale.soul_map_state
     assert {e["evidence"]["prediction_id"] for e in memory["learning_trail"]} == {"p-other", "p-own"}
     assert set(memory["resolved_prediction_ids"]) == {"p-other", "p-own"}
+
+
+def _fail_first_replace(monkeypatch):
+    """Make the first temp-file rename fail, then let every later rename through."""
+    import internal.store.soul_map_io as soul_map_io
+
+    real_replace = soul_map_io.os.replace
+    calls = []
+
+    def _flaky_replace(src, dst):
+        calls.append(dst)
+        if len(calls) == 1:
+            raise OSError("disk full")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(soul_map_io.os, "replace", _flaky_replace)
+
+
+def _prediction_ids(trail) -> list:
+    return [e["evidence"]["prediction_id"] for e in trail]
+
+
+def test_failed_append_row_reaches_disk_on_next_successful_append(tmp_path, monkeypatch):
+    """A row whose save failed must not vanish when a later append succeeds."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+    failed = {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-failed"}}
+    kept = {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-kept"}}
+
+    _fail_first_replace(monkeypatch)
+    bridge.append_learning_trail(failed, resolved_prediction_id="p-failed")
+    bridge.append_learning_trail(kept, resolved_prediction_id="p-kept")
+
+    on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert _prediction_ids(on_disk["learning_trail"]) == ["p-failed", "p-kept"]
+    assert on_disk["resolved_prediction_ids"] == ["p-failed", "p-kept"]
+    assert _prediction_ids(bridge.soul_map_state["learning_trail"]) == ["p-failed", "p-kept"]
+    assert bridge.soul_map_state["resolved_prediction_ids"] == ["p-failed", "p-kept"]
+
+
+def test_failed_append_row_reaches_disk_on_next_save_to_disk(tmp_path, monkeypatch):
+    """A whole-bridge save after a failed append must also write the pending row."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+    failed = {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-failed"}}
+
+    _fail_first_replace(monkeypatch)
+    bridge.append_learning_trail(failed, resolved_prediction_id="p-failed")
+    bridge._save_to_disk()
+
+    on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert _prediction_ids(on_disk["learning_trail"]) == ["p-failed"]
+    assert on_disk["resolved_prediction_ids"] == ["p-failed"]
