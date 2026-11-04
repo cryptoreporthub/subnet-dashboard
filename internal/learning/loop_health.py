@@ -15,6 +15,7 @@ from internal.council.scheduler_cycle_state import read_last_cycle
 from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import SOUL_MAP_PATH
 from internal.learning.predictions_store import PREDICTIONS_PATH, load_predictions
+from internal.liveness import write_seq
 from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled
 
 logger = logging.getLogger(__name__)
@@ -340,8 +341,6 @@ def _build_resolver_liveness_view() -> Dict[str, Any]:
 
 
 def _resolver_tracker_seq() -> int:
-    from internal.liveness import write_seq
-
     return write_seq(_RESOLVER_TRACKER_NAME)
 
 
@@ -379,8 +378,10 @@ def _resolver_liveness_view() -> Dict[str, Any]:
 
     with _RESOLVER_LIVENESS_CACHE_LOCK:
         if _RESOLVER_LIVENESS_BUILDING:
+            # A payload from before the latest tracker write is not a valid answer,
+            # even while a rebuild is in flight. Fall through to the placeholder.
             stale = _RESOLVER_LIVENESS_CACHE.get("payload")
-            if isinstance(stale, dict):
+            if isinstance(stale, dict) and _RESOLVER_LIVENESS_CACHE.get("seq") == _resolver_tracker_seq():
                 return dict(stale)
             return {
                 "at": None,

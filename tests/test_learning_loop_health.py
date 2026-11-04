@@ -21,15 +21,13 @@ from server import app
 @pytest.fixture(autouse=True)
 def _reset_resolver_snapshot_caches():
     """Keep shared resolver snapshots isolated across health-contract tests."""
-    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
-    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    loop_health._RESOLVER_LIVENESS_CACHE.update({"at": 0.0, "payload": None, "seq": -1})
     loop_health._RESOLVER_LIVENESS_BUILDING = False
     routes._RESOLVER_STATE_CACHE["at"] = 0.0
     routes._RESOLVER_STATE_CACHE["payload"] = None
     routes._RESOLVER_STATE_BUILDING = False
     yield
-    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
-    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    loop_health._RESOLVER_LIVENESS_CACHE.update({"at": 0.0, "payload": None, "seq": -1})
     loop_health._RESOLVER_LIVENESS_BUILDING = False
     routes._RESOLVER_STATE_CACHE["at"] = 0.0
     routes._RESOLVER_STATE_CACHE["payload"] = None
@@ -482,6 +480,37 @@ def test_resolver_cache_kept_after_write_to_other_tracker(monkeypatch):
     assert loop_health._resolver_liveness_view()["status"] == "unavailable"
     other.record_success({"noop": True})
     assert loop_health._resolver_liveness_view()["status"] == "unavailable"
+
+
+def test_resolver_waiter_during_rebuild_ignores_payload_from_before_tracker_write(monkeypatch):
+    from internal import liveness
+
+    started = threading.Event()
+    release = threading.Event()
+    calls = {"n": 0}
+
+    def _build():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"status": "old"}
+        started.set()
+        release.wait(timeout=2)
+        return {"status": "new"}
+
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _build)
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+
+    assert loop_health._resolver_liveness_view()["status"] == "old"
+    tracker.record_success({"noop": True})
+    thread = threading.Thread(target=loop_health._resolver_liveness_view)
+    thread.start()
+    assert started.wait(timeout=1)
+    second = loop_health._resolver_liveness_view()
+    release.set()
+    thread.join(timeout=2)
+
+    assert second["status"] == "unavailable"
 
 
 def test_published_long_without_ledger_is_stalled(tmp_path, monkeypatch):
