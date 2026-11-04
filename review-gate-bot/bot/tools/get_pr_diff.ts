@@ -28,7 +28,10 @@ export default defineTool({
       if (diff === undefined) {
         return { ok: false, reason: "no diff in this fixture" };
       }
-      const presented = presentDiffFiles(diffFixtureFilesToCompare(diff.files), { paths: input.paths });
+      const presented = presentDiffFiles(diffFixtureFilesToCompare(diff.files), {
+        paths: input.paths,
+        purpose: "eval",
+      });
       return { ok: true, ...presented, source: "fixture" };
     }
 
@@ -41,7 +44,12 @@ export default defineTool({
     if (pr.headSha !== input.headSha) {
       return { ok: false, reason: "stale-head", current: pr.headSha };
     }
-    const diff = await readDiff(octokit, ref, { head: pr.headSha, base: pr.baseSha, paths: input.paths });
+    const diff = await readDiff(octokit, ref, {
+      head: pr.headSha,
+      base: pr.baseSha,
+      paths: input.paths,
+      purpose: "live",
+    });
     return diff.ok ? { ...diff, source: "github" } : diff;
   },
 });

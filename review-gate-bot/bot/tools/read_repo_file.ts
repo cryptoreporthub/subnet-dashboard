@@ -42,7 +42,7 @@ export default defineTool({
         ok: true,
         path: input.path,
         sha: input.at === "head" ? pr.headSha : pr.baseSha,
-        ...windowText(text, input),
+        ...windowText(text, { ...input, purpose: "eval" }),
         source: "fixture",
       };
     }
@@ -54,6 +54,6 @@ export default defineTool({
     const octokit = await ctx.host.github.getOctokit();
     const pr = await readPr(octokit, ref);
     const sha = input.at === "head" ? pr.headSha : pr.baseSha;
-    return { ...(await readRepoFile(octokit, ref, sha, input.path, input)), source: "github" };
+    return { ...(await readRepoFile(octokit, ref, sha, input.path, { ...input, purpose: "live" })), source: "github" };
   },
 });

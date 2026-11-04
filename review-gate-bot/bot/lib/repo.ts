@@ -1,6 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 import type { PrRef } from "./gh.js";
 import { scrubModelRepoReads } from "./model-read-redaction.js";
+import type { SessionPurpose } from "./method-variants.js";
 import { redactSecrets } from "./redact.js";
 
 /**
@@ -67,7 +68,11 @@ export type DiffCompareFile = {
  * Scrub paths and patches, apply the diff char budget. Live GitHub reads and eval fixture reads
  * both go through here so the model sees the same redacted, capped diff.
  */
-export function presentDiffFiles(all: readonly DiffCompareFile[], options?: { paths?: readonly string[] }): Diff {
+export function presentDiffFiles(
+  all: readonly DiffCompareFile[],
+  options?: { paths?: readonly string[]; purpose?: SessionPurpose },
+): Diff {
+  const purpose = options?.purpose ?? "live";
   const wanted = options?.paths === undefined ? undefined : new Set(options.paths);
   const files: DiffFile[] = [];
   const omittedPaths: string[] = [];
@@ -76,11 +81,11 @@ export function presentDiffFiles(all: readonly DiffCompareFile[], options?: { pa
   for (const file of all) {
     // A rename is selected by either of its paths, and its paths are scrubbed before they leave this module:
     // a PR can name a file with a credential-shaped value, and the result goes to a model and to a public review.
-    const path = scrubModelRepoReads() ? redactSecrets(file.filename).text : file.filename;
+    const path = scrubModelRepoReads(purpose) ? redactSecrets(file.filename).text : file.filename;
     const previous =
       file.previous_filename === undefined
         ? undefined
-        : scrubModelRepoReads()
+        : scrubModelRepoReads(purpose)
           ? redactSecrets(file.previous_filename).text
           : file.previous_filename;
     if (wanted !== undefined && !wanted.has(file.filename) && (file.previous_filename === undefined || !wanted.has(file.previous_filename))) {
@@ -99,7 +104,7 @@ export function presentDiffFiles(all: readonly DiffCompareFile[], options?: { pa
       entry.patchOmitted = "GitHub gave no patch: the file is binary or too large to diff";
     } else {
       // The budget is spent on what is returned; redacted text can be longer than raw (arm F uses raw length).
-      const text = scrubModelRepoReads() ? redactSecrets(file.patch).text : file.patch;
+      const text = scrubModelRepoReads(purpose) ? redactSecrets(file.patch).text : file.patch;
       if (text.length > budget) {
         entry.patchOmitted = `over the remaining size budget (${text.length} chars); read the file at head instead`;
         omittedPaths.push(path);
@@ -140,7 +145,7 @@ export function diffFixtureFilesToCompare(all: readonly DiffFile[]): DiffCompare
 export async function readDiff(
   octokit: Octokit,
   ref: PrRef,
-  options: { head: string; base: string; paths?: string[] },
+  options: { head: string; base: string; paths?: string[]; purpose?: SessionPurpose },
 ): Promise<DiffRead> {
   const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
     owner: ref.owner,
@@ -163,7 +168,7 @@ export async function readDiff(
     deletions: file.deletions,
     patch: file.patch,
   }));
-  return { ok: true, ...presentDiffFiles(sources, { paths: options.paths }) };
+  return { ok: true, ...presentDiffFiles(sources, { paths: options.paths, purpose: options.purpose }) };
 }
 
 export type FileRead =
@@ -228,12 +233,18 @@ const REDACTED_KEY_LINE = "<redacted:private-key>";
  * Scrubbing comes before the cap. Cutting first can leave the head of a secret at
  * the cap, and the scrubber does not match a head, so it would go out in the clear.
  */
-export function windowText(content: string, options: { startLine?: number; endLine?: number }): TextWindow {
+export function windowText(
+  content: string,
+  options: { startLine?: number; endLine?: number; purpose?: SessionPurpose },
+): TextWindow {
+  const purpose = options.purpose ?? "live";
   const lines = content.split("\n");
   const startLine = Math.max(1, options.startLine ?? 1);
   const endLine = Math.min(lines.length, options.endLine ?? lines.length);
   const slice = lines.slice(startLine - 1, endLine).join("\n");
-  const scrubbed = scrubModelRepoReads() ? redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text : slice;
+  const scrubbed = scrubModelRepoReads(purpose)
+    ? redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text
+    : slice;
   const truncated = scrubbed.length > LIMITS.fileChars;
   const text = truncated ? scrubbed.slice(0, LIMITS.fileChars) : scrubbed;
   return {
@@ -250,7 +261,7 @@ export async function readRepoFile(
   ref: PrRef,
   sha: string,
   path: string,
-  options: { startLine?: number; endLine?: number },
+  options: { startLine?: number; endLine?: number; purpose?: SessionPurpose },
 ): Promise<FileRead> {
   if (!validRepoPath(path)) {
     return refusal(path, "not a repo-relative path");
@@ -279,7 +290,7 @@ export async function readRepoFile(
     ok: true,
     path,
     sha,
-    ...windowText(Buffer.from(entry.content, "base64").toString("utf8"), options),
+    ...windowText(Buffer.from(entry.content, "base64").toString("utf8"), { ...options, purpose: options.purpose }),
   };
 }
 

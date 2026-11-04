@@ -3,6 +3,7 @@ import {
   githubChannel,
   type GitHubEventContext,
 } from "@grok/agent-sdk/channels/github";
+import { assertHostedLiveHasNoExamArmEnv } from "../lib/production-config.js";
 import { commentReviewTurn, pullRequestReviewTurn, reviewEventReviewTurn, type GateDeps, type ReviewTurnLease } from "../lib/advance.js";
 
 async function depsOf(ctx: GitHubEventContext): Promise<GateDeps> {
@@ -60,7 +61,10 @@ export default githubChannel({
     "pull_request_review",
   ],
 
-  onPullRequest: async (ctx, pr) => turnFor(ctx, await pullRequestReviewTurn(await depsOf(ctx), pr)),
+  onPullRequest: async (ctx, pr) => {
+    assertHostedLiveHasNoExamArmEnv();
+    return turnFor(ctx, await pullRequestReviewTurn(await depsOf(ctx), pr));
+  },
 
   /**
    * Review and comment events re-run the gate.
@@ -73,8 +77,10 @@ export default githubChannel({
    * which is read back from the PR by `readGateState`, not by re-dispatching
    * on the webhook.
    */
-  onComment: async (ctx, comment) =>
-    turnFor(ctx, await commentReviewTurn(await depsOf(ctx), comment.author?.login)),
+  onComment: async (ctx, comment) => {
+    assertHostedLiveHasNoExamArmEnv();
+    return turnFor(ctx, await commentReviewTurn(await depsOf(ctx), comment.author?.login));
+  },
 
   /**
    * `pull_request_review` has no typed hook and never reaches `onComment`, yet
@@ -85,6 +91,11 @@ export default githubChannel({
    * delivery on such a channel would start a fresh session. Verdicts arrive on
    * `pull_request_review`, which is in the membership.
    */
-  onEvent: async (ctx) =>
-    ctx.eventName === "pull_request_review" ? turnFor(ctx, await reviewEventReviewTurn(await depsOf(ctx))) : null,
+  onEvent: async (ctx) => {
+    if (ctx.eventName === "pull_request_review") {
+      assertHostedLiveHasNoExamArmEnv();
+      return turnFor(ctx, await reviewEventReviewTurn(await depsOf(ctx)));
+    }
+    return null;
+  },
 });
