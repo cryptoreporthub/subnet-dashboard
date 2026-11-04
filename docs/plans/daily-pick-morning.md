@@ -320,3 +320,42 @@ The assigned upload path was **not present** in the cloud agent environment; cla
 | Slot-only change leaves ~13h window | **Confirmed** (00:00 UTC date roll vs 13:05 slot) |
 | Boot/side paths can create picks early | **Confirmed** (45s cold tick; `story_path`, `pick_explain`; `summarize_picks` dormant in prod) |
 | **13:00–13:05** rollover without fallback | **New gap** — plan requires `latest_pick_row_before` (§2.3, §5) |
+
+---
+
+## Appendix: repro + state model
+
+### Logical repro @ `0299d354` semantics (**VERIFIED**)
+
+Replay of UTC-calendar `_today_str()` + “missing row ⇒ `get_or_create` persists” (slot hypothetically **13:05** only; pick-day helper **not** applied). Ran on plan branch after **`eb368ad4`**.
+
+```
+2026-11-04 02:00 UTC: utc_today=2026-11-04 pick_day_13h=2026-11-03 slot_open=False early_create=True
+2026-11-04 12:30 UTC: utc_today=2026-11-04 pick_day_13h=2026-11-03 slot_open=False early_create=True
+2026-11-04 13:06 UTC: utc_today=2026-11-04 pick_day_13h=2026-11-04 slot_open=True early_create=True
+Boot 2026-11-04T00:05:45Z: early_create=True date_key=2026-11-04
+```
+
+(`pick_day_13h` column shows what **13:00 UTC rollover** would use; **early_create=True** is the bug under slot-only change + 45s boot tick.)
+
+### Cutover state model (Mermaid — no TLC)
+
+```mermaid
+stateDiagram-v2
+  [*] --> PreSlotNoRow: UTC midnight rolls stored date key
+  PreSlotNoRow --> BadEarlyPublish: boot 45s / story_path / pick_explain
+  BadEarlyPublish --> [*]: breaks no publish before slot
+  PreSlotNoRow --> GatedWait: pick_day rollover + creation gate
+  GatedWait --> AfterSlotPublish: 13:05 scheduler tick
+  AfterSlotPublish --> MigratedA: §6.1 migration map once
+  MigratedA --> [*]: steady pick_day_str
+```
+
+### Terminology (two different A/B scales)
+
+| Scale | Option A | Option B | **This plan commits to** |
+|-------|----------|----------|---------------------------|
+| **Diagnosis** (whole change) | Env-only slot → 13:05 | `pick_day.py` + **13:00 rollover** + **13:05 slot** + shared `pick_day_str()` | **Diagnosis B** |
+| **Plan §6** (legacy rows on disk) | **Migration map** on first boot (§6.1) | Dual-read fallback (explicitly **out of scope**) | **§6 A** |
+
+**One line:** implement **diagnosis B + §6 A** (as locked in **`eb368ad4`** adversarial review pass) — not env-only, not dual-read.
