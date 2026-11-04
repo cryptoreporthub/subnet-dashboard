@@ -36,6 +36,9 @@ log_runner_liveness() {
 }
 
 maybe_restart_dead_runner() {
+  if [[ -f "$ART/.r2-gate-hold" ]]; then
+    return 0
+  fi
   if grep -q '^=== R2 complete ' "$RUN_LOG" 2>/dev/null; then
     return 0
   fi

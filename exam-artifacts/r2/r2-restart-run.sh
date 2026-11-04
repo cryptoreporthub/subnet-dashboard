@@ -7,9 +7,14 @@ RUN_LOG="$ART/r2-run-532f3fbd-d7345633.log"
 START_IDX="${1:?plan idx}"
 GATE="$ART/r2-harness-gate.sh"
 KILLED="$ART/r2-write-killed-inflight-audit.sh"
+HOLD="$ART/.r2-gate-hold"
 TMUX=(tmux -f /exec-daemon/tmux.portal.conf)
 SESSION=r2-run
 
+if [[ -f "$HOLD" ]]; then
+  echo "r2-restart ABORT gate_hold START_IDX=${START_IDX}" >>"$RUN_LOG"
+  exit 3
+fi
 if ! bash "$GATE" "$RUN_LOG"; then
   echo "r2-restart ABORT START_IDX=${START_IDX} harness_gate_failed" >>"$RUN_LOG"
   exit 2
