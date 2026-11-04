@@ -1,0 +1,12 @@
+{
+  "number": 9456,
+  "title": "snapshot_coverage: parse MAX_TOKENS via read_max_tokens",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9456",
+  "headSha": "851fbabb8fafdf9a1a08a0a0577f7b31e5e40e1c",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/council/snapshot_coverage.py",
+    "tests/test_subnet_universe.py"
+  ]
+}

@@ -60,3 +60,20 @@ def test_exam_dup_gate_rejects_known_nonowner_patch() -> None:
     fp = diff_patch_fingerprint(json.loads(exam.read_text()))
     errors = check_r1b_exam_duplicate("r1b-f1-99", {"files": [{"patch": json.loads(exam.read_text())["files"][0]["patch"]}]}, {fp})
     assert errors
+
+
+def test_wired_control_gate_rejects_orphan_module_path() -> None:
+    from gate_core import check_r1b_wired_fixture
+
+    diff = {"files": [{"path": "internal/r1b_clean_perf.py", "patch": "+++"}]}
+    oracle = {"behavior": {"expectedVerdict": "PASS", "wiredImportPath": "internal.subnet_universe._sorted_removed_netuids"}}
+    errors = check_r1b_wired_fixture("r1b-wired-99", diff, oracle)
+    assert errors
+
+
+def test_wired_control_gate_requires_import_path() -> None:
+    from gate_core import check_r1b_wired_fixture
+
+    diff = {"files": [{"path": "internal/subnet_universe.py", "patch": "+++"}]}
+    errors = check_r1b_wired_fixture("r1b-wired-99", diff, {"behavior": {"expectedVerdict": "PASS"}})
+    assert errors

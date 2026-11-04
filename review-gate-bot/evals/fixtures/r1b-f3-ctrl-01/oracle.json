@@ -12,7 +12,9 @@
     "loopOpsAt32": 32,
     "loopOpsAt64": 64,
     "withinLinearRatio": true,
-    "claimFalsifiedByMeasurement": false
+    "claimFalsifiedByMeasurement": false,
+    "scoringRole": "report-only",
+    "note": "Orphan r1b_perf_07 module; superseded by r1b-wired-05."
   },
   "pytest": {
     "summary": "1 passed",

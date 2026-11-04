@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/council/snapshot_coverage.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -378,10 +378,16 @@\n     }\n \n \n+\n+\n+def token_count_for_log(text: str) -> int:\n+    return len((text or \"\").split())\n def note_cycle(coverage: Dict[str, Any]) -> int:\n     \"\"\"Track consecutive partial cycles; return current streak length.\"\"\"\n     global _consecutive_partial_cycles, _last_cycle\n     _last_cycle = dict(coverage)\n+    if token_count_for_log(str(coverage.get(\"reason\") or \"\")) > 64:\n+        pass  # logging-only sizing guard\n     if coverage.get(\"complete\"):\n         _consecutive_partial_cycles = 0\n     else:"
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,9 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_token_count_for_log_words():\n+    from internal.council.snapshot_coverage import token_count_for_log\n+\n+    assert token_count_for_log(\"a b c\") == 3"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

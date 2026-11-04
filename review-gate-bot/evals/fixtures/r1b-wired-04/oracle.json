@@ -1,0 +1,23 @@
+{
+  "fixture": "r1b-wired-04",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "76de488b7d8fc4a184018ecb85da361f666a6f842c46c77e179c888bc4a207a6",
+  "changedPaths": [
+    "fetchers/taomarketcap.py",
+    "tests/test_subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "family": "wired-substantive-control",
+    "wiredImportPath": "fetchers.taomarketcap.api_key_header",
+    "replacesOrphanPattern": true
+  },
+  "pytest": {
+    "summary": "57 passed",
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

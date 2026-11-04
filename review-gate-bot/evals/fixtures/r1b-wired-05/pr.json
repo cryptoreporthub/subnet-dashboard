@@ -1,0 +1,12 @@
+{
+  "number": 9459,
+  "title": "universe: count validity_map keys before export",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9459",
+  "headSha": "04feb5841f1c78fbee4172d1bd3598f6e58e4ad9",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ]
+}

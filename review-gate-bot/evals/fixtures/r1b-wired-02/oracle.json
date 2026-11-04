@@ -1,0 +1,23 @@
+{
+  "fixture": "r1b-wired-02",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "e22e3ff11e2bb4f8e10360dc8f217e8ebf06b60b9a95e683a564c23b11ba8a68",
+  "changedPaths": [
+    "internal/council/snapshot_coverage.py",
+    "tests/test_subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "family": "wired-substantive-control",
+    "wiredImportPath": "internal.council.snapshot_coverage.read_max_tokens",
+    "replacesOrphanPattern": true
+  },
+  "pytest": {
+    "summary": "57 passed",
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "fetchers/taomarketcap.py",
+      "status": "modified",
+      "additions": 14,
+      "deletions": 1,
+      "patch": "@@ -93,6 +93,15 @@\n         \"marketcap_rank\": row.get(\"marketcap_rank\", 0),\n     }\n \n+\n+\n+def api_key_header(value: str | None) -> str:\n+    if not value:\n+        return \"\"\n+    v = value.strip()\n+    if v.lower().startswith(\"apikey \"):\n+        return \"ApiKey \" + v[7:].strip()\n+    return f\"ApiKey {v}\"\n def fetch_all_subnets_from_api() -> Optional[List[Dict]]:\n     \"\"\"Fetch ALL subnets from taomarketcap.com public API.\n \n@@ -112,7 +121,11 @@\n \n             url = f\"{API_BASE}?page={page}\"\n             logger.info(\"Fetching subnets page %d from %s\", page, url)\n-            resp = sync_get(url, timeout=15)\n+            headers = {}\n+            key = os.environ.get(\"TMC_API_KEY\")\n+            if key:\n+                headers[\"Authorization\"] = api_key_header(key)\n+            resp = sync_get(url, timeout=15, headers=headers)\n             if resp.status_code != 200:\n                 logger.warning(\"API page %d returned %s\", page, resp.status_code)\n                 break"
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,9 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_api_key_header_prefix_on_fetcher():\n+    from fetchers.taomarketcap import api_key_header\n+\n+    assert api_key_header(\"secret\").startswith(\"ApiKey \")"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

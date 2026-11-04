@@ -1,0 +1,23 @@
+{
+  "fixture": "r1b-wired-01",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "9c9e7a639cef38d1c1c723285f8705d30aca80d2aeda080fe3b528a996482db3",
+  "changedPaths": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "family": "wired-substantive-control",
+    "wiredImportPath": "internal.subnet_universe._sorted_removed_netuids",
+    "replacesOrphanPattern": true
+  },
+  "pytest": {
+    "summary": "57 passed",
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

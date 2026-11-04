@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 1,
+      "patch": "@@ -264,6 +264,10 @@\n class MembershipBuild:\n     snapshot: UniverseSnapshot\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n+\n+\n+def _sorted_removed_netuids(prior: list[int], current: list[int]) -> list[int]:\n+    return sorted(set(prior) - set(current))\n \n \n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n@@ -725,7 +729,7 @@\n                     \"subnet_universe unsafe shrink blocked (%d -> %d) removed=%s\",\n                     len(self._snapshot.netuids),\n                     len(built.netuids),\n-                    sorted(set(self._snapshot.netuids) - set(built.netuids)),\n+                    _sorted_removed_netuids(list(self._snapshot.netuids), list(built.netuids)),\n                 )\n                 built = _hold_prior(\n                     self._snapshot, \"degraded\", \"Unsafe shrink blocked \u2014 retained last-known-good universe\""
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,9 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_sorted_removed_netuids_orders_and_dedupes():\n+    from internal.subnet_universe import _sorted_removed_netuids\n+\n+    assert _sorted_removed_netuids([3, 1, 2], [2]) == [1, 3]"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

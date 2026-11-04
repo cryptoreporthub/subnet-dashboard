@@ -7,7 +7,9 @@
     "tests/test_r1b_redact_clean_tokens.py"
   ],
   "behavior": {
-    "expectedVerdict": "PASS"
+    "expectedVerdict": "PASS",
+    "scoringRole": "report-only",
+    "note": "Orphan module; superseded by r1b-wired-02."
   },
   "pytest": {
     "summary": "1 passed",

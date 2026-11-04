@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 0,
+      "patch": "@@ -316,6 +316,12 @@\n         refresh_incomplete=True,\n         message=message,\n     )\n+\n+\n+def _refresh_batch_count(netuid_count: int, *, batch_size: int = 32) -> int:\n+    if netuid_count <= 0:\n+        return 0\n+    return (netuid_count + batch_size - 1) // batch_size\n \n \n def _compute_membership(\n@@ -558,6 +564,7 @@\n             probe_candidates = list(range(MAX_NETUIDS))\n         else:\n             candidates |= set(range(MAX_NETUIDS))\n+            _refresh_batch_count(len(probe_candidates))\n             probe_candidates = sorted(candidates)\n         deadline = time.monotonic() + self._probe_budget_seconds\n         if self._probe_fetch is not None:"
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,9 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_refresh_batch_count_for_sixty_four():\n+    from internal.subnet_universe import _refresh_batch_count\n+\n+    assert _refresh_batch_count(64, batch_size=32) == 2"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

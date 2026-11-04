@@ -1,0 +1,12 @@
+{
+  "number": 9457,
+  "title": "snapshot_coverage: token_count_for_log on partial cycle notes",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9457",
+  "headSha": "0a884e0e6823552bf9674b6da611443674adb3a2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/council/snapshot_coverage.py",
+    "tests/test_subnet_universe.py"
+  ]
+}
