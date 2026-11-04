@@ -52,31 +52,22 @@ export const DIFF_FILE_CAP = 300;
 
 export type DiffRead = ({ ok: true } & Diff) | { ok: false; reason: "diff-incomplete"; detail: string };
 
+/** One changed file before scrubbing and size budgeting (GitHub compare or eval fixture). */
+export type DiffCompareFile = {
+  filename: string;
+  previous_filename?: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch?: string;
+};
+
 /**
- * The PR's diff between two commits the caller has already checked. The compare is pinned to
- * `base...head` by SHA, not read by PR number: `pulls.listFiles` answers for whatever head the PR
- * has at the moment of the call, so a push after the head check would hand back another head's
- * patches. A diff at the file cap is refused, since a cut list would read as the whole change.
+ * Scrub paths and patches, apply the diff char budget. Live GitHub reads and eval fixture reads
+ * both go through here so the model sees the same redacted, capped diff.
  */
-export async function readDiff(
-  octokit: Octokit,
-  ref: PrRef,
-  options: { head: string; base: string; paths?: string[] },
-): Promise<DiffRead> {
-  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
-    owner: ref.owner,
-    repo: ref.repo,
-    basehead: `${options.base}...${options.head}`,
-  });
-  const all = data.files ?? [];
-  if (all.length >= DIFF_FILE_CAP) {
-    return {
-      ok: false,
-      reason: "diff-incomplete",
-      detail: `the diff has ${DIFF_FILE_CAP} or more files, GitHub's compare limit; read the files you need with read_repo_file at head instead`,
-    };
-  }
-  const wanted = options.paths === undefined ? undefined : new Set(options.paths);
+export function presentDiffFiles(all: readonly DiffCompareFile[], options?: { paths?: readonly string[] }): Diff {
+  const wanted = options?.paths === undefined ? undefined : new Set(options.paths);
   const files: DiffFile[] = [];
   const omittedPaths: string[] = [];
   let budget = LIMITS.diffChars;
@@ -115,12 +106,58 @@ export async function readDiff(
   }
 
   return {
-    ok: true,
     totalFiles: all.length,
     files,
     truncated: omittedPaths.length > 0,
     omittedPaths,
   };
+}
+
+/** Map a stored eval diff entry into compare input (fixture stores raw paths and patches). */
+export function diffFixtureFilesToCompare(all: readonly DiffFile[]): DiffCompareFile[] {
+  return all.map((file) => ({
+    filename: file.path,
+    previous_filename: file.previousPath,
+    status: file.status,
+    additions: file.additions,
+    deletions: file.deletions,
+    patch: file.patch,
+  }));
+}
+
+/**
+ * The PR's diff between two commits the caller has already checked. The compare is pinned to
+ * `base...head` by SHA, not read by PR number: `pulls.listFiles` answers for whatever head the PR
+ * has at the moment of the call, so a push after the head check would hand back another head's
+ * patches. A diff at the file cap is refused, since a cut list would read as the whole change.
+ */
+export async function readDiff(
+  octokit: Octokit,
+  ref: PrRef,
+  options: { head: string; base: string; paths?: string[] },
+): Promise<DiffRead> {
+  const { data } = await octokit.rest.repos.compareCommitsWithBasehead({
+    owner: ref.owner,
+    repo: ref.repo,
+    basehead: `${options.base}...${options.head}`,
+  });
+  const all = data.files ?? [];
+  if (all.length >= DIFF_FILE_CAP) {
+    return {
+      ok: false,
+      reason: "diff-incomplete",
+      detail: `the diff has ${DIFF_FILE_CAP} or more files, GitHub's compare limit; read the files you need with read_repo_file at head instead`,
+    };
+  }
+  const sources: DiffCompareFile[] = all.map((file) => ({
+    filename: file.filename,
+    previous_filename: file.previous_filename,
+    status: file.status,
+    additions: file.additions,
+    deletions: file.deletions,
+    patch: file.patch,
+  }));
+  return { ok: true, ...presentDiffFiles(sources, { paths: options.paths }) };
 }
 
 export type FileRead =
