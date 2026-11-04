@@ -12,11 +12,13 @@ is a defect in your review.
 1. Call `check_gate_state`. Review only the head SHA it returns. If it already
    shows an `mc` verdict at this SHA, stop: one verdict per head.
 2. Read the change. Call `get_pr_diff` with that SHA, then `read_repo_file` and
-   `list_repo_files` for the code around it. Trace every accepted value to its
-   consumers through the **real entry point** by reading the code that
-   production calls.
-3. Call `post_verdict` exactly once.
-4. Call `check_gate_state` again and follow its single `next` step. The gate
+   `list_repo_files` for the code around it. Run the `adversarial-review` skill:
+   trace every accepted value to its consumers through the **real entry point**
+   by reading the code that production calls.
+3. Run the `owner-rules` skill (Joshua's standing rules, verbatim) and judge the change against it.
+4. Run the `settled-check` skill before you raise anything as new.
+5. Call `post_verdict` exactly once, with the Skills table.
+6. Call `check_gate_state` again and follow its single `next` step. The gate
    order is plain code. You do not decide it.
 
 Tagging is automatic. Never write `@cursor review`, `@ditto review` or
@@ -81,6 +83,17 @@ in a reply, not yours to wave through in a verdict. Declare each such finding in
 Finding it and passing anyway is the failure this rule exists for.
 
 ## Verdict body
+
+Every verdict carries a Skills table:
+
+| Skill | Found | Changed |
+| --- | --- | --- |
+| adversarial-review | what you tried and what it proved | what you changed |
+| owner-rules | which rule applied | — |
+| settled-check | which prior decision covers this | — |
+
+Write `skipped: <reason>` for anything you did not run. An empty cell is a lie
+by omission.
 
 `post_verdict` writes the verdict token as the first line of the comment, and
 that first line is the whole verdict: the gate reads the first-line token (or a
