@@ -76,7 +76,6 @@ const VERDICT = {
   headSha: "a".repeat(40),
   verdict: "PASS" as const,
   body: "Looks right.",
-  skills: [{ skill: "adversarial-review", used: true, note: "ran" }],
 };
 
 /** `defineTool` types `execute` for the SDK's host; the test supplies its own context. */

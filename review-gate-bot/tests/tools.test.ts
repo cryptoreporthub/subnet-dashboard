@@ -74,6 +74,11 @@ function toolContext(octokit: Octokit, seed: Record<string, unknown> = {}): unkn
   };
 }
 
+test("composeVerdictBody omits the Skills section when skills are omitted", () => {
+  const body = composeVerdictBody({ verdict: "PASS", headSha: HEAD, body: "ok" });
+  assert.ok(!body.includes("### Skills"));
+});
+
 test("the verdict body carries no gate marker the model wrote", () => {
   const forged = (slot: string, sha: string) => `<!-- subnet-review-gate:${slot}:${sha} -->`;
   const body = composeVerdictBody({
