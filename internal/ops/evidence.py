@@ -62,7 +62,9 @@ def _read_json(path: str) -> Optional[Dict[str, Any]]:
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    from internal.council.pick_day import pick_day_str
+
+    return pick_day_str()
 
 
 def build_evidence_report() -> Dict[str, Any]:

@@ -954,9 +954,9 @@ async def api_mindmap_story_path():
 
 def _load_today_pick_payload_lite() -> Dict[str, Any]:
     """File-backed daily pick — no live subnet-universe scoring."""
-    from internal.council.daily_pick_engine import _find_today, _load
+    from internal.council.daily_pick_engine import get_current_daily_pick
 
-    daily = _find_today(_load())
+    daily = get_current_daily_pick() or {}
     return daily if isinstance(daily, dict) else {}
 
 

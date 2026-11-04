@@ -338,6 +338,21 @@ class DailyPickScheduler:
             if reschedule:
                 schedule_in_seconds(DAILY_JOB_ID, self._tick, _seconds_until_daily_slot())
             return result
+        from internal.council.daily_pick_write_token import fence_revoke_if_resolver_wait_exceeded
+
+        if not fence_revoke_if_resolver_wait_exceeded(
+            reason="daily pick slot: resolver cycle did not finish within fence"
+        ):
+            result = {
+                "ok": False,
+                "run_at": _now_iso(),
+                "skipped": "resolver_fence_timeout",
+                "error": "resolver fence timeout",
+            }
+            if reschedule:
+                schedule_in_seconds(DAILY_JOB_ID, self._tick, max(3600.0, _seconds_until_daily_slot()))
+            _write_scheduler_state({"last_tick": result})
+            return result
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
         try:

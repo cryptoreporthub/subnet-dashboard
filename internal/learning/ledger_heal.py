@@ -28,8 +28,9 @@ def _utcnow() -> datetime:
 
 
 def _today_record(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    from internal.council.daily_pick_reader import load_current_daily_pick
+
     picks_path = path or DAILY_PICKS_PATH
-    today = _utcnow().date().isoformat()
     try:
         with open(picks_path, "r", encoding="utf-8") as handle:
             records = json.load(handle)
@@ -37,10 +38,8 @@ def _today_record(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
     if not isinstance(records, list):
         return None
-    for rec in reversed(records):
-        if isinstance(rec, dict) and rec.get("date") == today:
-            return rec
-    return None
+    row, _meta = load_current_daily_pick(records)
+    return row if isinstance(row, dict) else None
 
 
 def _subnet_row_for_heal(stored_pick: Dict[str, Any], netuid: Any) -> Optional[Dict[str, Any]]:

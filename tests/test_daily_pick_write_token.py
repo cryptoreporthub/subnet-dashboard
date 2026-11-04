@@ -63,6 +63,30 @@ def test_post_revoke_commit_rejected():
     assert ran["v"] is False
 
 
+def test_resolver_fence_wait_then_revoke(monkeypatch):
+    class _Sched:
+        _inflight_future = None
+
+        def __init__(self):
+            self._cycle_lock = threading.Lock()
+            self._cycle_lock.acquire()
+
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler",
+        lambda: _Sched(),
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_write_token.resolver_fence_wait_seconds",
+        lambda: 0.05,
+    )
+    monkeypatch.setattr("internal.council.daily_pick_write_token.time.sleep", lambda _: None)
+
+    ok = tok.wait_for_resolver_cycle_before_pick(timeout_seconds=0.01, poll_seconds=0.0)
+    assert ok is False
+    assert tok.fence_revoke_if_resolver_wait_exceeded(reason="test") is False
+    assert tok.health_flags().get("daily_pick_write_fence_timeout") is True
+
+
 def test_fence_timeout_health_flag():
     tok.revoke_daily_pick_write_token(fence_timeout=True, reason="fence")
     flags = tok.health_flags()

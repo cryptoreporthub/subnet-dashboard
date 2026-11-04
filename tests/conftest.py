@@ -73,6 +73,29 @@ def _clear_message_intel_load_cache():
         pass
 
 
+@pytest.fixture(autouse=True)
+def _daily_pick_write_token_for_tests():
+    """Resolver/pick guarded commits require an issued token (§5)."""
+    try:
+        from internal.council.daily_pick_write_token import issue_daily_pick_write_token
+
+        issue_daily_pick_write_token()
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _daily_pick_creation_open_for_scheduler(monkeypatch):
+    """Keep scheduler unit tests exercising ticks unless they override the gate."""
+    try:
+        monkeypatch.setattr(
+            "internal.council.pick_day.daily_pick_creation_open",
+            lambda now=None: True,
+        )
+    except Exception:
+        pass
+
+
 @pytest.fixture
 def usable_soul_map(tmp_path, monkeypatch):
     """A valid soul_map for tests that run the real snapshot producer.

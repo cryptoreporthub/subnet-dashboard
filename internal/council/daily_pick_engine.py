@@ -202,12 +202,23 @@ def _merge_selection_recorded_at(
 
 
 def get_current_daily_pick() -> Optional[Dict[str, Any]]:
-    row, _meta = resolve_current_daily_pick(_load())
-    return row
+    records = _load()
+    row, _meta = resolve_current_daily_pick(records)
+    if row is not None:
+        return row
+    # Fallback: today's v2/HOLD row when §3 has no published pick (API honesty + test patches).
+    return _find_today(records)
 
 
 def get_current_daily_pick_with_meta() -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    return resolve_current_daily_pick(_load())
+    records = _load()
+    row, meta = resolve_current_daily_pick(records)
+    if row is not None:
+        return row, meta
+    fallback = _find_today(records)
+    if fallback is not None:
+        meta = {**meta, "prior_pick_day": False, "fallback_today_row": True}
+    return fallback, meta
 
 
 def _subnets_have_prices(subnets: List[Dict[str, Any]]) -> bool:

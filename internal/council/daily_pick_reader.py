@@ -69,6 +69,25 @@ def resolve_current_daily_pick(
     return None, meta
 
 
+def load_current_daily_pick(
+    records: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    """Load from disk (optional records) and apply §3 reader + today fallback."""
+    if records is None:
+        from internal.council.daily_pick_engine import _load
+
+        records = _load()
+    row, meta = resolve_current_daily_pick(records)
+    if row is not None:
+        return row, meta
+    from internal.council.daily_pick_engine import _find_today
+
+    fallback = _find_today(records)
+    if fallback is not None:
+        meta = {**meta, "fallback_today_row": True}
+    return fallback, meta
+
+
 def find_v2_row(records: List[Dict[str, Any]], pick_day: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Latest row for v2 pick_id (published or HOLD)."""
     day = pick_day or pick_day_str()

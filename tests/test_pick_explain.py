@@ -88,7 +88,7 @@ _FIXTURE_AUDIT = {"adjusted_confidence": 0.82, "concerns": []}
 # Fixture subnet row — survives tradable_subnets filter (integer netuid > 0).
 _FIXTURE_SUBNET = {"netuid": 42, "name": "MockNet", "symbol": "MOCK", "price": 1.0}
 
-# Fixture get_or_create_today_pick result — SN42 is the published pick.
+# Fixture get_current_daily_pick result — SN42 is the published pick.
 # Carries the sentinel calibration on the pick sub-object so the fix can
 # return the persisted value instead of the live re-score (_LIVE_SCORE_CAL).
 _FIXTURE_TODAY_PICK_STATE = {

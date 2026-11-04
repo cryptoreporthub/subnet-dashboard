@@ -120,11 +120,13 @@ def _day_from_disk() -> Optional[Dict[str, Any]]:
 
 def _load_day_snapshot() -> Dict[str, Any]:
     emitted_at = _emitted_at_z()
+    from internal.council.pick_day import pick_day_str
+
     day: Dict[str, Any] = {
         "action": "HOLD",
         "published": False,
         "reason": "No long call published",
-        "date": datetime.now(timezone.utc).date().isoformat(),
+        "date": pick_day_str(),
         "timestamp_utc": emitted_at,
         "pick": None,
         "candidate": None,

@@ -52,8 +52,11 @@ def _load_json(path: str) -> Any:
         return None
 
 
+from internal.council.pick_day import pick_day_str
+
+
 def _today_str() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return pick_day_str()
 
 
 def _collect_candidates() -> List[Dict[str, Any]]:
@@ -63,9 +66,10 @@ def _collect_candidates() -> List[Dict[str, Any]]:
     picks_path = os.environ.get("DAILY_PICKS_PATH", "data/daily_picks.json")
     picks = _load_json(picks_path)
     if isinstance(picks, list):
-        for rec in reversed(picks):
-            if rec.get("date") != _today_str():
-                continue
+        from internal.council.daily_pick_reader import load_current_daily_pick
+
+        rec, _meta = load_current_daily_pick(picks)
+        if isinstance(rec, dict):
             pick = rec.get("pick") or rec.get("candidate") or {}
             if not isinstance(pick, dict):
                 break
@@ -84,7 +88,6 @@ def _collect_candidates() -> List[Dict[str, Any]]:
                     "action": pick.get("action"),
                 }
             )
-            break
 
     soul_path = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
     soul = _load_json(soul_path)

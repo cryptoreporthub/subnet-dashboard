@@ -63,8 +63,11 @@ def _parse_iso(value: Any) -> Optional[datetime]:
 
 
 def _daily_pick_today(path: Optional[str] = None) -> Dict[str, Any]:
+    from internal.council.daily_pick_reader import load_current_daily_pick
+    from internal.council.pick_day import pick_day_str
+
     picks_path = path or os.environ.get("DAILY_PICKS_PATH", "data/daily_picks.json")
-    today = _utcnow().date().isoformat()
+    today = pick_day_str()
     out: Dict[str, Any] = {
         "date": today,
         "action": None,
@@ -77,21 +80,20 @@ def _daily_pick_today(path: Optional[str] = None) -> Dict[str, Any]:
             records = json.load(handle)
         if not isinstance(records, list):
             return out
-        for rec in reversed(records):
-            if not isinstance(rec, dict) or rec.get("date") != today:
-                continue
-            action = str(rec.get("action") or "").upper() or None
-            out["action"] = action
-            out["reason"] = rec.get("reason") or rec.get("hold_reason")
-            pick = rec.get("pick") if isinstance(rec.get("pick"), dict) else None
-            if pick:
-                out["has_pick"] = True
-                netuid = pick.get("netuid")
-                if netuid is None:
-                    sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
-                    netuid = sn.get("netuid")
-                out["pick_netuid"] = netuid
-            break
+        rec, _meta = load_current_daily_pick(records)
+        if not isinstance(rec, dict):
+            return out
+        action = str(rec.get("action") or "").upper() or None
+        out["action"] = action
+        out["reason"] = rec.get("reason") or rec.get("hold_reason")
+        pick = rec.get("pick") if isinstance(rec.get("pick"), dict) else None
+        if pick:
+            out["has_pick"] = True
+            netuid = pick.get("netuid")
+            if netuid is None:
+                sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
+                netuid = sn.get("netuid")
+            out["pick_netuid"] = netuid
     except Exception:
         pass
     return out

@@ -41,7 +41,9 @@ def _utcnow_iso() -> str:
 
 
 def _today_str() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    from internal.council.pick_day import pick_day_str
+
+    return pick_day_str()
 
 
 def universe_for_policy(
@@ -275,8 +277,19 @@ def audit_row(
 
 
 def _find_row_for_date(records: List[Dict[str, Any]], date: str) -> Optional[Dict[str, Any]]:
+    from internal.council.daily_pick_reader import find_v2_row, load_current_daily_pick
+    from internal.council.pick_day import v2_pick_id
+
+    if date == _today_str():
+        row, _meta = load_current_daily_pick(records)
+        if row is not None:
+            return row
+    pid = v2_pick_id(date)
     for rec in reversed(records):
-        if rec.get("date") == date:
+        if rec.get("pick_id") == pid:
+            return rec
+    for rec in reversed(records):
+        if rec.get("date") == date or rec.get("pick_day") == date:
             return rec
     return None
 

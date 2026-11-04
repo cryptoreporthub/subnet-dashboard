@@ -214,3 +214,11 @@ For current **`pick_day = pick_day_str()`**:
 If local disk stalls during **fsync** inside a guarded **validate-token + bounded local atomic commit**, the commit holds **`daily_pick_write_token_lock`** until the kernel returns — **revocation waits** behind that commit (at most one bounded local write). A **frozen disk** breaks the site regardless; no timeout logic will forcibly release the lock mid-commit.
 
 **Mitigation (observability only):** log guarded commit duration at info/warning; expose **`/api/health`** (and JSON detail on **`/health`** when requested) **`daily_pick_commit_slow: true`** when any guarded commit exceeds **5s**. **No automatic timeout or lock break.**
+
+### Process model (threading.Lock fence)
+
+**Prod layout (`fly.toml`):** web `RUN_MODE=web`, **`BACKGROUND_ON_WEB=off`**, inline worker sibling **`RUN_MODE=worker`** (`scripts/fly_web_entrypoint.sh` **:92–:94** `setsid … internal.worker`; web **:148** `exec python scripts/run_web_with_guard.py`).
+
+**Guarded writes** (token + resolver/pick RMW) run from **`background_boot`** schedulers — **worker process only** in prod (web skips background boot). HTTP read paths use **`get_current_daily_pick` / `load_current_daily_pick`** only; **`server.py` has no `get_or_create_today_pick()` call sites**.
+
+**Caveat:** `threading.Lock` is **process-local**. If **`BACKGROUND_ON_WEB=on`**, the web process would also start resolver/pick schedulers with a **separate** token — not prod config today. **`ledger_heal._downgrade_today_to_hold`** still writes pick JSON without the token (worker boot/recover path only).

@@ -95,8 +95,11 @@ def _utcnow_z() -> str:
 
 
 def _daily_pick_summary() -> Dict[str, Any]:
+    from internal.council.daily_pick_reader import load_current_daily_pick
+    from internal.council.pick_day import pick_day_str
+
     path = os.environ.get("DAILY_PICKS_PATH", "data/daily_picks.json")
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = pick_day_str()
     out: Dict[str, Any] = {
         "date": today,
         "action": None,
@@ -109,18 +112,17 @@ def _daily_pick_summary() -> Dict[str, Any]:
             records = json.load(f)
         if not isinstance(records, list):
             return out
-        for rec in reversed(records):
-            if rec.get("date") != today:
-                continue
-            out["action"] = rec.get("action")
-            out["published"] = bool(rec.get("published"))
-            out["candidate"] = bool(rec.get("candidate"))
-            out["reason"] = rec.get("reason") or rec.get("hold_reason")
-            pick = rec.get("pick") or {}
-            if isinstance(pick, dict):
-                out["pick_netuid"] = pick.get("netuid") or (pick.get("subnet") or {}).get("netuid")
-                out["pick_confidence"] = pick.get("confidence")
-            break
+        rec, _meta = load_current_daily_pick(records)
+        if not isinstance(rec, dict):
+            return out
+        out["action"] = rec.get("action")
+        out["published"] = bool(rec.get("pick"))
+        out["candidate"] = bool(rec.get("candidate"))
+        out["reason"] = rec.get("reason") or rec.get("hold_reason")
+        pick = rec.get("pick") or {}
+        if isinstance(pick, dict):
+            out["pick_netuid"] = pick.get("netuid") or (pick.get("subnet") or {}).get("netuid")
+            out["pick_confidence"] = pick.get("confidence")
     except Exception:
         pass
     return out

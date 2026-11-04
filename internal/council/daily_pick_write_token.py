@@ -95,3 +95,41 @@ def health_flags() -> Dict[str, Any]:
         if _schedule_disabled:
             flags["daily_pick_schedule_disabled"] = True
         return flags
+
+
+def resolver_fence_wait_seconds() -> float:
+    import os
+
+    return float(os.environ.get("DAILY_PICK_WRITE_FENCE_WAIT_SECONDS", "3600"))
+
+
+def wait_for_resolver_cycle_before_pick(
+    timeout_seconds: Optional[float] = None,
+    poll_seconds: float = 0.25,
+) -> bool:
+    """Bounded wait for in-flight resolver cycle without holding write-token lock (§5)."""
+    from internal.council.resolver_scheduler import get_prediction_resolver_scheduler
+
+    deadline = time.monotonic() + (timeout_seconds if timeout_seconds is not None else resolver_fence_wait_seconds())
+    sched = get_prediction_resolver_scheduler()
+    while time.monotonic() < deadline:
+        if sched is None:
+            return True
+        inflight = getattr(sched, "_inflight_future", None)
+        if inflight is not None and not inflight.done():
+            time.sleep(poll_seconds)
+            continue
+        lock = getattr(sched, "_cycle_lock", None)
+        if lock is not None and lock.locked():
+            time.sleep(poll_seconds)
+            continue
+        return True
+    return False
+
+
+def fence_revoke_if_resolver_wait_exceeded(reason: str = "resolver fence timeout") -> bool:
+    """Wait bounded for resolver idle; revoke token on timeout. Returns True if idle in time."""
+    if wait_for_resolver_cycle_before_pick():
+        return True
+    revoke_daily_pick_write_token(fence_timeout=True, reason=reason)
+    return False

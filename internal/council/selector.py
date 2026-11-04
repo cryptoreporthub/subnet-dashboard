@@ -12,6 +12,7 @@ from internal.council.experts.quant import QuantExpert
 from internal.council.experts.hype import HypeExpert
 from internal.council.experts.contrarian import ContrarianExpert
 from internal.council.mindmap_bridge import MindmapBridge
+from internal.council.pick_day import pick_day_str
 
 class Selector:
     """
@@ -175,7 +176,7 @@ class Selector:
             decisions.append(payload)
             
         daily_output = {
-            "date": datetime.now(timezone.utc).date().isoformat(),
+            "date": pick_day_str(),
             "decisions": decisions
         }
         
