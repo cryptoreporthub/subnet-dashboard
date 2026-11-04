@@ -54,12 +54,14 @@ def _trail_has_prediction_resolved(prediction_id: Any) -> bool:
     from internal.council.weights import SOUL_MAP_PATH
 
     trail = MindmapBridge(persistence_path=SOUL_MAP_PATH).soul_map_state.get("learning_trail") or []
-    return any(
-        isinstance(e, dict)
-        and e.get("event_type") == "prediction_resolved"
-        and (e.get("evidence") or {}).get("prediction_id") == prediction_id
-        for e in trail
-    )
+    for e in trail:
+        if not isinstance(e, dict) or e.get("event_type") != "prediction_resolved":
+            continue
+        evidence = e.get("evidence")
+        # Legacy rows may carry non-dict evidence; they cannot match, and must not raise.
+        if isinstance(evidence, dict) and evidence.get("prediction_id") == prediction_id:
+            return True
+    return False
 
 
 def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) -> None:

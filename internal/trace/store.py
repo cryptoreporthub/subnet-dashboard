@@ -126,7 +126,9 @@ def has_decision_row(decision_type: str, prediction_id: Any, path: Optional[str]
     for row in _load_json_store(_resolve_path(path)).get("records") or []:
         if not isinstance(row, dict) or row.get("decision_type") != decision_type:
             continue
-        if (row.get("decision") or {}).get("prediction_id") == prediction_id:
+        decision = row.get("decision")
+        # Legacy rows may carry a non-dict decision; they cannot match, and must not raise.
+        if isinstance(decision, dict) and decision.get("prediction_id") == prediction_id:
             return True
     return False
 
