@@ -87,6 +87,49 @@ def log_memory_snapshot(label: str) -> None:
     logger.info("%s pid=%s rss_kb=%d", label, os.getpid(), rss)
 
 
+_TRIM_AFTER_JOBS = frozenset({"daily_pick_scheduler", "pump_ladder_scan"})
+
+
+def _read_mem_breakdown() -> str:
+    """End-of-job fields: anon/file RSS, thread count, gc counts (cheap; no tracemalloc)."""
+    parts = []
+    try:
+        with open("/proc/self/smaps_rollup", encoding="utf-8") as handle:
+            kb = {
+                ln.split(":")[0]: ln.split()[1] for ln in handle if ":" in ln and len(ln.split()) >= 2
+            }
+        parts.append(f"anon_kb={kb['Anonymous']} file_kb={kb['Pss_File']}")
+    except (OSError, KeyError, IndexError):
+        parts.append("anon_kb=unknown file_kb=unknown")
+    import gc
+
+    parts.append(f"threads={threading.active_count()} gc={'/'.join(map(str, gc.get_count()))}")
+    return " ".join(parts)
+
+
+def _maybe_malloc_trim(name: str) -> None:
+    """Env-flagged malloc_trim(0) after the daily pick / pump scan; logs RSS before and after."""
+    flag = os.environ.get("MEMORY_MALLOC_TRIM_AFTER_JOBS", "").lower()
+    if name not in _TRIM_AFTER_JOBS or flag not in ("1", "true", "yes", "on"):
+        return
+    try:
+        import ctypes
+
+        trim = ctypes.CDLL("libc.so.6").malloc_trim  # glibc only; AttributeError/OSError elsewhere
+    except (OSError, AttributeError):
+        logger.info("malloc_trim name=%s unavailable (non-glibc)", name)
+        return
+    before = read_rss_kb()
+    released = trim(0)
+    logger.info(
+        "malloc_trim name=%s rss_before_kb=%s rss_after_kb=%s released=%s",
+        name,
+        before,
+        read_rss_kb(),
+        released,
+    )
+
+
 def log_heavy_job_rss(
     name: str,
     phase: str,
@@ -106,51 +149,17 @@ def log_heavy_job_rss(
         held_ms = 0.0
         if phase == "end" and started_at is not None:
             held_ms = (time.perf_counter() - started_at) * 1000.0
-        uptime_s = process_uptime_s
-        if rss is None:
-            if uptime_s is not None:
-                logger.info(
-                    "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown "
-                    "held_ms=%.1f process_uptime_s=%.3f",
-                    name,
-                    phase,
-                    run_mode,
-                    pid,
-                    held_ms,
-                    uptime_s,
-                )
-            else:
-                logger.info(
-                    "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=unknown held_ms=%.1f",
-                    name,
-                    phase,
-                    run_mode,
-                    pid,
-                    held_ms,
-                )
-            return
-        if uptime_s is not None:
-            logger.info(
-                "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f "
-                "process_uptime_s=%.3f",
-                name,
-                phase,
-                run_mode,
-                pid,
-                rss,
-                held_ms,
-                uptime_s,
-            )
-            return
-        logger.info(
-            "heavy_job_rss name=%s phase=%s run_mode=%s pid=%s rss_kb=%d held_ms=%.1f",
-            name,
-            phase,
-            run_mode,
-            pid,
-            rss,
-            held_ms,
+        msg = (
+            f"heavy_job_rss name={name} phase={phase} run_mode={run_mode} pid={pid} "
+            f"rss_kb={'unknown' if rss is None else rss} held_ms={held_ms:.1f}"
         )
+        if process_uptime_s is not None:
+            msg += f" process_uptime_s={process_uptime_s:.3f}"
+        if phase == "end":
+            msg += " " + _read_mem_breakdown()
+        logger.info(msg)
+        if phase == "end":
+            _maybe_malloc_trim(name)
     except Exception as exc:
         logger.debug("heavy_job_rss log failed: %s", exc)
 

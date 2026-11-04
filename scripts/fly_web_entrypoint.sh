@@ -87,7 +87,7 @@ _start_inline_worker() {
     rm -f "$INLINE_WORKER_PIDFILE"
   fi
   echo "starting inline background worker (RUN_MODE=worker, WORKER_HEAVY=${WORKER_HEAVY:-essential})..."
-  nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
+  nice -n 10 env RUN_MODE=worker MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX:-2}" WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
   echo $! > "$INLINE_WORKER_PIDFILE"
   echo "inline worker pgid=$(cat "$INLINE_WORKER_PIDFILE")"
 }
