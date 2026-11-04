@@ -458,7 +458,9 @@ def _stamp_and_nudge_expert(
         else None
     )
     if nudge_expert and not _skip_council_learning(prediction):
-        _nudge_weights(bool(correct), nudge_expert, capture=capture)
+        with _cycle_persist_guard_safe():
+            if not _cycle_writes_revoked_safe():
+                _nudge_weights(bool(correct), nudge_expert, capture=capture)
     return stamped_expert, nudge_expert
 
 
@@ -852,22 +854,25 @@ def _record_scenario_outcome(
             }.items()
             if v is not None
         }
-        scenario = scenario_memory.record_outcome(
-            name=prediction.get("name", "unknown"),
-            outcome="correct" if correct else "wrong",
-            features=features,
-            regime=regime,
-            metadata=metadata,
-            scenario_id=prediction.get("scenario_id"),
-        )
-        # This grades a scenario every resolve, but was invisible to the
-        # trail/mindmap — the loop was learning silently.
-        try:
-            from internal.learning import trail_bus
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return
+            scenario = scenario_memory.record_outcome(
+                name=prediction.get("name", "unknown"),
+                outcome="correct" if correct else "wrong",
+                features=features,
+                regime=regime,
+                metadata=metadata,
+                scenario_id=prediction.get("scenario_id"),
+            )
+            # This grades a scenario every resolve, but was invisible to the
+            # trail/mindmap — the loop was learning silently.
+            try:
+                from internal.learning import trail_bus
 
-            trail_bus.emit_scenario_tagged(scenario, netuid=prediction.get("netuid"))
-        except Exception:
-            pass
+                trail_bus.emit_scenario_tagged(scenario, netuid=prediction.get("netuid"))
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -960,8 +965,12 @@ def atomic_finalize_resolution(
 
     warnings: List[str] = []
 
+    # Revocation is sticky for a cycle, so one revoked check ends the whole finalize.
     try:
-        on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
     except Exception:
         logger.exception("atomic_finalize: on_prediction_resolved failed")
         warnings.append("on_prediction_resolved")
@@ -969,7 +978,10 @@ def atomic_finalize_resolution(
     try:
         from internal.council.prediction_trace import record_prediction_resolved
 
-        record_prediction_resolved(prediction)
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            record_prediction_resolved(prediction)
     except Exception:
         logger.exception("atomic_finalize: record_prediction_resolved failed")
         warnings.append("record_prediction_resolved")
@@ -977,7 +989,10 @@ def atomic_finalize_resolution(
     try:
         from internal.learning.trail_events import emit_prediction_resolved
 
-        emit_prediction_resolved(prediction, prediction.get("expert"))
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            emit_prediction_resolved(prediction, prediction.get("expert"))
     except Exception:
         logger.exception("atomic_finalize: emit_prediction_resolved failed")
         warnings.append("emit_prediction_resolved")
@@ -985,7 +1000,10 @@ def atomic_finalize_resolution(
     try:
         from internal.council import pick_history
 
-        pick_history.finalize_from_prediction(prediction)
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            pick_history.finalize_from_prediction(prediction)
     except Exception:
         logger.exception("atomic_finalize: pick_history.finalize_from_prediction failed")
         warnings.append("pick_history_finalize")
@@ -1078,13 +1096,16 @@ def _nudge_signal_weights(
         extra = {"band": capture.band, "capture": capture.capture_capped}
     for signal_name in active_signals:
         try:
-            nudge_signal_weight(
-                horizon_type,
-                signal_name,
-                nudge_correct,
-                scale=scale,
-                extra=extra or None,
-            )
+            with _cycle_persist_guard_safe():
+                if _cycle_writes_revoked_safe():
+                    return
+                nudge_signal_weight(
+                    horizon_type,
+                    signal_name,
+                    nudge_correct,
+                    scale=scale,
+                    extra=extra or None,
+                )
         except Exception:
             pass
 
