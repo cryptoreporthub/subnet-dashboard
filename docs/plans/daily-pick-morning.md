@@ -1,6 +1,6 @@
 # Plan: Daily pick at ~6:05 AM America/Phoenix (no-migration redesign)
 
-**Status:** Plan only (PR #1561 draft). **Supersedes** bulk migration / WAL / audit-rename / legacy relabel (removed per Joshua + Replit redesign).
+**Status:** Approved for implementation (PR #1561). **Supersedes** bulk migration / WAL / audit-rename / legacy relabel (removed per Joshua + Replit redesign).
 
 **Verification:** Code refs below from branch `cursor/daily-pick-morning-plan-3740` @ **`89d891c6`** (same tree as `main` for cited paths).
 
@@ -206,3 +206,11 @@ For current **`pick_day = pick_day_str()`**:
 5. Tests §7; human-gated Fly deploy.
 
 **Removed from prior plan:** §6 migration map, audit renames, WAL/progress/marker, legacy relabel windows, resolver migration boot block, collision closure, `pick_day_selection_instant_utc` backfill.
+
+---
+
+## Known limit (Joshua accepted)
+
+If local disk stalls during **fsync** inside a guarded **validate-token + bounded local atomic commit**, the commit holds **`daily_pick_write_token_lock`** until the kernel returns — **revocation waits** behind that commit (at most one bounded local write). A **frozen disk** breaks the site regardless; no timeout logic will forcibly release the lock mid-commit.
+
+**Mitigation (observability only):** log guarded commit duration at info/warning; expose **`/api/health`** (and JSON detail on **`/health`** when requested) **`daily_pick_commit_slow: true`** when any guarded commit exceeds **5s**. **No automatic timeout or lock break.**

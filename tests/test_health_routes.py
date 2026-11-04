@@ -16,7 +16,8 @@ def test_api_health_returns_ok_json():
     with TestClient(app) as client:
         response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
 
 
 def test_ops_live_timeout_returns_honest_degraded(monkeypatch):
@@ -65,6 +66,6 @@ def test_health_non_blocking_during_slow_ops_live(monkeypatch):
     assert health.status_code == 200
     assert health.text.strip() == "OK"
     assert api_health.status_code == 200
-    assert api_health.json() == {"status": "ok"}
+    assert api_health.json()["status"] == "ok"
     assert elapsed < 1.0
     assert result["resp"].status_code == 200

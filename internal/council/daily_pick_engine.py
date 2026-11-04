@@ -18,6 +18,17 @@ from typing import Any, Callable, Dict, Iterator, List, Optional
 import fcntl
 
 from internal.council.daily_pick import select_daily_pick
+from internal.council.daily_pick_reader import (
+    find_v2_row,
+    is_published_daily_pick_row,
+    resolve_current_daily_pick,
+)
+from internal.council.daily_pick_write_token import guarded_bounded_commit
+from internal.council.pick_day import (
+    daily_pick_creation_open,
+    pick_day_str,
+    v2_pick_id,
+)
 from internal.council.stage_trace import stage
 from internal.council.scenario_memory import classify_regime
 from internal.council.rotation_tracker import get_rotation_summary
@@ -94,67 +105,109 @@ def _locked_daily_picks(path: str, timeout_seconds: float = 5.0) -> Iterator[Non
 
 
 def _save(records: List[Dict[str, Any]], path: Optional[str] = None) -> bool:
-    """Persist daily picks. Return False when today's incoming row is older.
-
-    Reloads under the file lock so an abandoned worker cannot replace a row
-    whose build_started_at is later, and cannot drop history loaded by the
-    winner. Same check-then-write as score snapshot publish.
-    """
+    """Persist daily picks. Return False when today's incoming row is older."""
     path = path or DAILY_PICKS_PATH
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     incoming_today = _find_today(records)
-    with _locked_daily_picks(path):
-        disk = _load(path)
-        disk_today = _find_today(disk)
-        if (
-            isinstance(incoming_today, dict)
-            and incoming_today.get("scheduler_hold")
-            and isinstance(disk_today, dict)
-            and not disk_today.get("scheduler_hold")
-            and disk_today.get("pick")
-        ):
-            logger.info("daily pick hold skipped: a published pick is already on disk")
-            return False
-        incoming_stamp = _row_stamp(incoming_today)
-        disk_stamp = _row_stamp(disk_today)
-        if (
-            incoming_today is not None
-            and incoming_stamp is not None
-            and disk_stamp is not None
-            and incoming_stamp < disk_stamp
-        ):
-            logger.info(
-                "daily pick publish skipped: incoming %s is older than on-disk %s",
-                incoming_today.get("build_started_at") or incoming_today.get("timestamp_utc"),
-                (disk_today or {}).get("build_started_at") or (disk_today or {}).get("timestamp_utc"),
-            )
-            return False
-        merged = _upsert_today(disk, incoming_today) if incoming_today is not None else list(records)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(merged, handle, indent=2)
-        os.replace(tmp, path)
-    return True
+    wrote = False
+
+    def _commit() -> None:
+        nonlocal wrote
+        with _locked_daily_picks(path):
+            disk = _load(path)
+            disk_today = _find_today(disk)
+            if (
+                isinstance(incoming_today, dict)
+                and incoming_today.get("scheduler_hold")
+                and isinstance(disk_today, dict)
+                and not disk_today.get("scheduler_hold")
+                and disk_today.get("pick")
+            ):
+                logger.info("daily pick hold skipped: a published pick is already on disk")
+                return
+            incoming_stamp = _row_stamp(incoming_today)
+            disk_stamp = _row_stamp(disk_today)
+            if (
+                incoming_today is not None
+                and incoming_stamp is not None
+                and disk_stamp is not None
+                and incoming_stamp < disk_stamp
+            ):
+                logger.info(
+                    "daily pick publish skipped: incoming %s is older than on-disk %s",
+                    incoming_today.get("build_started_at") or incoming_today.get("timestamp_utc"),
+                    (disk_today or {}).get("build_started_at") or (disk_today or {}).get("timestamp_utc"),
+                )
+                return
+            merged = _upsert_today(disk, incoming_today) if incoming_today is not None else list(records)
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as handle:
+                json.dump(merged, handle, indent=2)
+            os.replace(tmp, path)
+            wrote = True
+
+    if not guarded_bounded_commit(_commit):
+        return False
+    return wrote
 
 
 def _today_str() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return pick_day_str()
 
 
 def _find_today(records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Current pick-day v2 row (or legacy same-day fallback for writers)."""
+    row = find_v2_row(records, _today_str())
+    if row is not None:
+        return row
     today = _today_str()
     for rec in reversed(records):
-        if rec.get("date") == today:
+        if rec.get("date") == today and not rec.get("pick_id"):
             return rec
     return None
 
 
 def _upsert_today(records: List[Dict[str, Any]], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Replace any same-day row so scheduler regen does not duplicate dates."""
+    """Upsert by v2 pick_id; legacy date-key only when pick_id absent."""
+    pick_id = payload.get("pick_id")
+    if pick_id:
+        kept = [r for r in records if r.get("pick_id") != pick_id]
+        kept.append(payload)
+        return kept
     today = _today_str()
-    kept = [r for r in records if r.get("date") != today]
+    kept = [r for r in records if r.get("date") != today or r.get("pick_id")]
     kept.append(payload)
     return kept
+
+
+def _attach_v2_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
+    day = _today_str()
+    payload = dict(payload)
+    payload["pick_day"] = day
+    payload["date"] = day
+    payload["pick_id"] = v2_pick_id(day)
+    payload["schema_version"] = 2
+    return payload
+
+
+def _merge_selection_recorded_at(
+    payload: Dict[str, Any], existing: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    if is_published_daily_pick_row(payload):
+        if isinstance(existing, dict) and existing.get("selection_recorded_at_utc"):
+            payload["selection_recorded_at_utc"] = existing["selection_recorded_at_utc"]
+        elif "selection_recorded_at_utc" not in payload:
+            payload["selection_recorded_at_utc"] = _now_stamp()
+    return payload
+
+
+def get_current_daily_pick() -> Optional[Dict[str, Any]]:
+    row, _meta = resolve_current_daily_pick(_load())
+    return row
+
+
+def get_current_daily_pick_with_meta() -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    return resolve_current_daily_pick(_load())
 
 
 def _subnets_have_prices(subnets: List[Dict[str, Any]]) -> bool:
@@ -235,11 +288,14 @@ def _payload_uses_root(payload: Dict[str, Any]) -> bool:
 
 def write_scheduler_hold(reason: str) -> Dict[str, Any]:
     """Persist an honest HOLD when the background tick cannot finish scoring."""
+    if not daily_pick_creation_open():
+        existing = get_current_daily_pick()
+        return existing if isinstance(existing, dict) else {}
     reason = (reason or "daily pick scheduler failed").strip() or "daily pick scheduler failed"
     records = _load()
-    payload: Dict[str, Any] = {
+    payload: Dict[str, Any] = _attach_v2_fields(
+        {
         "status": "ok",
-        "date": _today_str(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "action": "HOLD",
         "reason": reason,
@@ -250,11 +306,12 @@ def write_scheduler_hold(reason: str) -> Dict[str, Any]:
         "rotation_summary": {},
         "market_context": {},
         "build_started_at": _now_stamp(),
-    }
+        }
+    )
     existing = _find_today(records)
     if isinstance(existing, dict) and not existing.get("scheduler_hold") and existing.get("pick"):
-        # Never clobber a real published pick.
         return existing
+    payload = _merge_selection_recorded_at(payload, existing)
     records = _upsert_today(records, payload)
     if not _save(records):
         return _find_today(_load()) or existing or payload
@@ -277,6 +334,11 @@ def get_or_create_today_pick(
     """
     market_context = market_context or {}
     subnets = tradable_subnets(subnets)
+
+    if not daily_pick_creation_open():
+        row, _meta = resolve_current_daily_pick(_load())
+        return row
+
     records = _load()
 
     if not force:
@@ -307,9 +369,9 @@ def get_or_create_today_pick(
 
     started = _now_stamp()
     if not subnets:
-        payload: Dict[str, Any] = {
+        payload: Dict[str, Any] = _attach_v2_fields(
+            {
             "status": "ok",
-            "date": _today_str(),
             "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "action": "HOLD",
             "reason": "No subnets available",
@@ -319,7 +381,10 @@ def get_or_create_today_pick(
             "rotation_summary": get_rotation_summary(subnets),
             "market_context": market_context,
             "build_started_at": started,
-        }
+            }
+        )
+        existing = _find_today(records)
+        payload = _merge_selection_recorded_at(payload, existing)
         records = _upsert_today(records, payload)
         if not _save(records):
             return _find_today(_load()) or payload
@@ -350,9 +415,9 @@ def get_or_create_today_pick(
         reason = None
         candidate = None
 
-    payload = {
+    payload = _attach_v2_fields(
+        {
         "status": "ok",
-        "date": _today_str(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "regime": classify_regime(market_context),
         "rotation_summary": get_rotation_summary(subnets),
@@ -362,7 +427,10 @@ def get_or_create_today_pick(
         "reason": reason,
         "market_context": market_context,
         "build_started_at": started,
-    }
+        }
+    )
+    existing = _find_today(records)
+    payload = _merge_selection_recorded_at(payload, existing)
 
     records = _upsert_today(records, payload)
     if is_cancelled is not None and is_cancelled():

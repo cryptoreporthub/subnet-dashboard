@@ -32,7 +32,7 @@ from typing import Any, Callable, Dict, Iterator, Optional
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import write_soul_map as _write_soul_map_raw
 
 from internal.liveness import LivenessTracker
 from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
@@ -156,21 +156,34 @@ def _load_json(path: str) -> Dict[str, Any]:
     return {}
 
 
+def _write_soul_map_guarded(mutator, path: str) -> bool:
+    from internal.council.daily_pick_write_token import guarded_bounded_commit
+
+    return guarded_bounded_commit(lambda: _write_soul_map_raw(mutator, path))
+
+
 def _save_json(path: str, data: Dict[str, Any]) -> None:
-    try:
-        from internal.file_utils import ensure_data_dir
-        ensure_data_dir()
-    except Exception:
-        os.makedirs(os.path.dirname(path) or "data", exist_ok=True)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(temp_path, path)
-    finally:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
+    from internal.council.daily_pick_write_token import guarded_bounded_commit
+
+    def _commit() -> None:
+        try:
+            from internal.file_utils import ensure_data_dir
+
+            ensure_data_dir()
+        except Exception:
+            os.makedirs(os.path.dirname(path) or "data", exist_ok=True)
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_path, path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    if not guarded_bounded_commit(_commit):
+        logger.info("resolver_scheduler _save_json skipped: write token revoked")
 
 
 class _CycleTiming:
@@ -749,7 +762,7 @@ class PredictionResolverScheduler:
         def _mutator(data: Dict[str, Any]) -> None:
             data.setdefault("prediction_resolver_scheduler", {}).update(state)
         try:
-            write_soul_map(_mutator, self.soul_map_path)
+            _write_soul_map_guarded(_mutator, self.soul_map_path)
         except Exception:
             pass
 
@@ -1029,9 +1042,10 @@ class PredictionResolverScheduler:
 
             with timing.stage("ledger_heal", _persist_after_ledger):
                 try:
+                    from internal.council.daily_pick_write_token import guarded_bounded_commit
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
 
-                    heal_daily_pick_ledger(dry_run=False)
+                    guarded_bounded_commit(lambda: heal_daily_pick_ledger(dry_run=False))
                 except Exception as heal_exc:
                     import logging
                     logging.getLogger(__name__).warning(
@@ -1216,7 +1230,7 @@ class PredictionResolverScheduler:
         # Full RMW wall (read+mutator+disk); invariant: rmw >= mutator.
         t_rmw = time.perf_counter()
         try:
-            write_soul_map(_mutator, self.soul_map_path)
+            _write_soul_map_guarded(_mutator, self.soul_map_path)
             if timing is not None:
                 timing.record_persist_subtimer(
                     "summary_rmw", (time.perf_counter() - t_rmw) * 1000

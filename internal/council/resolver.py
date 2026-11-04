@@ -305,9 +305,21 @@ def _save_json(
     try:
         from internal.file_utils import safe_write_json
         from internal.learning.predictions_store import locked_predictions_file
+        from internal.council.daily_pick_write_token import guarded_bounded_commit
 
-        with locked_predictions_file():
-            safe_write_json(path, data)
+        def _commit() -> None:
+            with locked_predictions_file():
+                safe_write_json(path, data)
+
+        if not guarded_bounded_commit(_commit):
+            log_mutation(
+                operation="failed",
+                path=path,
+                writer_function="resolver._save_json",
+                trigger=reason,
+                caller=caller,
+            )
+            return
         log_mutation(
             operation="completed",
             path=path,

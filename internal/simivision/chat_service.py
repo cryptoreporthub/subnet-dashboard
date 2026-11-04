@@ -384,8 +384,13 @@ def build_chat_context() -> Dict[str, Any]:
     stats = engine.get_stats()
     expert_weights = stats.get("expert_weights", {})
 
-    daily_pick_data = _safe_load_json("data", "daily_picks.json", default=[{}])
-    daily_pick = daily_pick_data[0] if daily_pick_data else {}
+    daily_pick_data = _safe_load_json("data", "daily_picks.json", default=[])
+    from internal.council.daily_pick_reader import resolve_current_daily_pick
+
+    daily_pick, _meta = resolve_current_daily_pick(
+        daily_pick_data if isinstance(daily_pick_data, list) else []
+    )
+    daily_pick = daily_pick or {}
 
     ctx = {
         "source": source,

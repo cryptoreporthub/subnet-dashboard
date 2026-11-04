@@ -108,9 +108,9 @@ def _load_hour_picks() -> List[Dict[str, Any]]:
 
 def _day_from_disk() -> Optional[Dict[str, Any]]:
     try:
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_current_daily_pick
 
-        daily = _find_today(_load())
+        daily = get_current_daily_pick()
         if isinstance(daily, dict):
             return daily
     except Exception:

@@ -1026,9 +1026,9 @@ def _safe_mindmap_graph_context(*, timeout_s: float = 2.0) -> Dict[str, Any]:
 def _read_shell_daily_pick() -> Dict[str, Any]:
     """Lite pick from local JSON — instant SSR, no scoring or live feeds."""
     try:
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_current_daily_pick
 
-        existing = _find_today(_load())
+        existing = get_current_daily_pick()
         if existing is None:
             return {}
         return _enrich_daily_pick_payload_lite(dict(existing))
@@ -3187,9 +3187,9 @@ async def api_daily_pick_weighed():
     """Deferred hydrate read — shortlist only, scored on live-priced subnets."""
 
     def _build():
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_current_daily_pick
 
-        existing = _find_today(_load())
+        existing = get_current_daily_pick()
         if existing is None:
             return {"shortlist": []}
         return {"shortlist": _daily_pick_weighed_shortlist(existing)}
@@ -3231,10 +3231,10 @@ def _daily_pick_pending_hold() -> Dict[str, Any]:
 
 def _hydrate_daily_pick_lite(stash: Dict[str, Any]) -> Dict[str, Any]:
     """One JSON load + lite enrich — never scores. Shared by single-flight GET."""
-    from internal.council.daily_pick_engine import _find_today, _load
+    from internal.council.daily_pick_engine import get_current_daily_pick
     from internal.whales.enrichment_badge import empty_whale_flow_badge
 
-    existing = _find_today(_load())
+    existing = get_current_daily_pick()
     if existing is None:
         pending = _daily_pick_pending_hold()
         stash["payload"] = pending
@@ -3345,9 +3345,9 @@ async def api_top_pick_day():
     """Top pick for the current day — read persisted pick only; never run pick engine on API."""
 
     def _build():
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_current_daily_pick
 
-        existing = _find_today(_load())
+        existing = get_current_daily_pick()
         if isinstance(existing, dict):
             day_pick = existing.get("pick")
             if not day_pick and existing.get("candidate"):
