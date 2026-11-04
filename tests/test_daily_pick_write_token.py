@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Dict
 
 import pytest
 
@@ -285,37 +284,12 @@ def test_stop_during_subnet_load_cannot_commit_stale_generation(monkeypatch, tmp
     assert json.loads(path.read_text()) == []
 
 
-def test_resolver_soul_map_guard_rejects_stale_write_generation(tmp_path):
-    """Resolver scheduler soul-map commits must pass captured daily-pick write gen."""
-    from internal.council.resolver_scheduler import _write_soul_map_guarded
+def test_save_rejects_missing_write_generation(tmp_path, monkeypatch):
+    path = tmp_path / "daily_picks.json"
+    monkeypatch.setattr("internal.council.daily_pick_engine.DAILY_PICKS_PATH", str(path))
+    from internal.council import daily_pick_engine as engine
 
-    soul_path = tmp_path / "soul_map.json"
-    soul_path.write_text("{}", encoding="utf-8")
-    captured = tok.current_write_generation()
-    tok.bump_write_generation(reason="simulated mid-cycle bump")
-    mutated = {"v": False}
-
-    def _mutator(data: Dict[str, Any]) -> None:
-        mutated["v"] = True
-
-    assert (
-        _write_soul_map_guarded(
-            _mutator,
-            str(soul_path),
-            write_generation=captured,
-        )
-        is False
-    )
-    assert mutated["v"] is False
-    assert (
-        _write_soul_map_guarded(
-            _mutator,
-            str(soul_path),
-            write_generation=tok.current_write_generation(),
-        )
-        is True
-    )
-    assert mutated["v"] is True
+    assert engine._save([{"date": "2026-11-04", "action": "HOLD"}], write_generation=None) is False
 
 
 def test_start_pick_schedulers_does_not_reissue_token_after_fence_revoke(monkeypatch):

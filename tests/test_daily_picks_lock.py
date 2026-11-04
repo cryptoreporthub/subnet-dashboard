@@ -7,6 +7,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 import internal.council.daily_pick_engine as engine
+from internal.council.daily_pick_write_token import current_write_generation
 
 
 def _iso(moment: datetime) -> str:
@@ -38,8 +39,8 @@ def test_older_build_does_not_clobber_newer_today(tmp_path, monkeypatch):
         "build_started_at": _iso(now),
         "timestamp_utc": _iso(now),
     }
-    engine._save([{"date": yesterday, "action": "HOLD"}])
-    engine._save([newer])
+    engine._save([{"date": yesterday, "action": "HOLD"}], write_generation=current_write_generation())
+    engine._save([newer], write_generation=current_write_generation())
     wrote = engine._save(
         [
             {
@@ -52,7 +53,8 @@ def test_older_build_does_not_clobber_newer_today(tmp_path, monkeypatch):
                 "build_started_at": _iso(now - timedelta(seconds=30)),
                 "timestamp_utc": _iso(now - timedelta(seconds=25)),
             }
-        ]
+        ],
+        write_generation=current_write_generation(),
     )
     assert wrote is False
     saved = json.loads(path.read_text(encoding="utf-8"))
@@ -133,9 +135,9 @@ def test_cancelled_worker_skips_save_and_prediction(tmp_path, monkeypatch):
     save_calls = {"n": 0}
     real_save = engine._save
 
-    def counting_save(records, save_path=None):
+    def counting_save(records, save_path=None, *, write_generation=None):
         save_calls["n"] += 1
-        return real_save(records, save_path)
+        return real_save(records, save_path, write_generation=write_generation)
 
     monkeypatch.setattr(engine, "_save", counting_save)
     recorded = {"n": 0}

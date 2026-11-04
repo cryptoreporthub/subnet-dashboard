@@ -291,7 +291,7 @@ def _save_json(
     caller: Optional[str] = None,
     trigger: Optional[str] = None,
 ) -> None:
-    """Write JSON file atomically with caller attribution."""
+    """Write predictions JSON atomically (plan §5: predictions_store lock only, not pick token)."""
     from internal.ops.mutation_log import log_mutation
 
     reason = trigger or "resolver_save"

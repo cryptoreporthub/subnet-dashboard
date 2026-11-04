@@ -134,7 +134,9 @@ For current **`pick_day = pick_day_str()`**:
 
 **Forbidden:** lock held across **`run_cycle`**, grading, network/RPC, or whole jobs.
 
-**Representative sites:** **`resolver.py:1323`**, **`resolver_scheduler.py:1219`**, **`1030-1034`**.
+**Representative sites:** **`resolver_scheduler` soul-map summary** (captured cycle `write_generation`), **`daily_pick_engine._save`**, **`ledger_heal` heal commit** (resolver cycle gen when in-tick).
+
+**Exception (intentional):** **`resolver._save_json`** for **`predictions.json`** — `predictions_store` file lock only; not daily-pick token (grading writes are not pick JSON RMW).
 
 **Tests (§7):** **`tests/test_daily_pick_write_token.py`** — hung-outside-lock; **revoke-during-commit race**; post-revoke sites rejected @ listed lines.
 

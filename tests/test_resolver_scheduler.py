@@ -866,6 +866,65 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     assert "resolver lifecycle event=timeout" in caplog.text
 
 
+def test_resolver_timeout_summary_not_committed_after_mid_cycle_write_bump(
+    monkeypatch, fresh_scheduler, tmp_path
+):
+    """Timeout soul-map persist must use captured cycle gen; bump mid-cycle blocks it."""
+    from internal.council import daily_pick_write_token as tok
+    from internal.council.resolver_scheduler import _now_iso
+
+    marker = {
+        "prediction_resolver_scheduler": {
+            "last_cycle": {"run_at": "MARKER-UNCHANGED", "ok": True},
+        }
+    }
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps(marker), encoding="utf-8")
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def _hang(self):
+        started.set()
+        release.wait(timeout=10)
+        time.sleep(5)
+        return {
+            "ok": True,
+            "run_at": _now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    def _bump_when_cycle_starts():
+        started.wait(timeout=5)
+        tok.bump_write_generation(reason="mid-cycle resolver test")
+        release.set()
+
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda **_: {"ok": True, "healed": False},
+    )
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _hang,
+    )
+    threading.Thread(target=_bump_when_cycle_starts, daemon=True).start()
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+    sched._tick()
+    soul = json.loads(soul_path.read_text(encoding="utf-8"))
+    last = soul["prediction_resolver_scheduler"]["last_cycle"]
+    assert last["run_at"] == "MARKER-UNCHANGED"
+    assert "cycle_timeout" not in str(last.get("error") or "")
+
+
 def test_resolver_timeout_persists_partial_timing_and_abandoned_live(
     monkeypatch, fresh_scheduler
 ):

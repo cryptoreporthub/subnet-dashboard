@@ -116,9 +116,8 @@ def _save(
     path = path or DAILY_PICKS_PATH
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     if write_generation is None:
-        from internal.council.daily_pick_write_token import current_write_generation
-
-        write_generation = current_write_generation()
+        logger.info("daily pick _save skipped: missing write_generation")
+        return False
     incoming_today = _find_today(records)
     wrote = False
 
@@ -381,6 +380,10 @@ def get_or_create_today_pick(
     """
     market_context = market_context or {}
     subnets = tradable_subnets(subnets)
+    if write_generation is None:
+        from internal.council.daily_pick_write_token import current_write_generation
+
+        write_generation = current_write_generation()
 
     if not daily_pick_creation_open():
         if force:

@@ -130,8 +130,10 @@ def test_daily_pick_engine_handles_empty_subnets():
 
 
 def test_load_past_picks_limit():
+    from internal.council.daily_pick_write_token import current_write_generation
+
     with tempfile.TemporaryDirectory() as tmp:
         daily_pick_engine.DAILY_PICKS_PATH = os.path.join(tmp, "daily_picks.json")
         records = [{"date": f"2026-06-{20 + i:02d}"} for i in range(5)]
-        daily_pick_engine._save(records)
+        daily_pick_engine._save(records, write_generation=current_write_generation())
         assert len(daily_pick_engine.load_past_picks(limit=3)) == 3

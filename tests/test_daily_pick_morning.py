@@ -82,7 +82,9 @@ def test_selection_recorded_at_utc_only_on_first_publish(picks_path, monkeypatch
     published["pick"] = {"subnet": {"netuid": 2}, "final_confidence": 0.99, "action": "long"}
     published["selection_recorded_at_utc"] = "2026-01-02T00:00:00Z"
     merged = _upsert_today([hold], published)
-    assert _save(merged)
+    from internal.council.daily_pick_write_token import current_write_generation
+
+    assert _save(merged, write_generation=current_write_generation())
     disk = json.loads(picks_path.read_text())
     row = disk[-1]
     assert row["selection_recorded_at_utc"] == "2026-01-02T00:00:00Z"
@@ -356,7 +358,9 @@ def test_legacy_rows_preserved_when_v2_written(picks_path, monkeypatch):
         "build_started_at": "2026-11-04T19:05:00Z",
     }
     merged = _upsert_today(json.loads(picks_path.read_text()), v2_long)
-    assert _save(merged)
+    from internal.council.daily_pick_write_token import current_write_generation
+
+    assert _save(merged, write_generation=current_write_generation())
     disk = json.loads(picks_path.read_text())
     assert len(disk) == 3
     assert any(r.get("pick_id") == v2_pick_id(day) for r in disk)

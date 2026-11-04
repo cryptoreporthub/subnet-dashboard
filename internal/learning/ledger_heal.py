@@ -135,7 +135,10 @@ def heal_daily_pick_ledger(
             "reference_price": subnet_row.get("price"),
         }
 
-    from internal.council.daily_pick_write_token import guarded_bounded_commit
+    from internal.council.daily_pick_write_token import (
+        current_write_generation,
+        guarded_bounded_commit,
+    )
     from internal.learning.prediction_loop import record_pick_prediction
 
     market_context = today_rec.get("market_context") if isinstance(today_rec, dict) else {}
@@ -149,7 +152,17 @@ def heal_daily_pick_ledger(
             market_context=market_context if isinstance(market_context, dict) else {},
         )
 
-    if not guarded_bounded_commit(_commit):
+    write_gen: Optional[int] = None
+    try:
+        from internal.council.resolver_scheduler import active_cycle_write_generation
+
+        write_gen = active_cycle_write_generation()
+    except Exception:
+        write_gen = None
+    if write_gen is None:
+        write_gen = current_write_generation()
+
+    if not guarded_bounded_commit(_commit, write_generation=write_gen):
         return {"ok": False, "healed": False, "reason": "write_token_rejected", "netuid": netuid}
 
     stored = stored_holder.get("value")

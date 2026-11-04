@@ -444,6 +444,14 @@ _cycle_timing: ContextVar[Optional[_CycleTiming]] = ContextVar(
 )
 
 
+def active_cycle_write_generation() -> Optional[int]:
+    """Daily-pick write gen captured at resolver cycle start (worker thread only)."""
+    timing = _cycle_timing.get()
+    if timing is None:
+        return None
+    return timing.owner_write_gen()
+
+
 class PredictionResolverScheduler:
     """Background scheduler that periodically grades pending predictions."""
 
@@ -639,7 +647,12 @@ class PredictionResolverScheduler:
                     "expired_now": 0,
                     "pending": 0,
                 }
-                self._persist_cycle_summary(skipped)
+                from internal.council.daily_pick_write_token import current_write_generation
+
+                self._persist_cycle_summary(
+                    skipped,
+                    write_generation=current_write_generation(),
+                )
                 # Skips are recorded honestly; they never produce ok (spec §2).
                 self.liveness.record_skip(reason="heavy_job_busy")
                 with self._lock:
@@ -789,6 +802,7 @@ class PredictionResolverScheduler:
         try:
             from internal.council.daily_pick_write_token import current_write_generation
 
+            # Lifecycle metadata: live write gen (outside resolver cycle ownership).
             _write_soul_map_guarded(
                 _mutator,
                 self.soul_map_path,
@@ -864,7 +878,12 @@ class PredictionResolverScheduler:
                     "skipped": "cycle_in_flight",
                     "abandoned_live": abandoned_live,
                 }
-                self._persist_cycle_summary(result)
+                from internal.council.daily_pick_write_token import current_write_generation
+
+                self._persist_cycle_summary(
+                    result,
+                    write_generation=current_write_generation(),
+                )
                 return result
         # Phase 3 revive budget: boot revive uses full cycle ceiling, not the
         # first-tick min(cycle, 90) cap that starves post-revive run_once.
@@ -914,6 +933,8 @@ class PredictionResolverScheduler:
         from internal.council.daily_pick_write_token import current_write_generation
 
         timing.set_owner_write_gen(current_write_generation())
+
+        cycle_write_gen = timing.owner_write_gen()
 
         def _run_cycle() -> Dict[str, Any]:
             ctx_token = bind_patchd_context(
@@ -982,7 +1003,11 @@ class PredictionResolverScheduler:
                 self._apply_cycle_timing(result, timing)
                 # force=True: timeout path owns the summary write after orphan
                 # ownership was revoked in _abandon_inflight_cycle.
-                self._persist_cycle_summary(result, force=True)
+                self._persist_cycle_summary(
+                    result,
+                    force=True,
+                    write_generation=cycle_write_gen,
+                )
                 return result
         except BaseException:
             if not submitted:
@@ -1068,7 +1093,11 @@ class PredictionResolverScheduler:
             timing.record_persist_subtimer(
                 "apply_cycle_timing", (time.perf_counter() - t_apply) * 1000
             )
-            self._persist_cycle_summary(result, owner_gen=owner)
+            self._persist_cycle_summary(
+                result,
+                owner_gen=owner,
+                write_generation=timing.owner_write_gen(),
+            )
 
         try:
             # B1b t1: pre-flight boundary (immediately before ledger_heal).
@@ -1185,7 +1214,11 @@ class PredictionResolverScheduler:
                 # B1b closing stamp after end size + mark_complete.
                 timing.mark_closing_stamp()
                 self._apply_cycle_timing(result, timing)
-                self._persist_cycle_summary(result, owner_gen=owner)
+                self._persist_cycle_summary(
+                result,
+                owner_gen=owner,
+                write_generation=timing.owner_write_gen(),
+            )
         return result
 
     def _persist_cycle_summary(
@@ -1194,20 +1227,30 @@ class PredictionResolverScheduler:
         *,
         owner_gen: Optional[int] = None,
         force: bool = False,
+        write_generation: Optional[int] = None,
     ) -> None:
         """Persist last_cycle with single-writer ownership (Phase 3).
 
         Abandoned orphans pass ``owner_gen`` that no longer matches
         ``_persist_owner_gen`` and skip the 24MB soul_map RMW. Timeout /
-        control-plane writers use ``force=True``.
+        control-plane writers use ``force=True`` with the cycle-captured
+        ``write_generation`` (caller thread has no ``_cycle_timing``).
         """
         with self._persist_lock:
             if not force and owner_gen is not None:
                 if self._persist_owner_gen != owner_gen:
                     return
-            self._persist_cycle_summary_locked(result)
+            self._persist_cycle_summary_locked(
+                result,
+                write_generation=write_generation,
+            )
 
-    def _persist_cycle_summary_locked(self, result: Dict[str, Any]) -> None:
+    def _persist_cycle_summary_locked(
+        self,
+        result: Dict[str, Any],
+        *,
+        write_generation: Optional[int] = None,
+    ) -> None:
         stage_timing_ms = dict(result.get("stage_timing_ms") or {})
         # Prefer explicit rollups on the result; else derive from stage_timing_ms.
         if "stages_sum_ms" in result and "nonstage_ms" in result:
@@ -1239,6 +1282,9 @@ class PredictionResolverScheduler:
             "lifecycle": self._lifecycle,
         }
         timing = _cycle_timing.get()
+        write_gen = write_generation
+        if write_gen is None and timing is not None:
+            write_gen = timing.owner_write_gen()
 
         def _mutator(data: Dict[str, Any]) -> None:
             # Phase 3 fix-up: time mutator body alone (persist_summary_mutator_ms).
@@ -1265,7 +1311,6 @@ class PredictionResolverScheduler:
 
         # Full RMW wall (read+mutator+disk); invariant: rmw >= mutator.
         t_rmw = time.perf_counter()
-        write_gen = timing.owner_write_gen() if timing is not None else None
         try:
             _write_soul_map_guarded(
                 _mutator,
