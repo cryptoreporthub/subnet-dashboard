@@ -87,23 +87,59 @@ def log_memory_snapshot(label: str) -> None:
     logger.info("%s pid=%s rss_kb=%d", label, os.getpid(), rss)
 
 
+# Exact names emitted by the whole-job scopes: pick_scheduler.py heavy_job_rss_scope("daily_pick_scheduler")
+# and pump/scheduler.py log_heavy_job_rss("pump_ladder_scan", ...). Sub-stage names such as
+# "daily_pick_scheduler:market_context" must NOT match (exact set membership, no prefix match).
 _TRIM_AFTER_JOBS = frozenset({"daily_pick_scheduler", "pump_ladder_scan"})
 
 
+def _read_mallinfo2() -> str:
+    """glibc mallinfo2 in KB (arena=brk heap, hblkhd=mmap'd, uordblks=in use, fordblks=free, keepcost=top trimmable).
+
+    Tells allocator fragmentation (fordblks large) apart from a live object graph (uordblks large).
+    "unknown" on non-glibc, glibc < 2.33 (no mallinfo2) or any ctypes failure.
+    """
+    try:
+        import ctypes
+
+        names = (
+            "arena", "ordblks", "smblks", "hblks", "hblkhd",
+            "usmblks", "fsmblks", "uordblks", "fordblks", "keepcost",
+        )  # fmt: skip
+
+        class _MallInfo2(ctypes.Structure):
+            _fields_ = [(n, ctypes.c_size_t) for n in names]
+
+        fn = ctypes.CDLL("libc.so.6").mallinfo2
+        fn.restype = _MallInfo2
+        mi = fn()
+        kb = {n: getattr(mi, n) // 1024 for n in ("arena", "hblkhd", "uordblks", "fordblks", "keepcost")}
+        return (
+            f"mi_arena_kb={kb['arena']} mi_hblkhd_kb={kb['hblkhd']} mi_uord_kb={kb['uordblks']} "
+            f"mi_ford_kb={kb['fordblks']} mi_keep_kb={kb['keepcost']}"
+        )
+    except Exception:
+        return "mi_arena_kb=unknown mi_hblkhd_kb=unknown mi_uord_kb=unknown mi_ford_kb=unknown mi_keep_kb=unknown"
+
+
 def _read_mem_breakdown() -> str:
-    """End-of-job fields: anon/file RSS, thread count, gc counts (cheap; no tracemalloc)."""
+    """End-of-job fields: anon/file RSS, smaps read time, thread count, gc counts, glibc mallinfo2, arena cap."""
     parts = []
+    t0 = time.perf_counter()
     try:
         with open("/proc/self/smaps_rollup", encoding="utf-8") as handle:
             kb = {
                 ln.split(":")[0]: ln.split()[1] for ln in handle if ":" in ln and len(ln.split()) >= 2
             }
         parts.append(f"anon_kb={kb['Anonymous']} file_kb={kb['Pss_File']}")
-    except (OSError, KeyError, IndexError):
+    except (OSError, KeyError, IndexError, ValueError):  # ValueError incl. UnicodeDecodeError
         parts.append("anon_kb=unknown file_kb=unknown")
+    parts.append(f"smaps_ms={(time.perf_counter() - t0) * 1000.0:.2f}")
     import gc
 
     parts.append(f"threads={threading.active_count()} gc={'/'.join(map(str, gc.get_count()))}")
+    parts.append(_read_mallinfo2())
+    parts.append(f"arena_max={os.environ.get('MALLOC_ARENA_MAX') or 'unset'}")
     return " ".join(parts)
 
 
