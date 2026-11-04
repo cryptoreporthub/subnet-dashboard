@@ -93,49 +93,50 @@ For current **`pick_day = pick_day_str()`**:
 
 **Pattern (existing):** `PredictionResolverScheduler` uses **`_cycle_generation`** / **`_persist_owner_gen`** (`internal/council/resolver_scheduler.py:434-436`, `:778-790`, owner checks `:1014`, `:1126`, `:1156`).
 
-**Single lock (normative):** one process-wide **`threading.Lock`** — **`daily_pick_write_token_lock`** — for **brief in-memory token mutations only** (issue, revocation, validate). **Lock scope:** **never** hold it across a whole resolver job, network I/O, RPC, grading compute, or any slow work. Resolver cycles run **outside** the lock; they **re-enter** only at each guarded **validate-token-then-commit** (§5.1).
+**Single lock (normative):** one process-wide **`threading.Lock`** — **`daily_pick_write_token_lock`** — shared by **token issue**, **revocation**, **validate**, and **each guarded local disk commit** (§5.1). **Lock scope:** **never** across a whole resolver job, network I/O, RPC, or grading compute — only **validate-token + bounded local atomic commit** at listed write sites. Under the lock: **only bounded local atomic commit** (temp → fsync → replace, or existing **`_save_json` / `write_soul_map` / heal** helpers that already atomic-rename) — not unbounded or remote I/O.
 
-**Token issue / revocation:** **`issue_*` / `revoke_daily_pick_write_token()`** acquire the lock **only for a brief swap** — read/compare generation, set revoked flag, mirror `_abandon_inflight_cycle` (`resolver_scheduler.py:778-790`) — then **release before any I/O**. Revocation must **always** be able to acquire the lock quickly even if a resolver thread is hung in compute **outside** the lock.
+**Token issue / revocation:** same lock. **Issue** and **revoke** (`resolver_scheduler.py:778-790`) perform a **brief in-memory swap** (generation / revoked flag / `_abandon_inflight_cycle`) — no network. **Revocation** may block behind **at most one in-flight bounded local commit** already holding the lock; it must **not** wait on resolver work **outside** the lock (hung compute). **After `revoke_daily_pick_write_token()` returns**, no guarded site may still publish a **stale** post-revoke commit (§5.1 race rule).
 
 **Normative:**
 
 - **Bounded wait** (default **3600s**, env) for in-flight resolver cycle **without holding `daily_pick_write_token_lock`** before pick slot write.
-- **On timeout:** call **`revoke_daily_pick_write_token()`** (brief lock only); **do not block boot**; **disable** new daily pick schedule until token re-armed; **continue serving** §3; `/health` **`daily_pick_write_fence_timeout: true`**.
+- **On timeout:** call **`revoke_daily_pick_write_token()`**; **do not block boot**; **disable** new daily pick schedule until token re-armed; **continue serving** §3; `/health` **`daily_pick_write_fence_timeout: true`**.
 
-**After revocation, every guarded disk commit must no-op** if the token is stale — each site uses **validate-token-then-commit** under the lock (§5.1); **no I/O while holding the lock** (prepare payload / read files **before** acquire; flush **after** release if impl batches, but token check + generation bind must not span I/O).
+**Guarded sites:** prepare payload **outside** lock; **under lock:** validate token → **bounded local atomic commit** → release (§5.1). Stale token → **no commit** (return before write).
 
-| Write site | Location @ `89d891c6` | Lock scope (validate → commit only) |
-|------------|------------------------|-------------------------------------|
-| Pick JSON RMW | `daily_pick_engine.py:96-137` `_save` / upsert | **Outside lock:** build row. **Inside lock:** `allowed()` + bind gen → **release** → fcntl + disk write |
-| Predictions persist | `resolver.py:1323`, `:1383`, `:1523`, `:1673` | **Outside:** `_save_json` prep. **Inside:** `allowed()` → **release** → `_save_json` |
-| Cycle summary + soul_map RMW | `resolver_scheduler.py:1154-1158`, `:1219` | **Outside:** summary / map bytes. **Inside:** `allowed()` → **release** → `write_soul_map` |
-| Partial / stage persists | `resolver_scheduler.py:1010-1021` | **Outside:** summary. **Inside:** `allowed()` → **release** → `_persist_cycle_summary` |
-| Cycle `finally` persist | `resolver_scheduler.py:1124-1138` | same pattern |
-| Skipped / timeout summary | `resolver_scheduler.py:605`, `:823`, `:935` | same pattern |
-| Lifecycle state on soul_map | `resolver_scheduler.py:740-752` | same pattern |
-| Ledger heal | `resolver_scheduler.py:1030-1034` | **Outside:** heal inputs. **Inside:** `allowed()` → **release** → `heal_daily_pick_ledger` |
-| Grading | `resolver_scheduler.py:1074-1075`, `:1093-1100` | **Outside lock:** grading + resolver calls. **At each `_save_json` site:** validate-then-commit only |
-| Auto-retrain | `resolver_scheduler.py:1112-1118` | **Outside lock:** retrain work. Guard side effects that touch disk with validate-then-commit |
+| Write site | Location @ `89d891c6` | Pattern (validate-token + bounded atomic commit under lock) |
+|------------|------------------------|-------------------------------------------------------------|
+| Pick JSON RMW | `daily_pick_engine.py:96-137` `_save` / upsert | **Outside:** build row. **Inside lock:** `allowed()` → fcntl + atomic pick persist (same bounded RMW as today) |
+| Predictions persist | `resolver.py:1323`, `:1383`, `:1523`, `:1673` | **Outside:** serialize. **Inside lock:** `allowed()` → `_save_json` (atomic) |
+| Cycle summary + soul_map RMW | `resolver_scheduler.py:1154-1158`, `:1219` | **Outside:** summary / map payload. **Inside lock:** `allowed()` → `write_soul_map` |
+| Partial / stage persists | `resolver_scheduler.py:1010-1021` | **Outside:** summary. **Inside lock:** `allowed()` → `_persist_cycle_summary` |
+| Cycle `finally` persist | `resolver_scheduler.py:1124-1138` | same |
+| Skipped / timeout summary | `resolver_scheduler.py:605`, `:823`, `:935` | same |
+| Lifecycle state on soul_map | `resolver_scheduler.py:740-752` | same |
+| Ledger heal | `resolver_scheduler.py:1030-1034` | **Outside:** inputs. **Inside lock:** `allowed()` → `heal_daily_pick_ledger` |
+| Grading | `resolver_scheduler.py:1074-1075`, `:1093-1100` | **Outside lock:** grading + resolver RPC. **Each persist site:** validate + bounded atomic commit under lock |
+| Auto-retrain | `resolver_scheduler.py:1112-1118` | **Outside lock:** retrain. Disk-touching effects: validate + bounded atomic commit under lock |
 
-- **Never** unbounded wait **for the lock** (revocation must not wait on a hung job — hung job must not hold the lock).
+- **Never** unbounded wait **for the lock** on hung job work **outside** the lock; revocation waits **at most one bounded local commit**, not whole-cycle compute.
 
 **Process model:** Inline worker on same VM — `scripts/fly_web_entrypoint.sh:3-5`, worker `:92-94`; fence runs in **worker** where resolver + pick schedulers live.
 
-### 5.1 Validate-token-then-commit (same lock as revocation; brief only)
+### 5.1 Validate-token + bounded local atomic commit (same lock as revocation)
 
-**Rule:** At each guarded write site, **`daily_pick_write_token_lock`** is held **only** for **validate-token-then-commit** — a **short** critical section:
+**Middle ground (supersedes `653da892` release-before-write):** releasing the lock **before** disk write allowed check → revoke → write **race** (stale commit after revoke). Normative pattern at every guarded site:
 
-1. **`with daily_pick_write_token_lock:`** read token / generation; **`if not daily_pick_write_token_allowed(): return`** (no disk write).
-2. Optionally record generation binding in memory (still inside lock).
-3. **Release lock** — then perform **fcntl / `_save_json` / `write_soul_map` / heal** (all I/O **outside** the lock unless a future impl proves sub-millisecond in-memory-only commit; normative default is **no I/O while holding lock**).
+1. **Outside lock:** prepare payload (serialize JSON, build pick row, read inputs — no token check).
+2. **`with daily_pick_write_token_lock:`** **`if not daily_pick_write_token_allowed(): return`** (no commit).
+3. **Still inside lock:** run **bounded local atomic commit** only — temp + fsync + replace, or **`_save_json` / `write_soul_map` / `heal_daily_pick_ledger` / pick fcntl RMW** as implemented today (must complete in bounded local time; not network).
+4. **Release lock.**
 
-**Same lock as revocation:** **`revoke_daily_pick_write_token()`** and **issue** use the **same** lock but **only** for the brief swap (§5) — never while a resolver job runs.
+**Revocation interaction:** **`revoke_daily_pick_write_token()`** uses the **same** lock. Revocation may wait for **one** in-progress bounded local commit to finish; it must **not** wait on threads stuck in compute **outside** the lock. **Race rule:** concurrent **revoke during commit** — disk ends **fully committed before revoke visible** OR commit **aborted/rejected** (no token); **never** a visible stale write **after** revoke completes.
 
-**Anti-pattern (forbidden):** `with daily_pick_write_token_lock:` wrapping **`run_cycle`**, grading, network, or “whole job” — that would let a hung job **block revocation** after the 3600s fence timeout.
+**Forbidden:** lock held across **`run_cycle`**, grading, network/RPC, or whole jobs.
 
-**Representative sites (must follow §5.1):** **`resolver.py:1323`**, **`resolver_scheduler.py:1219`**, **`1030-1034`** (ledger heal).
+**Representative sites:** **`resolver.py:1323`**, **`resolver_scheduler.py:1219`**, **`1030-1034`**.
 
-**Tests (§7):** **`tests/test_daily_pick_write_token.py`** — per-site validate-then-commit; post-revoke **`allowed()` false** → no mutation @ listed lines.
+**Tests (§7):** **`tests/test_daily_pick_write_token.py`** — hung-outside-lock; **revoke-during-commit race**; post-revoke sites rejected @ listed lines.
 
 ---
 
@@ -181,7 +182,8 @@ For current **`pick_day = pick_day_str()`**:
 | Cold boot | Creation closed → next slot, not 45s persist (`pick_scheduler`) |
 | Read-only paths | No `select_daily_pick` before slot (homepage / story_path pattern) |
 | Contract | `tests/test_endpoint_contract.py` unchanged |
-| Token lock scope | **`tests/test_daily_pick_write_token.py`** — §5.1 validate-then-commit only @ **`resolver.py:1323`**, **`resolver_scheduler.py:1219`**, **`1030-1034`**; hung job **outside** lock does **not** block revocation; post-revoke write **rejected** |
+| Token lock scope | **`tests/test_daily_pick_write_token.py`** — §5.1 @ **`resolver.py:1323`**, **`resolver_scheduler.py:1219`**, **`1030-1034`**; **hung outside lock** does not block revocation; post-revoke commit **rejected** |
+| Revoke during commit race | Same module — interleave **revoke** with bounded atomic commit: outcome **committed-before-revoke OR rejected**, **never** stale visible state **after** revoke returns |
 
 **Standing gate:** do not bump `DAILY_PICK_TICK_TIMEOUT_SECONDS` or unmute `LOOP_STALL_GUARD_KILL`.
 
