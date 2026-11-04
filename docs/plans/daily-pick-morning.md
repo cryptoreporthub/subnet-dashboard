@@ -41,9 +41,24 @@
 | `PICK_DAY_ROLLOVER_UTC_HOUR` / `MINUTE` | `13` / `0` | Pick-day string advances |
 | `DAILY_PICK_SLOT_UTC_HOUR` / `MINUTE` | `13` / `5` (env at deploy) | Scheduler slot (existing env names) |
 
-**Rollover:** if `now.utc() < 13:00`, pick day = previous calendar date; else today’s calendar date (`pick_day_str()`).
+**Rollover (normative):** let `now_utc = now.astimezone(timezone.utc)`, `t = now_utc.time()`. If `t < time(13, 0)` (rollover constants env-overridable), **`pick_day_str(now) = (now_utc.date() - 1 day).isoformat()`**; else **`pick_day_str(now) = now_utc.date().isoformat()`**.
 
-**Creation gate:** persist allowed when `now >= pick_day_start_utc(pick_day_str()) + slot offset` (default **13:05** on that pick day). **`force=True` does not bypass** this gate (scheduler, engine, ops heal scripts).
+**Pick-day start:** **`pick_day_start_utc(pick_day)`** = **`datetime.combine(date.fromisoformat(pick_day), time(13, 0), tzinfo=timezone.utc)`** (rollover hour/minute from env).
+
+**Slot open instant (normative, one formula):** for **`pick_day = pick_day_str(now)`**,
+
+```text
+slot_open_utc(pick_day) = datetime.combine(
+    date.fromisoformat(pick_day),
+    time(DAILY_PICK_SLOT_UTC_HOUR, DAILY_PICK_SLOT_UTC_MINUTE),
+    tzinfo=timezone.utc,
+)
+daily_pick_creation_open(now)  ⇔  now_utc >= slot_open_utc(pick_day)
+```
+
+Default env → **`slot_open_utc = pick_day calendar date at 13:05:00 UTC`**. **`force=True` does not bypass.** At **`13:00:00 ≤ now < slot_open`**, pick day has already rolled but creation is **closed** (reader uses §3 prior published).
+
+**Boundary tests (§7):** freeze **`2026-11-04 13:04:59 UTC`** → `pick_day_str` **`2026-11-04`**, **`daily_pick_creation_open` false**; **`13:05:00 UTC`** → **true**; **`13:00:00 UTC`** → pick day **`2026-11-04`**, creation **false**; **`12:59:59 UTC`** → pick day **`2026-11-03`**, creation **true** (slot for **`2026-11-03`** already passed).
 
 ### Published row
 
