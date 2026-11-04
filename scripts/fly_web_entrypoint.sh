@@ -5,6 +5,9 @@
 # sibling OS process, not a second machine.
 set -eu
 
+# ARENA-CAP TOGGLE (memory fix 1, #1538): default ON (=2) for capture 2. Change -2 to - to turn the default off. Env override wins (set it EMPTY to turn the cap off without a code change); non-numeric values are ignored.
+WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX-2}"
+case "$WORKER_MALLOC_ARENA_MAX" in *[!0-9]*) echo "ignoring non-numeric WORKER_MALLOC_ARENA_MAX" >&2; WORKER_MALLOC_ARENA_MAX="" ;; esac
 INLINE_WORKER_PIDFILE="${INLINE_WORKER_PIDFILE:-/tmp/inline_worker.pid}"
 INLINE_WORKER_STOP_GRACE_SECONDS="${INLINE_WORKER_STOP_GRACE_SECONDS:-15}"
 INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS="${INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS:-90}"
@@ -87,7 +90,7 @@ _start_inline_worker() {
     rm -f "$INLINE_WORKER_PIDFILE"
   fi
   echo "starting inline background worker (RUN_MODE=worker, WORKER_HEAVY=${WORKER_HEAVY:-essential})..."
-  nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
+  nice -n 10 env RUN_MODE=worker ${WORKER_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WORKER_MALLOC_ARENA_MAX}} WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
   echo $! > "$INLINE_WORKER_PIDFILE"
   echo "inline worker pgid=$(cat "$INLINE_WORKER_PIDFILE")"
 }
