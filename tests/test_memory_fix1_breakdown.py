@@ -99,7 +99,7 @@ def test_trim_non_glibc_is_guarded(caplog, monkeypatch):
 
 
 def test_worker_entrypoints_arena_cap_is_opt_in_web_never_capped():
-    """MALLOC_ARENA_MAX is exported to the worker ONLY when WORKER_MALLOC_ARENA_MAX is set (default off)."""
+    """MALLOC_ARENA_MAX reaches the worker only via WORKER_MALLOC_ARENA_MAX (default 2 for capture 2; empty/non-numeric = off)."""
     web = (ROOT / "scripts/fly_web_entrypoint.sh").read_text()
     worker_line = next(ln for ln in web.splitlines() if "env RUN_MODE=worker" in ln)
     optin = "${WORKER_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WORKER_MALLOC_ARENA_MAX}}"
@@ -107,11 +107,14 @@ def test_worker_entrypoints_arena_cap_is_opt_in_web_never_capped():
     assert ":-2" not in worker_line
     assert optin in (ROOT / "scripts/fly_worker_entrypoint.sh").read_text()
     # the web uvicorn process is not capped: only the worker launch line mentions it
-    toggle = 'WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX:-}"'  # the single default-off toggle line
+    toggle = 'WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX-2}"'  # the single default-ON toggle line (capture 2)
     for text in (web, (ROOT / "scripts/fly_worker_entrypoint.sh").read_text()):
         assert text.count(toggle) == 1
+    guard = [ln for ln in web.splitlines() if ln.startswith("case ") and "MALLOC_ARENA_MAX" in ln]
+    assert len(guard) == 1 and "*[!0-9]*)" in guard[0]
     assert [ln for ln in web.splitlines() if "MALLOC_ARENA_MAX" in ln and not ln.startswith("#")] == [
         toggle,
+        guard[0],
         worker_line,
     ]
     assert "MALLOC_ARENA_MAX" not in (ROOT / "fly.toml").read_text()
@@ -268,3 +271,27 @@ def test_arena_cap_env_default_off_and_on_with_override():
     on = subprocess.run(["sh", "-eu", "-c", cmd], capture_output=True, text=True, env={**base, "WORKER_MALLOC_ARENA_MAX": "2"})
     assert off.stdout.strip() == "unset", off
     assert on.stdout.strip() == "2", on
+
+
+def _run_entrypoint_prefix(script: str, override):
+    """Execute the real toggle+guard lines from an entrypoint, then the opt-in env expression."""
+    import subprocess
+
+    lines = (ROOT / script).read_text().splitlines()
+    head = [ln for ln in lines if ln.startswith("WORKER_MALLOC_ARENA_MAX=") or (ln.startswith("case ") and "MALLOC_ARENA_MAX" in ln)]
+    assert len(head) == 2
+    optin = "${WORKER_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WORKER_MALLOC_ARENA_MAX}}"
+    prog = "set -eu\n" + "\n".join(head) + f"\nenv -u MALLOC_ARENA_MAX {optin} sh -c 'echo ${{MALLOC_ARENA_MAX:-unset}}'\n"
+    env = {"PATH": os.environ["PATH"]}
+    if override is not None:
+        env["WORKER_MALLOC_ARENA_MAX"] = override
+    return subprocess.run(["sh", "-c", prog], capture_output=True, text=True, env=env).stdout.strip()
+
+
+@pytest.mark.parametrize("script", ["scripts/fly_web_entrypoint.sh", "scripts/fly_worker_entrypoint.sh"])
+def test_arena_cap_default_on_and_validated(script):
+    assert _run_entrypoint_prefix(script, None) == "2"  # default ON
+    assert _run_entrypoint_prefix(script, "4") == "4"  # override wins
+    assert _run_entrypoint_prefix(script, "") == "unset"  # explicit empty turns it off
+    assert _run_entrypoint_prefix(script, "2 FOO=bar") == "unset"  # non-numeric ignored, no arg injection
+    assert _run_entrypoint_prefix(script, "abc") == "unset"
