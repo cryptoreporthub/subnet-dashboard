@@ -96,7 +96,7 @@ def latest_pick_row_before(picks: list, pick_day: str | None = None) -> dict | N
 
 **Published row (normative, single definition):** **`is_published_daily_pick_row(rec)`** — `scheduler_hold` is falsy; **`action`** is **`LONG`** or **`BUY`** (case-insensitive); **`pick`** is a **`dict`**. HOLD rows, `scheduler_hold: true`, and rows with `pick: null` are **not** published. All fallback readers and pre-marker hero paths use this predicate only (no parallel “published=True” boolean on disk today).
 
-**Legacy row identity (normative, feeds §6.1 — switchover window + closure):** when **`pick_day_relabel_applies(rec, cutover_deploy_date)`** is true (§6.1), a row with stored `date == X` and **`pick_day_selection_instant(rec) < X 13:00:00 UTC`** belongs to **pick day `X−1`**. **`pick_day_selection_instant(rec)`** (stable, §6.1.2) must not use last-write **`timestamp_utc`** alone. Outside the switchover window the row is **left unchanged** unless required for **collision closure** (§6.1). `read_pick_day_str_from_record(rec)` returns the mapped pick day when relabeled, else stored `date`.
+**Legacy row identity (normative, feeds §6.1 — switchover window + closure):** when **`pick_day_relabel_applies(rec, cutover_deploy_date)`** is true (§6.1), a row with stored `date == X` and trusted **`pick_day_selection_instant_utc < X 13:00:00 UTC`** belongs to **pick day `X−1`**. Rows **without** trusted instant are **excluded from relabel** (§6.1.2). Outside the switchover window the row is **left unchanged** unless required for **collision closure** (§6.1). `read_pick_day_str_from_record(rec)` returns the mapped pick day when relabeled, else stored `date`.
 
 ### 3.3 Replace `_today_str()` in engine
 
@@ -258,7 +258,7 @@ flowchart TD
 
 ### 6.1 Option A — migration map + cutover-day outcome (committed)
 
-**Legacy row rule (normative, switchover window + collision closure):** row with stored `date == X` and **`pick_day_selection_instant(rec) < X 13:00:00 UTC`** maps to pick day **`X−1`** when relabel applies.
+**Legacy row rule (normative, switchover window + collision closure):** row with stored `date == X` and trusted **`pick_day_selection_instant_utc < X 13:00:00 UTC`** maps to pick day **`X−1`** when relabel applies (§6.1.2). Rows without trusted instant are **excluded** (fail closed).
 
 **`pick_day_relabel_applies(rec, cutover_deploy_date)` (initial window):** stored `date` is in the inclusive range **`[cutover_deploy_date − 3 days, cutover_deploy_date + 1 day]`**.
 
@@ -273,18 +273,27 @@ Rows that remain outside the final window after successful closure are **unchang
 
 #### 6.1.2 Stable selection instant + resumable migration
 
-**Normative selection instant (not last-write `timestamp_utc`):** At pinned code **`0299d354`**, **`get_or_create_today_pick`** sets **`build_started_at`** from **`started = _now_stamp()` on every scoring attempt** (`daily_pick_engine.py:321`, `:364`) — regen **restamps** it, so **`build_started_at` alone is not stable** for migration today.
+**Normative selection instant (fail-closed — no guessing):** At **`0299d354`**, **`build_started_at`** is **restamped on every attempt** (`daily_pick_engine.py:321`, `:364`) and **`timestamp_utc`** is last-write time — **neither is trustworthy** for “original selection before `X 13:00`” on legacy rows.
 
-**Impl PR (new work — required before cutover):** preserve the **first** selection instant per row — e.g. set **`pick_day_selection_instant_utc`** once on first persist and never update on HOLD/regen, **or** stop refreshing **`build_started_at`** on regen paths. **`pick_day_selection_instant(rec)`** reads that preserved field (prefer **`pick_day_selection_instant_utc`**, else first-seen **`build_started_at`**, else one-time **`timestamp_utc`** fallback with log).
+**Trusted field (only):** **`pick_day_selection_instant_utc`** — ISO UTC string set **once** on first persist for that row in the **impl PR**, **never** updated on HOLD/regen/retry. **Why trustworthy:** immutable after first write; not derived from restamped fields.
 
-**Relabel rule:** row with stored `date == X` and **`pick_day_selection_instant(rec) < X 13:00:00 UTC`** maps to **`X−1`** when relabel applies (§6.1). Legacy rows **regenerated after `X 13:00`** but whose **first instant** was before **`X 13:00`** must still relabel once first-stamp preservation lands (§7).
+**Relabel eligibility:** include row in **`relabel_map`** only when **`pick_day_selection_instant_utc`** is present **and** parsed instant **&lt; stored `date` 13:00:00 UTC**. Otherwise **fail closed:** keep stored **`date`**, log **`pick_day_relabel_untrusted_instant`**, **exclude from relabel** (still listed in marker/WAL as skipped). Do **not** infer from **`build_started_at`** / **`timestamp_utc`** alone.
+
+**Impl PR (required before cutover):** write **`pick_day_selection_instant_utc`** on every new persist going forward; optional backfill only when ops can prove instant from external evidence (out of scope for automatic migration).
 
 **Resumable migration (crash-safe — pairs with §6.1.1 audits):**
 
-- Progress file: **`data/pick_day_migration_v1.progress.json`** — fields: **`phase`**, **`cutover_deploy_date`**, **`relabel_map`**, **`legacy_rows_relabeled`**, **`pick_audits_migrated`**, **`updated_at`**. **`pick_day_migration_complete()`** is true **only** when final marker exists (below); progress alone is **not** complete.
-- **Phases (strict order):** `resolver_fenced` → `picks_relabeled` → `audits_migrated` → `marker_written`.
-- **Phase picks:** under **`daily_picks.json` lock**, apply relabel map, **`os.replace`**, checkpoint progress **`picks_relabeled`** with full **`relabel_map`**.
-- **Phase audits (§6.1.1):** process renames in **ascending `from_date` order** (oldest first). **Example:** migrate **`D−2.json → D−3.json` before `D−1.json → D−2.json`** (never the reverse). After **each** rename or resume fix, append to progress **`pick_audits_migrated`** and flush progress file.
+**Write-ahead (normative — before any rename):** No mutation to **`daily_picks.json`** or any **`data/pick_audits/*.json`** until a **durable WAL** is on disk:
+
+- Path: **`data/pick_day_migration_v1.wal.json`** (or atomic **`progress.json`** segment — same file OK if **`fsync`** after each step).
+- WAL records **`cutover_deploy_date`**, final **`relabel_map`**, ordered **`audit_renames: [{from, to}]`**, **`excluded_untrusted: [{date, reason}]`**, **`wal_seq`**, **`intent`**: `picks_pending` | `audit_pending` | `marker_pending`.
+- **Durability:** write temp → **`os.replace`** → **`fsync`** directory + file **before** pick relabel or audit rename.
+- **Replay (idempotent):** on boot, if marker absent, read WAL + progress; for each intent, compare disk to WAL (pick keys, audit paths); **skip completed steps**; never double-rename (if `{to}.json` exists and WAL says done, advance).
+
+- Progress file: **`data/pick_day_migration_v1.progress.json`** — fields: **`phase`**, **`cutover_deploy_date`**, **`relabel_map`**, **`legacy_rows_relabeled`**, **`pick_audits_migrated`**, **`updated_at`**, **`wal_seq`**. **`pick_day_migration_complete()`** is true **only** when final marker exists; progress/WAL alone is **not** complete.
+- **Phases (strict order):** `resolver_fenced` → **`wal_written`** → `picks_relabeled` → `audits_migrated` → `marker_written`.
+- **Phase picks:** after **`wal_written`** with **`intent: picks_pending`**, under lock, apply relabel map to **`daily_picks.json`**, **`os.replace`**, **`fsync`**, checkpoint progress **`picks_relabeled`**.
+- **Phase audits (§6.1.1):** for each rename, append **`audit_pending`** slice to WAL + **`fsync`**, **then** rename/fix file; after **each** step, update progress.
 - **Final marker `pick_day_migration_v1.json` written only after **`audits_migrated`** phase succeeds; then delete progress file (or set phase `marker_written`).
 
 **File lock (required):** **`fcntl` lock on `data/pick_day_migration.lock`** for the entire progress sequence (picks + audits + marker); idempotent replays read progress and resume at last phase.
@@ -366,9 +375,10 @@ During the first UTC morning after deploy, legacy rows and resolver cycles may d
 
   1. Set **`migration_fence_active = true`**; record **`migration_fence_gen = _cycle_generation`**.
   2. **While `cycle_in_flight`:** poll until idle **or** until **`PICK_DAY_MIGRATION_RESOLVER_WAIT_SECONDS`** (default **3600**) elapses. During poll, any persist must pass **`resolver_persist_allowed(owner_gen)`** (below).
-  3. **Timeout action (single, unambiguous):** when wait elapses and a cycle is **still** in flight → call **`_abandon_inflight_cycle`** (same as resolver timeout path: bump **`_cycle_generation`**, clear **`_persist_owner_gen`**, mark timing abandoned). **Then** wait until **idle** (inflight future done). **Do not** run pick relabel until idle. **Do not** leave the cycle running un-fenced after timeout.
-  4. Run **§6.1.2** locked migration (picks → audits → marker).
-  5. **`pick_day_migration_end_resolver_fence()`** clears **`migration_fence_active`**.
+  3. **At 3600s (soft timeout):** if still in flight → **`_abandon_inflight_cycle`** (bump **`_cycle_generation`**, clear **`_persist_owner_gen`**, mark abandoned). Continue polling for idle.
+  4. **Hard limit (fail-closed):** **`PICK_DAY_MIGRATION_RESOLVER_HARD_SECONDS`** (default **300**) **after** step 3 abandon. If resolver worker thread is **still alive** / **`cycle_in_flight`** after hard limit → **`pick_day_migration_boot_blocked=true`**: **block worker boot** — **no** §6.1.2 migration, **no** pick scheduler arm, **no** legacy-scheme pick writes; log **`pick_day_migration_resolver_hard_timeout`** (ops alert); health exposes block reason. **Never** unbounded wait. Web may still serve **`last_good_published_pick`** reads.
+  5. **Only when idle** within soft+hard window → run **§6.1.2** locked migration (WAL → picks → audits → marker).
+  6. **`pick_day_migration_end_resolver_fence()`** clears **`migration_fence_active`** (not when boot blocked — fence stays until ops restart after hung thread cleared).
 
   **`resolver_persist_allowed(owner_gen)`** (central helper — impl PR): returns false when **`migration_fence_active`** and (cycle is abandoned **or** `owner_gen != _persist_owner_gen` **or** `owner_gen != timing.owner_gen()`). All persist sites must call it (or equivalent) before mutating disk:
 
@@ -418,9 +428,9 @@ During the first UTC morning after deploy, legacy rows and resolver cycles may d
 | **New/extend** | **Cutover day D:** disk legacy row `date=D`, `timestamp_utc=D 00:15`, migration runs → relabeled **`D−1`**; **`_upsert_today` refuses** overwrite of relabeled row; freeze **13:06 UTC** → **exactly one** row passing **`is_published_daily_pick_row`** for **`D`**, **`select_daily_pick` invoked once**; **`force=True` no-op** on **`cutover_pick_day`** |
 | **New/extend** | **Post-marker legacy write:** simulate old `_today_str()` persist after marker → **refused** (§3.4.2) |
 | **New/extend** | **Relabel window seam:** fixture with legacy **`D−3`** midnight row + legitimate **`D−4`** row → collision closure widens or **`pick_day_migration_fail_collision`**; assert **at most one row per pick-day key** |
-| **New/extend** | **First-stamp preservation (impl):** row first scored **`X 00:15`**, HOLD regen after **`X 13:00`** restamps `build_started_at` @ engine `:321/:364` — migration still relabels using **preserved first instant** (§6.1.2) |
-| **New/extend** | **Audit resume:** `{from}.json` missing, `{to}.json` present → fix **`pick_date`**, progress **`resume_pick_date`** |
-| **New/extend** | **Resolver fence timeout:** single action — **`_abandon_inflight_cycle`**, then migration only when idle; stale-gen persist **skipped** at listed §6.4 sites |
+| **New/extend** | **WAL crash safety:** inject crash after **`wal_written`**, after **`picks_relabeled`**, mid-audit — replay **idempotent**, disk matches WAL (§6.1.2) |
+| **New/extend** | **Untrusted instant:** legacy row with only restamped **`build_started_at`** (no **`pick_day_selection_instant_utc`**) → **excluded** from **`relabel_map`**, stored **`date`** unchanged |
+| **New/extend** | **Fence hard limit:** after 3600s abandon + 300s hard, inflight thread still alive → **`pick_day_migration_boot_blocked`**, no migration |
 | **New/extend** | **Boot order:** migration fence before resolver scheduler start (same process) |
 | **Update** `tests/test_pick_scheduler.py` | Cold start schedules ≥ slot when creation closed; retry when `scheduler_hold` after slot; catch-up after failed 13:05 tick |
 | **Update** `tests/test_daily_pick_shed_date_guard.py` | Shed guard uses `pick_day_str`, not UTC midnight (comment references 2026-08-30 incident) |
