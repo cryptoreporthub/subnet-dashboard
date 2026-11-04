@@ -3,6 +3,7 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { readPrFixture, readRepoFixture } from "../lib/fixtures.js";
+import { evalPrChangedPaths, evalRepoPathsAtBase } from "../lib/eval-repo-fixture.js";
 import { capListing, listRepoFiles } from "../lib/repo.js";
 
 /**
@@ -24,7 +25,11 @@ export default defineTool({
         return { ok: false, reason: "no repository in this fixture" };
       }
       const prefix = input.prefix ?? "";
-      const capped = capListing(Object.keys(repo.files).filter((path) => path.startsWith(prefix)));
+      const paths =
+        input.at === "head"
+          ? Object.keys(repo.files)
+          : evalRepoPathsAtBase(repo, evalPrChangedPaths(pr));
+      const capped = capListing(paths.filter((path) => path.startsWith(prefix)));
       return { ok: true, sha: input.at === "head" ? pr.headSha : pr.baseSha, ...capped, source: "fixture" };
     }
 

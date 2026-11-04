@@ -3,7 +3,7 @@ import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr, readSuiteRecord, suiteKey, type PrRef } from "../lib/gh.js";
-import { readPrFixture } from "../lib/fixtures.js";
+import { readGateFixture, readPrFixture } from "../lib/fixtures.js";
 import { recordSuiteComparison } from "../lib/suite-record.js";
 import { carryDecision } from "../lib/suite.js";
 
@@ -195,8 +195,20 @@ export default defineTool({
     }
 
     if (isEval) {
-      // An eval has no runner and no network. The case's gate.json already
-      // pins the suite state, so this path records nothing and claims nothing.
+      const gate = await readGateFixture(ctx.workspaceDir);
+      if (gate?.suite === "clean") {
+        return {
+          recorded: false,
+          reason: "eval",
+          source: "fixture",
+          carried: false,
+          clean: true,
+          newFailures: [],
+          fixed: [],
+          flakyRetriedOk: [],
+          preExisting: [],
+        };
+      }
       return { recorded: false, reason: "eval-no-runner", carried: false, clean: false };
     }
 

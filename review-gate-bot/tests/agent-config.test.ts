@@ -68,6 +68,15 @@ test("the model is pinned, not left to the SDK default", () => {
   });
 });
 
+test("eval bot model logged for harness runs (composer-2.5 fast:false)", async () => {
+  const { evalBotModel } = await import("../evals/evals.config.js");
+  assert.deepEqual(evalBotModel, {
+    id: "composer-2.5",
+    params: [{ id: "fast", value: "false" }],
+  });
+  assert.deepEqual(evalBotModel, (agent as unknown as { model: unknown }).model);
+});
+
 test("the eval judge is a different model from the bot, so it never grades its own answers", async () => {
   const { default: evals } = await import("../evals/evals.config.js");
   const judge = (evals as unknown as { judge: { model: { id: string; params: { id: string; value: string }[] } } }).judge.model;

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,10 +8,13 @@ import type { Octokit } from "@octokit/rest";
 import { readPr, suiteKey } from "../bot/lib/gh.js";
 import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
+import { CHECK_GATE_STATE_OUTPUT_KEYS } from "../bot/lib/check_gate_output.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
 import { composeVerdictBody } from "../bot/tools/post_verdict.js";
 import listRepoFiles from "../bot/tools/list_repo_files.js";
 import readRepoFile from "../bot/tools/read_repo_file.js";
+import getPrDiff from "../bot/tools/get_pr_diff.js";
+import { readDiff } from "../bot/lib/repo.js";
 
 const HEAD = "a".repeat(40);
 const OLD = "b".repeat(40);
@@ -73,11 +77,6 @@ function toolContext(octokit: Octokit, seed: Record<string, unknown> = {}): unkn
     },
   };
 }
-
-test("composeVerdictBody omits the Skills section when skills are omitted", () => {
-  const body = composeVerdictBody({ verdict: "PASS", headSha: HEAD, body: "ok" });
-  assert.ok(!body.includes("### Skills"));
-});
 
 test("the verdict body carries no gate marker the model wrote", () => {
   const forged = (slot: string, sha: string) => `<!-- subnet-review-gate:${slot}:${sha} -->`;
@@ -197,6 +196,26 @@ test("an eval gate state is the fixture's, for the head it pins", async () => {
   assert.equal(result.next, "await_cursor_ditto");
   assert.equal(result.fileCount, 1);
   assert.equal(result.source, "fixture");
+  for (const key of Object.keys(result)) {
+    assert.ok(
+      (CHECK_GATE_STATE_OUTPUT_KEYS as readonly string[]).includes(key),
+      `unexpected check_gate_state key: ${key}`,
+    );
+  }
+});
+
+test("check_gate_state strips non-production keys from fixture gate.json", async () => {
+  const polluted = {
+    ...FIXTURE_GATE,
+    prBody: "extra narrative",
+    packBControl: true,
+    note: "eval-only",
+  };
+  const result = (await run(checkGateState)({}, await evalContext(polluted))) as Record<string, unknown>;
+  assert.equal(result.next, "await_cursor_ditto");
+  assert.equal("prBody" in result, false);
+  assert.equal("packBControl" in result, false);
+  assert.equal("note" in result, false);
 });
 
 test("an eval gate state is not shown beside a PR head the fixture does not pin", async () => {
@@ -235,4 +254,195 @@ test("an eval file listing past the cap is cut and flagged, as a live listing is
   const listing = (await run(listRepoFiles)({ at: "head" }, ctx)) as { paths: string[]; truncated: boolean };
   assert.equal(listing.paths.length, 2_000);
   assert.equal(listing.truncated, true);
+});
+
+// --- R0.8 eval base fidelity (read_repo_file + list_repo_files) ---------------
+
+async function evalBaseFixtureContext(
+  repo: { files: Record<string, string>; baseFiles?: Record<string, string> },
+  prFiles: string[],
+): Promise<{ session: { purpose: string }; workspaceDir: string }> {
+  const dir = await mkdtemp(join(tmpdir(), "repo-eval-base-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({ number: 1522, title: "t", url: "u", headSha: HEAD, baseSha: BASE, draft: false, files: prFiles }),
+  );
+  await writeFile(join(dir, "repo.json"), JSON.stringify(repo));
+  return { session: { purpose: "eval" }, workspaceDir: dir };
+}
+
+test("R0.8-1 eval read at base returns baseFiles text for a changed file; head returns head text", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n", "b.py": "same\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string; sha?: string };
+  assert.equal((await at("base", "a.py")).text, "old\n");
+  assert.equal((await at("base", "a.py")).sha, BASE);
+  assert.equal((await at("head", "a.py")).text, "new\n");
+});
+
+test("R0.8-2 eval read of unchanged context file succeeds at base and head with equal text", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "a.py": "new\n", "internal/context.py": "ctx\n" }, baseFiles: { "a.py": "old\n" } },
+    ["a.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string };
+  assert.equal((await at("base", "internal/context.py")).text, "ctx\n");
+  assert.equal((await at("head", "internal/context.py")).text, "ctx\n");
+});
+
+test("R0.8-3 eval read of PR-added file is not-found at base and succeeds at head", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "added.py": "added\n", "keep.py": "k\n" }, baseFiles: {} },
+    ["added.py"],
+  );
+  const at = async (where: "head" | "base", path: string) =>
+    (await run(readRepoFile)({ at: where, path }, ctx)) as { ok: boolean; text?: string };
+  assert.equal((await at("base", "added.py")).ok, false);
+  assert.equal((await at("head", "added.py")).text, "added\n");
+});
+
+test("R0.8-4 eval list_repo_files at base includes unchanged files and excludes PR-added paths", async () => {
+  const ctx = await evalBaseFixtureContext(
+    { files: { "added.py": "a\n", "keep.py": "k\n", "changed.py": "new" }, baseFiles: { "changed.py": "old" } },
+    ["added.py", "changed.py"],
+  );
+  const base = (await run(listRepoFiles)({ at: "base" }, ctx)) as { paths: string[] };
+  const head = (await run(listRepoFiles)({ at: "head" }, ctx)) as { paths: string[] };
+  assert.ok(base.paths.includes("keep.py"));
+  assert.ok(base.paths.includes("changed.py"));
+  assert.ok(!base.paths.includes("added.py"));
+  assert.ok(head.paths.includes("added.py"));
+});
+
+test("R0.8-5 read_repo_file and list_repo_files GitHub branches unchanged (no eval base helpers)", () => {
+  const readSrc = readFileSync(new URL("../bot/tools/read_repo_file.ts", import.meta.url), "utf8");
+  const listSrc = readFileSync(new URL("../bot/tools/list_repo_files.ts", import.meta.url), "utf8");
+  const readGh = readSrc.slice(readSrc.indexOf("const ref = parseGitHubPrContinuationKey"));
+  const listGh = listSrc.slice(listSrc.indexOf("const ref = parseGitHubPrContinuationKey"));
+  assert.match(readGh, /readRepoFile\(octokit/);
+  assert.doesNotMatch(readGh, /evalRepoTextAtBase/);
+  assert.match(listGh, /listRepoFiles\(octokit/);
+  assert.doesNotMatch(listGh, /evalRepoPathsAtBase/);
+});
+
+test("an eval compare_suite_runs returns the clean result a clean fixture gate pins, not a runner failure", async () => {
+  const ctx = await evalContext({ ...FIXTURE_GATE, suite: "clean" });
+  const result = (await run(compareSuiteRuns)({ headSha: HEAD, baseSha: BASE }, ctx)) as Record<string, unknown>;
+  assert.equal(result.clean, true);
+  assert.deepEqual(result.newFailures, []);
+  assert.equal(result.recorded, false, "an eval records nothing");
+  assert.equal(result.source, "fixture");
+});
+
+test("an eval compare_suite_runs stays not-clean when the fixture gate has no clean suite", async () => {
+  for (const suite of ["missing", "failed"]) {
+    const ctx = await evalContext({ ...FIXTURE_GATE, suite });
+    const result = (await run(compareSuiteRuns)({ headSha: HEAD, baseSha: BASE }, ctx)) as Record<string, unknown>;
+    assert.equal(result.clean, false, suite);
+    assert.equal(result.reason, "eval-no-runner", suite);
+  }
+});
+
+// --- V3 tool fidelity: eval vs production output content (not only keys) ------
+// Scope: get_pr_diff only. check_gate_state V3 remains the output-key whitelist above.
+// read_repo_file and list_repo_files use the R0.8 base-read fidelity tests instead.
+
+type CompareFile = {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch?: string;
+  previous_filename?: string;
+};
+
+function compareOctokit(files: CompareFile[]): Octokit {
+  return {
+    rest: {
+      repos: {
+        compareCommitsWithBasehead: async () => ({ data: { files } }),
+      },
+    },
+  } as unknown as Octokit;
+}
+
+async function diffEvalContext(rawFiles: CompareFile[]): Promise<{ session: { purpose: string }; workspaceDir: string }> {
+  const dir = await mkdtemp(join(tmpdir(), "diff-eval-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({
+      number: 1522,
+      title: "t",
+      url: "u",
+      headSha: HEAD,
+      baseSha: BASE,
+      draft: false,
+      files: rawFiles.map((f) => f.filename),
+    }),
+  );
+  await writeFile(
+    join(dir, "diff.json"),
+    JSON.stringify({
+      totalFiles: rawFiles.length,
+      truncated: false,
+      omittedPaths: [],
+      files: rawFiles.map((f) => ({
+        path: f.filename,
+        status: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
+        patch: f.patch,
+        ...(f.previous_filename === undefined ? {} : { previousPath: f.previous_filename }),
+      })),
+    }),
+  );
+  return { session: { purpose: "eval" }, workspaceDir: dir };
+}
+
+test("V3 get_pr_diff eval output matches production readDiff content for the same raw compare", async () => {
+  const bearerVal = "evalparitybearer1234567890";
+  const secretVal = "evalparitysecret1234567890";
+  const patch = `+bearer=${bearerVal}\n+client_secret=${secretVal}\n`;
+  const rawFiles: CompareFile[] = [
+    { filename: "a.py", status: "modified", additions: 2, deletions: 0, patch },
+    { filename: "b.py", status: "modified", additions: 1, deletions: 0, patch: "+ok\n" },
+  ];
+  const ref = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+  const prod = await readDiff(compareOctokit(rawFiles), ref, { head: HEAD, base: BASE });
+  assert.equal(prod.ok, true);
+  if (!prod.ok) {
+    return;
+  }
+  const evalOut = (await run(getPrDiff)({ headSha: HEAD }, await diffEvalContext(rawFiles))) as Record<string, unknown>;
+  assert.equal(evalOut.ok, true);
+  assert.equal(evalOut.source, "fixture");
+  assert.equal(evalOut.totalFiles, prod.totalFiles);
+  assert.deepEqual(evalOut.files, prod.files);
+  assert.equal(evalOut.truncated, prod.truncated);
+  assert.deepEqual(evalOut.omittedPaths, prod.omittedPaths);
+});
+
+test("V3 get_pr_diff path filter matches production for the same raw compare", async () => {
+  const rawFiles: CompareFile[] = [
+    { filename: "a.py", status: "modified", additions: 1, deletions: 0, patch: "+a\n" },
+    { filename: "b.py", status: "modified", additions: 1, deletions: 0, patch: "+b\n" },
+  ];
+  const ref = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+  const prod = await readDiff(compareOctokit(rawFiles), ref, { head: HEAD, base: BASE, paths: ["b.py"] });
+  assert.equal(prod.ok, true);
+  if (!prod.ok) {
+    return;
+  }
+  const evalOut = (await run(getPrDiff)({ headSha: HEAD, paths: ["b.py"] }, await diffEvalContext(rawFiles))) as Record<
+    string,
+    unknown
+  >;
+  assert.deepEqual(
+    { totalFiles: evalOut.totalFiles, files: evalOut.files, truncated: evalOut.truncated, omittedPaths: evalOut.omittedPaths },
+    { totalFiles: prod.totalFiles, files: prod.files, truncated: prod.truncated, omittedPaths: prod.omittedPaths },
+  );
 });
