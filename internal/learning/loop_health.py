@@ -82,6 +82,7 @@ def _daily_pick_today(path: Optional[str] = None) -> Dict[str, Any]:
             return out
         records = [record for record in records if isinstance(record, dict)]
         rec, meta = load_current_daily_pick(records)
+        # Gap UX: hero may show prior_pick_day; health intentionally reports no pick today.
         if not isinstance(rec, dict) or meta.get("prior_pick_day"):
             return out
         action = str(rec.get("action") or "").upper() or None

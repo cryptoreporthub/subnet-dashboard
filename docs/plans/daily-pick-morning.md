@@ -12,7 +12,7 @@
 
 | Issue | Evidence |
 |-------|----------|
-| Slot defaults **00:15 UTC** | `internal/council/pick_scheduler.py:32-33` — `DAILY_PICK_SLOT_UTC_HOUR` default `"0"`, minute `"15"` |
+| Slot defaults **00:15 UTC** (pre-change) | `pick_day.py` — **`DAILY_PICK_SLOT_UTC_*` default 19:05**, rollover **19:00** |
 | “Today” = UTC calendar midnight | `internal/council/daily_pick_engine.py:140-141` — `_today_str()` → `datetime.now(timezone.utc).date().isoformat()` |
 | Cold boot arms **45s** create tick | `pick_scheduler.py:273` — `schedule_in_seconds(DAILY_JOB_ID, self._tick, 45)` before `already running` return (`:274-275`) |
 | Selection time **restamped** each attempt | `daily_pick_engine.py:321`, `:364` — `"build_started_at": started` on every persist path |

@@ -354,11 +354,11 @@ def write_scheduler_hold(
         return existing
     payload = _merge_selection_recorded_at(payload, existing)
     records = _upsert_today(records, payload)
-    gen = write_generation
-    if gen is None:
+    if write_generation is None:
+        logger.info("write_scheduler_hold skipped persist: missing write_generation")
         existing = _find_today(_load())
         return existing if isinstance(existing, dict) else {}
-    if not _save(records, write_generation=gen):
+    if not _save(records, write_generation=write_generation):
         existing = _find_today(_load())
         return existing if isinstance(existing, dict) else {}
     return payload

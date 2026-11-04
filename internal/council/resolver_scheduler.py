@@ -158,13 +158,26 @@ def _load_json(path: str) -> Dict[str, Any]:
     return {}
 
 
-def _write_soul_map_guarded(mutator, path: str) -> bool:
+def _write_soul_map_guarded(
+    mutator,
+    path: str,
+    *,
+    write_generation: Optional[int] = None,
+) -> bool:
     from internal.council.daily_pick_write_token import guarded_bounded_commit
 
-    return guarded_bounded_commit(lambda: write_soul_map(mutator, path))
+    return guarded_bounded_commit(
+        lambda: write_soul_map(mutator, path),
+        write_generation=write_generation,
+    )
 
 
-def _save_json(path: str, data: Dict[str, Any]) -> None:
+def _save_json(
+    path: str,
+    data: Dict[str, Any],
+    *,
+    write_generation: Optional[int] = None,
+) -> None:
     from internal.council.daily_pick_write_token import guarded_bounded_commit
 
     def _commit() -> None:
@@ -184,7 +197,7 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
 
-    if not guarded_bounded_commit(_commit):
+    if not guarded_bounded_commit(_commit, write_generation=write_generation):
         logger.info("resolver_scheduler _save_json skipped: write token revoked")
 
 
@@ -210,6 +223,7 @@ class _CycleTiming:
         self._closing_stamp: Optional[float] = None
         # Phase 3: cycle generation that owns persist writes for this timing.
         self._owner_gen: Optional[int] = None
+        self._owner_write_gen: Optional[int] = None
         # Dark-region sub-timers inside persist_partial (ms).
         self._persist_apply_ms: float = 0.0
         self._persist_rmw_ms: float = 0.0
@@ -284,6 +298,14 @@ class _CycleTiming:
     def owner_gen(self) -> Optional[int]:
         with self._lock:
             return self._owner_gen
+
+    def set_owner_write_gen(self, gen: Optional[int]) -> None:
+        with self._lock:
+            self._owner_write_gen = gen
+
+    def owner_write_gen(self) -> Optional[int]:
+        with self._lock:
+            return self._owner_write_gen
 
     def record_persist_subtimer(self, name: str, duration_ms: float) -> None:
         with self._lock:
@@ -763,8 +785,15 @@ class PredictionResolverScheduler:
         }
         def _mutator(data: Dict[str, Any]) -> None:
             data.setdefault("prediction_resolver_scheduler", {}).update(state)
+
         try:
-            _write_soul_map_guarded(_mutator, self.soul_map_path)
+            from internal.council.daily_pick_write_token import current_write_generation
+
+            _write_soul_map_guarded(
+                _mutator,
+                self.soul_map_path,
+                write_generation=current_write_generation(),
+            )
         except Exception:
             pass
 
@@ -854,6 +883,9 @@ class PredictionResolverScheduler:
             cycle_id = make_resolver_cycle_id(gen, run_at)
             timing = _CycleTiming(abandoned_live)
             timing.set_owner_gen(gen)
+            from internal.council.daily_pick_write_token import current_write_generation
+
+            timing.set_owner_write_gen(current_write_generation())
             token = _cycle_timing.set(timing)
             ctx_token = bind_patchd_context(
                 cycle_generation=gen,
@@ -879,6 +911,9 @@ class PredictionResolverScheduler:
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
         timing = _CycleTiming(abandoned_live)
         timing.set_owner_gen(gen)
+        from internal.council.daily_pick_write_token import current_write_generation
+
+        timing.set_owner_write_gen(current_write_generation())
 
         def _run_cycle() -> Dict[str, Any]:
             ctx_token = bind_patchd_context(
@@ -1230,8 +1265,13 @@ class PredictionResolverScheduler:
 
         # Full RMW wall (read+mutator+disk); invariant: rmw >= mutator.
         t_rmw = time.perf_counter()
+        write_gen = timing.owner_write_gen() if timing is not None else None
         try:
-            _write_soul_map_guarded(_mutator, self.soul_map_path)
+            _write_soul_map_guarded(
+                _mutator,
+                self.soul_map_path,
+                write_generation=write_gen,
+            )
             if timing is not None:
                 timing.record_persist_subtimer(
                     "summary_rmw", (time.perf_counter() - t_rmw) * 1000
