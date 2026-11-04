@@ -330,3 +330,11 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-11-04 — PR #1561 gates @ `b3b00ebf` (draft, no deploy)
+
+- **HEAD:** `b3b00ebf` — Ditto run `809176cc` fixes (prior-day guards, resolver `_save_json` without pick token, conftest fail-hard, lock slot 19:05).
+- **Gates:** morning bundle **213×2** pass; **`comm -23` vs `0299d354` = 0** (full suite ~8m); CI smoke + full-suite + contract green.
+- **Ditto:** [run `97db989c`](https://developer.heyditto.ai/review/runs/97db989c-d5bb-441b-8a95-c274f9ded470) @ `b3b00eb` — **pass**, no new comments (prior 8+9 addressed in code).
+- **Still open:** Replit (last MODIFY `78c3d790`), Claude adversarial @ head, Cursor Auto-Review **MODIFY** (PR title/body still plan-only / 13:05 vs code **19:00/19:05 UTC** Phase B — intentional per Joshua; body refresh pending).
+- **Slot:** rollover **19:00 UTC**, creation **19:05 UTC** (12:05 PM Arizona); tests/docs goal line aligned.
