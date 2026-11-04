@@ -1,0 +1,61 @@
+{
+  "harnessSha": "5d884c476340e2d8d678b20a9039e3a8900a6f10",
+  "harnessShaShort": "5d884c47",
+  "fixturePinSha": "36d724b1b131bfd755a07f4a6dd412aaf1a8c107",
+  "fixturePinShaShort": "36d724b1",
+  "packBV3GateSchema": true,
+  "runLabel": "R1-F3",
+  "arm": "A",
+  "iterations": 3,
+  "slotOrder": "iteration-major",
+  "expectedSyspromptChars": 6874,
+  "expectedSyspromptSha256": "46c634666738fa8f6eb61cb1e79d4dee5fb207d531a012513516601705e05feb",
+  "expectedModel": {
+    "id": "composer-2.5",
+    "params": [{ "id": "fast", "value": "false" }]
+  },
+  "waves": [
+    {
+      "iteration": 1,
+      "outputJson": "exam-artifacts/r1-f3/runs/review-gate-r1packb-f3-iter1-5d884c47-36d724b1.json",
+      "evalIds": [
+        "review-gate-r1packb-f3/f3-02/1",
+        "review-gate-r1packb-f3/f3-03/1",
+        "review-gate-r1packb-f3/f3-04/1",
+        "review-gate-r1packb-f3/f3-05/1",
+        "review-gate-r1packb-f3/f3-06/1",
+        "review-gate-r1packb-f3/f3-ctrl-01/1",
+        "review-gate-r1packb-f3/f3-ctrl-02/1",
+        "review-gate-r1packb-f3/f3-ctrl-03/1"
+      ]
+    },
+    {
+      "iteration": 2,
+      "outputJson": "exam-artifacts/r1-f3/runs/review-gate-r1packb-f3-iter2-5d884c47-36d724b1.json",
+      "evalIds": [
+        "review-gate-r1packb-f3/f3-02/2",
+        "review-gate-r1packb-f3/f3-03/2",
+        "review-gate-r1packb-f3/f3-04/2",
+        "review-gate-r1packb-f3/f3-05/2",
+        "review-gate-r1packb-f3/f3-06/2",
+        "review-gate-r1packb-f3/f3-ctrl-01/2",
+        "review-gate-r1packb-f3/f3-ctrl-02/2",
+        "review-gate-r1packb-f3/f3-ctrl-03/2"
+      ]
+    },
+    {
+      "iteration": 3,
+      "outputJson": "exam-artifacts/r1-f3/runs/review-gate-r1packb-f3-iter3-5d884c47-36d724b1.json",
+      "evalIds": [
+        "review-gate-r1packb-f3/f3-02/3",
+        "review-gate-r1packb-f3/f3-03/3",
+        "review-gate-r1packb-f3/f3-04/3",
+        "review-gate-r1packb-f3/f3-05/3",
+        "review-gate-r1packb-f3/f3-06/3",
+        "review-gate-r1packb-f3/f3-ctrl-01/3",
+        "review-gate-r1packb-f3/f3-ctrl-02/3",
+        "review-gate-r1packb-f3/f3-ctrl-03/3"
+      ]
+    }
+  ]
+}
