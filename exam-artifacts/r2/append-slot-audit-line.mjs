@@ -19,9 +19,16 @@ const condition = flag("--condition");
 const role = flag("--role");
 const botCheckoutSha = flag("--bot-checkout-sha");
 const r2MethodArm = flag("--r2-method-arm");
+const planIdx = flag("--plan-idx");
+const retryOfIdx = flag("--retry-of-idx");
+const attempt = flag("--attempt");
+const slotKilled = flag("--slot-killed") === "true";
+const killReason = flag("--kill-reason");
 const slotStartedAt = flag("--slot-started-at");
 const slotEndedAt = flag("--slot-ended-at");
 const timedOut = flag("--timed-out") === "true";
+const slotFailed = flag("--slot-failed") === "true";
+const slotFailedReason = flag("--slot-failed-reason");
 const slotJson = flag("--slot-json");
 
 if (!auditPath || !evalId || !caseId || !iteration || !slotStartedAt || !slotEndedAt) {
@@ -32,24 +39,44 @@ if (!syspromptSha || syspromptSha.length !== 64) {
   console.error("STOP V1: invalid sysprompt sha");
   process.exit(3);
 }
+
+function countReadRepoFileCommitEnumErrors(toolCalls) {
+  const needle = 'Invalid option: expected one of "head"|"base"';
+  return (toolCalls ?? []).filter(
+    (c) =>
+      c.toolName === "read_repo_file" &&
+      (String(c.output ?? "").includes(needle) || (c.isError && String(c.output ?? "").includes("Invalid option"))),
+  ).length;
+}
+
 const model = JSON.parse(modelJson ?? "{}");
 let postVerdict = [];
 let sessionId;
 let durationMs;
-if (!timedOut && slotJson) {
+let readRepoFileCommitEnumErrors = 0;
+if (slotJson && !timedOut) {
   const slotDoc = JSON.parse(readFileSync(slotJson, "utf8"));
   const row = slotDoc.results?.[0];
-  if (!row) {
+  if (!row && !slotFailed) {
     console.error("STOP: slot json missing results[0]");
     process.exit(4);
   }
-  postVerdict = (row.toolCalls ?? [])
-    .filter((c) => c.toolName === "post_verdict")
-    .map((c) => ({ args: c.args, output: c.output, isError: c.isError }));
-  sessionId = row.sessionId;
-  durationMs = row.durationMs;
+  if (row) {
+    readRepoFileCommitEnumErrors = countReadRepoFileCommitEnumErrors(row.toolCalls);
+    if (!slotFailed) {
+      postVerdict = (row.toolCalls ?? [])
+        .filter((c) => c.toolName === "post_verdict")
+        .map((c) => ({ args: c.args, output: c.output, isError: c.isError }));
+      sessionId = row.sessionId;
+      durationMs = row.durationMs;
+    } else {
+      sessionId = row.sessionId;
+      durationMs = row.durationMs;
+    }
+  }
 }
-const v2Outcome = timedOut || postVerdict.length === 0 ? "NO_POST" : "POST";
+const v2Outcome =
+  timedOut || slotFailed || postVerdict.length === 0 ? "NO_POST" : "POST";
 const line = {
   caseId,
   iteration,
@@ -65,11 +92,32 @@ const line = {
   slotStartedAt,
   slotEndedAt,
   v2Outcome,
-  postVerdict: timedOut ? [] : postVerdict,
+  postVerdict: timedOut || slotFailed ? [] : postVerdict,
   sessionId,
   durationMs,
 };
+if (planIdx !== undefined) {
+  line.planIdx = Number(planIdx);
+}
+if (retryOfIdx !== undefined) {
+  line.retryOfIdx = Number(retryOfIdx);
+}
+if (attempt !== undefined) {
+  line.attempt = Number(attempt);
+}
+if (slotKilled) {
+  line.slotKilled = true;
+  line.killReason = killReason || "runner_lost_in_flight";
+  line.backfilled = true;
+}
+if (readRepoFileCommitEnumErrors > 0) {
+  line.readRepoFileCommitEnumErrors = readRepoFileCommitEnumErrors;
+}
 if (timedOut) {
   line.slotTimedOut = true;
+}
+if (slotFailed) {
+  line.slotFailed = true;
+  line.slotFailedReason = slotFailedReason || "eval_exit_nonzero";
 }
 appendFileSync(auditPath, `${JSON.stringify(line)}\n`);

@@ -78,7 +78,7 @@ record_timeout() {
   node "$APPEND" --audit "$AUDIT" --sysprompt-chars "$sysprompt_chars" --sysprompt-sha "$sysprompt_sha" \
     --model-json "$model_json" --fixture-pin "$fix_full" --eval-id "$eval_id" --case-id "$case_slug" \
     --iteration "$iter_num" --condition "$condition" --role "$role" --bot-checkout-sha "$bot_sha" \
-    --r2-method-arm "$method_arm" --slot-started-at "$slot_start" --slot-ended-at "$slot_end" --timed-out true
+    --r2-method-arm "$method_arm" --plan-idx "$idx" --slot-started-at "$slot_start" --slot-ended-at "$slot_end" --timed-out true
   python3 - <<PY
 import json
 json.dump({"lastCompletedIdx": int("$idx"), "slotTimeoutCount": int("$STRIKES"), "stopped": False}, open("$PROGRESS_FILE","w"))
@@ -117,11 +117,24 @@ while IFS=$'\t' read -r IDX EVAL_ID CONDITION ROLE BOT_SHA METHOD_ARM CASE_SLUG 
   }
 
   EC="$(bash "$SLOT_RUN" "$BOT" "$EVAL_ID" "$STATE" "$SLOT_JSON" "$METHOD_ARM" "$SLOT_WALL_SEC" "$RUN_LOG")"
+  RETRY_OF_IDX=""
   if [[ "$EC" -ne 0 ]] && [[ "$EC" -ne 124 ]] && provider_flake_retry; then
-    echo "provider_flake_retry eval_id=${EVAL_ID} idx=${IDX} exit=${EC} sleep_s=45" | tee -a "$RUN_LOG"
+    FAIL_END="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    FAIL_JSON="$(mktemp /tmp/r2-slot-fail-XXXX.json)"
+    cp "$SLOT_JSON" "$FAIL_JSON"
+    echo "provider_flake_retry eval_id=${EVAL_ID} idx=${IDX} exit=${EC} sleep_s=45 record_slot_failed=1" >>"$RUN_LOG"
+    node "$APPEND" --audit "$AUDIT" --sysprompt-chars "$SYSPROMPT_CHARS" --sysprompt-sha "$SYSPROMPT_SHA" \
+      --model-json "$MODEL_JSON" --fixture-pin "$FIX_FULL" --eval-id "$EVAL_ID" --case-id "$CASE_SLUG" \
+      --iteration "$ITER_NUM" --condition "$CONDITION" --role "$ROLE" --bot-checkout-sha "$BOT_SHA" \
+      --r2-method-arm "$METHOD_ARM" --plan-idx "$IDX" --slot-started-at "$SLOT_START" --slot-ended-at "$FAIL_END" \
+      --slot-failed true --slot-failed-reason "provider_error_exit_${EC}" --slot-json "$FAIL_JSON"
+    rm -f "$FAIL_JSON"
     rm -f "$SLOT_JSON"
     rm -rf "$STATE"
     sleep 45
+    RETRY_OF_IDX="$IDX"
+    SLOT_START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "SLOT_START idx=${IDX} eval_id=${EVAL_ID} retry_of_idx=${IDX} at=${SLOT_START}" >>"$RUN_LOG"
     STATE="/tmp/r2-slot-state-${IDX}-$$-${RANDOM}"
     SLOT_JSON="$(mktemp /tmp/r2-slot-XXXX.json)"
     EC="$(bash "$SLOT_RUN" "$BOT" "$EVAL_ID" "$STATE" "$SLOT_JSON" "$METHOD_ARM" "$SLOT_WALL_SEC" "$RUN_LOG")"
@@ -137,14 +150,28 @@ while IFS=$'\t' read -r IDX EVAL_ID CONDITION ROLE BOT_SHA METHOD_ARM CASE_SLUG 
     continue
   fi
   if [[ "$EC" -ne 0 ]] || [[ ! -s "$SLOT_JSON" ]]; then
+    FAIL_END="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    node "$APPEND" --audit "$AUDIT" --sysprompt-chars "$SYSPROMPT_CHARS" --sysprompt-sha "$SYSPROMPT_SHA" \
+      --model-json "$MODEL_JSON" --fixture-pin "$FIX_FULL" --eval-id "$EVAL_ID" --case-id "$CASE_SLUG" \
+      --iteration "$ITER_NUM" --condition "$CONDITION" --role "$ROLE" --bot-checkout-sha "$BOT_SHA" \
+      --r2-method-arm "$METHOD_ARM" --plan-idx "$IDX" --slot-started-at "$SLOT_START" --slot-ended-at "$FAIL_END" \
+      --slot-failed true --slot-failed-reason "eval_exit_${EC}" ${SLOT_JSON:+--slot-json "$SLOT_JSON"}
     echo "STOP slot_failed eval_id=${EVAL_ID} exit=${EC}"
     exit 11
   fi
   node "$MERGE" "$AGG" "$SLOT_JSON" "$EVAL_ID"
+  EXTRA_RETRY=()
+  if [[ -n "$RETRY_OF_IDX" ]]; then
+    EXTRA_RETRY=(--retry-of-idx "$RETRY_OF_IDX" --attempt 2)
+  elif [[ -f "$ART/.retry-next-plan-idx" ]] && [[ "$(cat "$ART/.retry-next-plan-idx")" == "$IDX" ]]; then
+    EXTRA_RETRY=(--retry-of-idx "$IDX" --attempt 2)
+    rm -f "$ART/.retry-next-plan-idx"
+  fi
   node "$APPEND" --audit "$AUDIT" --sysprompt-chars "$SYSPROMPT_CHARS" --sysprompt-sha "$SYSPROMPT_SHA" \
     --model-json "$MODEL_JSON" --fixture-pin "$FIX_FULL" --eval-id "$EVAL_ID" --case-id "$CASE_SLUG" \
     --iteration "$ITER_NUM" --condition "$CONDITION" --role "$ROLE" --bot-checkout-sha "$BOT_SHA" \
-    --r2-method-arm "$METHOD_ARM" --slot-started-at "$SLOT_START" --slot-ended-at "$SLOT_END" --slot-json "$SLOT_JSON"
+    --r2-method-arm "$METHOD_ARM" --plan-idx "$IDX" --slot-started-at "$SLOT_START" --slot-ended-at "$SLOT_END" \
+    --slot-json "$SLOT_JSON" "${EXTRA_RETRY[@]}"
   rm -f "$SLOT_JSON"
   echo "SLOT_END idx=${IDX} eval_id=${EVAL_ID} exit=${EC} at=${SLOT_END}"
   python3 - <<PY
