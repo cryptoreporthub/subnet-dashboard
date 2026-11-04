@@ -94,8 +94,8 @@ def _trail_key(entry: Any) -> Optional[Tuple[str, ...]]:
 def _replay_trail_rows(state: Dict[str, Any], rows: List[Tuple[Dict[str, Any], Any]]) -> None:
     """Apply learning-trail rows and their resolved ids to a soul_map_state dict in order.
 
-    Idempotent: a row whose (event_type, time) is already in the trail is skipped, ledger id
-    included. The same buffered row is replayed by every write until one commits, so it can
+    Idempotent: a row whose _trail_key is already in the trail is skipped, ledger id included.
+    A resolution keys by prediction id, any other row by (event_type, time). The same buffered row is replayed by every write until one commits, so it can
     arrive more than once.
     """
     if not rows:
@@ -215,11 +215,11 @@ class MindmapBridge:
             _drop_pending_through(key, flushed["through"])
             committed_state = result.get("soul_map_state")
             committed_state = committed_state if isinstance(committed_state, dict) else {}
-            for key in ("learning_trail", "resolved_prediction_ids"):
-                if key in committed_state:
-                    self.soul_map_state[key] = committed_state[key]
+            for field in ("learning_trail", "resolved_prediction_ids"):
+                if field in committed_state:
+                    self.soul_map_state[field] = committed_state[field]
                 else:
-                    self.soul_map_state.pop(key, None)
+                    self.soul_map_state.pop(field, None)
         else:
             # The disk write failed. Keep this row in memory; the returned blob is the
             # pre-append snapshot and would drop it. Earlier failed rows are already in
