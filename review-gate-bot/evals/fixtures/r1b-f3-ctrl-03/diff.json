@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_perf_09.py",
+      "status": "added",
+      "additions": 8,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,8 @@\n+\"\"\"Grace helper.\"\"\"\n+from datetime import datetime\n+\n+STALE_GRACE_SECONDS = 48 * 3600\n+\n+\n+def grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n+    return (now - started).total_seconds() >= grace"
+    },
+    {
+      "path": "tests/test_r1b_perf_09.py",
+      "status": "added",
+      "additions": 11,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,11 @@\n+from datetime import datetime, timedelta, timezone\n+\n+from internal.r1b_perf_09 import STALE_GRACE_SECONDS, grace_elapsed_enough\n+\n+\n+def test_measured_grace_boundary():\n+    now = datetime(2026, 10, 3, tzinfo=timezone.utc)\n+    before = now - timedelta(seconds=STALE_GRACE_SECONDS - 1)\n+    at = now - timedelta(seconds=STALE_GRACE_SECONDS)\n+    assert grace_elapsed_enough(now, before) is False\n+    assert grace_elapsed_enough(now, at) is True"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

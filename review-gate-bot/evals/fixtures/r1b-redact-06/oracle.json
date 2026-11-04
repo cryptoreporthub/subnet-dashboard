@@ -1,0 +1,21 @@
+{
+  "fixture": "r1b-redact-06",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "c84029067b6b153d379964cfda20d8f6bc2a1e68b7278c61ddaf9bf344b0f763",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "1 failed, 55 passed",
+    "passed": 55,
+    "failed": 1,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_shrink_allowed_in_grace_blocked"
+    ]
+  }
+}

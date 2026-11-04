@@ -1,0 +1,11 @@
+{
+  "number": 9431,
+  "title": "universe: comment the merge helper",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9431",
+  "headSha": "c90c9abaed6d9f3e8ed98ef68b55f1961867b86b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

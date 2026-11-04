@@ -1,0 +1,28 @@
+{
+  "fixture": "r1b-redact-01",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "3c141e03ea1aca3e7bc25ef9e61bf56e2532e31814c28ca4e407876040de3a12",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY"
+  },
+  "pytest": {
+    "summary": "8 failed, 48 passed",
+    "passed": 48,
+    "failed": 8,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_chain_unregistered_row_leaves_after_grace_even_if_tmc_is_down",
+      "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+      "tests/test_subnet_universe.py::test_negative_validity_removal_after_grace",
+      "tests/test_subnet_universe.py::test_no_price_on_one_positive_does_not_snapshot_freeze_membership",
+      "tests/test_subnet_universe.py::test_provider_grace_removal_via_refresh_once",
+      "tests/test_subnet_universe.py::test_refresh_once_publishes_grace_removal_despite_incomplete_refresh",
+      "tests/test_subnet_universe.py::test_shrink_allowed_incomplete_refresh_grace_eligible_ok",
+      "tests/test_subnet_universe.py::test_unregistered_netuid_leaves_after_grace_and_stays_gone"
+    ]
+  }
+}

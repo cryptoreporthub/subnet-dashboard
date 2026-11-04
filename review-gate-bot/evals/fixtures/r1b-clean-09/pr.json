@@ -1,0 +1,11 @@
+{
+  "number": 9436,
+  "title": "universe: log netuids removed after grace",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9436",
+  "headSha": "1e98e6ea0693768b6a11a3c3528c190366a44dd0",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

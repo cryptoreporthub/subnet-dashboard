@@ -1,0 +1,20 @@
+{
+  "fixture": "hard-r24-consolidation-drops-coverage-v2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "00c338a1499c2e3671f5fb7f1443d2c8e51ac3f9daf20244652bddd6be71d024",
+  "changedPaths": [
+    "tests/test_subnet_universe_edges.py"
+  ],
+  "pytest": {
+    "summary": "55 passed",
+    "passed": 55,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "MODIFY",
+    "note": "Merged two distinct checks into one test; root-never-dropped assertion no longer runs; suite stays green."
+  }
+}

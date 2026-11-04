@@ -1,0 +1,12 @@
+{
+  "number": 9427,
+  "title": "ci: narrow universe pytest collect to stable cases",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9427",
+  "headSha": "c308b207e1d5054a85064ad388414e6ec347e339",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "pytest.ini",
+    "tests/test_subnet_universe.py"
+  ]
+}

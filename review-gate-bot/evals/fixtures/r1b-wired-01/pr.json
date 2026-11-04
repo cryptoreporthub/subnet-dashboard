@@ -1,0 +1,12 @@
+{
+  "number": 9455,
+  "title": "universe: sort removed netuids via _sorted_removed_netuids",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9455",
+  "headSha": "0290aeab5cbf7e5c7008fba37d2db63af6a8c0dd",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ]
+}

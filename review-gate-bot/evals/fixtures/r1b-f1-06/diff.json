@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -655,7 +655,7 @@\n                 self._disk_mtime = os.path.getmtime(self._persist_file)\n                 with open(self._persist_file, \"r\") as handle:\n                     payload = json.load(handle)\n-                if isinstance(payload, dict) and payload.get(\"netuids\"):\n+                if isinstance(payload, dict) and (payload.get(\"netuids\") or payload.get(\"rows\")):\n                     snap = UniverseSnapshot.from_dict(payload)\n                     logger.info(\"subnet_universe loaded LKG: %d netuids\", len(snap.netuids))\n                     return snap"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

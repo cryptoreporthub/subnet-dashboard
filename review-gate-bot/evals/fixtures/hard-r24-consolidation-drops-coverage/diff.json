@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 4,
+      "patch": "@@ -1,5 +1,2 @@\n-def test_edge_a():\n+def test_edge_combined():\n     assert True\n-\n-def test_edge_b():\n-    assert True"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

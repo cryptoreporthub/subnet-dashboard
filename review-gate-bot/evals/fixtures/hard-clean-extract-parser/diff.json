@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 13,
+      "deletions": 5,
+      "patch": "@@ -266,6 +266,17 @@\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n \n \n+def _parse_utc(value: Any) -> Optional[datetime]:\n+    \"\"\"An ISO timestamp as an aware UTC datetime, or None when it does not parse.\"\"\"\n+    try:\n+        parsed = datetime.fromisoformat(str(value))\n+    except Exception:\n+        return None\n+    if parsed.tzinfo is None:\n+        parsed = parsed.replace(tzinfo=timezone.utc)\n+    return parsed\n+\n+\n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n     if netuid == ROOT_NETUID:\n         return False\n@@ -273,11 +284,8 @@\n         return False\n     if not evidence.negative_since:\n         return False\n-    try:\n-        started = datetime.fromisoformat(str(evidence.negative_since))\n-        if started.tzinfo is None:\n-            started = started.replace(tzinfo=timezone.utc)\n-    except Exception:\n+    started = _parse_utc(evidence.negative_since)\n+    if started is None:\n         return False\n     return (now - started).total_seconds() >= STALE_GRACE_SECONDS\n "
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 9,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,12 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_parse_utc_treats_a_naive_timestamp_as_utc_and_rejects_garbage():\n+    from internal.subnet_universe import _parse_utc\n+\n+    assert _parse_utc(\"2026-10-01T00:00:00\").tzinfo is timezone.utc\n+    assert _parse_utc(\"2026-10-01T00:00:00+00:00\").utcoffset() == timedelta(0)\n+    assert _parse_utc(\"not a date\") is None\n+    assert _parse_utc(None) is None"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

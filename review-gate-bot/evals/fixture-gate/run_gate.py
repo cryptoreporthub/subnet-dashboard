@@ -40,10 +40,11 @@ def main() -> int:
     steps: list[tuple[str, list[str], Path]] = [
         ("gate executor probe", [py, "-m", "pytest", "-q", str(GATE / "test_gate_executor.py")], REPO),
         ("structural pytest", [py, "-m", "pytest", "-q", str(GATE / "test_gate.py")], REPO),
-        ("known-bad rejection (7 cases)", [py, "-m", "pytest", "-q", str(GATE / "test_known_bad.py")], REPO),
+        ("known-bad rejection", [py, "-m", "pytest", "-q", str(GATE / "test_known_bad.py")], REPO),
+        ("pack B author-voice + exam-dup gate", [py, "-m", "pytest", "-q", str(GATE / "test_pack_b_gate.py")], REPO),
         (
             "oracle-gen --check (executed oracle ON; ORACLE_PYTHON=%s)" % py,
-            ["python3", "evals/oracle-gen/gen.py", "--check", "--python", py],
+            [py, "evals/oracle-gen/gen.py", "--check", "--python", py],
             BOT,
         ),
     ]

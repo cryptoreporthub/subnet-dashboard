@@ -1,0 +1,23 @@
+{
+  "fixture": "hard-r24-removal-guarded-b",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "9b58526bd0bc96a12eafdde3d8f2431f420ccd23a086b992597d596daed107a5",
+  "changedPaths": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ],
+  "pytest": {
+    "summary": "49 passed",
+    "passed": 49,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Removes guarded production code and seven dependent tests; recorded testcase count falls below 90% of base while comparison stays green.",
+    "baseTestcases": 56,
+    "headTestcases": 49
+  }
+}

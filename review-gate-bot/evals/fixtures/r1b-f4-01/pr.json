@@ -1,0 +1,12 @@
+{
+  "number": 9422,
+  "title": "ci: run universe tests on every shard",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9422",
+  "headSha": "e4e74d5ea023a09e38b1efa26fbf2327ae5ce439",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "pytest.ini",
+    "tests/test_subnet_universe.py"
+  ]
+}

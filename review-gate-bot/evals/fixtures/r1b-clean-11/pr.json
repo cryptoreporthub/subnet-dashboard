@@ -1,0 +1,12 @@
+{
+  "number": 9438,
+  "title": "perf: measured sort helper for dashboards",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9438",
+  "headSha": "dde49806ca4749a5bc07eb61b644d11d5d3c7266",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_clean_perf.py",
+    "tests/test_r1b_clean_perf.py"
+  ]
+}

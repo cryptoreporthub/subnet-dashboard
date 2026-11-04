@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "patch": "@@ -191,7 +191,8 @@\n     }\n \n \n-def _merge_sources(\n+def _merge_sources(  # chain vs TMC validity\n+\n     prior: Optional[Dict[str, Any]],\n     *,\n     tmc_positive: Optional[bool],"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

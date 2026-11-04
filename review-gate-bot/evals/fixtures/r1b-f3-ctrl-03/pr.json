@@ -1,0 +1,12 @@
+{
+  "number": 9421,
+  "title": "perf: measured wall-clock grace boundary",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9421",
+  "headSha": "9d1c0a8d59fe7b0054481096dd930d5fad6331e7",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_perf_09.py",
+    "tests/test_r1b_perf_09.py"
+  ]
+}

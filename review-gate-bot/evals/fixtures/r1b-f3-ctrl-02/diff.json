@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_perf_08.py",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,6 @@\n+\"\"\"Batch counter.\"\"\"\n+\n+def queries_for_refresh(netuid_count: int, *, batch_size: int = 32) -> int:\n+    if netuid_count <= 0:\n+        return 0\n+    return (netuid_count + batch_size - 1) // batch_size"
+    },
+    {
+      "path": "tests/test_r1b_perf_08.py",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,6 @@\n+from internal.r1b_perf_08 import queries_for_refresh\n+\n+\n+def test_measured_batch_count():\n+    measured = queries_for_refresh(64, batch_size=32)\n+    assert measured == 2"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

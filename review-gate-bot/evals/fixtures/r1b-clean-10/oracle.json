@@ -1,0 +1,19 @@
+{
+  "fixture": "r1b-clean-10",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "b88c5f5707c43fe2063a90931a7246179791cb78ada40f9f5f93c87b12d63e9c",
+  "changedPaths": [
+    "internal/subnets/tradable.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS"
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

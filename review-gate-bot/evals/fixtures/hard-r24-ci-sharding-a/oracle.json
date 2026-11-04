@@ -1,0 +1,20 @@
+{
+  "fixture": "hard-r24-ci-sharding-a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "39f486e2e937c2740358fad49ae495347b9e912df8430062f931105fbab8ce13",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Two-shard matrix visible in diff; union covers prior single job."
+  }
+}

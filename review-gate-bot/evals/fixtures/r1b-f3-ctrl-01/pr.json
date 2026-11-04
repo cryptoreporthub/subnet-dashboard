@@ -1,0 +1,12 @@
+{
+  "number": 9419,
+  "title": "universe: export validity keys with loop metrics",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9419",
+  "headSha": "3b420f3d47e5861c05061d0a70376b3605502866",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_perf_07.py",
+    "tests/test_r1b_perf_07.py"
+  ]
+}

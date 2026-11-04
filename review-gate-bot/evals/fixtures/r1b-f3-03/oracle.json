@@ -1,0 +1,34 @@
+{
+  "fixture": "r1b-f3-03",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "c090538600baed7a684592805f0103ba92b983443ecd97254c6fe341dca00d40",
+  "changedPaths": [
+    "internal/r1b_perf_03.py",
+    "tests/test_r1b_perf_03.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY",
+    "family": "F3-unmeasured-perf",
+    "visibleClaim": "Refresh performs one query per subnet batch (no extra round trips).",
+    "measuredBatchQueriesAt128": 132,
+    "claimOneTotalCall": false,
+    "claimFalsifiedByMeasurement": true,
+    "note": "PR claims one RPC total; measured batch count grows with netuids."
+  },
+  "pytest": {
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "pytestBase": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "number": 9454,
+  "title": "generalization: membership helper via internal/council/snapshot_coverage.py",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9454",
+  "headSha": "ae2518217bd4ad0d957ff08f88cc0158efd62a6d",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "internal/council/snapshot_coverage.py"
+  ]
+}

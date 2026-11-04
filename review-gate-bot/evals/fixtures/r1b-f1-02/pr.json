@@ -1,0 +1,11 @@
+{
+  "number": 9402,
+  "title": "universe: let kick_refresh schedule work on idle web workers",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9402",
+  "headSha": "8595d8fd288d013e8f2f75b16fb5c3bff29c0356",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

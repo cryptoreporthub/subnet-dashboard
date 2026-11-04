@@ -1,0 +1,8 @@
+{
+  "files": {
+    "tests/test_subnet_universe_edges.py": "def test_edge_chain_wins_on_unregistered():\n    assert 1 + 1 == 2\n"
+  },
+  "baseFiles": {
+    "tests/test_subnet_universe_edges.py": "def test_edge_chain_wins_on_unregistered():\n    assert 1 + 1 == 2\n\n\ndef test_edge_root_never_dropped():\n    assert 0 in (0, 1, 2)\n"
+  }
+}

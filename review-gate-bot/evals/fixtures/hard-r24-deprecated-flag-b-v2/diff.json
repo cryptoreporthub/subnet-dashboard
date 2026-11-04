@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "config/experimental_refresh.toml",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 1,
+      "patch": "@@ -1 +0,0 @@\n-enabled = true"
+    },
+    {
+      "path": "tests/test_experimental_refresh_config.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 5,
+      "patch": "@@ -1,5 +0,0 @@\n-def test_refresh_toggle_enabled():\n-    import tomllib\n-    from pathlib import Path\n-    data = tomllib.loads(Path(\"config/experimental_refresh.toml\").read_bytes())\n-    assert data[\"enabled\"] is True"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

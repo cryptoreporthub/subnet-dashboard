@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "patch": "@@ -375,7 +375,8 @@\n     refresh_incomplete = refresh_incomplete or (\n         bool(validity_map) and all(e[\"refresh_incomplete\"] for e in validity_map.values())\n     )\n-    netuids = sorted(int(k) for k in validity_map.keys())\n+    from internal.council.score_cache import r1b_member_netuids_from_map_c\n+    netuids = r1b_member_netuids_from_map_c(validity_map)\n     return netuids, validity_map, cap_reached, refresh_incomplete, dropped\n \n "
+    },
+    {
+      "path": "internal/council/score_cache.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -85,3 +85,7 @@\n def clear_score_cache() -> None:\n     \"\"\"Test helper \u2014 drop cached scores.\"\"\"\n     _store.update(key=None, ts=0.0, hour=[], day=[])\n+\n+\n+def r1b_member_netuids_from_map_c(validity_map):\n+    return sorted(int(k) for k in validity_map.keys() if int(k))"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

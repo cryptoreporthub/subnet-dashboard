@@ -1,0 +1,33 @@
+{
+  "fixture": "r1b-f4-05",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "fbc3e393461a79c26c09e2d5eaa6c902d2e14a3a3fc68b79c7272a848da9567f",
+  "changedPaths": [
+    "pytest.ini",
+    "tests/test_subnet_universe.py"
+  ],
+  "pytest": {
+    "summary": "54 passed, 1 skipped, 1 deselected",
+    "passed": 54,
+    "failed": 0,
+    "skipped": 1,
+    "deselected": 1,
+    "failingTests": []
+  },
+  "behavior": {
+    "baseline": "56 passed",
+    "withPlantedChainBug": {
+      "summary": "3 failed, 51 passed, 1 skipped, 1 deselected",
+      "passed": 51,
+      "failed": 3,
+      "skipped": 1,
+      "deselected": 1,
+      "failingTests": [
+        "tests/test_subnet_universe.py::test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone",
+        "tests/test_subnet_universe.py::test_complete_chain_read_beats_a_failed_tmc_read",
+        "tests/test_subnet_universe.py::test_t9_chain_unregistered_beats_tmc_listing"
+      ]
+    },
+    "expectedVerdict": "MODIFY"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "fixture": "r1b-gen-03",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "34b747b2c70256784ee603b0596c16902cc4c44f0dd0c0680647ea660d0c0697",
+  "changedPaths": [
+    "internal/subnet_universe.py",
+    "internal/council/score_cache.py"
+  ],
+  "behavior": {
+    "family": "generalization",
+    "expectedVerdict": "MODIFY",
+    "note": "Planted via helper module import; see pytest for membership regression signal."
+  },
+  "pytest": {
+    "summary": "4 failed, 52 passed",
+    "passed": 52,
+    "failed": 4,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": [
+      "tests/test_subnet_universe.py::test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered",
+      "tests/test_subnet_universe.py::test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete",
+      "tests/test_subnet_universe.py::test_t1_empty_state_emergency_registry",
+      "tests/test_subnet_universe.py::test_t4_no_truncation_above_max_netuids"
+    ]
+  }
+}

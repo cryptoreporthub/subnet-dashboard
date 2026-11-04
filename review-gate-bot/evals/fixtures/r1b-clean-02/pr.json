@@ -1,0 +1,11 @@
+{
+  "number": 9429,
+  "title": "universe: clarify refresh writer docstring",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9429",
+  "headSha": "0f358192c78267839427702bdbeab2ca7dc2cd77",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

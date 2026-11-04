@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_clean_perf.py",
+      "status": "added",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,4 @@\n+\"\"\"Measured sort helper.\"\"\"\n+\n+def sort_netuids(values: list[int]) -> list[int]:\n+    return sorted(values)"
+    },
+    {
+      "path": "tests/test_r1b_clean_perf.py",
+      "status": "added",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+from internal.r1b_clean_perf import sort_netuids\n+\n+\n+def test_sort_netuids_measured():\n+    assert sort_netuids([2, 0, 1]) == [0, 1, 2]"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

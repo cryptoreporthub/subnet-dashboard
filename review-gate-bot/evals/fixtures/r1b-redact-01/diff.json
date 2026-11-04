@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -266,7 +266,13 @@\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n \n \n+def _token_count_guard(token_count: int) -> bool:\n+    return token_count > 0\n+\n+\n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n+    if not _token_count_guard(0):\n+        return False\n     if netuid == ROOT_NETUID:\n         return False\n     if evidence.probe is not False:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

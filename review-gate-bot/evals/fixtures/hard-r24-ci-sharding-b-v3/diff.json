@@ -1,0 +1,28 @@
+{
+  "totalFiles": 3,
+  "files": [
+    {
+      "path": ".github/workflows/ci-smoke.yml",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 2,
+      "patch": "@@ -1,7 +1,11 @@\n name: ci-smoke\n on: [push]\n jobs:\n-  test:\n+  unit:\n     runs-on: ubuntu-latest\n     steps:\n-      - run: pytest -q\n+      - run: pytest -q -m \"not integration\"\n+  integration:\n+    runs-on: ubuntu-latest\n+    steps:\n+      - run: pytest -q -m integration"
+    },
+    {
+      "path": "tests/conftest.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,5 @@\n+import pytest\n+\n+\n+def pytest_configure(config):\n+    config.addinivalue_line(\"markers\", \"integration: cross-service checks\")"
+    },
+    {
+      "path": "tests/test_r24_shard_partition.py",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -1,3 +1,6 @@\n+import pytest\n+\n+\n def test_unit_smoke_alpha():\n     assert 2 + 2 == 4\n \n@@ -6,5 +9,6 @@\n     assert len(\"ab\") == 2\n \n \n+@pytest.mark.integration\n def test_integration_cross_check():\n     assert {1, 2} | {2, 3} == {1, 2, 3}"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 8,
+      "deletions": 1,
+      "patch": "@@ -266,6 +266,13 @@\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n \n \n+MAX_TOKENS = 4096\n+\n+\n+def _max_tokens_cap(batch: int, max_tokens: int = MAX_TOKENS) -> int:\n+    return min(batch, max_tokens // 2)\n+\n+\n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n     if netuid == ROOT_NETUID:\n         return False\n@@ -279,7 +286,7 @@\n             started = started.replace(tzinfo=timezone.utc)\n     except Exception:\n         return False\n-    return (now - started).total_seconds() >= STALE_GRACE_SECONDS\n+    return (now - started).total_seconds() >= _max_tokens_cap(STALE_GRACE_SECONDS)\n \n \n def is_universe_refresh_writer() -> bool:"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

@@ -1,0 +1,21 @@
+{
+  "fixture": "hard-r24-ci-sharding-b-v2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "0d95e1b66a842abd4f58c98d046631f2d907ac173a992a9841bc469a1cb7fe33",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/conftest.py"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Partition: -m 'not integration' and -m integration; marker registered in conftest; no tests left unrun."
+  }
+}

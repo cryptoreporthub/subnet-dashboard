@@ -1,0 +1,20 @@
+{
+  "fixture": "hard-r24-ci-sharding-a-v2",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a866f6958b3995ec291cc92c4d75e0c9b2119992dca83820a15626563f5cc26f",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Matrix shard-index [0,1] with --num-shards=2; pip install pytest-shard visible; union covers full suite."
+  }
+}

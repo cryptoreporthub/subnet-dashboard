@@ -1,0 +1,10 @@
+{
+  "files": {
+    "internal/subnet_universe.py": "",
+    "tests/test_subnet_universe.py": ""
+  },
+  "baseFiles": {
+    "internal/subnet_universe.py": "def _legacy_census_ping() -> int:\n    return 1\n",
+    "tests/test_subnet_universe.py": "def test_legacy_census_ping():\n    from internal.subnet_universe import _legacy_census_ping\n    assert _legacy_census_ping() == 1\n\ndef test_bulk_placeholder_one():\n    assert True\n\ndef test_bulk_placeholder_two():\n    assert True\n\ndef test_bulk_placeholder_three():\n    assert True\n\ndef test_bulk_placeholder_four():\n    assert True\n\ndef test_bulk_placeholder_five():\n    assert True\n\ndef test_bulk_placeholder_six():\n    assert True\n\ndef test_bulk_placeholder_seven():\n    assert True\n"
+  }
+}

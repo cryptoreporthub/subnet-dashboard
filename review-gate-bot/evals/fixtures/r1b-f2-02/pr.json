@@ -1,0 +1,12 @@
+{
+  "number": 9408,
+  "title": "universe: build netuid list via tradable filter helper",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9408",
+  "headSha": "ad77a17dfc8973185d558176c3a31380b4f9628c",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "internal/subnets/tradable.py"
+  ]
+}

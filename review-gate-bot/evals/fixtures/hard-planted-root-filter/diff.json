@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 1,
+      "patch": "@@ -375,7 +375,8 @@\n     refresh_incomplete = refresh_incomplete or (\n         bool(validity_map) and all(e[\"refresh_incomplete\"] for e in validity_map.values())\n     )\n-    netuids = sorted(int(k) for k in validity_map.keys())\n+    # skip placeholder keys that carry no netuid\n+    netuids = sorted(int(k) for k in validity_map.keys() if int(k))\n     return netuids, validity_map, cap_reached, refresh_incomplete, dropped\n \n "
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

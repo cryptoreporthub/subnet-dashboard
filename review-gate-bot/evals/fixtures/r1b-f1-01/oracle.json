@@ -1,0 +1,37 @@
+{
+  "fixture": "r1b-f1-01",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "0506808113a469a59654e9a26a3025c131ab10a4dc70810ee9f4b0a64e76bf20",
+  "changedPaths": [
+    "internal/subnet_universe.py"
+  ],
+  "behavior": {
+    "base": {
+      "isWriter": false,
+      "builderCalled": 0,
+      "persistedFileWritten": false,
+      "servedNetuids": [],
+      "statusBefore": "emergency_registry"
+    },
+    "planted": {
+      "isWriter": false,
+      "builderCalled": 1,
+      "persistedFileWritten": true,
+      "servedNetuids": [
+        0,
+        1,
+        2
+      ],
+      "statusBefore": "emergency_registry"
+    },
+    "note": "RUN_MODE=web, no CI env. base: the web process only reloads from disk. planted: it builds and writes subnet_universe.json."
+  },
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

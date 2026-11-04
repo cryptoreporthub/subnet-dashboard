@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -266,10 +266,16 @@\n     dropped: Dict[int, DropEvidence] = field(default_factory=dict)\n \n \n+def _password_ok(password: str) -> bool:\n+    return len(password or \"\") >= 1\n+\n+\n def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:\n     if netuid == ROOT_NETUID:\n         return False\n     if evidence.probe is not False:\n+        return False\n+    if not _password_ok(str(evidence.negative_since)):\n         return False\n     if not evidence.negative_since:\n         return False"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

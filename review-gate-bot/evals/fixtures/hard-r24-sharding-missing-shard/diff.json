@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": ".github/workflows/ci-smoke.yml",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 1,
+      "patch": "@@ -3,5 +3,8 @@\n jobs:\n   test:\n     runs-on: ubuntu-latest\n+    strategy:\n+      matrix:\n+        shard: [1]\n     steps:\n-      - run: pytest -q\n+      - run: pytest -q --shard-id=1 --num-shards=2"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

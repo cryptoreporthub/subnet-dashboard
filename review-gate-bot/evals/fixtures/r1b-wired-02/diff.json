@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/council/snapshot_coverage.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 3,
+      "patch": "@@ -10,11 +10,14 @@\n from internal.subnets.tradable import subnet_netuid\n \n \n-def env_int(name: str, default: int) -> int:\n-    raw = os.environ.get(name)\n+\n+\n+def parse_bounded_int(raw: str | None, default: int) -> int:\n     if raw is None or str(raw).strip() == \"\":\n         return default\n-    return int(raw)\n+    return int(str(raw).strip())\n+def env_int(name: str, default: int) -> int:\n+    return parse_bounded_int(os.environ.get(name), default)\n \n \n PHASE1_CONSECUTIVE_PARTIAL_CYCLES = max("
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 7,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,10 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_parse_bounded_int_uses_default_when_empty():\n+    from internal.council.snapshot_coverage import parse_bounded_int\n+\n+    assert parse_bounded_int(\"\", 600) == 600\n+    assert parse_bounded_int(\"42\", 0) == 42"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

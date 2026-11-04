@@ -1,0 +1,11 @@
+{
+  "number": 9442,
+  "title": "universe: read api_key header before interpreting chain gaps",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9442",
+  "headSha": "a34965c9e4933b1732040e827aea9a767d98504e",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

@@ -27,7 +27,6 @@ START_IDX="${START_IDX:-0}"
 mkdir -p "$ART/runs"
 python3 "$ART/generate-run-plan.py"
 FIX_FULL="$(python3 -c "import json; print(json.load(open('$PLAN'))['fixturePinSha'])")"
-git -C "$REPO_ROOT" checkout "$FIX_FULL" -- review-gate-bot/evals
 
 if [[ "$RESUME" != "1" ]] && (( START_IDX == 0 )); then
   : >"$AUDIT"

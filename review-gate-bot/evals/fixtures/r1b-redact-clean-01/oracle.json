@@ -1,0 +1,22 @@
+{
+  "fixture": "r1b-redact-clean-01",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a9146a424f75106ebc178dd2bccb3894f19e9b5e83c147e285dbeb7218685958",
+  "changedPaths": [
+    "internal/r1b_redact_clean_tokens.py",
+    "tests/test_r1b_redact_clean_tokens.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "scoringRole": "report-only",
+    "note": "Orphan module; superseded by r1b-wired-02."
+  },
+  "pytest": {
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

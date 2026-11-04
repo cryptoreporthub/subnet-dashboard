@@ -1,0 +1,11 @@
+{
+  "number": 9411,
+  "title": "ci: start pytest sharding rollout",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9411",
+  "headSha": "a2ad7be1daf58e3db271a94df87e0994248c7423",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml"
+  ]
+}

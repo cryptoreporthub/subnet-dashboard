@@ -1,0 +1,12 @@
+{
+  "number": 9402,
+  "title": "refactor: drop census ping helper and bulk universe checks",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9402",
+  "headSha": "537cd5177ac6c63ac82c2bf7e587cc9b5c1355b0",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ]
+}

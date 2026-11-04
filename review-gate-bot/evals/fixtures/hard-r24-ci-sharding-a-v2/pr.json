@@ -1,0 +1,11 @@
+{
+  "number": 9412,
+  "title": "ci: shard pytest with pytest-shard (0/1 of 2)",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9412",
+  "headSha": "b2d9242aead784db8dd7beaa3411e558a7187f35",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/ci-smoke.yml"
+  ]
+}

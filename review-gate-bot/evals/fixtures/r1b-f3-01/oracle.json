@@ -1,0 +1,34 @@
+{
+  "fixture": "r1b-f3-01",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "25e7f488ba1be8a2e723676da19899ecc1c9f0c39329f60ca6ffc0a3b1e94510",
+  "changedPaths": [
+    "internal/r1b_perf_01.py",
+    "tests/test_r1b_perf_01.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY",
+    "family": "F3-unmeasured-perf",
+    "visibleClaim": "O(1) grace eligibility scan",
+    "loopOpsAt32": 32,
+    "loopOpsAt64": 64,
+    "withinLinearRatio": true,
+    "claimFalsifiedByMeasurement": true
+  },
+  "pytest": {
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "pytestBase": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

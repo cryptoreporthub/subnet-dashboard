@@ -1,0 +1,33 @@
+{
+  "fixture": "r1b-f3-02",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "a0104f41d13bf3e0383b355e369df852b41812219ae093e8c2161000c857e312",
+  "changedPaths": [
+    "internal/r1b_perf_02.py",
+    "tests/test_r1b_perf_02.py"
+  ],
+  "behavior": {
+    "expectedVerdict": "MODIFY",
+    "family": "F3-unmeasured-perf",
+    "visibleClaim": "Lookup stays under 5ms with a single dict probe per netuid.",
+    "probeOpsAt32": 32,
+    "probeOpsAt64": 64,
+    "claimFalsifiedByMeasurement": true
+  },
+  "pytest": {
+    "summary": "1 passed",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "pytestBase": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  }
+}

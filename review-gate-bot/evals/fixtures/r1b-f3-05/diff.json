@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_perf_05.py",
+      "status": "added",
+      "additions": 14,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,14 @@\n+\"\"\"Memoized netuid scan.\"\"\"\n+# Repeated scans reuse a memo table for O(1) answers.\n+_memo = {}\n+\n+def cached_max_netuid(netuids: list[int]) -> int:\n+    key = tuple(sorted(netuids))\n+    if key in _memo:\n+        return _memo[key]\n+    val = max(netuids)\n+    _memo[key] = val\n+    return val\n+\n+def scan_loop_ops(netuids: list[int]) -> int:\n+    return len(netuids)"
+    },
+    {
+      "path": "tests/test_r1b_perf_05.py",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,6 @@\n+from internal.r1b_perf_05 import cached_max_netuid\n+\n+\n+def test_memo_distinguishes_same_length_different_sets():\n+    assert cached_max_netuid([0, 1, 2]) == 2\n+    assert cached_max_netuid([0, 5, 6]) == 6"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

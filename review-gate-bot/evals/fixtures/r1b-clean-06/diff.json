@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -47,7 +47,7 @@\n     return path\n \n \n-def _prior_snapshot(netuids: list[int]) -> UniverseSnapshot:\n+def _prior_snapshot(netuids: list[int]) -> UniverseSnapshot:  # test fixture prior\n     rows = tuple({\"netuid\": n, \"name\": f\"SN{n}\"} for n in netuids)\n     validity = {str(n): _validity_entry(validity=\"positive\", sources=[\"taomarketcap\"]) for n in netuids}\n     return UniverseSnapshot("
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

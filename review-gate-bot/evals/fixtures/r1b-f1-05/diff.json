@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 8,
+      "deletions": 1,
+      "patch": "@@ -736,8 +736,15 @@\n             self._refresh_lock.release()\n \n     def ensure_refresh_loop(self) -> None:\n-        if _ci_or_test() or not is_universe_refresh_writer():\n+        if _ci_or_test():\n             return\n+        try:\n+            from internal.run_mode import inline_worker_expected\n+            if not is_universe_refresh_writer() and not inline_worker_expected():\n+                return\n+        except Exception:\n+            if not is_universe_refresh_writer():\n+                return\n         with self._loop_lock:\n             if self._loop_started:\n                 return"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

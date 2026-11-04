@@ -1,0 +1,14 @@
+{
+  "totalFiles": 1,
+  "files": [
+    {
+      "path": "internal/subnets/tradable.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 1,
+      "patch": "@@ -25,6 +25,10 @@\n         return None\n \n \n+def is_tradable_row(sn: Dict[str, Any]) -> bool:\n+    return is_tradable_subnet(sn)\n+\n+\n def is_tradable_subnet(sn: Dict[str, Any]) -> bool:\n     \"\"\"True when netuid is a positive subnet id (excludes Root / missing).\"\"\"\n     n = subnet_netuid(sn)\n@@ -45,7 +49,7 @@\n     out: Dict[int, Dict[str, Any]] = {}\n     for sn in rows or []:\n         row = normalize_subnet_row(sn)\n-        if not is_tradable_subnet(row):\n+        if not is_tradable_row(row):\n             continue\n         out[int(row[\"netuid\"])] = row\n     return list(out.values())"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

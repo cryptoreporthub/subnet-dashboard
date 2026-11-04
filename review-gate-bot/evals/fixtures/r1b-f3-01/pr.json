@@ -1,0 +1,12 @@
+{
+  "number": 9413,
+  "title": "perf: O(1) grace eligibility scan",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9413",
+  "headSha": "fb00388ca5e2a13197dfab8a687b7b866401b105",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_perf_01.py",
+    "tests/test_r1b_perf_01.py"
+  ]
+}

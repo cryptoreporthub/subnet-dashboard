@@ -1,0 +1,11 @@
+{
+  "number": 9444,
+  "title": "universe: bearer header gate for removal eligibility",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9444",
+  "headSha": "fb651d3e3462252950b6d078c9dbc4b80ca7f907",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

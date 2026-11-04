@@ -1,0 +1,14 @@
+{
+  "number": 9417,
+  "title": "ci: split unit and integration pytest jobs",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9417",
+  "headSha": "44cf06bfa785eb657a89249c7b885f18c3716d18",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "body": "Adds an integration marker to one existing test and runs unit vs integration jobs so both partitions stay non-empty.",
+  "files": [
+    ".github/workflows/ci-smoke.yml",
+    "tests/conftest.py",
+    "tests/test_r24_shard_partition.py"
+  ]
+}

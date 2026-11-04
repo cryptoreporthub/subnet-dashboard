@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_redact_clean_header.py",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,9 @@\n+\"\"\"Header helper.\"\"\"\n+\n+def api_key_header(value: str | None) -> str:\n+    if not value:\n+        return \"\"\n+    v = value.strip()\n+    if v.lower().startswith(\"apikey \"):\n+        return \"ApiKey \" + v[7:].strip()\n+    return f\"ApiKey {v}\""
+    },
+    {
+      "path": "tests/test_r1b_redact_clean_header.py",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,9 @@\n+from internal.r1b_redact_clean_header import api_key_header\n+\n+\n+def test_api_key_header_prefix():\n+    assert api_key_header(\"secret\").startswith(\"ApiKey \")\n+\n+\n+def test_api_key_header_normalizes_prefix_casing():\n+    assert api_key_header(\"apikey secret\") == \"ApiKey secret\""
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

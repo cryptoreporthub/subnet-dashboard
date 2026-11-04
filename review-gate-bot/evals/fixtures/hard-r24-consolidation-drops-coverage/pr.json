@@ -1,0 +1,11 @@
+{
+  "number": 9410,
+  "title": "test: consolidate universe edge cases",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9410",
+  "headSha": "4b8e4f22c5991e1c0f63f94f65c162b9fa103048",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe.py"
+  ]
+}

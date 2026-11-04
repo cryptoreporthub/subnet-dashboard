@@ -1,6 +1,7 @@
 """Gate must reject known-bad fixture revisions from git history (R0.2 acceptance)."""
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -36,6 +37,61 @@ KNOWN_BAD.append(
         "planted-blank-reload oracle PASS at head",
     )
 )
+
+
+def test_known_bad_r1b_defect_title_rejected() -> None:
+    from gate_core import check_r1b_author_voice
+
+    errors = check_r1b_author_voice("r1b-f1-bad", {"title": "ci: shrink universe tests"}, {})
+    assert errors
+
+
+def test_known_bad_r1b_exam_dup_rejected() -> None:
+    from gate_core import check_r1b_exam_duplicate, diff_patch_fingerprint
+
+    exam_diff = json.loads((REPO / "review-gate-bot/evals/fixtures/hard-planted-nonowner-refresh/diff.json").read_text())
+    fp = diff_patch_fingerprint(exam_diff)
+    errors = check_r1b_exam_duplicate("r1b-dup", exam_diff, {fp})
+    assert errors
+
+
+def test_known_bad_f3_hidden_visible_claim_rejected() -> None:
+    from gate_core import check_f3_visible_claim
+
+    errors = check_f3_visible_claim(
+        "r1b-f3-04",
+        {"title": "perf: linear merge of validity rows"},
+        {"files": [{"patch": "@@\n+def merged_netuids():\n+    return []\n"}]},
+        {"behavior": {"visibleClaim": "O(1) constant-time merge"}},
+    )
+    assert errors
+
+
+def test_known_bad_r1b_gate_extra_keys_rejected() -> None:
+    from gate_core import check_fixture_snapshot_keys
+
+    gate = {
+        "headSha": "a" * 40,
+        "mc": "missing",
+        "cursor": "missing",
+        "ditto": "missing",
+        "replit": "missing",
+        "suite": "missing",
+        "replitTagged": False,
+        "next": "review",
+        "prBody": "hidden claim",
+    }
+    pr = {
+        "number": 1,
+        "headSha": "a" * 40,
+        "baseSha": "b" * 40,
+        "draft": False,
+        "title": "t",
+        "files": [],
+        "url": "u",
+    }
+    errors = check_fixture_snapshot_keys("r1b-f3-01", pr, gate)
+    assert errors
 
 
 @pytest.mark.parametrize("rev,path,label", KNOWN_BAD)

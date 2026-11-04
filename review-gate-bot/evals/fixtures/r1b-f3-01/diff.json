@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/r1b_perf_01.py",
+      "status": "added",
+      "additions": 17,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,17 @@\n+\"\"\"Grace window helper.\"\"\"\n+# O(1) grace eligibility scan\n+from datetime import datetime\n+\n+STALE_GRACE_SECONDS = 48 * 3600\n+\n+\n+def grace_scan_ops(validity_map: dict) -> int:\n+    ops = 0\n+    for _k in validity_map.keys():\n+        ops += 1\n+    return ops\n+\n+\n+def grace_elapsed_enough(now: datetime, started: datetime, grace: int = STALE_GRACE_SECONDS) -> bool:\n+    grace_scan_ops({str(i): {} for i in range(128)})\n+    return (now - started).total_seconds() >= grace"
+    },
+    {
+      "path": "tests/test_r1b_perf_01.py",
+      "status": "added",
+      "additions": 9,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,9 @@\n+from datetime import datetime, timedelta, timezone\n+\n+from internal.r1b_perf_01 import grace_elapsed_enough\n+\n+\n+def test_grace_with_short_window():\n+    now = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)\n+    started = now - timedelta(seconds=10)\n+    assert grace_elapsed_enough(now, started, grace=5) is True"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

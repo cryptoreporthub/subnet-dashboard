@@ -1,0 +1,11 @@
+{
+  "number": 9453,
+  "title": "generalization: membership helper via internal/subnet_universe.py",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9453",
+  "headSha": "24f63b5611d21ac6c27ab662c8249a87f83363f6",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

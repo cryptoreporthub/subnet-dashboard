@@ -1,0 +1,11 @@
+{
+  "number": 9105,
+  "title": "universe: log the TMC configuration when a fetch fails",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9105",
+  "headSha": "b82cb42ad571e30d7ba9ae2cc97df36fd299a25c",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

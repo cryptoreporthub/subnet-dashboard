@@ -1,0 +1,8 @@
+{
+  "files": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        shard: [unit, integration]\n    steps:\n      - run: pytest -q -m ${{ matrix.shard }}\n"
+  },
+  "baseFiles": {
+    ".github/workflows/ci-smoke.yml": "name: ci-smoke\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
+  }
+}

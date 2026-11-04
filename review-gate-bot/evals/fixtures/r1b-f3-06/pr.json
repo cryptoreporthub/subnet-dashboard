@@ -1,0 +1,12 @@
+{
+  "number": 9418,
+  "title": "perf: constant-time cap check before publishing",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9418",
+  "headSha": "fa309e6be3cd6b96b564034999a0dc9158fe867e",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_perf_06.py",
+    "tests/test_r1b_perf_06.py"
+  ]
+}

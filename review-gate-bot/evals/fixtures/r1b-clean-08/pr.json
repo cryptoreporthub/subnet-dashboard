@@ -1,0 +1,11 @@
+{
+  "number": 9435,
+  "title": "tests: pin root non-removal under long negative evidence",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9435",
+  "headSha": "5ca7868e4bfed3795930733f8db8606cb0e407b5",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "tests/test_subnet_universe.py"
+  ]
+}

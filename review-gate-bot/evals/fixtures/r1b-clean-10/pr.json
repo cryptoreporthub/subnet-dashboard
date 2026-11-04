@@ -1,0 +1,11 @@
+{
+  "number": 9437,
+  "title": "subnets: alias is_tradable_row for readability",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9437",
+  "headSha": "8fd23a835bc5b3a72277618a353650a848224d84",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnets/tradable.py"
+  ]
+}

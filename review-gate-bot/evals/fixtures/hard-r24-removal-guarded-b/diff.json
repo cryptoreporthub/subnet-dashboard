@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 2,
+      "patch": "@@ -1,2 +0,0 @@\n-def _legacy_census_ping() -> int:\n-    return 1"
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 24,
+      "patch": "@@ -1,24 +0,0 @@\n-def test_legacy_census_ping():\n-    from internal.subnet_universe import _legacy_census_ping\n-    assert _legacy_census_ping() == 1\n-\n-def test_bulk_placeholder_one():\n-    assert True\n-\n-def test_bulk_placeholder_two():\n-    assert True\n-\n-def test_bulk_placeholder_three():\n-    assert True\n-\n-def test_bulk_placeholder_four():\n-    assert True\n-\n-def test_bulk_placeholder_five():\n-    assert True\n-\n-def test_bulk_placeholder_six():\n-    assert True\n-\n-def test_bulk_placeholder_seven():\n-    assert True"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

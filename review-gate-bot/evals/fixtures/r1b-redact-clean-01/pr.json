@@ -1,0 +1,12 @@
+{
+  "number": 9446,
+  "title": "config: parse max_tokens from env for council batches",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9446",
+  "headSha": "6a597bd39ed744f565328a1bbb759a72ad5aea4e",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/r1b_redact_clean_tokens.py",
+    "tests/test_r1b_redact_clean_tokens.py"
+  ]
+}

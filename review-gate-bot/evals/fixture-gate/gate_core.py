@@ -246,6 +246,139 @@ def validate_oracle_json(oracle_doc: dict) -> list[str]:
     return check_planted_oracle_semantics(oracle_doc)
 
 
+DEFECT_VOICE = re.compile(
+    r"\b(omit|drop|without|ignores|skip|shrink|bypass|disable|relax|untested|claimed)\b",
+    re.I,
+)
+
+
+PR_SNAPSHOT_KEYS = frozenset({"number", "headSha", "baseSha", "draft", "title", "files", "url"})
+GATE_STATE_KEYS = frozenset(
+    {"headSha", "mc", "cursor", "ditto", "replit", "suite", "replitTagged", "next", "suiteDetail"}
+)
+
+
+def check_fixture_snapshot_keys(dirname: str, pr: dict, gate: dict) -> list[str]:
+    """Pack B / eval fixtures must not add keys the production gate tool never returns."""
+    errors: list[str] = []
+    extra_pr = set(pr) - PR_SNAPSHOT_KEYS
+    extra_gate = set(gate) - GATE_STATE_KEYS
+    if extra_pr:
+        errors.append(f"{dirname}: pr.json extra keys {sorted(extra_pr)}")
+    if extra_gate:
+        errors.append(f"{dirname}: gate.json extra keys {sorted(extra_gate)}")
+    return errors
+
+
+def pack_b_control(dirname: str, gate: dict) -> bool:
+    return dirname.startswith("r1b-f3-ctrl-")
+
+
+def pack_b_wired_control(dirname: str) -> bool:
+    return dirname.startswith("r1b-wired-")
+
+
+ORPHAN_R1B_PATH = re.compile(r"^(internal/r1b_[a-z0-9_]+\.py|tests/test_r1b_[a-z0-9_]+\.py)$")
+
+
+def check_r1b_wired_fixture(dirname: str, diff: dict, oracle_doc: dict) -> list[str]:
+    if not pack_b_wired_control(dirname):
+        return []
+    errors: list[str] = []
+    behavior = oracle_doc.get("behavior") or {}
+    if behavior.get("scoringRole") == "report-only":
+        errors.append(f"{dirname}: wired control cannot be report-only")
+    if not behavior.get("wiredImportPath"):
+        errors.append(f"{dirname}: missing behavior.wiredImportPath")
+    for entry in diff.get("files") or []:
+        path = entry.get("path") or ""
+        if ORPHAN_R1B_PATH.match(path):
+            errors.append(f"{dirname}: wired control adds orphan path {path}")
+    return errors
+
+
+def author_voice_text(pr: dict, gate: dict) -> str:
+    return pr.get("title") or ""
+
+
+def check_r1b_author_voice(dirname: str, pr: dict, gate: dict) -> list[str]:
+    if not dirname.startswith("r1b-"):
+        return []
+    if pack_b_control(dirname, gate):
+        return []
+    if DEFECT_VOICE.search(author_voice_text(pr, gate)):
+        return [f"{dirname}: defect-naming token in title (author voice)"]
+    return []
+
+
+def diff_patch_fingerprint(diff: dict) -> str:
+    import hashlib
+
+    parts = [f["patch"] for f in sorted(diff.get("files") or [], key=lambda x: x.get("path", ""))]
+    return hashlib.sha256("\n---\n".join(parts).encode()).hexdigest()
+
+
+def exam_patch_fingerprints(fixtures_root: Path) -> set[str]:
+    fps: set[str] = set()
+    if not fixtures_root.is_dir():
+        return fps
+    for d in fixtures_root.iterdir():
+        if not d.is_dir() or not d.name.startswith("hard-"):
+            continue
+        if d.name.startswith("hard-r24-"):
+            continue
+        diff_path = d / "diff.json"
+        if diff_path.is_file():
+            fps.add(diff_patch_fingerprint(json.loads(diff_path.read_text())))
+    return fps
+
+
+def check_r1b_exam_duplicate(dirname: str, diff: dict, exam_fps: set[str]) -> list[str]:
+    if not dirname.startswith("r1b-"):
+        return []
+    if diff_patch_fingerprint(diff) in exam_fps:
+        return [f"{dirname}: unified diff matches an exam (hard-*) fixture patch"]
+    return []
+
+
+def f3_visible_haystack(pr: dict, diff: dict) -> str:
+    title = pr.get("title") or ""
+    patches = "\n".join((f.get("patch") or "") for f in diff.get("files") or [])
+    return f"{title}\n{patches}"
+
+
+def check_f3_visible_claim(dirname: str, pr: dict, diff: dict, oracle_doc: dict) -> list[str]:
+    if not dirname.startswith("r1b-f3-") or dirname.startswith("r1b-f3-ctrl-"):
+        return []
+    behavior = oracle_doc.get("behavior") or {}
+    claim = behavior.get("visibleClaim")
+    if not claim:
+        return []
+    if claim not in f3_visible_haystack(pr, diff):
+        return [f"{dirname}: visibleClaim not verbatim in PR title or diff"]
+    return []
+
+
+def validate_r1b_fixture_dir(fixture_dir: Path, *, exam_fps: set[str] | None = None) -> list[str]:
+    name = fixture_dir.name
+    if not name.startswith("r1b-"):
+        return []
+    errors: list[str] = []
+    pr = json.loads((fixture_dir / "pr.json").read_text())
+    gate = json.loads((fixture_dir / "gate.json").read_text())
+    diff = json.loads((fixture_dir / "diff.json").read_text())
+    errors.extend(check_fixture_snapshot_keys(name, pr, gate))
+    errors.extend(check_r1b_author_voice(name, pr, gate))
+    fps = exam_fps if exam_fps is not None else exam_patch_fingerprints(fixture_dir.parent)
+    errors.extend(check_r1b_exam_duplicate(name, diff, fps))
+    oracle_path = fixture_dir / "oracle.json"
+    if oracle_path.is_file():
+        oracle_doc = json.loads(oracle_path.read_text())
+        errors.extend(check_f3_visible_claim(name, pr, diff, oracle_doc))
+        errors.extend(check_r1b_wired_fixture(name, diff, oracle_doc))
+    return errors
+
+
 def validate_repo_doc(repo_doc: dict, *, python: str) -> list[str]:
     oracle = (repo_doc.get("oracle") or "MODIFY") if isinstance(repo_doc.get("oracle"), str) else "MODIFY"
     if isinstance(repo_doc.get("gate"), dict):

@@ -1,0 +1,20 @@
+{
+  "fixture": "hard-r24-sharding-missing-shard",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "32eacf072b0545032664e36d3de95e95674588abfce4537969a172d76ef2fec3",
+  "changedPaths": [
+    ".github/workflows/ci-smoke.yml"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "MODIFY",
+    "note": "Matrix runs only shard 1 of 2; half of suite never executes."
+  }
+}

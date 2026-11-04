@@ -1,0 +1,11 @@
+{
+  "number": 9406,
+  "title": "universe: accept LKG files with cleared netuids but intact rows",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9406",
+  "headSha": "c3547ea757c657fc0d34145feb1745b9a51a0773",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py"
+  ]
+}

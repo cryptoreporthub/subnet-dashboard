@@ -1,0 +1,21 @@
+{
+  "fixture": "hard-r24-tests-moved-a",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "diffSha256": "8622e18ed367bcd25ed197a39f1b7b18cc52ba8f224f06d5d2b329e181545f84",
+  "changedPaths": [
+    "tests/test_subnet_sanity_checks.py",
+    "tests/test_subnet_sanity.py"
+  ],
+  "pytest": {
+    "summary": "56 passed",
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "failingTests": []
+  },
+  "behavior": {
+    "expectedVerdict": "PASS",
+    "note": "Tests renamed/moved; assertion bodies unchanged; count preserved."
+  }
+}

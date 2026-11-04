@@ -1,0 +1,12 @@
+{
+  "number": 9409,
+  "title": "universe: reuse snapshot_coverage key shape for membership export",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9409",
+  "headSha": "3a543a09ff0a1d85e96578ad956e77cfd2a83319",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "internal/council/snapshot_coverage.py"
+  ]
+}

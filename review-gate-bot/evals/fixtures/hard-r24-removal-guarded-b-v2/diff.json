@@ -1,0 +1,28 @@
+{
+  "totalFiles": 3,
+  "files": [
+    {
+      "path": "internal/r24_census_helper.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 6,
+      "patch": "@@ -1,6 +0,0 @@\n-\"\"\"Small helper used only by its unit tests (removed with them).\"\"\"\n-from __future__ import annotations\n-\n-\n-def combine_netuid_labels(a: int, b: int) -> str:\n-    return f\"{a}:{b}\""
+    },
+    {
+      "path": "tests/test_r24_census_helper.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 13,
+      "patch": "@@ -1,13 +0,0 @@\n-from internal.r24_census_helper import combine_netuid_labels\n-\n-\n-def test_combine_labels_formats_pair():\n-    assert combine_netuid_labels(3, 7) == \"3:7\"\n-\n-\n-from internal.r24_census_helper import combine_netuid_labels\n-\n-\n-def test_combine_labels_is_stable_under_reorder_inputs():\n-    assert combine_netuid_labels(1, 9) == \"1:9\"\n-    assert combine_netuid_labels(9, 1) == \"9:1\""
+    },
+    {
+      "path": "tests/test_subnet_universe_misc.py",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 15,
+      "patch": "@@ -1,15 +0,0 @@\n-from internal.subnet_universe import STALE_GRACE_SECONDS\n-\n-\n-def test_grace_seconds_is_positive():\n-    assert STALE_GRACE_SECONDS > 0\n-\n-\n-def test_refresh_interval_is_five_minutes():\n-    from internal.subnet_universe import REFRESH_INTERVAL_SECONDS\n-    assert REFRESH_INTERVAL_SECONDS == 300\n-\n-\n-def test_persist_version_is_one():\n-    from internal.subnet_universe import PERSIST_VERSION\n-    assert PERSIST_VERSION == 1"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}
