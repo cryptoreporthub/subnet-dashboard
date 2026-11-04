@@ -163,3 +163,36 @@ def test_revoked_cycle_applies_no_later_learning_write(harness, monkeypatch, rev
     after_revoke = [w["name"] for w in writes if w["revoked"]]
     print(f"\n[WRITES] revoke_at={revoke_at} calls={writes}")
     assert after_revoke == []
+
+
+def test_abandon_cannot_revoke_between_impact_check_and_write(harness, monkeypatch):
+    """The impact check and its write sit under the release guard, so an abandon waits for both."""
+    import threading
+
+    sched = resolver_scheduler.PredictionResolverScheduler()
+    sched._persist_owner_gen = 1
+    timing = resolver_scheduler._CycleTiming()
+    timing.set_owner_gen(1, sched)
+    token = resolver_scheduler._cycle_timing.set(timing)
+    abandon_thread = None
+    seen: Dict[str, Any] = {}
+
+    def impact_while_abandon_races(correct, tier=None, **_kwargs):
+        nonlocal abandon_thread
+        if "abandon_blocked" not in seen:
+            abandon_thread = threading.Thread(target=sched._abandon_inflight_cycle)
+            abandon_thread.start()
+            abandon_thread.join(0.2)
+            seen["abandon_blocked"] = abandon_thread.is_alive()
+            seen["owner_gen"] = sched._persist_owner_gen
+        return 0.5
+
+    monkeypatch.setattr(resolver, "nudge_impact_strength", impact_while_abandon_races)
+    try:
+        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+    finally:
+        resolver_scheduler._cycle_timing.reset(token)
+    abandon_thread.join(5)
+
+    assert seen == {"abandon_blocked": True, "owner_gen": 1}
+    assert sched._persist_owner_gen is None
