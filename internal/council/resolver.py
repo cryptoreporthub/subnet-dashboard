@@ -303,10 +303,23 @@ def _save_json(
         caller=caller,
     )
     try:
+        from internal.council.resolver_scheduler import cycle_writes_revoked
         from internal.file_utils import safe_write_json
         from internal.learning.predictions_store import locked_predictions_file
 
         with locked_predictions_file():
+            # A cycle abandoned by timeout or revive must not overwrite newer state.
+            # Residual window: abandon does not take the predictions lock, so an
+            # abandon between this check and the write is not covered.
+            if cycle_writes_revoked():
+                log_mutation(
+                    operation="skipped_abandoned",
+                    path=path,
+                    writer_function="resolver._save_json",
+                    trigger=reason,
+                    caller=caller,
+                )
+                return
             safe_write_json(path, data)
         log_mutation(
             operation="completed",

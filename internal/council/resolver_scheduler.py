@@ -195,6 +195,9 @@ class _CycleTiming:
         self._closing_stamp: Optional[float] = None
         # Phase 3: cycle generation that owns persist writes for this timing.
         self._owner_gen: Optional[int] = None
+        # Scheduler instance that issued _owner_gen. Generations restart per instance,
+        # so revocation must be read from the issuing instance, not the module global.
+        self._owner_sched: Optional["PredictionResolverScheduler"] = None
         # Dark-region sub-timers inside persist_partial (ms).
         self._persist_apply_ms: float = 0.0
         self._persist_rmw_ms: float = 0.0
@@ -262,13 +265,28 @@ class _CycleTiming:
         with self._lock:
             return self._abandoned
 
-    def set_owner_gen(self, gen: Optional[int]) -> None:
+    def set_owner_gen(
+        self, gen: Optional[int], sched: Optional["PredictionResolverScheduler"] = None
+    ) -> None:
         with self._lock:
             self._owner_gen = gen
+            self._owner_sched = sched
 
     def owner_gen(self) -> Optional[int]:
         with self._lock:
             return self._owner_gen
+
+    def writes_revoked(self) -> bool:
+        """True once the issuing scheduler has revoked this cycle's persist ownership.
+
+        Abandon (timeout or revive) clears ``_persist_owner_gen`` on the issuing
+        instance, so orphan threads see a mismatch here.
+        """
+        with self._lock:
+            sched, gen = self._owner_sched, self._owner_gen
+        if sched is None or gen is None:
+            return False
+        return sched._persist_owner_gen != gen
 
     def record_persist_subtimer(self, name: str, duration_ms: float) -> None:
         with self._lock:
@@ -405,6 +423,12 @@ class _CycleTiming:
 _cycle_timing: ContextVar[Optional[_CycleTiming]] = ContextVar(
     "resolver_cycle_timing", default=None
 )
+
+
+def cycle_writes_revoked() -> bool:
+    """True when the cycle bound to this thread has lost its persist ownership."""
+    timing = _cycle_timing.get()
+    return timing is not None and timing.writes_revoked()
 
 
 class PredictionResolverScheduler:
@@ -840,7 +864,7 @@ class PredictionResolverScheduler:
                 self._lock_owner_gen = gen
             cycle_id = make_resolver_cycle_id(gen, run_at)
             timing = _CycleTiming(abandoned_live)
-            timing.set_owner_gen(gen)
+            timing.set_owner_gen(gen, self)
             token = _cycle_timing.set(timing)
             ctx_token = bind_patchd_context(
                 cycle_generation=gen,
@@ -867,7 +891,7 @@ class PredictionResolverScheduler:
         cycle_id = make_resolver_cycle_id(gen, run_at)
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
         timing = _CycleTiming(abandoned_live)
-        timing.set_owner_gen(gen)
+        timing.set_owner_gen(gen, self)
 
         def _run_cycle() -> Dict[str, Any]:
             ctx_token = bind_patchd_context(
