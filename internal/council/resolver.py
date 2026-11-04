@@ -1155,6 +1155,8 @@ def resolve_prediction_at_horizon(
     # Impact dial before finalize so prediction_resolved trail includes after value.
     if not _skip_council_learning(prediction):
         _nudge_impact_strength(prediction, bool(correct))
+        if _cycle_writes_revoked_safe():
+            return prediction
     atomic_finalize_resolution(
         prediction,
         actual_pct=actual_pct,
