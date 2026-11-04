@@ -123,6 +123,12 @@ For current **`pick_day = pick_day_str()`**:
 
 **Process model:** Inline worker on same VM — `scripts/fly_web_entrypoint.sh:3-5`, worker `:92-94`; fence runs in **worker** where resolver + pick schedulers live.
 
+### 5.1 Atomic token check + write (same lock as revocation)
+
+**Rule:** **`revoke_daily_pick_write_token()`**, **`daily_pick_write_token_allowed()`**, and **every disk write** in the table above acquire **`daily_pick_write_token_lock`** first. Token state must not be read or mutated outside that lock. **Check and write are one critical section** — no `if allowed()` outside the lock with `write()` after release.
+
+**Tests (§7):** `Fence timeout` row; add **`tests/test_daily_pick_write_token.py`** — revoke under lock; for each of **`resolver.py:1323`**, **`resolver_scheduler.py:1219`**, **`1034`**, simulate concurrent write → **`daily_pick_write_token_allowed()` false** → no file mutation.
+
 ---
 
 ## 6. Call sites → `pick_day_str()` + §3 reader
@@ -167,6 +173,7 @@ For current **`pick_day = pick_day_str()`**:
 | Cold boot | Creation closed → next slot, not 45s persist (`pick_scheduler`) |
 | Read-only paths | No `select_daily_pick` before slot (homepage / story_path pattern) |
 | Contract | `tests/test_endpoint_contract.py` unchanged |
+| Token lock atomic | **`tests/test_daily_pick_write_token.py`** — §5.1; revoke + per-site no-op @ listed file:line |
 
 **Standing gate:** do not bump `DAILY_PICK_TICK_TIMEOUT_SECONDS` or unmute `LOOP_STALL_GUARD_KILL`.
 
