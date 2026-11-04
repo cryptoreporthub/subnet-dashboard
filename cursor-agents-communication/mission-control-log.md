@@ -338,3 +338,10 @@
 - **Ditto:** [run `97db989c`](https://developer.heyditto.ai/review/runs/97db989c-d5bb-441b-8a95-c274f9ded470) @ `b3b00eb` — **pass**, no new comments (prior 8+9 addressed in code).
 - **Still open:** Replit (last MODIFY `78c3d790`), Claude adversarial @ head, Cursor Auto-Review **MODIFY** (PR title/body still plan-only / 13:05 vs code **19:00/19:05 UTC** Phase B — intentional per Joshua; body refresh pending).
 - **Slot:** rollover **19:00 UTC**, creation **19:05 UTC** (12:05 PM Arizona); tests/docs goal line aligned.
+
+## 2026-11-04 — PR #1561 doc + panel fix (Joshua: refresh PR, Replit, gates)
+
+- **PR title/body** refreshed — implementation @ **19:05 UTC**, DO NOT MERGE.
+- **Code/doc:** plan §3/§7/§8 → **19:00/19:05**; `summarize_picks` → `get_today_only_daily_pick`; repro test added.
+- **@claude** implementation ask posted @ `b53da884`; **@Replit** re-review comment posted @ new head after push.
+- **Gates:** morning **213×2**; **`comm-23`** re-run post-push.
