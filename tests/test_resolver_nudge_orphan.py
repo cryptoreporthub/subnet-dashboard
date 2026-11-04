@@ -153,6 +153,7 @@ def test_revoked_cycle_applies_no_later_learning_write(harness, monkeypatch, rev
     monkeypatch.setattr(resolver, "nudge_impact_strength", recorder("impact"))
     monkeypatch.setattr(resolver, "_record_scenario_outcome", recorder("scenario"))
     monkeypatch.setattr(resolver, "_nudge_signal_weights", recorder("signal"))
+    monkeypatch.setattr(resolver, "atomic_finalize_resolution", recorder("finalize"))
     try:
         resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
     finally:
