@@ -512,11 +512,15 @@ def test_fly_v2_cutover_gate_script_exists():
     assert "ROLLBACK" in script or "rollback" in script
 
 
+# memory fix 2 (#1538): web launch carries the WEB_MALLOC_ARENA_MAX opt-in prefix.
+_WEB_EXEC_LINE = "exec env ${WEB_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WEB_MALLOC_ARENA_MAX}} python scripts/run_web_with_guard.py"
+
+
 def _run_web_entrypoint_skip_only(env: dict[str, str]) -> str:
     """Run only _start_inline_worker from fly_web_entrypoint.sh (no supervise/uvicorn)."""
     src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
     # Drop supervise (infinite loop when ENABLE=1) and uvicorn exec.
-    marker = "_supervise_inline_worker\nexec python scripts/run_web_with_guard.py"
+    marker = "_supervise_inline_worker\n" + _WEB_EXEC_LINE
     assert marker in src, "entrypoint tail changed — update this test"
     stub = src.replace(
         marker,
@@ -551,8 +555,9 @@ def test_web_entrypoint_logs_skip_under_v2_enable_inline_off():
 def test_web_entrypoint_supervise_logs_skip_under_v2_enable_inline_off():
     """Full entrypoint path: _supervise_inline_worker must log skip for v2 gate."""
     src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    assert _WEB_EXEC_LINE in src, "entrypoint tail changed — update this test"
     stub = src.replace(
-        "exec python scripts/run_web_with_guard.py",
+        _WEB_EXEC_LINE,
         "exit 0\n",
     )
     merged = dict(os.environ)

@@ -110,13 +110,15 @@ def test_worker_entrypoints_arena_cap_is_opt_in_web_never_capped():
     toggle = 'WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX-2}"'  # the single default-ON toggle line (capture 2)
     for text in (web, (ROOT / "scripts/fly_worker_entrypoint.sh").read_text()):
         assert text.count(toggle) == 1
-    guard = [ln for ln in web.splitlines() if ln.startswith("case ") and "MALLOC_ARENA_MAX" in ln]
+    guard = [ln for ln in web.splitlines() if ln.startswith("case ") and "WORKER_MALLOC_ARENA_MAX" in ln]
     assert len(guard) == 1 and "*[!0-9]*)" in guard[0]
-    assert [ln for ln in web.splitlines() if "MALLOC_ARENA_MAX" in ln and not ln.startswith("#")] == [
+    # memory fix 2 adds a separate WEB_ knob (see test_memory_fix2_web_arena.py); worker lines unchanged.
+    assert [ln for ln in web.splitlines() if "WORKER_MALLOC_ARENA_MAX" in ln and not ln.startswith("#")] == [
         toggle,
         guard[0],
         worker_line,
     ]
+    assert "WEB_MALLOC_ARENA_MAX" not in worker_line
     assert "MALLOC_ARENA_MAX" not in (ROOT / "fly.toml").read_text()
 
 
@@ -278,7 +280,7 @@ def _run_entrypoint_prefix(script: str, override):
     import subprocess
 
     lines = (ROOT / script).read_text().splitlines()
-    head = [ln for ln in lines if ln.startswith("WORKER_MALLOC_ARENA_MAX=") or (ln.startswith("case ") and "MALLOC_ARENA_MAX" in ln)]
+    head = [ln for ln in lines if ln.startswith("WORKER_MALLOC_ARENA_MAX=") or (ln.startswith("case ") and "WORKER_MALLOC_ARENA_MAX" in ln)]
     assert len(head) == 2
     optin = "${WORKER_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WORKER_MALLOC_ARENA_MAX}}"
     prog = "set -eu\n" + "\n".join(head) + f"\nenv -u MALLOC_ARENA_MAX {optin} sh -c 'echo ${{MALLOC_ARENA_MAX:-unset}}'\n"
