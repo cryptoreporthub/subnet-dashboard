@@ -44,14 +44,24 @@ class MindmapBridge:
         dir_name = os.path.dirname(self.persistence_path)
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
+
+        def _apply(blob: Dict[str, Any]) -> None:
+            # Union the persisted resolved-id ledger with this bridge's copy, so a stale
+            # snapshot cannot drop an id another bridge recorded (replay guard).
+            current = blob.get("soul_map_state")
+            current_ledger = current.get("resolved_prediction_ids") if isinstance(current, dict) else None
+            own_ledger = self.soul_map_state.get("resolved_prediction_ids")
+            if isinstance(current_ledger, list) or isinstance(own_ledger, list):
+                merged: list = list(current_ledger) if isinstance(current_ledger, list) else []
+                for prediction_id in own_ledger if isinstance(own_ledger, list) else []:
+                    if prediction_id not in merged:
+                        merged.append(prediction_id)
+                self.soul_map_state["resolved_prediction_ids"] = merged
+            blob["soul_map_state"] = self.soul_map_state
+            blob["feedback_logs"] = self.feedback_logs
+
         try:
-            write_soul_map(
-                lambda blob: (
-                    blob.__setitem__("soul_map_state", self.soul_map_state),
-                    blob.__setitem__("feedback_logs", self.feedback_logs),
-                ),
-                self.persistence_path,
-            )
+            write_soul_map(_apply, self.persistence_path)
         except Exception:
             pass
 

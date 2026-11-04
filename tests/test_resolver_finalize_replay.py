@@ -176,3 +176,28 @@ def test_concurrent_bridges_keep_both_resolved_ids_and_trail_rows(tmp_path, monk
     state = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
     assert set(state["resolved_prediction_ids"]) == {"p-a", "p-b"}
     assert {e["evidence"]["prediction_id"] for e in state["learning_trail"]} == {"p-a", "p-b"}
+
+
+def test_stale_bridge_save_keeps_resolved_id_recorded_by_another_bridge(tmp_path, monkeypatch):
+    """A bridge loaded before another bridge's resolution must not drop that id on its next save.
+
+    The stale bridge only knows its own snapshot, so its whole-state save must union the
+    persisted ledger rather than overwrite it.
+    """
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    monkeypatch.setattr(soul_map_io, "_CACHE_TTL", 0)
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    stale = MindmapBridge(persistence_path=str(soul_path))
+    resolver_bridge = MindmapBridge(persistence_path=str(soul_path))
+
+    resolver_bridge.append_learning_trail(
+        {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-a"}},
+        resolved_prediction_id="p-a",
+    )
+    stale.update_soul_map({"decisions": []})
+
+    state = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
+    assert "p-a" in state["resolved_prediction_ids"]
