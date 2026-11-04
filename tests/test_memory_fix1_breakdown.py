@@ -101,7 +101,7 @@ def test_trim_non_glibc_is_guarded(caplog, monkeypatch):
 def test_worker_entrypoints_arena_cap_is_opt_in_web_never_capped():
     """MALLOC_ARENA_MAX reaches the worker only via WORKER_MALLOC_ARENA_MAX (default 2 for capture 2; empty/non-numeric = off)."""
     web = (ROOT / "scripts/fly_web_entrypoint.sh").read_text()
-    worker_line = next(ln for ln in web.splitlines() if "env RUN_MODE=worker" in ln)
+    worker_line = next(ln for ln in web.splitlines() if "RUN_MODE=worker" in ln and "setsid" in ln)
     optin = "${WORKER_MALLOC_ARENA_MAX:+MALLOC_ARENA_MAX=${WORKER_MALLOC_ARENA_MAX}}"
     assert optin in worker_line
     assert ":-2" not in worker_line
@@ -111,14 +111,14 @@ def test_worker_entrypoints_arena_cap_is_opt_in_web_never_capped():
     for text in (web, (ROOT / "scripts/fly_worker_entrypoint.sh").read_text()):
         assert text.count(toggle) == 1
     guard = [ln for ln in web.splitlines() if ln.startswith("case ") and "WORKER_MALLOC_ARENA_MAX" in ln]
-    assert len(guard) == 1 and "*[!0-9]*)" in guard[0]
+    assert len(guard) == 1 and "*[!0-9]*|0*)" in guard[0]
     # memory fix 2 adds a separate WEB_ knob (see test_memory_fix2_web_arena.py); worker lines unchanged.
     assert [ln for ln in web.splitlines() if "WORKER_MALLOC_ARENA_MAX" in ln and not ln.startswith("#")] == [
         toggle,
         guard[0],
         worker_line,
     ]
-    assert "WEB_MALLOC_ARENA_MAX" not in worker_line
+    assert "WEB_MALLOC_ARENA_MAX=" not in worker_line and "-u WEB_MALLOC_ARENA_MAX" in worker_line
     assert "MALLOC_ARENA_MAX" not in (ROOT / "fly.toml").read_text()
 
 
@@ -297,3 +297,6 @@ def test_arena_cap_default_on_and_validated(script):
     assert _run_entrypoint_prefix(script, "") == "unset"  # explicit empty turns it off
     assert _run_entrypoint_prefix(script, "2 FOO=bar") == "unset"  # non-numeric ignored, no arg injection
     assert _run_entrypoint_prefix(script, "abc") == "unset"
+    for bad in ("0", "00", "002", "-1"):  # memory fix 2: 0 means unlimited in glibc; leading zeros rejected
+        assert _run_entrypoint_prefix(script, bad) == "unset", bad
+    assert _run_entrypoint_prefix(script, "10") == "10"

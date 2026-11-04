@@ -5,7 +5,8 @@ set -eu
 
 # ARENA-CAP TOGGLE (memory fix 1, #1538): default ON (=2) for capture 2. Change -2 to - to turn the default off. Env override wins (set it EMPTY to turn the cap off without a code change); non-numeric values are ignored.
 WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX-2}"
-case "$WORKER_MALLOC_ARENA_MAX" in *[!0-9]*) echo "ignoring non-numeric WORKER_MALLOC_ARENA_MAX" >&2; WORKER_MALLOC_ARENA_MAX="" ;; esac
+# Validation MUST run before the ${VAR:+MALLOC_ARENA_MAX=$VAR} expansion below: the expansion is unquoted, so an unvalidated value would word-split into extra env args.
+case "$WORKER_MALLOC_ARENA_MAX" in "") ;; *[!0-9]*|0*) echo "ignoring invalid WORKER_MALLOC_ARENA_MAX (need 1-9 then digits)" >&2; WORKER_MALLOC_ARENA_MAX="" ;; esac
 DEDICATED_BOOT_IMMEDIATE="${LIVE_SUBNETS_BOOT_IMMEDIATE:-off}"
 
 PORT="${WORKER_HTTP_PORT:-8081}"
