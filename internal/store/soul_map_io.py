@@ -93,6 +93,18 @@ def _file_and_reader_locks(path: str) -> Iterator[None]:
         time.sleep(_READER_LOCK_WAIT_SECONDS)
 
 
+def _read_blob_for_write(path: str) -> Dict[str, Any]:
+    """Read the blob a write is about to replace. Only a missing file counts as empty."""
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError("soul map top level is not a JSON object")
+    return data
+
+
 def _read_blob(path: str) -> Dict[str, Any]:
     try:
         with open(path, "r") as f:
@@ -152,24 +164,51 @@ def write_soul_map(
     mutator: Callable[[Dict[str, Any]], None],
     path: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """Thread-safe read-modify-write. Returns the blob that write_soul_map_committed reports."""
+    return write_soul_map_committed(mutator, path)[1]
+
+
+def write_soul_map_committed(
+    mutator: Callable[[Dict[str, Any]], None],
+    path: Optional[str] = None,
+) -> Tuple[bool, Dict[str, Any]]:
     """Thread-safe read-modify-write under a per-path lock.
 
     Resolves path=None to weights.SOUL_MAP_PATH (lazy import).
     Acquires a lock for this path, reads current blob ({} if missing/bad),
     calls mutator(blob) which mutates the dict in place, then atomically
     writes it back. Exceptions from mutator propagate. Never raises from I/O.
-    On a disk-write failure, logs a warning and returns the pre-mutation blob
-    without updating the cache. Successful writes immediately refresh the
-    in-process cache, so a write followed by a read in the same process
-    always sees the new data.
+    Returns (committed, blob):
+      - (True, committed blob) when the write reached disk. The blob includes every
+        writer's changes, so a caller can sync its memory to it.
+      - (False, pre-mutation blob) when the disk write failed.
+      - (False, {}) when the existing file could not be read; the file is left unchanged.
+    On a disk-write failure, logs a warning without updating the cache. Successful writes
+    immediately refresh the in-process cache, so a write followed by a read in the same
+    process always sees the new data.
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved + ".writers"):
         with _file_and_reader_locks(resolved):
-            now = time.monotonic()
-            cached = _cache_get_fresh(resolved, now)
-            # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
-            blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
+            # Read disk, never the cache: another process may have written the file since
+            # this process cached it. The file lock is held, so this read-modify-write is safe.
+            try:
+                blob = _read_blob_for_write(resolved)
+            except Exception as exc:
+                # Replacing a file we could not read would destroy its contents. Leave it as is.
+                logger.warning(
+                    "soul_map read failed before write path=%s error_type=%s error=%s",
+                    resolved,
+                    type(exc).__name__,
+                    exc,
+                    extra={
+                        "event": "soul_map_persistence_failed",
+                        "path": resolved,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                return False, {}
             prior = copy.deepcopy(blob)
             mutator(blob)
             temp_path = ""
@@ -181,7 +220,6 @@ def write_soul_map(
                 with os.fdopen(fd, "w") as f:
                     json.dump(blob, f, indent=2)
                 os.replace(temp_path, resolved)
-                _cache_put(resolved, blob, time.monotonic())
                 temp_path = ""
             except Exception as exc:
                 logger.warning(
@@ -196,11 +234,23 @@ def write_soul_map(
                         "error": str(exc),
                     },
                 )
-                return prior
+                return False, prior
             finally:
                 if temp_path and os.path.exists(temp_path):
                     try:
                         os.unlink(temp_path)
                     except Exception:
                         pass
-            return blob
+            # The disk write has landed. A cache failure here must not report the write as failed,
+            # so drop the cache entry and let the next read reload from disk.
+            try:
+                _cache_put(resolved, blob, time.monotonic())
+            except Exception as exc:
+                _cache.pop(resolved, None)
+                logger.warning(
+                    "soul_map cache refresh failed after commit path=%s error_type=%s error=%s",
+                    resolved,
+                    type(exc).__name__,
+                    exc,
+                )
+            return True, blob
