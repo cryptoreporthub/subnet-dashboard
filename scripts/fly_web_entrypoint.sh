@@ -5,6 +5,8 @@
 # sibling OS process, not a second machine.
 set -eu
 
+# ARENA-CAP TOGGLE (memory fix 1, #1538): default OFF. For capture 2 flip to :-2 (one line). Env override still wins.
+WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX:-}"
 INLINE_WORKER_PIDFILE="${INLINE_WORKER_PIDFILE:-/tmp/inline_worker.pid}"
 INLINE_WORKER_STOP_GRACE_SECONDS="${INLINE_WORKER_STOP_GRACE_SECONDS:-15}"
 INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS="${INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS:-90}"

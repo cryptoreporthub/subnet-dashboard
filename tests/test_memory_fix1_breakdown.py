@@ -107,7 +107,13 @@ def test_worker_entrypoints_arena_cap_is_opt_in_web_never_capped():
     assert ":-2" not in worker_line
     assert optin in (ROOT / "scripts/fly_worker_entrypoint.sh").read_text()
     # the web uvicorn process is not capped: only the worker launch line mentions it
-    assert [ln for ln in web.splitlines() if "MALLOC_ARENA_MAX" in ln] == [worker_line]
+    toggle = 'WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX:-}"'  # the single default-off toggle line
+    for text in (web, (ROOT / "scripts/fly_worker_entrypoint.sh").read_text()):
+        assert text.count(toggle) == 1
+    assert [ln for ln in web.splitlines() if "MALLOC_ARENA_MAX" in ln and not ln.startswith("#")] == [
+        toggle,
+        worker_line,
+    ]
     assert "MALLOC_ARENA_MAX" not in (ROOT / "fly.toml").read_text()
 
 

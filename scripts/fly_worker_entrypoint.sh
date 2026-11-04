@@ -3,6 +3,8 @@
 # ponytail: single uvicorn process; lifespan starts background workers + live_subnets sync.
 set -eu
 
+# ARENA-CAP TOGGLE (memory fix 1, #1538): default OFF. For capture 2 flip to :-2 (one line). Env override still wins.
+WORKER_MALLOC_ARENA_MAX="${WORKER_MALLOC_ARENA_MAX:-}"
 DEDICATED_BOOT_IMMEDIATE="${LIVE_SUBNETS_BOOT_IMMEDIATE:-off}"
 
 PORT="${WORKER_HTTP_PORT:-8081}"
