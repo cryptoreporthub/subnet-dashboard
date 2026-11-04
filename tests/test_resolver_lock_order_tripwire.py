@@ -48,6 +48,9 @@ class _OrderTripwire:
     def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
         if self._sched._release_guard._is_owned():
             self._violations.append(self._name)
+            # Refuse instead of blocking: a blocking acquire here is the deadlock this test exists to catch,
+            # and a worker stuck on it cannot be stopped after the test fails.
+            raise RuntimeError(f"{self._name} acquired while the release guard is held")
         return self._inner.acquire(blocking, timeout)
 
     def release(self) -> None:
@@ -173,8 +176,9 @@ def test_tripwire_flags_scheduler_lock_acquired_under_release_guard():
     wrapped = _OrderTripwire("_scheduler_lock", resolver_scheduler._scheduler_lock, sched, violations)
 
     with sched._release_guard:
-        with wrapped:
-            pass
+        with pytest.raises(RuntimeError):
+            with wrapped:
+                pass
 
     assert violations == ["_scheduler_lock"]
 
