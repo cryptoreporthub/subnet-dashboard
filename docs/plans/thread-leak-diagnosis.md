@@ -11,13 +11,13 @@
 
 Production captures show the **worker** holding ~21–26 threads at boot and ~**22–24 steady** (flat in recent operator windows), while **web** reports ~8 threads at boot. `MALLOC_ARENA_MAX=2` cut worker RSS (~500 → ~285 MiB) by shrinking glibc arenas; **that does not prove or disprove thread accumulation from abandon paths.**
 
-**Hypothesis (unproven in prod):** the main growth mechanism is **not** forgotten daemon tick threads (those are bounded and named) but **ephemeral `ThreadPoolExecutor` instances** per resolver cycle, daily-pick tick, desk snapshot, etc., plus **`future.result(timeout=…)` + `pool.shutdown(wait=False, cancel_futures=True)`**. That pattern returns on timeout without joining the worker; `cancel_futures` only drops **queued** work, not a thread already running Python. **Ordinary scheduled retries on the same scheduler instance do not overlap** a prior abandon — resolver and daily pick refuse a new submit while `_inflight_future` is unfinished (`resolver_scheduler.py:806–811`, `pick_scheduler.py:359–362`). **Overlap (second concurrent pool worker)** arises mainly from **revive / recycle (#1552)** — new scheduler generation or replacement while the prior cycle’s orphan still runs — plus desk snapshot’s separate lock semantics and score-snapshot global write overlap.
+**Hypothesis (unproven in prod):** the main growth mechanism is **not** forgotten daemon tick threads (those are bounded and named) but **ephemeral `ThreadPoolExecutor` instances** per resolver cycle, daily-pick tick, desk snapshot, etc., plus **`future.result(timeout=…)` + `pool.shutdown(wait=False, cancel_futures=True)`**. That pattern returns on timeout without joining the worker; `cancel_futures` only drops **queued** work, not a thread already running Python. **Ordinary scheduled retries on the same scheduler instance do not overlap** a prior abandon — resolver and daily pick refuse a new submit while `_inflight_future` is unfinished (`resolver_scheduler.py:806–811`, `pick_scheduler.py:359–362`). **Overlap (second concurrent pool worker)** arises mainly from **revive / recycle (#1552)** — new scheduler generation or replacement while the prior cycle’s orphan still runs — plus **score-snapshot global write** overlap. Desk snapshot abandons hold **`_cycle_lock`** until the orphan’s worker `finally`; the next tick **skips** rather than starting a second pool worker on the same scheduler.
 
 **Proof / disproof (two legs — no “quiet days” gate):**
 
 1. **Deliberate staging episode** (same calendar day as morning-pick observability — does **not** delay or replace prod morning pick): on a **staging worker only**, force short cycle budgets (e.g. `RESOLVER_CYCLE_TIMEOUT_SECONDS=1`, desk/pick timeouts similarly tight) and run a bounded burst of resolver + pick + desk ticks. **Judge:** compare **`submitted`**, **`abandoned`**, and **`orphan_completed`** counters plus **`oldest_live_orphan_age_seconds`** peaks from the sampler. Accumulation ⇒ **`live`** or oldest age **trends up** while completions lag abandons; drain-only ⇒ abandons spike but **`live` returns to 0** and oldest age **falls** after the burst. This answers the Ditto “is abandon accumulating?” baseline **without** waiting for passive prod quiet time.
 
-2. **Multi-day prod trend** (not a single-sample threshold): over **≥3 production days** with normal scheduling, **`max(live)`** and **named heavy-prefix peaks** (`resolver-cycle-work`, etc.) must show a **non-decreasing trend** (or sustained **`live ≥ 2`** with rising oldest age) to support the hypothesis. A **transient** `live=2` or one spike **does not** prove growth. Flat bands ⇒ hypothesis **disproven** for threads (RSS remains separate).
+2. **Multi-day prod trend** (sampler **30s** resolution — not every transient blip): over **≥3 production days**, **`max(live)`** and **named heavy-prefix peaks** from the sampler must show a **rising trend** (or sustained **`live ≥ 2`** with **rising oldest age**) to **support** accumulation. A flat **`max(live)`** band means **no detected accumulation** at sampler cadence — **not** a proof that zero orphans ever existed between samples. RSS remains separate.
 
 **First approved step:** **logging only** — no scheduler/executor **behavior** changes (timeouts, shutdown, revive). Phase 0 **does** add **+1 daemon sampler thread** and modest log volume; it does **not** change abandon/shutdown semantics. **May ship the same deploy day** as morning-pick work (#1561): logging PR is independent; staging episode is staging-only and runs **after** Phase 0 lands, **without** blocking the prod morning pick path.
 
@@ -188,10 +188,10 @@ Telemetry today: `log_lifecycle("abandon"|"timeout")`, `log_heavy_job_rss` (incl
 
 ### 4.4 Pump desk snapshot (`desk_snapshot_scheduler.py`)
 
-| Event | Behavior | Overlap? | Tag |
-|-------|----------|----------|-----|
-| Timeout | Returns error; orphan releases `_cycle_lock` in `finally` after slow `run_snapshot` | Skipped ticks while lock held | **VERIFIED** |
-| No generation token | Orphan always runs to completion | **Yes** | **VERIFIED** |
+| Event | Behavior | Second pool worker overlap? | Tag |
+|-------|----------|----------------------------|-----|
+| Timeout | Returns error; orphan releases **`_cycle_lock`** in worker `finally` after slow `run_snapshot` | **No** (same scheduler) — **`_cycle_lock.acquire(blocking=False)`** fails on next tick → **`cycle_in_flight` skip** (~117–118) | **VERIFIED** |
+| No generation token | Orphan always runs to completion on its pool thread | **No** extra submit while lock held; aligns with §3.4 **Partial (skip, not overlap)** | **VERIFIED** |
 
 ### 4.5 Heavy job gate (`internal/heavy_job_gate.py`)
 
@@ -218,7 +218,14 @@ On stale snapshot/resolver: calls **revive** then may **`os._exit`** worker. Orp
 
 **Ordinary retry overlap is disproven in-tree:** `test_resolver_cycle_timeout_does_not_overlap_inflight_work` — second `_run_refresh_cycle_with_timeout` skips until first orphan finishes.
 
-**Ditto fd6a748f (concurrent test):** when hardened, capture **baseline** named-thread count before starting workers, require **two successful barrier rendezvous** records, assert **`peak_named >= baseline + 2`**, and **`release.set()` in `finally`** so assertions cannot wedge orphans (plan requirement for next test PR; docstrings in repro file reference this).
+**Phase 0 code PR (not this plan PR) must ship hardened repro before merge:**
+
+| Test | Required change |
+|------|-----------------|
+| `test_two_resolver_schedulers_two_named_workers` | **`baseline_named`** before threads start; record **two successful barrier rendezvous** (fail if `BrokenBarrierError`); assert **`peak_named >= baseline_named + 2`**; **`release.set()` in `finally`** |
+| `test_sequential_abandon_drain_diagnostic` | Assert each timed-out cycle returns **`cycle_timeout`** in error **or** move to **`@pytest.mark.diagnostic`** and exclude from contract CI — print-only must not ship as regression guard |
+
+Until hardened, the two-scheduler test is **documented contract only** (plan); Ditto CHANGES_REQUESTED clears when Phase 0 code lands the table above.
 
 **Assertion:** fails if production abandon path stops creating named pool workers (e.g. joined shutdown or instant completion). RSS deltas are diagnostic prints only — not prod leak proof.
 - RSS drift at this scale is noise; **do not infer** hundreds of MiB prod RSS from thread stacks without measurement.
@@ -257,7 +264,8 @@ Joshua constraint: **logging only** first. Phase 0 may ship **the same deploy da
 
 Shared helper (next PR): **`internal/orphan_job_metrics.py`** (name TBD) with:
 
-- One process-wide **`threading.Lock`** (`_orphan_metrics_lock`) — **all** counter mutations, per-job state transitions, registry insert/remove, and sampler reads of **`live` / oldest age** hold this lock (short critical sections only).
+- One process-wide **`threading.Lock`** (`_orphan_metrics_lock`) — counter mutations and **`OrphanJob` state transitions** hold this lock; keep critical sections **minimal**.
+- **`Future.add_done_callback` must never run while `_orphan_metrics_lock` is held.** CPython may invoke a done callback **inline** on the registering thread when the future is already complete; the callback re-enters the metrics lock → **self-deadlock** with a plain `Lock`. **Do not** substitute `RLock` as the primary fix (masks re-entrancy bugs). **Wiring order:** (1) under lock: allocate `job_key`, insert **ACTIVE**, `submitted++`; (2) **release lock**; (3) `fut = pool.submit(...)`; (4) **`fut.add_done_callback(...)`** still **outside** lock; (5) callback body: acquire lock → transition table → release.
 - Per-family aggregate counters: **`submitted`**, **`abandoned`**, **`orphan_completed`**, **`live`**.
 - Per-submit **`OrphanJob`** record keyed by stable **`job_key`** (resolver: `resolver_cycle_id`; pick: tick id + monotonic seq; etc.) bound to the **`concurrent.futures.Future`**.
 
@@ -318,16 +326,28 @@ Shared helper (next PR): **`internal/orphan_job_metrics.py`** (name TBD) with:
 
 **`Future.add_done_callback` on cancelled futures (Python 3.12):** cancelling a **queued** future **does** invoke done callbacks when the executor drains the queue (`shutdown(..., cancel_futures=True)`). The callback **must** branch on **`fut.cancelled()`** (and/or `OrphanJob` still **ACTIVE** without **`mark_abandoned`**) — **never** treat cancellation as **`orphan_completed`**. Only **`ABANDONED` → `CLOSED`** decrements **`live`**.
 
-**Single hook per future:** register **one** callback at submit that calls `_on_pool_future_done(family, job_key, fut)` which performs the transition table above. Do **not** also decrement in pool-worker `finally` (double-close risk).
+**Single hook per future:** register **one** callback **after** `submit`, **outside** `_orphan_metrics_lock`, calling `_on_pool_future_done(family, job_key, fut)` which acquires the lock and runs the transition table. Do **not** also decrement in pool-worker `finally` (double-close risk).
+
+#### 8.1.2 Callback registration vs lock (fixes self-deadlock)
+
+| Step | Thread | Lock held? |
+|------|--------|------------|
+| Pre-register `job_key` → **ACTIVE**, `submitted++` | tick | **yes**, then **release** before submit |
+| `pool.submit(worker)` | tick | **no** |
+| `fut.add_done_callback(_on_pool_future_done, ...)` | tick | **no** — mandatory even if worker is fast |
+| `_on_pool_future_done` | tick or pool | **yes** only inside callback body |
+| `mark_abandoned(job_key)` on timeout | tick | **yes**; if `fut.done()` before lock, complete without **ABANDONED** |
+
+**Sampler reads** (`live`, oldest age): acquire `_orphan_metrics_lock` briefly for snapshot; do not register callbacks under sampler.
 
 **Per-scheduler wiring (next PR):**
 
-| Scheduler | `register` + callback attach | `mark_abandoned(job_key)` |
-|-----------|------------------------------|---------------------------|
-| **Resolver** `resolver_scheduler.py` | Immediately after `pool.submit(_run_cycle)` (~904) | In `FuturesTimeoutError` handler (~909–917) **after** `_abandon_inflight_cycle`, pass **`resolver_cycle_id`** — under **same lock** as callback |
-| **Daily pick** `pick_scheduler.py` | After `pool.submit(_run_pick)` (~365) | On `FuturesTimeoutError` (~370–375) with tick **`job_key`** |
-| **Desk snapshot** `desk_snapshot_scheduler.py` | After `pool.submit(_run)` (~141) | On `FuturesTimeoutError` (~147–151) |
-| **Score snapshot write** `score_snapshots.py` | At submit; extend existing callback (~1305) | When `caller_abandoned.set()` on timeout (~1308–1314) |
+| Scheduler | Register **ACTIVE** (lock → unlock) | `submit` + **`add_done_callback` outside lock** | `mark_abandoned(job_key)` |
+|-----------|--------------------------------------|---------------------------------------------------|---------------------------|
+| **Resolver** `resolver_scheduler.py` | Before `pool.submit(_run_cycle)` (~904) | Immediately after submit, before `fut.result` | `FuturesTimeoutError` (~909–917) after `_abandon_inflight_cycle` |
+| **Daily pick** `pick_scheduler.py` | Before `pool.submit(_run_pick)` (~365) | After submit | `FuturesTimeoutError` (~370–375) |
+| **Desk snapshot** `desk_snapshot_scheduler.py` | Before `pool.submit(_run)` (~141) | After submit | `FuturesTimeoutError` (~147–151) |
+| **Score snapshot write** `score_snapshots.py` | Before submit | Extend existing callback (~1305), body uses lock | `caller_abandoned.set()` on timeout (~1308–1314) |
 
 **Required tests (Phase 0 PR — `tests/test_orphan_job_metrics.py` or scheduler integration):**
 
@@ -336,6 +356,7 @@ Shared helper (next PR): **`internal/orphan_job_metrics.py`** (name TBD) with:
 3. **Race — concurrent callback and timeout:** two threads call `mark_abandoned` and `_on_pool_future_done` with barrier; assert **`live`** never negative and exactly one increment/decrement pair.
 4. **`future.cancelled()`:** submit no-op, `shutdown(wait=False, cancel_futures=True)` before worker starts; assert callback runs but **`live` unchanged**, **`orphan_completed` unchanged**.
 5. **Exactly-once decrement:** inject double callback invocation (test hook); assert **`live`** does not go negative and **`CLOSED`** is idempotent.
+6. **Self-deadlock guard:** submit work that **returns immediately** (or finishes before `add_done_callback` returns); assert metrics **`live == 0`** and test thread **does not hang** — proves callback registration stayed **outside** lock.
 
 **`cancel_futures=True` accounting:** **`submitted`** counts registered jobs; **`abandoned`** counts caller timeouts on **started** work; **`CANCELLED_QUEUED`** jobs are neither **`abandoned`** nor **`orphan_completed`**. Do **not** expect **`submitted == abandoned + orphan_completed + cancelled`** without explicit **`cancelled_queued`** counter (optional log field).
 
@@ -371,17 +392,17 @@ Each tick (cheap — no I/O beyond logging), under a **read lock** or short lock
 
 | Leg | Outcome | Interpretation |
 |-----|---------|----------------|
-| **Staging episode** (§1 leg 1) | After forced short timeouts, **`live` → 0** and **`oldest_live_orphan_age_seconds` → 0** within bounded wall time; **`orphan_completed ≈ abandoned`** for started work | Timeouts happen; **no sustained accumulation** on staging |
-| **Staging episode** | **`live` or oldest age monotonic rise** during burst while **`orphan_completed` lags `abandoned`** | **Hypothesis supported** on staging — proceed toward behavioral fixes (§6) |
-| **Multi-day prod trend** (§1 leg 2) | **`max(live)`** and named-prefix **peaks flat** over ≥3 days | **Hypothesis disproven** for current prod workload (threads) |
-| **Multi-day prod trend** | Rising **peak** band or sustained **`live ≥ 2`** **with rising oldest age** across days | **Hypothesis supported** — not disproved by a single transient `live=2` |
+| **Staging episode** (§1 leg 1) | After forced short timeouts, **`live` → 0** and **`oldest_live_orphan_age_seconds` → 0** within bounded wall time; **`orphan_completed ≈ abandoned`** for started work | Timeouts happen; **no sustained accumulation** on staging. **Note:** forced 1s budgets change abandon **rates** vs prod (orphan duration still job-bound) — compare **trends**, not absolute counts to prod. |
+| **Staging episode** | **`live` or oldest age monotonic rise** during burst while **`orphan_completed` lags `abandoned`** | **Accumulation supported** on staging — proceed toward behavioral fixes (§6) |
+| **Multi-day prod trend** (§1 leg 2) | **`max(live)`** and named-prefix **peaks flat** over ≥3 days at **30s sampler cadence** | **No detected accumulation** — does **not** prove zero short-lived orphans between samples |
+| **Multi-day prod trend** | Rising **peak** band or sustained **`live ≥ 2`** **with rising oldest age** across days | **Accumulation supported** — not established by a single transient `live=2` |
 | Either | High **`abandoned` total** but **`live` 0–1** and **oldest age ~0** after idle | Timeouts without pile-up — tune revive paranoia, not unbounded leak |
 
 ---
 
 ## 9. Suggested implementation order (after Phase 0 logging)
 
-1. **Phase 0:** §8.1.1 state machine + `_orphan_metrics_lock` + sampler + events + **`tests/test_orphan_job_metrics.py`** (timeout/cancel/race cases) (**this PR is plan-only**; next PR is code).
+1. **Phase 0:** §8.1.1–8.1.2 state machine + lock-outside-callback wiring + sampler + events + **`tests/test_orphan_job_metrics.py`** (incl. fast-complete / deadlock guard) + **hardened repro table §5** (**this PR is plan-only**; next PR is code).
 2. Refactor **resolver** to shared executor + **`live`**-gated revive (#1552).
 3. Align **daily pick** and **desk snapshot**.
 4. **Score snapshots** write path: caller timeout must cancel build (generation) or subprocess.

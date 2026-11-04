@@ -9,8 +9,8 @@ see test_resolver_cycle_timeout_does_not_overlap_inflight_work).
 The two-scheduler test is a synthetic multi-instance analogue only — not revive
 integration (#1552). Revive overlap belongs in test_resolver_revive.py.
 
-Plan §5 / Ditto fd6a748f: harden concurrent test with baseline named count,
-two barrier rendezvous records, peak >= baseline+2, release in finally (next PR).
+Plan §5: Phase 0 code PR must harden concurrent test (baseline, barrier rendezvous,
+finally release) and fix drain diagnostic (assert or mark diagnostic).
 """
 
 from __future__ import annotations
