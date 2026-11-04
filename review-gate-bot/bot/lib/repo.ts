@@ -1,5 +1,6 @@
 import type { Octokit } from "@octokit/rest";
 import type { PrRef } from "./gh.js";
+import { scrubModelRepoReads } from "./model-read-redaction.js";
 import { redactSecrets } from "./redact.js";
 
 /**
@@ -75,8 +76,13 @@ export function presentDiffFiles(all: readonly DiffCompareFile[], options?: { pa
   for (const file of all) {
     // A rename is selected by either of its paths, and its paths are scrubbed before they leave this module:
     // a PR can name a file with a credential-shaped value, and the result goes to a model and to a public review.
-    const path = redactSecrets(file.filename).text;
-    const previous = file.previous_filename === undefined ? undefined : redactSecrets(file.previous_filename).text;
+    const path = scrubModelRepoReads() ? redactSecrets(file.filename).text : file.filename;
+    const previous =
+      file.previous_filename === undefined
+        ? undefined
+        : scrubModelRepoReads()
+          ? redactSecrets(file.previous_filename).text
+          : file.previous_filename;
     if (wanted !== undefined && !wanted.has(file.filename) && (file.previous_filename === undefined || !wanted.has(file.previous_filename))) {
       continue;
     }
@@ -92,8 +98,8 @@ export function presentDiffFiles(all: readonly DiffCompareFile[], options?: { pa
     if (file.patch === undefined) {
       entry.patchOmitted = "GitHub gave no patch: the file is binary or too large to diff";
     } else {
-      // The budget is spent on what is returned, so it is charged the redacted text's length, which can be longer.
-      const text = redactSecrets(file.patch).text;
+      // The budget is spent on what is returned; redacted text can be longer than raw (arm F uses raw length).
+      const text = scrubModelRepoReads() ? redactSecrets(file.patch).text : file.patch;
       if (text.length > budget) {
         entry.patchOmitted = `over the remaining size budget (${text.length} chars); read the file at head instead`;
         omittedPaths.push(path);
@@ -226,7 +232,8 @@ export function windowText(content: string, options: { startLine?: number; endLi
   const lines = content.split("\n");
   const startLine = Math.max(1, options.startLine ?? 1);
   const endLine = Math.min(lines.length, options.endLine ?? lines.length);
-  const scrubbed = redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text;
+  const slice = lines.slice(startLine - 1, endLine).join("\n");
+  const scrubbed = scrubModelRepoReads() ? redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text : slice;
   const truncated = scrubbed.length > LIMITS.fileChars;
   const text = truncated ? scrubbed.slice(0, LIMITS.fileChars) : scrubbed;
   return {
