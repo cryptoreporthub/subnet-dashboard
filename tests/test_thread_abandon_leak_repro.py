@@ -1,7 +1,16 @@
 """Repro: resolver abandon leaves named pool workers (real scheduler path).
 
 Run: pytest tests/test_thread_abandon_leak_repro.py -v -s
-Exercises PredictionResolverScheduler._run_refresh_cycle_with_timeout — not a stdlib copy.
+
+Exercises PredictionResolverScheduler._run_refresh_cycle_with_timeout.
+Does NOT prove ordinary retry overlap (same scheduler uses _inflight_future guard;
+see test_resolver_cycle_timeout_does_not_overlap_inflight_work).
+
+The two-scheduler test is a synthetic multi-instance analogue only — not revive
+integration (#1552). Revive overlap belongs in test_resolver_revive.py.
+
+Plan §5 / Ditto fd6a748f: harden concurrent test with baseline named count,
+two barrier rendezvous records, peak >= baseline+2, release in finally (next PR).
 """
 
 from __future__ import annotations
@@ -73,7 +82,7 @@ def test_resolver_abandon_exposes_named_worker_thread(monkeypatch):
 
 
 def test_two_resolver_schedulers_two_named_workers(monkeypatch):
-    """Two real scheduler instances: concurrent abandons → two named workers (overlap class)."""
+    """Two scheduler instances concurrently — synthetic overlap analogue, not revive."""
     started = threading.Barrier(2)
     release = threading.Event()
 
