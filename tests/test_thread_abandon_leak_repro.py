@@ -1,15 +1,17 @@
-"""Repro: per-cycle ThreadPoolExecutor + timeout abandon (mirrors resolver/pick schedulers).
+"""Repro: resolver abandon leaves named pool workers (real scheduler path).
 
 Run: pytest tests/test_thread_abandon_leak_repro.py -v -s
-Documents overlapping orphan pool threads under rapid abandons (stdlib mirror of production pattern).
+Exercises PredictionResolverScheduler._run_refresh_cycle_with_timeout — not a stdlib copy.
 """
 
 from __future__ import annotations
 
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
+import pytest
+
+from internal.council import resolver_scheduler
 from internal.process_memory import read_rss_kb
 
 
@@ -21,81 +23,150 @@ def _count_resolver_like_threads() -> int:
     )
 
 
-def _abandon_cycle(*, work_seconds: float, timeout_seconds: float) -> None:
-    """Minimal copy of resolver_scheduler._run_refresh_cycle_with_timeout abandon path."""
-    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
+def test_resolver_abandon_exposes_named_worker_thread(monkeypatch):
+    """Real _run_refresh_cycle_with_timeout: timeout leaves resolver-cycle-work alive."""
+    started = threading.Event()
+    release = threading.Event()
 
-    def _slow() -> None:
-        time.sleep(work_seconds)
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=5)
+        return {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
 
-    fut = pool.submit(_slow)
-    try:
-        fut.result(timeout=timeout_seconds)
-    except FuturesTimeoutError:
-        pass
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _blocked,
+    )
 
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    sched._active = True
+    sched._first_tick_pending = False
 
-def _rapid_abandon_overlap_peak(*, cycles: int) -> int:
-    """Fire `cycles` abandons faster than work duration; return peak named worker count."""
-    peak_named = 0
-    work_seconds = 1.0
-    timeout_seconds = 0.01
-    spacing_seconds = 0.02
-    for _ in range(cycles):
-        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
-        fut = pool.submit(time.sleep, work_seconds)
-        try:
-            fut.result(timeout=timeout_seconds)
-        except FuturesTimeoutError:
-            pass
-        pool.shutdown(wait=False, cancel_futures=True)
-        peak_named = max(peak_named, _count_resolver_like_threads())
-        time.sleep(spacing_seconds)
-    return peak_named
-
-
-def test_abandon_cycles_increase_thread_count_and_rss():
-    baseline_threads = threading.active_count()
     baseline_named = _count_resolver_like_threads()
-    baseline_rss = read_rss_kb() or 0
+    timed = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(timed.get("error"))
 
-    cycles = 8
-    for _ in range(cycles):
-        _abandon_cycle(work_seconds=2.0, timeout_seconds=0.05)
+    peak_named = _count_resolver_like_threads()
+    assert peak_named >= baseline_named + 1, (
+        "expected resolver-cycle-work pool thread while abandoned cycle blocked; "
+        f"peak_named={peak_named} baseline_named={baseline_named}"
+    )
 
-    # Orphan pool workers finish their sleep then exit; thread objects linger briefly.
+    release.set()
     deadline = time.time() + 5.0
     while time.time() < deadline:
-        if _count_resolver_like_threads() == 0:
+        if _count_resolver_like_threads() == baseline_named:
             break
-        time.sleep(0.1)
+        time.sleep(0.05)
+
+
+def test_two_resolver_schedulers_two_named_workers(monkeypatch):
+    """Two real scheduler instances: concurrent abandons → two named workers (overlap class)."""
+    started = threading.Barrier(2)
+    release = threading.Event()
+
+    def _blocked(self):
+        started.wait(timeout=2)
+        release.wait(timeout=5)
+        return {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _blocked,
+    )
+
+    s1 = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    s2 = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    for sched in (s1, s2):
+        sched._active = True
+        sched._first_tick_pending = False
+
+    peak_holder: dict[str, int] = {"peak": 0}
+
+    def _run(sched: resolver_scheduler.PredictionResolverScheduler) -> None:
+        sched._run_refresh_cycle_with_timeout()
+        peak_holder["peak"] = max(peak_holder["peak"], _count_resolver_like_threads())
+
+    t1 = threading.Thread(target=_run, args=(s1,), daemon=True)
+    t2 = threading.Thread(target=_run, args=(s2,), daemon=True)
+    t1.start()
+    t2.start()
+    t1.join(timeout=3)
+    t2.join(timeout=3)
+
+    peak_named = max(peak_holder["peak"], _count_resolver_like_threads())
+    assert peak_named >= 2, (
+        "expected two resolver-cycle-work threads from two concurrent abandoned cycles; "
+        f"peak_named={peak_named}"
+    )
+
+    release.set()
+    time.sleep(0.3)
+
+
+@pytest.mark.parametrize("cycles", [4])
+def test_sequential_abandon_drain_diagnostic(monkeypatch, cycles: int):
+    """Print RSS/thread deltas after real abandons that drain — not an accumulation proof."""
+
+    def _slow(self):
+        time.sleep(0.25)
+        return {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.02)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.02)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _slow,
+    )
+
+    baseline_threads = threading.active_count()
+    baseline_rss = read_rss_kb() or 0
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    sched._active = True
+    sched._first_tick_pending = False
+
+    for _ in range(cycles):
+        sched._run_refresh_cycle_with_timeout()
+        time.sleep(0.35)
 
     after_threads = threading.active_count()
-    after_named = _count_resolver_like_threads()
     after_rss = read_rss_kb() or 0
-
-    thread_delta = after_threads - baseline_threads
-    rss_delta_kb = after_rss - baseline_rss
-
     print(
-        f"baseline threads={baseline_threads} rss_kb={baseline_rss} "
-        f"named_workers={baseline_named}"
-    )
-    print(
-        f"after {cycles} sequential abandon cycles: threads={after_threads} (+{thread_delta}) "
-        f"rss_kb={after_rss} (+{rss_delta_kb}) named_workers={after_named}"
-    )
-
-    peak_named = _rapid_abandon_overlap_peak(cycles=cycles)
-    print(
-        f"peak concurrent resolver-cycle-work threads during rapid abandons={peak_named} "
-        f"(cycles={cycles})"
-    )
-
-    # Must fail if abandons do not overlap (e.g. shutdown(wait=True) or instant work).
-    assert peak_named >= cycles, (
-        "expected one live orphan per rapid abandon cycle while work outlives timeout; "
-        f"peak_named={peak_named} cycles={cycles}"
+        f"sequential real abandons cycles={cycles}: threads +{after_threads - baseline_threads} "
+        f"rss_kb +{after_rss - baseline_rss}"
     )
