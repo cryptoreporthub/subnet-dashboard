@@ -21,6 +21,7 @@ from internal.council.daily_pick import select_daily_pick
 from internal.council.daily_pick_reader import (
     find_v2_row,
     is_published_daily_pick_row,
+    legacy_row_counts_for_pick_day,
     resolve_current_daily_pick,
 )
 from internal.council.daily_pick_write_token import guarded_bounded_commit
@@ -151,19 +152,31 @@ def _save(records: List[Dict[str, Any]], path: Optional[str] = None) -> bool:
     return wrote
 
 
+def _today_row_for_read_fallback(rec: Dict[str, Any]) -> bool:
+    """Published pick or v2 pick-day row (incl. HOLD); never legacy pre-rollover v1."""
+    if is_published_daily_pick_row(rec):
+        return True
+    if rec.get("pick_id") and int(rec.get("schema_version") or 0) >= 2:
+        day = _today_str()
+        if str(rec.get("pick_day") or rec.get("date") or "") == day:
+            return True
+    return False
+
+
 def _today_str() -> str:
     return pick_day_str()
 
 
 def _find_today(records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Current pick-day v2 row (or legacy same-day fallback for writers)."""
-    row = find_v2_row(records, _today_str())
+    """Current pick-day v2 row (or legacy same-day when written at/after rollover)."""
+    today = _today_str()
+    row = find_v2_row(records, today)
     if row is not None:
         return row
-    today = _today_str()
     for rec in reversed(records):
         if rec.get("date") == today and not rec.get("pick_id"):
-            return rec
+            if legacy_row_counts_for_pick_day(rec, today):
+                return rec
     return None
 
 
@@ -172,6 +185,12 @@ def _upsert_today(records: List[Dict[str, Any]], payload: Dict[str, Any]) -> Lis
     pick_id = payload.get("pick_id")
     if pick_id:
         kept = [r for r in records if r.get("pick_id") != pick_id]
+        day = str(payload.get("pick_day") or payload.get("date") or _today_str())
+        kept = [
+            r
+            for r in kept
+            if not (not r.get("pick_id") and str(r.get("date") or "") == day)
+        ]
         kept.append(payload)
         return kept
     today = _today_str()
@@ -206,8 +225,10 @@ def get_current_daily_pick() -> Optional[Dict[str, Any]]:
     row, _meta = resolve_current_daily_pick(records)
     if row is not None:
         return row
-    # Fallback: today's v2/HOLD row when §3 has no published pick (API honesty + test patches).
-    return _find_today(records)
+    fallback = _find_today(records)
+    if fallback is not None and _today_row_for_read_fallback(fallback):
+        return fallback
+    return None
 
 
 def get_current_daily_pick_with_meta() -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
@@ -216,9 +237,10 @@ def get_current_daily_pick_with_meta() -> tuple[Optional[Dict[str, Any]], Dict[s
     if row is not None:
         return row, meta
     fallback = _find_today(records)
-    if fallback is not None:
+    if fallback is not None and _today_row_for_read_fallback(fallback):
         meta = {**meta, "prior_pick_day": False, "fallback_today_row": True}
-    return fallback, meta
+        return fallback, meta
+    return None, meta
 
 
 def _subnets_have_prices(subnets: List[Dict[str, Any]]) -> bool:

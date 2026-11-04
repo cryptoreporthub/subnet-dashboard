@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
 from datetime import datetime, timezone
 
 from internal.council.pick_day import daily_pick_creation_open, pick_day_str
+
+pytestmark = pytest.mark.pick_day_boundaries
 
 
 def test_pick_day_rollover_and_slot_boundaries():

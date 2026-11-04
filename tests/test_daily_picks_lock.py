@@ -14,16 +14,25 @@ def _iso(moment: datetime) -> str:
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return engine._today_str()
+
+
+def _slot_stamp(day: str | None = None) -> str:
+    d = day or _today()
+    return f"{d}T14:05:00Z"
 
 
 def test_older_build_does_not_clobber_newer_today(tmp_path, monkeypatch):
     path = tmp_path / "daily_picks.json"
     monkeypatch.setattr(engine, "DAILY_PICKS_PATH", str(path))
-    now = datetime.now(timezone.utc)
-    yesterday = (_today() and (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat())
+    now = datetime(2026, 11, 4, 14, 5, 10, tzinfo=timezone.utc)
+    yesterday = "2026-11-03"
+    day = _today()
     newer = {
-        "date": _today(),
+        "pick_id": engine.v2_pick_id(day),
+        "schema_version": 2,
+        "pick_day": day,
+        "date": day,
         "action": "LONG",
         "pick": {"netuid": 8},
         "build_started_at": _iso(now),
@@ -34,17 +43,20 @@ def test_older_build_does_not_clobber_newer_today(tmp_path, monkeypatch):
     wrote = engine._save(
         [
             {
-                "date": _today(),
+                "pick_id": engine.v2_pick_id(day),
+                "schema_version": 2,
+                "pick_day": day,
+                "date": day,
                 "action": "LONG",
                 "pick": {"netuid": 99},
                 "build_started_at": _iso(now - timedelta(seconds=30)),
-                "timestamp_utc": _iso(now + timedelta(seconds=5)),
+                "timestamp_utc": _iso(now - timedelta(seconds=25)),
             }
         ]
     )
     assert wrote is False
     saved = json.loads(path.read_text(encoding="utf-8"))
-    today = [row for row in saved if row["date"] == _today()]
+    today = [row for row in saved if row.get("pick_id") == engine.v2_pick_id(day)]
     assert len(today) == 1
     assert today[0]["action"] == "LONG"
     assert today[0]["pick"]["netuid"] == 8
@@ -95,7 +107,7 @@ def test_timeout_hold_beats_abandoned_worker(tmp_path, monkeypatch):
     assert thread.is_alive() is False
 
     saved = json.loads(path.read_text(encoding="utf-8"))
-    today = [row for row in saved if row.get("date") == _today()]
+    today = [row for row in saved if row.get("pick_id") == engine.v2_pick_id(_today())]
     assert len(today) == 1
     assert today[0]["scheduler_hold"] is True
     assert today[0]["reason"] == hold["reason"]

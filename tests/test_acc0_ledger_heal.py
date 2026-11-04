@@ -14,7 +14,23 @@ from internal.learning.loop_health import build_learning_loop_health
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    from internal.council.pick_day import pick_day_str
+
+    return pick_day_str()
+
+
+def _v2_daily_row(pick: dict) -> dict:
+    day = _today()
+    return {
+        "pick_id": f"v2:{day}",
+        "schema_version": 2,
+        "pick_day": day,
+        "date": day,
+        "action": "LONG",
+        "build_started_at": f"{day}T14:05:00Z",
+        "timestamp_utc": f"{day}T14:05:00Z",
+        "pick": pick,
+    }
 
 
 def _write_json(path: Path, payload) -> None:
@@ -40,14 +56,7 @@ def test_heal_backfills_gap(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     _write_json(
         daily,
-        [
-            {
-                "date": _today(),
-                "action": "long",
-                "pick": _sample_pick(),
-                "market_context": {},
-            }
-        ],
+        [_v2_daily_row(_sample_pick()) | {"market_context": {}}],
     )
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
 
@@ -59,8 +68,8 @@ def test_heal_backfills_gap(tmp_path, monkeypatch):
     )
 
     summary = heal_daily_pick_ledger(dry_run=False, daily_picks_path=str(daily))
-    assert summary["ok"] is True
-    assert summary["healed"] is True
+    assert summary["ok"] is True, summary
+    assert summary["healed"] is True, summary
 
     report = build_learning_loop_health(
         daily_picks_path=str(daily),
@@ -80,7 +89,7 @@ def test_heal_uses_prediction_reference_price(tmp_path, monkeypatch):
     }
     _write_json(
         daily,
-        [{"date": _today(), "action": "long", "pick": pick, "market_context": {}}],
+        [_v2_daily_row(pick) | {"market_context": {}}],
     )
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
 
@@ -88,7 +97,7 @@ def test_heal_uses_prediction_reference_price(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
 
     summary = heal_daily_pick_ledger(dry_run=False, daily_picks_path=str(daily))
-    assert summary["healed"] is True
+    assert summary["healed"] is True, summary
     assert summary["netuid"] == 15
 
 
@@ -97,7 +106,7 @@ def test_heal_idempotent(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     _write_json(
         daily,
-        [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}],
+        [_v2_daily_row(_sample_pick()) | {"market_context": {}}],
     )
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
 
@@ -124,7 +133,7 @@ def test_heal_dry_run_no_write(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     _write_json(
         daily,
-        [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}],
+        [_v2_daily_row(_sample_pick()) | {"market_context": {}}],
     )
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
 
@@ -144,7 +153,7 @@ def test_epoch_reset_reheals_or_downgrades(tmp_path, monkeypatch):
     archive = tmp_path / "archive"
     _write_json(
         daily,
-        [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}],
+        [_v2_daily_row(_sample_pick()) | {"market_context": {}}],
     )
     _write_json(
         preds,

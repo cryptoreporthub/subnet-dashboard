@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from internal.council.pick_day import pick_day_str, v2_pick_id
+from internal.council.pick_day import pick_day_start_utc, pick_day_str, v2_pick_id
 
 
 def is_published_daily_pick_row(rec: Optional[Dict[str, Any]]) -> bool:
@@ -22,6 +23,45 @@ def _effective_pick_day(rec: Dict[str, Any]) -> str:
     if rec.get("pick_day"):
         return str(rec["pick_day"])
     return str(rec.get("date") or "")
+
+
+def _parse_utc_instant(raw: Any) -> Optional[datetime]:
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def legacy_row_write_instant(rec: Dict[str, Any]) -> Optional[datetime]:
+    for key in ("build_started_at", "timestamp_utc", "selection_recorded_at_utc"):
+        instant = _parse_utc_instant(rec.get(key))
+        if instant is not None:
+            return instant.astimezone(timezone.utc)
+    return None
+
+
+def legacy_row_counts_for_pick_day(rec: Dict[str, Any], pick_day: str) -> bool:
+    """Legacy v1 row (no pick_id) counts for pick_day only if written at/after rollover."""
+    if rec.get("pick_id"):
+        return False
+    if str(rec.get("date") or "") != pick_day:
+        return False
+    instant = legacy_row_write_instant(rec)
+    if instant is None:
+        return False
+    return instant >= pick_day_start_utc(pick_day)
+
+
+def _today_row_read_fallback(rec: Dict[str, Any]) -> bool:
+    if is_published_daily_pick_row(rec):
+        return True
+    if rec.get("pick_id") and int(rec.get("schema_version") or 0) >= 2:
+        day = pick_day_str()
+        if str(rec.get("pick_day") or rec.get("date") or "") == day:
+            return True
+    return False
 
 
 def resolve_current_daily_pick(
@@ -83,9 +123,10 @@ def load_current_daily_pick(
     from internal.council.daily_pick_engine import _find_today
 
     fallback = _find_today(records)
-    if fallback is not None:
+    if fallback is not None and _today_row_read_fallback(fallback):
         meta = {**meta, "fallback_today_row": True}
-    return fallback, meta
+        return fallback, meta
+    return None, meta
 
 
 def find_v2_row(records: List[Dict[str, Any]], pick_day: Optional[str] = None) -> Optional[Dict[str, Any]]:

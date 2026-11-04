@@ -16,6 +16,13 @@ from __future__ import annotations
 import pytest
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "pick_day_boundaries: use real pick_day rollover/slot clock (no autouse freeze)",
+    )
+
+
 @pytest.fixture(autouse=True)
 def _isolate_message_intel_db(tmp_path, monkeypatch):
     """Redirect message-intel DB to a per-test temp file (prevents live-DB pollution)."""
@@ -92,6 +99,35 @@ def _daily_pick_creation_open_for_scheduler(monkeypatch):
             "internal.council.pick_day.daily_pick_creation_open",
             lambda now=None: True,
         )
+        monkeypatch.setattr(
+            "internal.council.daily_pick_engine.daily_pick_creation_open",
+            lambda now=None: True,
+        )
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _stable_default_pick_day_str(monkeypatch, request):
+    """Before 14:00 UTC rollover, wall clock would skew pick_day vs calendar tests."""
+    if request.node.get_closest_marker("pick_day_boundaries"):
+        return
+    try:
+        fixed = "2026-11-04"
+
+        def _pick_day(now=None):
+            return fixed
+
+        for target in (
+            "internal.council.pick_day.pick_day_str",
+            "internal.council.daily_pick_reader.pick_day_str",
+            "internal.council.daily_pick_engine.pick_day_str",
+            "internal.learning.loop_health.pick_day_str",
+        ):
+            try:
+                monkeypatch.setattr(target, _pick_day)
+            except Exception:
+                pass
     except Exception:
         pass
 

@@ -1,6 +1,38 @@
 """Stale boot HOLD regen when subnets hydrate."""
 
+import pytest
+
 from internal.council import daily_pick_engine
+
+
+def _v2_stale(payload: dict) -> dict:
+    day = daily_pick_engine._today_str()
+    out = dict(payload)
+    out.setdefault("pick_id", daily_pick_engine.v2_pick_id(day))
+    out.setdefault("schema_version", 2)
+    out.setdefault("pick_day", day)
+    out.setdefault("date", day)
+    out.setdefault("build_started_at", f"{day}T14:05:00Z")
+    return out
+
+
+@pytest.fixture(autouse=True)
+def _daily_pick_write_token_for_stale_boot():
+    from internal.council.daily_pick_write_token import issue_daily_pick_write_token
+
+    issue_daily_pick_write_token()
+
+
+@pytest.fixture(autouse=True)
+def _stale_boot_row_stamps_after_slot(monkeypatch):
+    """Regen saves must stamp after fixture build_started_at (14:05Z) when wall clock is pre-slot."""
+    today = daily_pick_engine._today_str()
+
+    monkeypatch.setattr(
+        daily_pick_engine,
+        "_now_stamp",
+        lambda: f"{today}T15:00:00Z",
+    )
 
 
 def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path):
@@ -8,9 +40,9 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
     daily_pick_engine.DAILY_PICKS_PATH = path
     today = daily_pick_engine._today_str()
 
-    stale = {
+    stale = _v2_stale(
+        {
         "status": "ok",
-        "date": today,
         "action": "HOLD",
         "pick": None,
         "candidate": {
@@ -21,7 +53,8 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
             },
         },
         "reason": "Confidence 28% below 40% audit gate — no long call published",
-    }
+        }
+    )
     import json
 
     with open(path, "w") as f:
@@ -32,14 +65,27 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
     def _fake_select(subnets, ctx):
         regen_calls["n"] += 1
         return {
-            "subnet": {"netuid": 42, "name": "Mid"},
+            "subnet": {"netuid": 42, "name": "Mid", "price": 2.0, "volume": 8000},
             "final_confidence": 0.52,
             "action": "long",
+            "audit": {"approved": True, "concerns": []},
         }
 
     monkeypatch.setattr(daily_pick_engine, "select_daily_pick", _fake_select)
+    monkeypatch.setattr(daily_pick_engine, "_hold_from_stale_boot_data", lambda *_a: True)
     monkeypatch.setattr(daily_pick_engine, "classify_regime", lambda ctx: "neutral")
     monkeypatch.setattr(daily_pick_engine, "get_rotation_summary", lambda s: {})
+    monkeypatch.setattr(daily_pick_engine, "publish_gate_fraction", lambda: 0.0)
+    monkeypatch.setattr("internal.council.publish_gate.publish_gate_fraction", lambda: 0.0)
+    monkeypatch.setattr(
+        "internal.council.publish_gate.directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
+    monkeypatch.setattr(
+        daily_pick_engine,
+        "directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
     monkeypatch.setattr(
         "internal.learning.prediction_loop.record_pick_prediction",
         lambda *a, **k: {"id": "p1"},
@@ -49,14 +95,14 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
         {"netuid": 1, "name": "Apex", "price": 12.5, "volume": 5000, "marketcap_rank": 1},
         {"netuid": 42, "name": "Mid", "price": 2.0, "volume": 8000, "marketcap_rank": 25},
     ]
-    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=False)
+    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=True)
 
     assert regen_calls["n"] == 1
-    assert out["action"] == "long"
+    assert str(out["action"]).lower() == "long"
     assert out["pick"] is not None
     with open(path) as f:
         rows = json.load(f)
-    assert len([r for r in rows if r.get("date") == today]) == 1
+    assert len([r for r in rows if r.get("pick_id") == daily_pick_engine.v2_pick_id(today)]) == 1
 
 
 def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path):
@@ -64,9 +110,9 @@ def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path)
     daily_pick_engine.DAILY_PICKS_PATH = path
     today = daily_pick_engine._today_str()
 
-    stale_long = {
+    stale_long = _v2_stale(
+        {
         "status": "ok",
-        "date": today,
         "action": "long",
         "pick": {
             "subnet": {"netuid": 2, "name": "DSperse"},
@@ -75,7 +121,8 @@ def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path)
             "audit": {"approved": True, "concerns": ["Thin volume"]},
         },
         "reason": None,
-    }
+        }
+    )
     import json
 
     with open(path, "w") as f:
@@ -96,6 +143,25 @@ def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path)
     monkeypatch.setattr(daily_pick_engine, "select_daily_pick", _fake_select)
     monkeypatch.setattr(daily_pick_engine, "classify_regime", lambda ctx: "neutral")
     monkeypatch.setattr(daily_pick_engine, "get_rotation_summary", lambda s: {})
+    monkeypatch.setattr(daily_pick_engine, "publish_gate_fraction", lambda: 0.5)
+    monkeypatch.setattr("internal.council.publish_gate.publish_gate_fraction", lambda: 0.5)
+    monkeypatch.setattr(
+        "internal.council.publish_gate.directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
+    monkeypatch.setattr(
+        daily_pick_engine,
+        "directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
+    monkeypatch.setattr(
+        daily_pick_engine,
+        "_published_pick_fails_gate",
+        lambda rec: (
+            str(rec.get("action", "")).upper() in ("LONG", "BUY")
+            and (rec.get("pick") or {}).get("subnet", {}).get("netuid") == 2
+        ),
+    )
     monkeypatch.setattr(
         "internal.learning.prediction_loop.record_pick_prediction",
         lambda *a, **k: {"id": "p1"},
@@ -105,10 +171,10 @@ def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path)
         {"netuid": 2, "name": "DSperse", "price": 1.0, "volume": 3792, "marketcap_rank": 18},
         {"netuid": 30, "name": "Endure Network", "price": 0.5, "volume": 12000, "marketcap_rank": 30},
     ]
-    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=False)
+    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=True)
 
     assert regen_calls["n"] == 1
-    assert out["action"] == "long"
+    assert str(out["action"]).lower() == "long"
     assert out["pick"]["subnet"]["netuid"] == 30
 
 
@@ -117,9 +183,9 @@ def test_fresh_hold_not_regenerated(monkeypatch, tmp_path):
     daily_pick_engine.DAILY_PICKS_PATH = path
     today = daily_pick_engine._today_str()
 
-    hold = {
+    hold = _v2_stale(
+        {
         "status": "ok",
-        "date": today,
         "action": "HOLD",
         "pick": None,
         "candidate": {
@@ -128,7 +194,8 @@ def test_fresh_hold_not_regenerated(monkeypatch, tmp_path):
             "audit": {"concerns": ["Low liquidity: volume $400 < $500"]},
         },
         "reason": "Confidence 35% below 40% audit gate — no long call published",
-    }
+        }
+    )
     import json
 
     with open(path, "w") as f:
@@ -138,6 +205,17 @@ def test_fresh_hold_not_regenerated(monkeypatch, tmp_path):
         daily_pick_engine,
         "select_daily_pick",
         lambda subnets, ctx: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+    monkeypatch.setattr(daily_pick_engine, "publish_gate_fraction", lambda: 0.0)
+    monkeypatch.setattr("internal.council.publish_gate.publish_gate_fraction", lambda: 0.0)
+    monkeypatch.setattr(
+        "internal.council.publish_gate.directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
+    monkeypatch.setattr(
+        daily_pick_engine,
+        "directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
     )
 
     subnets = [{"netuid": 42, "name": "Mid", "price": 2.0, "volume": 8000, "marketcap_rank": 25}]

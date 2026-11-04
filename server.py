@@ -3237,6 +3237,7 @@ def _hydrate_daily_pick_lite(stash: Dict[str, Any]) -> Dict[str, Any]:
     existing = get_current_daily_pick()
     if existing is None:
         pending = _daily_pick_pending_hold()
+        pending["enrichment_badge"] = empty_whale_flow_badge("lite_read")
         stash["payload"] = pending
         return pending
     # Stash stored JSON before enrich so waiters of THIS flight can shed to it

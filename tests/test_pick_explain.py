@@ -191,7 +191,7 @@ def test_pick_explain_calibration_field_contract():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_current_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_STATE,
         ),
     ):
@@ -256,7 +256,7 @@ def test_calibration_field_consistent_across_endpoints():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_current_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_STATE,
         ),
     ):
@@ -324,7 +324,7 @@ def test_pick_explain_calibration_source_live_when_persisted_record_lacks_field(
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_current_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_NO_CAL,
         ),
     ):
@@ -393,7 +393,7 @@ def test_pick_explain_gated_candidate_calibration_from_live_score():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_current_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_GATED_CANDIDATE,
         ),
     ):
@@ -433,7 +433,7 @@ def test_pick_explain_not_today_pick_calibration_from_live_score():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_current_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_OTHER_PUBLISHED,
         ),
     ):

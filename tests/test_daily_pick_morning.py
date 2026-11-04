@@ -15,8 +15,14 @@ from internal.council.daily_pick_engine import (
     _upsert_today,
     get_or_create_today_pick,
 )
-from internal.council.daily_pick_reader import resolve_current_daily_pick
-from internal.council.pick_day import pick_day_str, v2_pick_id
+from internal.council.daily_pick_reader import (
+    is_published_daily_pick_row,
+    legacy_row_counts_for_pick_day,
+    legacy_row_write_instant,
+    load_current_daily_pick,
+    resolve_current_daily_pick,
+)
+from internal.council.pick_day import daily_pick_creation_open, pick_day_str, v2_pick_id
 
 
 @pytest.fixture
@@ -80,3 +86,172 @@ def test_selection_recorded_at_utc_only_on_first_publish(picks_path, monkeypatch
     disk = json.loads(picks_path.read_text())
     row = disk[-1]
     assert row["selection_recorded_at_utc"] == "2026-01-02T00:00:00Z"
+
+
+def _bind_pick_clock(monkeypatch, instant: datetime) -> None:
+    import internal.council.pick_day as pick_day_mod
+
+    real_pick_day_str = pick_day_mod.pick_day_str
+
+    def _str(now=None):
+        return real_pick_day_str(now or instant)
+
+    def _open(now=None):
+        now_utc = (now or instant).astimezone(timezone.utc)
+        day = _str(now_utc)
+        return now_utc >= pick_day_mod.slot_open_utc(day)
+
+    monkeypatch.setattr(pick_day_mod, "pick_day_str", _str)
+    monkeypatch.setattr(pick_day_mod, "daily_pick_creation_open", _open)
+    for target in (
+        "internal.council.daily_pick_reader.pick_day_str",
+        "internal.council.daily_pick_engine.pick_day_str",
+    ):
+        monkeypatch.setattr(target, _str)
+
+
+@pytest.mark.pick_day_boundaries
+def test_prod_legacy_0015_row_v2_at_slot_no_hold_served(picks_path, monkeypatch):
+    """Deploy-shaped legacy row at 00:15 UTC must not block v2 at 14:05 or serve HOLD."""
+    prior = {
+        "pick_id": v2_pick_id("2026-11-03"),
+        "schema_version": 2,
+        "pick_day": "2026-11-03",
+        "date": "2026-11-03",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 7}, "final_confidence": 0.88, "action": "long"},
+    }
+    legacy_today = {
+        "date": "2026-11-04",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 99}, "final_confidence": 0.91, "action": "long"},
+        "timestamp_utc": "2026-11-04T00:15:00Z",
+        "build_started_at": "2026-11-04T00:15:00Z",
+    }
+    picks_path.write_text(json.dumps([prior, legacy_today]), encoding="utf-8")
+
+    t1340 = datetime(2026, 11, 4, 13, 40, 0, tzinfo=timezone.utc)
+    _bind_pick_clock(monkeypatch, t1340)
+    records = json.loads(picks_path.read_text())
+    row, meta = load_current_daily_pick(records)
+    assert row is not None
+    assert is_published_daily_pick_row(row)
+    assert row.get("pick_id") == prior["pick_id"]
+    assert meta.get("prior_pick_day") is False
+    assert row.get("pick", {}).get("subnet", {}).get("netuid") == 7
+    assert legacy_row_write_instant(legacy_today) is not None
+    assert not legacy_row_counts_for_pick_day(legacy_today, pick_day_str(t1340))
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.select_daily_pick",
+        lambda subnets, ctx: {
+            "subnet": {"netuid": 12, "name": "SlotPick"},
+            "final_confidence": 0.55,
+            "action": "long",
+        },
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
+    monkeypatch.setattr("internal.council.daily_pick_engine.publish_gate_fraction", lambda: 0.0)
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.record_pick_prediction",
+        lambda *_a, **_k: None,
+    )
+
+    t1405 = datetime(2026, 11, 4, 14, 5, 0, tzinfo=timezone.utc)
+    _bind_pick_clock(monkeypatch, t1405)
+    assert daily_pick_creation_open(t1405) is True
+    out = get_or_create_today_pick([{"netuid": 12, "price": 1.0}], force=False)
+    assert out is not None
+    assert out.get("pick_id") == v2_pick_id("2026-11-04")
+    assert int(out.get("schema_version") or 0) >= 2
+    assert str(out.get("action", "")).upper() in ("LONG", "BUY")
+
+    disk = json.loads(picks_path.read_text())
+    v2_rows = [r for r in disk if r.get("pick_id") == v2_pick_id("2026-11-04")]
+    assert len(v2_rows) == 1
+    hero, hero_meta = load_current_daily_pick(disk)
+    assert hero is not None
+    assert is_published_daily_pick_row(hero)
+    assert hero_meta.get("prior_pick_day") is False
+    assert hero.get("pick_id") == v2_pick_id("2026-11-04")
+
+
+@pytest.mark.pick_day_boundaries
+def test_deploy_after_slot_catch_up_tick_publishes_v2(picks_path, monkeypatch):
+    """Worker starts 15:00 UTC after slot; first catch-up tick publishes v2, no HOLD served."""
+    from internal.council import pick_scheduler
+    from internal.council.daily_pick_write_token import issue_daily_pick_write_token
+
+    prior = {
+        "pick_id": v2_pick_id("2026-11-03"),
+        "schema_version": 2,
+        "pick_day": "2026-11-03",
+        "date": "2026-11-03",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 7}, "final_confidence": 0.88, "action": "long"},
+    }
+    legacy_today = {
+        "date": "2026-11-04",
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 99}, "final_confidence": 0.91, "action": "long"},
+        "timestamp_utc": "2026-11-04T00:15:00Z",
+        "build_started_at": "2026-11-04T00:15:00Z",
+    }
+    picks_path.write_text(json.dumps([prior, legacy_today]), encoding="utf-8")
+
+    t1500 = datetime(2026, 11, 4, 15, 0, 0, tzinfo=timezone.utc)
+    _bind_pick_clock(monkeypatch, t1500)
+
+    def _assert_no_hold_served(records):
+        row, _meta = load_current_daily_pick(records)
+        assert row is not None
+        assert str(row.get("action", "")).upper() != "HOLD"
+        assert is_published_daily_pick_row(row)
+
+    _assert_no_hold_served(json.loads(picks_path.read_text()))
+    assert daily_pick_creation_open(t1500) is True
+    assert not legacy_row_counts_for_pick_day(legacy_today, pick_day_str(t1500))
+
+    issue_daily_pick_write_token()
+    monkeypatch.setattr(
+        "internal.council.daily_pick_write_token.fence_revoke_if_resolver_wait_exceeded",
+        lambda **_k: True,
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.select_daily_pick",
+        lambda subnets, ctx: {
+            "subnet": {"netuid": 12, "name": "CatchUpPick"},
+            "final_confidence": 0.55,
+            "action": "long",
+        },
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.directional_publish_guard",
+        lambda _p: {"approved": True, "reason": ""},
+    )
+    monkeypatch.setattr("internal.council.daily_pick_engine.publish_gate_fraction", lambda: 0.0)
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.record_pick_prediction",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 12, "price": 1.0}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    pick_scheduler.stop_pick_schedulers()
+
+    sched = pick_scheduler.DailyPickScheduler()
+    result = sched.run_once()
+
+    assert result.get("ok") is True
+    assert str(result.get("action", "")).upper() in ("LONG", "BUY")
+
+    disk = json.loads(picks_path.read_text())
+    v2_rows = [r for r in disk if r.get("pick_id") == v2_pick_id("2026-11-04")]
+    assert len(v2_rows) == 1
+    assert int(v2_rows[0].get("schema_version") or 0) >= 2
+    _assert_no_hold_served(disk)
+    hero, hero_meta = load_current_daily_pick(disk)
+    assert hero.get("pick_id") == v2_pick_id("2026-11-04")
+    assert hero_meta.get("prior_pick_day") is False

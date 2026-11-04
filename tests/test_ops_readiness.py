@@ -187,6 +187,10 @@ def test_readiness_pump_desk_trust_from_liveness_registry(monkeypatch):
 
 def test_readiness_pump_desk_trust_not_ready_when_stale(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setattr(
+        "internal.liveness._merge_persisted_snapshots",
+        lambda local: local,
+    )
     from internal.liveness import LivenessTracker
 
     tracker = LivenessTracker("pump_ladder", interval_seconds=60, persist=False)

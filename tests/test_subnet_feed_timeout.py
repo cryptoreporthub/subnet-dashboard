@@ -39,7 +39,7 @@ def test_daily_pick_read_path_skips_live_feed(monkeypatch):
     monkeypatch.setattr(srv, "_get_subnets_hydrate", _boom)
     monkeypatch.setattr(srv, "_get_subnets_with_source", _boom)
     monkeypatch.setattr(srv, "_enrich_daily_pick_payload", _boom)
-    monkeypatch.setattr("internal.council.daily_pick_engine._find_today", lambda _rows: stored)
+    monkeypatch.setattr("internal.council.daily_pick_engine.get_current_daily_pick", lambda: stored)
 
     client = TestClient(srv.app)
     resp = client.get("/api/daily-pick")
@@ -56,7 +56,7 @@ def test_daily_pick_times_out_without_wedging_event_loop(monkeypatch):
 
     import server as srv
 
-    monkeypatch.setattr("internal.council.daily_pick_engine._find_today", lambda _rows: None)
+    monkeypatch.setattr("internal.council.daily_pick_engine.get_current_daily_pick", lambda: None)
 
     def _boom(*_args, **_kwargs):
         raise AssertionError("hydrate must not run when no stored pick")
@@ -108,7 +108,7 @@ def test_daily_pick_weighed_endpoint_returns_shortlist(monkeypatch):
         {"netuid": 2, "name": "Beta", "conviction": 38, "role": "volume thin"},
     ]
 
-    monkeypatch.setattr("internal.council.daily_pick_engine._find_today", lambda _rows: stored)
+    monkeypatch.setattr("internal.council.daily_pick_engine.get_current_daily_pick", lambda: stored)
     monkeypatch.setattr(srv, "_daily_pick_weighed_shortlist", lambda _payload: fake_shortlist)
 
     client = TestClient(srv.app)
@@ -145,8 +145,8 @@ def test_top_pick_day_does_not_invoke_pick_engine(monkeypatch):
 
     monkeypatch.setattr("internal.council.daily_pick_engine.get_or_create_today_pick", _boom)
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {"pick": {"subnet": {"netuid": 9, "name": "Gamma"}}},
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {"pick": {"subnet": {"netuid": 9, "name": "Gamma"}}},
     )
 
     client = TestClient(srv.app)

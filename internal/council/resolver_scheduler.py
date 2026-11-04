@@ -34,6 +34,8 @@ from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.store.soul_map_io import write_soul_map as _write_soul_map_raw
 
+write_soul_map = _write_soul_map_raw
+
 from internal.liveness import LivenessTracker
 from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
 from internal.ops.mutation_log import (
@@ -159,7 +161,7 @@ def _load_json(path: str) -> Dict[str, Any]:
 def _write_soul_map_guarded(mutator, path: str) -> bool:
     from internal.council.daily_pick_write_token import guarded_bounded_commit
 
-    return guarded_bounded_commit(lambda: _write_soul_map_raw(mutator, path))
+    return guarded_bounded_commit(lambda: write_soul_map(mutator, path))
 
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:

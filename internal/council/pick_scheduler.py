@@ -334,7 +334,7 @@ class DailyPickScheduler:
                 schedule_in_seconds(DAILY_JOB_ID, self._tick, max(3600.0, _seconds_until_daily_slot()))
             return result
         if not daily_pick_creation_open():
-            result = {"ok": True, "run_at": _now_iso(), "skipped": "creation_closed"}
+            result = {"ok": False, "run_at": _now_iso(), "skipped": "creation_closed"}
             if reschedule:
                 schedule_in_seconds(DAILY_JOB_ID, self._tick, _seconds_until_daily_slot())
             return result
