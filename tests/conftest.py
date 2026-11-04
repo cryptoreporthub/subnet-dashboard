@@ -24,6 +24,21 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
+def _reset_homepage_shell_cache():
+    """Drop poisoned instant-shell HTML from the byte cache between tests."""
+    try:
+        import server as _srv
+
+        cached = _srv._HOMEPAGE_HTML_CACHE.get("html")
+        if isinstance(cached, str) and "Loading council desk" in cached:
+            _srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+            _srv._HOMEPAGE_HTML_CACHE["html"] = None
+    except Exception:
+        pass
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _isolate_message_intel_db(tmp_path, monkeypatch):
     """Redirect message-intel DB to a per-test temp file (prevents live-DB pollution)."""
     db_path = str(tmp_path / "test_message_intel.db")
@@ -92,8 +107,10 @@ def _daily_pick_write_token_for_tests():
 
 
 @pytest.fixture(autouse=True)
-def _daily_pick_creation_open_for_scheduler(monkeypatch):
+def _daily_pick_creation_open_for_scheduler(monkeypatch, request):
     """Keep scheduler unit tests exercising ticks unless they override the gate."""
+    if request.node.get_closest_marker("pick_day_boundaries"):
+        return
     try:
         monkeypatch.setattr(
             "internal.council.pick_day.daily_pick_creation_open",

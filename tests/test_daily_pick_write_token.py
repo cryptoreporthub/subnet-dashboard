@@ -170,6 +170,50 @@ def test_pick_tick_timeout_does_not_revoke_write_token(monkeypatch):
     pick_scheduler.stop_pick_schedulers()
 
 
+def test_stale_write_generation_rejected_after_bump():
+    """P1-b: timed-out / bumped generation cannot commit; current generation can."""
+    stale = tok.current_write_generation()
+    tok.bump_write_generation(reason="simulated tick timeout")
+    ran = {"v": False}
+
+    def commit_fn():
+        ran["v"] = True
+
+    assert tok.guarded_bounded_commit(commit_fn, write_generation=stale) is False
+    assert ran["v"] is False
+    assert tok.guarded_bounded_commit(commit_fn) is True
+    assert ran["v"] is True
+
+
+def test_stop_pick_schedulers_bumps_generation(monkeypatch):
+    """P1-b: stop() invalidates outstanding worker commits without revoking schedule."""
+    monkeypatch.setenv("PICK_SCHEDULER_ENABLED", "on")
+    import internal.council.pick_scheduler as pick_scheduler
+    from unittest.mock import MagicMock
+
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", MagicMock())
+    pick_scheduler.stop_pick_schedulers()
+    before = tok.current_write_generation()
+    pick_scheduler.start_pick_schedulers(immediate=False)
+    stale = tok.current_write_generation()
+    pick_scheduler.stop_pick_schedulers()
+    after_stop = tok.current_write_generation()
+    assert after_stop > stale
+
+    ran = {"v": False}
+
+    def commit_fn():
+        ran["v"] = True
+
+    assert tok.guarded_bounded_commit(commit_fn, write_generation=stale) is False
+    assert ran["v"] is False
+    assert tok.daily_pick_write_token_allowed() is True
+    pick_scheduler.start_pick_schedulers(immediate=False)
+    assert tok.guarded_bounded_commit(commit_fn) is True
+    assert ran["v"] is True
+    pick_scheduler.stop_pick_schedulers()
+
+
 def test_start_pick_schedulers_does_not_reissue_token_after_fence_revoke(monkeypatch):
     monkeypatch.setenv("PICK_SCHEDULER_ENABLED", "on")
     import internal.council.pick_scheduler as pick_scheduler

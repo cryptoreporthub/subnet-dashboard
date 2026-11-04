@@ -34,6 +34,9 @@ _TODAY = datetime.now(timezone.utc).date().isoformat()
 # judge_scores_at_creation is pre-populated so attach_judge_scores_to_daily_pick
 # skips the live conviction_bands IO path.
 _FIXTURE_PICK_RECORD = {
+    "pick_id": f"v2:{_TODAY}",
+    "schema_version": 2,
+    "pick_day": _TODAY,
     "date": _TODAY,
     "status": "ok",
     "action": "long",
@@ -92,6 +95,9 @@ _FIXTURE_SUBNET = {"netuid": 42, "name": "MockNet", "symbol": "MOCK", "price": 1
 # Carries the sentinel calibration on the pick sub-object so the fix can
 # return the persisted value instead of the live re-score (_LIVE_SCORE_CAL).
 _FIXTURE_TODAY_PICK_STATE = {
+    "pick_id": f"v2:{_TODAY}",
+    "schema_version": 2,
+    "pick_day": _TODAY,
     "date": _TODAY,
     "action": "long",
     "pick": {
@@ -158,7 +164,6 @@ def test_daily_pick_calibration_survives_enrichment():
     """
     with (
         patch("internal.council.daily_pick_engine._load", return_value=[_FIXTURE_PICK_RECORD]),
-        patch("internal.council.daily_pick_engine._find_today", return_value=_FIXTURE_PICK_RECORD),
     ):
         resp = client.get("/api/daily-pick")
 
@@ -229,7 +234,6 @@ def test_calibration_field_consistent_across_endpoints():
     """
     with (
         patch("internal.council.daily_pick_engine._load", return_value=[_FIXTURE_PICK_RECORD]),
-        patch("internal.council.daily_pick_engine._find_today", return_value=_FIXTURE_PICK_RECORD),
     ):
         daily_resp = client.get("/api/daily-pick")
 

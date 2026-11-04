@@ -34,34 +34,58 @@ def _parse_utc_instant(raw: Any) -> Optional[datetime]:
         return None
 
 
-def legacy_row_write_instant(rec: Dict[str, Any]) -> Optional[datetime]:
-    for key in ("build_started_at", "timestamp_utc", "selection_recorded_at_utc"):
+def legacy_row_original_instant(rec: Dict[str, Any]) -> Optional[datetime]:
+    """Immutable legacy provenance — not restampable ``build_started_at`` alone (P1-a)."""
+    if rec.get("pick_id"):
+        return None
+    for key in ("timestamp_utc", "selection_recorded_at_utc"):
         instant = _parse_utc_instant(rec.get(key))
         if instant is not None:
             return instant.astimezone(timezone.utc)
     return None
 
 
+def legacy_row_write_instant(rec: Dict[str, Any]) -> Optional[datetime]:
+    original = legacy_row_original_instant(rec)
+    if original is not None:
+        return original
+    instant = _parse_utc_instant(rec.get("build_started_at"))
+    if instant is not None:
+        return instant.astimezone(timezone.utc)
+    return None
+
+
 def legacy_row_counts_for_pick_day(rec: Dict[str, Any], pick_day: str) -> bool:
-    """Legacy v1 row (no pick_id) counts for pick_day only if written at/after rollover."""
+    """Legacy v1 row counts for pick_day only from immutable provenance vs rollover."""
     if rec.get("pick_id"):
         return False
     if str(rec.get("date") or "") != pick_day:
         return False
-    instant = legacy_row_write_instant(rec)
+    instant = legacy_row_original_instant(rec)
+    if instant is None:
+        instant = _parse_utc_instant(rec.get("build_started_at"))
+        if instant is not None:
+            instant = instant.astimezone(timezone.utc)
     if instant is None:
         return False
     return instant >= pick_day_start_utc(pick_day)
 
 
+def disk_has_v2_cutover(records: List[Dict[str, Any]]) -> bool:
+    return any(int(r.get("schema_version") or 0) >= 2 or r.get("pick_id") for r in records)
+
+
+def row_write_instant(rec: Dict[str, Any]) -> Optional[datetime]:
+    """Best-effort creation/write time for reader ordering."""
+    instant = legacy_row_write_instant(rec)
+    if instant is not None:
+        return instant
+    return _parse_utc_instant(rec.get("timestamp_utc"))
+
+
 def _today_row_read_fallback(rec: Dict[str, Any]) -> bool:
-    if is_published_daily_pick_row(rec):
-        return True
-    if rec.get("pick_id") and int(rec.get("schema_version") or 0) >= 2:
-        day = pick_day_str()
-        if str(rec.get("pick_day") or rec.get("date") or "") == day:
-            return True
-    return False
+    """Published LONG/BUY only — v2 HOLD may exist on disk but is never served."""
+    return is_published_daily_pick_row(rec)
 
 
 def resolve_current_daily_pick(
@@ -84,7 +108,25 @@ def resolve_current_daily_pick(
         rec.get("pick_id") == target_id and is_published_daily_pick_row(rec)
         for rec in records
     )
-    cutover = any(int(r.get("schema_version") or 0) >= 2 for r in records)
+
+    if not v2_published_for_day:
+        same_day: Optional[Dict[str, Any]] = None
+        same_stamp: Optional[datetime] = None
+        for rec in records:
+            if not is_published_daily_pick_row(rec):
+                continue
+            eff = _effective_pick_day(rec)
+            if eff != pick_day:
+                continue
+            stamp = row_write_instant(rec)
+            if same_day is None:
+                same_day = rec
+                same_stamp = stamp
+            elif stamp is not None and (same_stamp is None or stamp > same_stamp):
+                same_day = rec
+                same_stamp = stamp
+        if same_day is not None:
+            return same_day, meta
 
     best: Optional[Dict[str, Any]] = None
     best_day = ""
@@ -93,18 +135,13 @@ def resolve_current_daily_pick(
             continue
         eff = _effective_pick_day(rec)
         if not eff or eff >= pick_day:
-            if v2_published_for_day or cutover:
-                if eff == pick_day and rec.get("pick_id") != target_id:
-                    continue
-            elif eff == pick_day:
-                continue
-        if eff < pick_day and eff > best_day:
+            continue
+        if eff > best_day:
             best = rec
             best_day = eff
 
     if best is not None:
-        if _effective_pick_day(best) != pick_day:
-            meta["prior_pick_day"] = True
+        meta["prior_pick_day"] = True
         return best, meta
     return None, meta
 
@@ -120,12 +157,6 @@ def load_current_daily_pick(
     row, meta = resolve_current_daily_pick(records)
     if row is not None:
         return row, meta
-    from internal.council.daily_pick_engine import _find_today
-
-    fallback = _find_today(records)
-    if fallback is not None and _today_row_read_fallback(fallback):
-        meta = {**meta, "fallback_today_row": True}
-        return fallback, meta
     return None, meta
 
 

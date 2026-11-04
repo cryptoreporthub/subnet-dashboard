@@ -279,6 +279,11 @@ class DailyPickScheduler:
         return {"started": True, "job": DAILY_JOB_ID}
 
     def stop(self) -> Dict[str, Any]:
+        from internal.council.daily_pick_write_token import bump_write_generation
+
+        with self._work_lock:
+            self._work_generation += 1
+        bump_write_generation(reason="daily pick scheduler stopped")
         cancel_job(DAILY_JOB_ID)
         return {"stopped": True}
 
@@ -364,6 +369,9 @@ class DailyPickScheduler:
                 ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
+            from internal.council.daily_pick_write_token import current_write_generation
+
+            write_gen = current_write_generation()
             with self._work_lock:
                 self._work_generation += 1
 
@@ -385,6 +393,7 @@ class DailyPickScheduler:
                         ctx,
                         False,
                         is_cancelled=lambda: self._work_generation != tick_gen,
+                        write_generation=write_gen,
                     )
 
             with self._submit_lock:
@@ -399,8 +408,11 @@ class DailyPickScheduler:
             try:
                 payload = fut.result(timeout=timeout)
             except FuturesTimeoutError:
+                from internal.council.daily_pick_write_token import bump_write_generation
+
                 with self._work_lock:
                     self._work_generation += 1
+                bump_write_generation(reason="daily pick tick timed out")
                 result["error"] = f"daily pick tick timed out after {timeout}s"
                 result["stall"] = stage_trace.describe_stall(trace)
                 logger.warning("%s (worker abandoned)", result["error"])
@@ -607,10 +619,14 @@ def start_pick_schedulers(immediate: bool = False) -> Dict[str, Any]:
 
 def stop_pick_schedulers() -> Dict[str, Any]:
     global _daily, _hour
+    from internal.council.daily_pick_write_token import bump_write_generation
+
     with _lock:
         daily, hour = _daily, _hour
         _daily = None
         _hour = None
+    if daily is not None or hour is not None:
+        bump_write_generation(reason="pick schedulers stopped")
     out: Dict[str, Any] = {}
     if daily is not None:
         out["daily"] = daily.stop()

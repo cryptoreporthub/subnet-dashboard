@@ -19,6 +19,7 @@ import fcntl
 
 from internal.council.daily_pick import select_daily_pick
 from internal.council.daily_pick_reader import (
+    disk_has_v2_cutover,
     find_v2_row,
     is_published_daily_pick_row,
     legacy_row_counts_for_pick_day,
@@ -105,10 +106,19 @@ def _locked_daily_picks(path: str, timeout_seconds: float = 5.0) -> Iterator[Non
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
-def _save(records: List[Dict[str, Any]], path: Optional[str] = None) -> bool:
+def _save(
+    records: List[Dict[str, Any]],
+    path: Optional[str] = None,
+    *,
+    write_generation: Optional[int] = None,
+) -> bool:
     """Persist daily picks. Return False when today's incoming row is older."""
     path = path or DAILY_PICKS_PATH
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    if write_generation is None:
+        from internal.council.daily_pick_write_token import current_write_generation
+
+        write_generation = current_write_generation()
     incoming_today = _find_today(records)
     wrote = False
 
@@ -147,20 +157,18 @@ def _save(records: List[Dict[str, Any]], path: Optional[str] = None) -> bool:
             os.replace(tmp, path)
             wrote = True
 
-    if not guarded_bounded_commit(_commit):
+    if not guarded_bounded_commit(_commit, write_generation=write_generation):
         return False
     return wrote
 
 
+def _records_have_v2_cutover(records: List[Dict[str, Any]]) -> bool:
+    return disk_has_v2_cutover(records)
+
+
 def _today_row_for_read_fallback(rec: Dict[str, Any]) -> bool:
-    """Published pick or v2 pick-day row (incl. HOLD); never legacy pre-rollover v1."""
-    if is_published_daily_pick_row(rec):
-        return True
-    if rec.get("pick_id") and int(rec.get("schema_version") or 0) >= 2:
-        day = _today_str()
-        if str(rec.get("pick_day") or rec.get("date") or "") == day:
-            return True
-    return False
+    """Published LONG/BUY only — never serve v2 HOLD from read fallbacks."""
+    return is_published_daily_pick_row(rec)
 
 
 def _today_str() -> str:
@@ -168,11 +176,13 @@ def _today_str() -> str:
 
 
 def _find_today(records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Current pick-day v2 row (or legacy same-day when written at/after rollover)."""
+    """Current pick-day v2 row only after cutover — legacy same-day never substitutes v2."""
     today = _today_str()
     row = find_v2_row(records, today)
     if row is not None:
         return row
+    if _records_have_v2_cutover(records):
+        return None
     for rec in reversed(records):
         if rec.get("date") == today and not rec.get("pick_id"):
             if legacy_row_counts_for_pick_day(rec, today):
@@ -185,12 +195,6 @@ def _upsert_today(records: List[Dict[str, Any]], payload: Dict[str, Any]) -> Lis
     pick_id = payload.get("pick_id")
     if pick_id:
         kept = [r for r in records if r.get("pick_id") != pick_id]
-        day = str(payload.get("pick_day") or payload.get("date") or _today_str())
-        kept = [
-            r
-            for r in kept
-            if not (not r.get("pick_id") and str(r.get("date") or "") == day)
-        ]
         kept.append(payload)
         return kept
     today = _today_str()
@@ -221,26 +225,16 @@ def _merge_selection_recorded_at(
 
 
 def get_current_daily_pick() -> Optional[Dict[str, Any]]:
-    records = _load()
-    row, _meta = resolve_current_daily_pick(records)
-    if row is not None:
-        return row
-    fallback = _find_today(records)
-    if fallback is not None and _today_row_for_read_fallback(fallback):
-        return fallback
-    return None
+    from internal.council.daily_pick_reader import load_current_daily_pick
+
+    row, _meta = load_current_daily_pick()
+    return row
 
 
 def get_current_daily_pick_with_meta() -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    records = _load()
-    row, meta = resolve_current_daily_pick(records)
-    if row is not None:
-        return row, meta
-    fallback = _find_today(records)
-    if fallback is not None and _today_row_for_read_fallback(fallback):
-        meta = {**meta, "prior_pick_day": False, "fallback_today_row": True}
-        return fallback, meta
-    return None, meta
+    from internal.council.daily_pick_reader import load_current_daily_pick
+
+    return load_current_daily_pick()
 
 
 def _subnets_have_prices(subnets: List[Dict[str, Any]]) -> bool:
@@ -319,7 +313,11 @@ def _payload_uses_root(payload: Dict[str, Any]) -> bool:
     return False
 
 
-def write_scheduler_hold(reason: str) -> Dict[str, Any]:
+def write_scheduler_hold(
+    reason: str,
+    *,
+    write_generation: Optional[int] = None,
+) -> Dict[str, Any]:
     """Persist an honest HOLD when the background tick cannot finish scoring."""
     if not daily_pick_creation_open():
         existing = get_current_daily_pick()
@@ -346,7 +344,12 @@ def write_scheduler_hold(reason: str) -> Dict[str, Any]:
         return existing
     payload = _merge_selection_recorded_at(payload, existing)
     records = _upsert_today(records, payload)
-    if not _save(records):
+    gen = write_generation
+    if gen is None:
+        from internal.council.daily_pick_write_token import current_write_generation
+
+        gen = current_write_generation()
+    if not _save(records, write_generation=gen):
         return _find_today(_load()) or existing or payload
     return payload
 
@@ -356,6 +359,7 @@ def get_or_create_today_pick(
     market_context: Optional[Dict[str, Any]] = None,
     force: bool = False,
     is_cancelled: Optional[Callable[[], bool]] = None,
+    write_generation: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Return today's daily pick, creating it if necessary.
@@ -419,7 +423,7 @@ def get_or_create_today_pick(
         existing = _find_today(records)
         payload = _merge_selection_recorded_at(payload, existing)
         records = _upsert_today(records, payload)
-        if not _save(records):
+        if not _save(records, write_generation=write_generation):
             return _find_today(_load()) or payload
         try:
             from internal.learning.prediction_loop import record_hold_decision
@@ -470,7 +474,7 @@ def get_or_create_today_pick(
         logger.warning("daily pick aborted before save: worker was cancelled or timed out")
         return None
     with stage("save"):
-        saved = _save(records)
+        saved = _save(records, write_generation=write_generation)
     if not saved:
         return _find_today(_load()) or payload
 

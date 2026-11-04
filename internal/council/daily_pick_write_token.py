@@ -34,6 +34,25 @@ def issue_daily_pick_write_token() -> int:
     return gen
 
 
+def current_write_generation() -> int:
+    with daily_pick_write_token_lock:
+        return _generation
+
+
+def bump_write_generation(*, reason: str = "") -> int:
+    """Invalidate in-flight workers without revoking the schedule (P1-b)."""
+    global _generation
+    with daily_pick_write_token_lock:
+        _generation += 1
+        gen = _generation
+    logger.info(
+        "daily_pick_write_token generation bumped to %s reason=%s",
+        gen,
+        reason or "unspecified",
+    )
+    return gen
+
+
 def revoke_daily_pick_write_token(*, fence_timeout: bool = False, reason: str = "") -> None:
     global _generation, _revoked, _fence_timeout, _schedule_disabled
     with daily_pick_write_token_lock:
@@ -64,12 +83,23 @@ def reenable_daily_pick_schedule() -> None:
     issue_daily_pick_write_token()
 
 
-def guarded_bounded_commit(commit_fn: Callable[[], None]) -> bool:
-    """Validate token then run local atomic commit under lock (§5.1)."""
+def guarded_bounded_commit(
+    commit_fn: Callable[[], None],
+    *,
+    write_generation: Optional[int] = None,
+) -> bool:
+    """Validate token + generation then run local atomic commit under lock (§5.1 / P1-b)."""
     global _commit_slow, _last_commit_seconds
     started = time.monotonic()
     with daily_pick_write_token_lock:
         if not daily_pick_write_token_allowed():
+            return False
+        if write_generation is not None and write_generation != _generation:
+            logger.info(
+                "daily_pick guarded commit rejected stale generation=%s current=%s",
+                write_generation,
+                _generation,
+            )
             return False
         commit_fn()
     elapsed = time.monotonic() - started
