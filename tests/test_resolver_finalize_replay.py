@@ -66,7 +66,8 @@ def _lineage_rows(trace_path) -> list:
         r
         for r in data.get("records", [])
         if r.get("decision_type") == "prediction_resolve"
-        and (r.get("decision") or {}).get("prediction_id") == PREDICTION_ID
+        and isinstance(r.get("decision"), dict)
+        and r["decision"].get("prediction_id") == PREDICTION_ID
     ]
 
 
@@ -77,7 +78,8 @@ def _trail_rows(soul_path) -> list:
         e
         for e in trail
         if e.get("event_type") == "prediction_resolved"
-        and (e.get("evidence") or {}).get("prediction_id") == PREDICTION_ID
+        and isinstance(e.get("evidence"), dict)
+        and e["evidence"].get("prediction_id") == PREDICTION_ID
     ]
 
 
@@ -92,6 +94,41 @@ def test_replayed_finalize_records_one_lineage_row(isolated):
 def test_replayed_finalize_records_one_trail_row(isolated):
     _trace_path, soul_path = isolated
     _finalize_once()
+    _finalize_once()
+
+    assert len(_trail_rows(soul_path)) == 1
+
+
+def test_legacy_trace_row_with_non_dict_decision_does_not_block_lineage(isolated):
+    trace_path, _soul_path = isolated
+    trace_path.write_text(
+        json.dumps(
+            {
+                "meta": {},
+                "records": [{"decision_type": "prediction_resolve", "decision": "legacy-string"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _finalize_once()
+
+    assert len(_lineage_rows(trace_path)) == 1
+
+
+def test_legacy_trail_row_with_non_dict_evidence_does_not_block_trail(isolated):
+    _trace_path, soul_path = isolated
+    soul_path.write_text(
+        json.dumps(
+            {
+                "soul_map_state": {
+                    "learning_trail": [{"event_type": "prediction_resolved", "evidence": "legacy-string"}]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
     _finalize_once()
 
     assert len(_trail_rows(soul_path)) == 1
