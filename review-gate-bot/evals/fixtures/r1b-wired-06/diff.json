@@ -1,0 +1,21 @@
+{
+  "totalFiles": 2,
+  "files": [
+    {
+      "path": "internal/subnet_universe.py",
+      "status": "modified",
+      "additions": 5,
+      "deletions": 1,
+      "patch": "@@ -316,6 +316,10 @@\n         refresh_incomplete=True,\n         message=message,\n     )\n+\n+\n+def _sorted_probe_candidates(candidates: set[int]) -> list[int]:\n+    return sorted(candidates)\n \n \n def _compute_membership(\n@@ -558,7 +562,7 @@\n             probe_candidates = list(range(MAX_NETUIDS))\n         else:\n             candidates |= set(range(MAX_NETUIDS))\n-            probe_candidates = sorted(candidates)\n+            probe_candidates = _sorted_probe_candidates(candidates)\n         deadline = time.monotonic() + self._probe_budget_seconds\n         if self._probe_fetch is not None:\n             probe_map, probe_complete = self._probe_fetch(probe_candidates, deadline)"
+    },
+    {
+      "path": "tests/test_subnet_universe.py",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -1140,3 +1140,9 @@\n     entry = builder.build(prior).snapshot.validity_map[\"42\"]\n     assert entry[\"validity\"] == \"negative\"\n     assert entry[\"negative_since\"] == started\n+\n+\n+def test_sorted_probe_candidates_orders_netuids():\n+    from internal.subnet_universe import _sorted_probe_candidates\n+\n+    assert _sorted_probe_candidates({3, 1, 2}) == [1, 2, 3]"
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}

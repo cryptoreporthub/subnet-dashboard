@@ -274,6 +274,29 @@ def pack_b_control(dirname: str, gate: dict) -> bool:
     return dirname.startswith("r1b-f3-ctrl-")
 
 
+def pack_b_wired_control(dirname: str) -> bool:
+    return dirname.startswith("r1b-wired-")
+
+
+ORPHAN_R1B_PATH = re.compile(r"^(internal/r1b_[a-z0-9_]+\.py|tests/test_r1b_[a-z0-9_]+\.py)$")
+
+
+def check_r1b_wired_fixture(dirname: str, diff: dict, oracle_doc: dict) -> list[str]:
+    if not pack_b_wired_control(dirname):
+        return []
+    errors: list[str] = []
+    behavior = oracle_doc.get("behavior") or {}
+    if behavior.get("scoringRole") == "report-only":
+        errors.append(f"{dirname}: wired control cannot be report-only")
+    if not behavior.get("wiredImportPath"):
+        errors.append(f"{dirname}: missing behavior.wiredImportPath")
+    for entry in diff.get("files") or []:
+        path = entry.get("path") or ""
+        if ORPHAN_R1B_PATH.match(path):
+            errors.append(f"{dirname}: wired control adds orphan path {path}")
+    return errors
+
+
 def author_voice_text(pr: dict, gate: dict) -> str:
     return pr.get("title") or ""
 
@@ -352,6 +375,7 @@ def validate_r1b_fixture_dir(fixture_dir: Path, *, exam_fps: set[str] | None = N
     if oracle_path.is_file():
         oracle_doc = json.loads(oracle_path.read_text())
         errors.extend(check_f3_visible_claim(name, pr, diff, oracle_doc))
+        errors.extend(check_r1b_wired_fixture(name, diff, oracle_doc))
     return errors
 
 

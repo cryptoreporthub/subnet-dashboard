@@ -1,0 +1,12 @@
+{
+  "number": 9460,
+  "title": "universe: sort probe candidates via _sorted_probe_candidates",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9460",
+  "headSha": "d17c88ff04410daac5c9f278748b33eaa14d0ac9",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/subnet_universe.py",
+    "tests/test_subnet_universe.py"
+  ]
+}

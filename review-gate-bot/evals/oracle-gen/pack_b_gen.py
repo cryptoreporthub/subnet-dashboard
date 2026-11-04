@@ -596,6 +596,12 @@ def build(env: dict) -> None:
         behavior = {"expectedVerdict": "PASS"}
         if name == "r1b-f3-ctrl-01":
             behavior.update(_linear_ops_oracle(good_mod, claim="O(n) loop ops measured in test"))
+            behavior.update(
+                {
+                    "scoringRole": "report-only",
+                    "note": "Orphan r1b_perf_07 module; superseded by r1b-wired-05.",
+                }
+            )
         _w(
             env,
             name,
@@ -862,7 +868,11 @@ def test_root_is_never_eligible_for_removal_whatever_the_elapsed_time():
                 ("tests/test_r1b_clean_perf.py", None, perf_test),
             ],
             {
-                "behavior": {"expectedVerdict": "PASS"},
+                "behavior": {
+                    "expectedVerdict": "PASS",
+                    "scoringRole": "report-only",
+                    "note": "Orphan r1b_clean_perf module; superseded by r1b-wired-01.",
+                },
                 "pytest": _pytest(
                     env,
                     extra_files={
@@ -993,7 +1003,7 @@ def test_root_is_never_eligible_for_removal_whatever_the_elapsed_time():
             next_pr(),
             title,
             [(mod_path, None, mod_text), (test_path, None, test_text)],
-            oracle={"behavior": {"expectedVerdict": "PASS"}, "pytest": pt},
+            oracle={"behavior": {"expectedVerdict": "PASS", **({"scoringRole": "report-only", "note": "Orphan module; superseded by r1b-wired-02."} if name == "r1b-redact-clean-01" else {})}, "pytest": pt},
         )
 
     # ---- Generalization ---------------------------------------------------------------
@@ -1033,4 +1043,8 @@ def test_root_is_never_eligible_for_removal_whatever_the_elapsed_time():
             oracle={"behavior": behavior, "pytest": pt},
         )
 
-    assert pr == 9455, f"expected 9455 next PR, got {pr}"
+    import pack_b_wired  # noqa: E402
+
+    pack_b_wired.build_wired(env, next_pr=next_pr, _w=_w, _pytest=_pytest, run_pytest=run_pytest)
+
+    assert pr == 9461, f"expected 9461 next PR, got {pr}"
