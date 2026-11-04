@@ -4,7 +4,7 @@
 
 **Verification:** Code refs below from branch `cursor/daily-pick-morning-plan-3740` @ **`89d891c6`** (same tree as `main` for cited paths).
 
-**Goal:** Move authoritative daily pick generation to **14:05 UTC** (~07:05 America/Phoenix) with **14:00 UTC pick-day rollover**, without rewriting history on disk.
+**Goal:** Move authoritative daily pick generation to **19:05 UTC** (~12:05 PM America/Phoenix) with **19:00 UTC pick-day rollover**, without rewriting history on disk.
 
 ---
 

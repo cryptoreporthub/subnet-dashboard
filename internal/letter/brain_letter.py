@@ -136,9 +136,12 @@ def _today_pick_block() -> Dict[str, Any]:
         records = load_data("data/daily_picks.json")
         from internal.council.daily_pick_reader import load_current_daily_pick
 
-        row, _meta = load_current_daily_pick(
-            records if isinstance(records, list) else []
+        rows = (
+            [rec for rec in records if isinstance(rec, dict)]
+            if isinstance(records, list)
+            else []
         )
+        row, _meta = load_current_daily_pick(rows)
         if isinstance(row, dict):
             payload = row
     except Exception:

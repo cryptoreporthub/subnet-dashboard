@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from internal.council import stage_trace
+from internal.council.pick_day import DAILY_PICK_SLOT_UTC_HOUR, DAILY_PICK_SLOT_UTC_MINUTE
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker, get_tracker
 
@@ -29,8 +30,6 @@ DAILY_JOB_ID = "daily-pick-scheduler"
 HOUR_JOB_ID = "hour-pick-scheduler"
 
 HOUR_PICK_REFRESH_MINUTES = int(os.environ.get("HOUR_PICK_REFRESH_MINUTES", "180"))
-DAILY_PICK_SLOT_UTC_HOUR = int(os.environ.get("DAILY_PICK_SLOT_UTC_HOUR", "14"))
-DAILY_PICK_SLOT_UTC_MINUTE = int(os.environ.get("DAILY_PICK_SLOT_UTC_MINUTE", "5"))
 # ponytail: one failed cold-start/slot tick must not wait until tomorrow 00:15.
 DAILY_PICK_RETRY_MINUTES = int(os.environ.get("DAILY_PICK_RETRY_MINUTES", "15"))
 DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "90"))

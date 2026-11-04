@@ -281,7 +281,7 @@ def _find_row_for_date(records: List[Dict[str, Any]], date: str) -> Optional[Dic
     from internal.council.pick_day import v2_pick_id
 
     if date == _today_str():
-        row, _meta = load_current_daily_pick(records)
+        row = find_v2_row(records, date)
         if row is not None:
             return row
     pid = v2_pick_id(date)

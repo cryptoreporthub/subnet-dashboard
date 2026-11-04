@@ -3187,9 +3187,9 @@ async def api_daily_pick_weighed():
     """Deferred hydrate read — shortlist only, scored on live-priced subnets."""
 
     def _build():
-        from internal.council.daily_pick_engine import get_current_daily_pick
+        from internal.council.daily_pick_engine import get_today_only_daily_pick
 
-        existing = get_current_daily_pick()
+        existing = get_today_only_daily_pick()
         if existing is None:
             return {"shortlist": []}
         return {"shortlist": _daily_pick_weighed_shortlist(existing)}
@@ -3346,9 +3346,9 @@ async def api_top_pick_day():
     """Top pick for the current day — read persisted pick only; never run pick engine on API."""
 
     def _build():
-        from internal.council.daily_pick_engine import get_current_daily_pick
+        from internal.council.daily_pick_engine import get_today_only_daily_pick
 
-        existing = get_current_daily_pick()
+        existing = get_today_only_daily_pick()
         if isinstance(existing, dict):
             day_pick = existing.get("pick")
             if not day_pick and existing.get("candidate"):

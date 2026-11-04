@@ -108,7 +108,7 @@ def test_daily_pick_weighed_endpoint_returns_shortlist(monkeypatch):
         {"netuid": 2, "name": "Beta", "conviction": 38, "role": "volume thin"},
     ]
 
-    monkeypatch.setattr("internal.council.daily_pick_engine.get_current_daily_pick", lambda: stored)
+    monkeypatch.setattr("internal.council.daily_pick_engine.get_today_only_daily_pick", lambda: stored)
     monkeypatch.setattr(srv, "_daily_pick_weighed_shortlist", lambda _payload: fake_shortlist)
 
     client = TestClient(srv.app)
@@ -145,7 +145,7 @@ def test_top_pick_day_does_not_invoke_pick_engine(monkeypatch):
 
     monkeypatch.setattr("internal.council.daily_pick_engine.get_or_create_today_pick", _boom)
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine.get_current_daily_pick",
+        "internal.council.daily_pick_engine.get_today_only_daily_pick",
         lambda: {"pick": {"subnet": {"netuid": 9, "name": "Gamma"}}},
     )
 

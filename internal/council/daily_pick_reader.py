@@ -29,9 +29,12 @@ def _parse_utc_instant(raw: Any) -> Optional[datetime]:
     if not raw or not isinstance(raw, str):
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        instant = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=timezone.utc)
+    return instant.astimezone(timezone.utc)
 
 
 def legacy_row_original_instant(rec: Dict[str, Any]) -> Optional[datetime]:
@@ -115,6 +118,7 @@ def resolve_current_daily_pick(
     """Return (row, meta) per §3 reader rule."""
     pick_day = now_pick_day or pick_day_str()
     meta: Dict[str, Any] = {"pick_day": pick_day, "prior_pick_day": False}
+    records = [rec for rec in records if isinstance(rec, dict)]
     if not records:
         return None, meta
 

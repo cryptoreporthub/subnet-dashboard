@@ -183,6 +183,8 @@ def _find_today(records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return row
     if _records_have_v2_cutover(records):
         return None
+    if daily_pick_creation_open():
+        return None
     for rec in reversed(records):
         if rec.get("date") == today and not rec.get("pick_id"):
             if legacy_row_counts_for_pick_day(rec, today):
@@ -235,6 +237,14 @@ def get_current_daily_pick_with_meta() -> tuple[Optional[Dict[str, Any]], Dict[s
     from internal.council.daily_pick_reader import load_current_daily_pick
 
     return load_current_daily_pick()
+
+
+def get_today_only_daily_pick() -> Optional[Dict[str, Any]]:
+    """Callers that must not treat prior-day reader fallback as today's pick."""
+    row, meta = get_current_daily_pick_with_meta()
+    if meta.get("prior_pick_day"):
+        return None
+    return row
 
 
 def _subnets_have_prices(subnets: List[Dict[str, Any]]) -> bool:
@@ -373,8 +383,19 @@ def get_or_create_today_pick(
     subnets = tradable_subnets(subnets)
 
     if not daily_pick_creation_open():
+        if force:
+            return None
         row, _meta = resolve_current_daily_pick(_load())
-        return row
+        if row is not None:
+            return row
+        return {
+            "status": "ok",
+            "pick_day": _today_str(),
+            "date": _today_str(),
+            "action": "HOLD",
+            "pick": None,
+            "candidate": None,
+        }
 
     records = _load()
 

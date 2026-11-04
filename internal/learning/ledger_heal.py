@@ -38,7 +38,9 @@ def _today_record(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
     if not isinstance(records, list):
         return None
-    row, _meta = load_current_daily_pick(records)
+    row, meta = load_current_daily_pick(records)
+    if meta.get("prior_pick_day"):
+        return None
     return row if isinstance(row, dict) else None
 
 

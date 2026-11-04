@@ -182,9 +182,9 @@ def summarize_picks() -> Dict[str, Any]:
 def summarize_picks_lite() -> Dict[str, Any]:
     """File-backed pick narrative for mindmap state — no hour/day scoring."""
     try:
-        from internal.council.daily_pick_engine import get_current_daily_pick
+        from internal.council.daily_pick_engine import get_today_only_daily_pick
 
-        daily = get_current_daily_pick() or {}
+        daily = get_today_only_daily_pick() or {}
     except Exception as exc:
         return _sentences([f"Pick snapshot unavailable: {exc}"])
 

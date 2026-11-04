@@ -95,7 +95,7 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
         {"netuid": 1, "name": "Apex", "price": 12.5, "volume": 5000, "marketcap_rank": 1},
         {"netuid": 42, "name": "Mid", "price": 2.0, "volume": 8000, "marketcap_rank": 25},
     ]
-    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=True)
+    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=False)
 
     assert regen_calls["n"] == 1
     assert str(out["action"]).lower() == "long"
@@ -171,7 +171,7 @@ def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path)
         {"netuid": 2, "name": "DSperse", "price": 1.0, "volume": 3792, "marketcap_rank": 18},
         {"netuid": 30, "name": "Endure Network", "price": 0.5, "volume": 12000, "marketcap_rank": 30},
     ]
-    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=True)
+    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=False)
 
     assert regen_calls["n"] == 1
     assert str(out["action"]).lower() == "long"

@@ -385,11 +385,14 @@ def build_chat_context() -> Dict[str, Any]:
     expert_weights = stats.get("expert_weights", {})
 
     daily_pick_data = _safe_load_json("data", "daily_picks.json", default=[])
+    rows = (
+        [row for row in daily_pick_data if isinstance(row, dict)]
+        if isinstance(daily_pick_data, list)
+        else []
+    )
     from internal.council.daily_pick_reader import load_current_daily_pick
 
-    daily_pick, _meta = load_current_daily_pick(
-        daily_pick_data if isinstance(daily_pick_data, list) else []
-    )
+    daily_pick, _meta = load_current_daily_pick(rows)
     daily_pick = daily_pick or {}
 
     ctx = {

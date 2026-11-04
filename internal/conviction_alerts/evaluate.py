@@ -68,8 +68,8 @@ def _collect_candidates() -> List[Dict[str, Any]]:
     if isinstance(picks, list):
         from internal.council.daily_pick_reader import load_current_daily_pick
 
-        rec, _meta = load_current_daily_pick(picks)
-        if isinstance(rec, dict):
+        rec, meta = load_current_daily_pick(picks)
+        if isinstance(rec, dict) and not meta.get("prior_pick_day"):
             pick = rec.get("pick") or rec.get("candidate") or {}
             if isinstance(pick, dict):
                 conf = _normalize_confidence(

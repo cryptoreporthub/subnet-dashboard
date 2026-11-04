@@ -43,7 +43,7 @@ def test_reader_steady_140030_shows_prior_published(picks_path):
         "pick": {"subnet": {"netuid": 1}, "final_confidence": 0.9},
     }
     picks_path.write_text(json.dumps([prior]), encoding="utf-8")
-    frozen = datetime(2026, 11, 4, 14, 0, 30, tzinfo=timezone.utc)
+    frozen = datetime(2026, 11, 4, 19, 0, 30, tzinfo=timezone.utc)
     with patch("internal.council.daily_pick_reader.pick_day_str", return_value=day):
         row, meta = resolve_current_daily_pick(json.loads(picks_path.read_text()))
     assert row is not None
@@ -52,7 +52,7 @@ def test_reader_steady_140030_shows_prior_published(picks_path):
 
 
 def test_force_true_before_slot_does_not_persist(picks_path, monkeypatch):
-    frozen = datetime(2026, 11, 4, 14, 0, 0, tzinfo=timezone.utc)
+    frozen = datetime(2026, 11, 4, 19, 0, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.daily_pick_creation_open",
         lambda now=None: False,
@@ -130,7 +130,7 @@ def test_prod_legacy_0015_row_v2_at_slot_no_hold_served(picks_path, monkeypatch)
     }
     picks_path.write_text(json.dumps([prior, legacy_today]), encoding="utf-8")
 
-    t1340 = datetime(2026, 11, 4, 13, 40, 0, tzinfo=timezone.utc)
+    t1340 = datetime(2026, 11, 4, 18, 40, 0, tzinfo=timezone.utc)
     _bind_pick_clock(monkeypatch, t1340)
     records = json.loads(picks_path.read_text())
     row, meta = load_current_daily_pick(records)
@@ -141,7 +141,7 @@ def test_prod_legacy_0015_row_v2_at_slot_no_hold_served(picks_path, monkeypatch)
     assert pick_day_str(t1340) == "2026-11-03"
     assert row.get("pick", {}).get("subnet", {}).get("netuid") == 7
 
-    t1442 = datetime(2026, 11, 4, 14, 42, 0, tzinfo=timezone.utc)
+    t1442 = datetime(2026, 11, 4, 19, 42, 0, tzinfo=timezone.utc)
     _bind_pick_clock(monkeypatch, t1442)
     records = json.loads(picks_path.read_text())
     row, meta = load_current_daily_pick(records)
@@ -172,7 +172,7 @@ def test_prod_legacy_0015_row_v2_at_slot_no_hold_served(picks_path, monkeypatch)
         lambda *_a, **_k: None,
     )
 
-    t1405 = datetime(2026, 11, 4, 14, 5, 0, tzinfo=timezone.utc)
+    t1405 = datetime(2026, 11, 4, 19, 5, 0, tzinfo=timezone.utc)
     _bind_pick_clock(monkeypatch, t1405)
     assert daily_pick_creation_open(t1405) is True
     out = get_or_create_today_pick([{"netuid": 12, "price": 1.0}], force=False)
@@ -215,7 +215,7 @@ def test_legacy_restamp_after_rollover_does_not_block_v2(picks_path, monkeypatch
         "build_started_at": "2026-11-04T15:00:00Z",
     }
     picks_path.write_text(json.dumps([prior, legacy_restamp]), encoding="utf-8")
-    t1405 = datetime(2026, 11, 4, 14, 5, 0, tzinfo=timezone.utc)
+    t1405 = datetime(2026, 11, 4, 19, 5, 0, tzinfo=timezone.utc)
     _bind_pick_clock(monkeypatch, t1405)
     assert not legacy_row_counts_for_pick_day(legacy_restamp, "2026-11-04")
     assert _find_today(json.loads(picks_path.read_text())) is None
@@ -265,7 +265,7 @@ def test_deploy_after_slot_catch_up_tick_publishes_v2(picks_path, monkeypatch):
     }
     picks_path.write_text(json.dumps([prior, legacy_today]), encoding="utf-8")
 
-    t1500 = datetime(2026, 11, 4, 15, 0, 0, tzinfo=timezone.utc)
+    t1500 = datetime(2026, 11, 4, 20, 0, 0, tzinfo=timezone.utc)
     _bind_pick_clock(monkeypatch, t1500)
 
     def _assert_no_hold_served(records):
@@ -340,7 +340,7 @@ def test_legacy_rows_preserved_when_v2_written(picks_path, monkeypatch):
         "build_started_at": "2026-11-04T00:15:00Z",
     }
     picks_path.write_text(json.dumps([prior, legacy_today]), encoding="utf-8")
-    t1405 = datetime(2026, 11, 4, 14, 5, 0, tzinfo=timezone.utc)
+    t1405 = datetime(2026, 11, 4, 19, 5, 0, tzinfo=timezone.utc)
     _bind_pick_clock(monkeypatch, t1405)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.daily_pick_creation_open",
@@ -353,7 +353,7 @@ def test_legacy_rows_preserved_when_v2_written(picks_path, monkeypatch):
         "date": day,
         "action": "LONG",
         "pick": {"subnet": {"netuid": 12}, "final_confidence": 0.6, "action": "long"},
-        "build_started_at": "2026-11-04T14:05:00Z",
+        "build_started_at": "2026-11-04T19:05:00Z",
     }
     merged = _upsert_today(json.loads(picks_path.read_text()), v2_long)
     assert _save(merged)
@@ -380,7 +380,7 @@ def test_v2_hold_on_disk_not_served_by_reader(picks_path):
         "date": day,
         "action": "HOLD",
         "pick": None,
-        "build_started_at": "2026-11-04T14:05:00Z",
+        "build_started_at": "2026-11-04T19:05:00Z",
     }
     records = [legacy_today, hold]
     with patch("internal.council.daily_pick_reader.pick_day_str", return_value=day):
@@ -414,7 +414,8 @@ def test_scheduler_cold_start_1445_utc_first_tick_publishes_v2(picks_path, monke
     }
     picks_path.write_text(json.dumps([prior, legacy_today]), encoding="utf-8")
 
-    t1445 = datetime(2026, 11, 4, 14, 45, 0, tzinfo=timezone.utc)
+    t1445 = datetime(2026, 11, 4, 19, 45, 0, tzinfo=timezone.utc)
+    _bind_pick_clock(monkeypatch, t1445)
     assert pick_day_mod.pick_day_str(t1445) == "2026-11-04"
     assert pick_day_mod.daily_pick_creation_open(t1445) is True
 
@@ -447,7 +448,7 @@ def test_scheduler_cold_start_1445_utc_first_tick_publishes_v2(picks_path, monke
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._now_stamp",
-        lambda: "2026-11-04T14:45:01Z",
+        lambda: "2026-11-04T19:45:01Z",
     )
     pick_scheduler.stop_pick_schedulers()
     result = pick_scheduler.DailyPickScheduler().run_once()
@@ -460,7 +461,7 @@ def test_scheduler_cold_start_1445_utc_first_tick_publishes_v2(picks_path, monke
 
 @pytest.mark.pick_day_boundaries
 def test_prior_day_tiebreak_v2_wins_over_legacy_on_2026_11_05_gap():
-    """14:02 UTC 2026-11-05 (post-rollover, pre-slot): v2:2026-11-04 beats legacy same date."""
+    """19:02 UTC 2026-11-05 (post-rollover, pre-slot): v2:2026-11-04 beats legacy same date."""
     day = "2026-11-05"
     legacy = {
         "date": "2026-11-04",
@@ -475,7 +476,7 @@ def test_prior_day_tiebreak_v2_wins_over_legacy_on_2026_11_05_gap():
         "date": "2026-11-04",
         "action": "LONG",
         "pick": {"subnet": {"netuid": 12}, "final_confidence": 0.6, "action": "long"},
-        "build_started_at": "2026-11-04T14:05:00Z",
+        "build_started_at": "2026-11-04T19:05:00Z",
     }
     records = [legacy, v2_row]
     with patch("internal.council.daily_pick_reader.pick_day_str", return_value=day):
