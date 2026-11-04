@@ -112,7 +112,20 @@ while IFS=$'\t' read -r IDX EVAL_ID CONDITION ROLE BOT_SHA METHOD_ARM CASE_SLUG 
   STATE="/tmp/r2-slot-state-${IDX}-$$-${RANDOM}"
   rm -rf "$STATE"
 
+  provider_flake_retry() {
+    [[ -s "$SLOT_JSON" ]] && grep -q 'trouble connecting to the model provider' "$SLOT_JSON"
+  }
+
   EC="$(bash "$SLOT_RUN" "$BOT" "$EVAL_ID" "$STATE" "$SLOT_JSON" "$METHOD_ARM" "$SLOT_WALL_SEC" "$RUN_LOG")"
+  if [[ "$EC" -ne 0 ]] && [[ "$EC" -ne 124 ]] && provider_flake_retry; then
+    echo "provider_flake_retry eval_id=${EVAL_ID} idx=${IDX} exit=${EC} sleep_s=45" | tee -a "$RUN_LOG"
+    rm -f "$SLOT_JSON"
+    rm -rf "$STATE"
+    sleep 45
+    STATE="/tmp/r2-slot-state-${IDX}-$$-${RANDOM}"
+    SLOT_JSON="$(mktemp /tmp/r2-slot-XXXX.json)"
+    EC="$(bash "$SLOT_RUN" "$BOT" "$EVAL_ID" "$STATE" "$SLOT_JSON" "$METHOD_ARM" "$SLOT_WALL_SEC" "$RUN_LOG")"
+  fi
   SLOT_END="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   rm -rf "$STATE"
 
