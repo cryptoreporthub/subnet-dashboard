@@ -78,13 +78,24 @@ export function verdictAt(
   // A FAIL still blocks; anything else asks for a fresh review rather than passing on an order nobody can see.
   const timeOf = (v: PinnedVerdict): number | undefined => (v.at === undefined ? undefined : Date.parse(v.at));
   const lastTime = timeOf(last);
-  const simultaneous =
-    lastTime === undefined
-      ? [last.verdict]
+  // A verdict with no readable time may sit anywhere in the order, so it is never assumed to be the latest on its own.
+  // When the latest verdict has no readable time, nothing can be ordered: every verdict at this head is in the group.
+  const readable = (v: PinnedVerdict): boolean => {
+    const t = timeOf(v);
+    return t !== undefined && !Number.isNaN(t);
+  };
+  // No verdict has a readable time: the caller's order is the only order, so the last one is the latest.
+  if (!mine.some(readable)) {
+    return last.verdict;
+  }
+  const simultaneous = (
+    lastTime === undefined || Number.isNaN(lastTime)
+      ? mine
       : mine.filter((v) => {
           const t = timeOf(v);
-          return t !== undefined && (Number.isNaN(t) || Number.isNaN(lastTime) || t === lastTime);
-        }).map((v) => v.verdict);
+          return t === undefined || Number.isNaN(t) || t === lastTime;
+        })
+  ).map((v) => v.verdict);
   if (new Set(simultaneous).size > 1) {
     return simultaneous.includes("FAIL") ? "FAIL" : "MODIFY";
   }

@@ -227,6 +227,24 @@ test("the latest verdict at a head wins", () => {
   assert.equal(verdictAt(verdicts, "cursor", HEAD), "PASS");
 });
 
+test("a FAIL with no readable time is not hidden by a timed PASS", () => {
+  const untimedFail = { reviewer: "cursor" as const, headSha: HEAD, verdict: "FAIL" as const };
+  const timedPass = { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const, at: "2026-11-04T10:00:00Z" };
+  assert.equal(verdictAt([untimedFail, timedPass], "cursor", HEAD), "FAIL");
+});
+
+test("a timed FAIL is not hidden by a PASS with no readable time", () => {
+  const timedFail = { reviewer: "cursor" as const, headSha: HEAD, verdict: "FAIL" as const, at: "2026-11-04T09:00:00Z" };
+  const untimedPass = { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const };
+  assert.equal(verdictAt([timedFail, untimedPass], "cursor", HEAD), "FAIL");
+});
+
+test("a timed PASS is not hidden by a FAIL with no readable time", () => {
+  const timedPass = { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const, at: "2026-11-04T10:00:00Z" };
+  const untimedFail = { reviewer: "cursor" as const, headSha: HEAD, verdict: "FAIL" as const };
+  assert.equal(verdictAt([timedPass, untimedFail], "cursor", HEAD), "FAIL");
+});
+
 test("verdictAt ignores another reviewer and another head", () => {
   const verdicts = [v("ditto", "PASS"), v("cursor", "PASS", OTHER)];
   assert.equal(verdictAt(verdicts, "cursor", HEAD), "missing");
