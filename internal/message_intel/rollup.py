@@ -268,8 +268,24 @@ def is_desk_author(*, author_id: Any = None, author_username: Any = None) -> boo
         raw_id = raw_id.split(":", 1)[1]
     if raw_id in DESK_AUTHOR_ID_VALUES:
         return True
+    env_bot_id = os.environ.get("TELEGRAM_BOT_USER_ID", "").strip().lower()
+    if env_bot_id and raw_id == env_bot_id:
+        return True
     handle = str(author_username or "").strip().lower().lstrip("@")
-    return bool(handle) and handle in DESK_AUTHOR_USERNAMES
+    if handle and handle in DESK_AUTHOR_USERNAMES:
+        return True
+    env_bot_user = os.environ.get("TELEGRAM_BOT_USERNAME", "").strip().lower().lstrip("@")
+    return bool(env_bot_user) and handle == env_bot_user
+
+
+def is_desk_message_row(row: Dict[str, Any]) -> bool:
+    """True when a stored intel row is from the outbound Telegram bot / desk."""
+    if not isinstance(row, dict):
+        return False
+    return is_desk_author(
+        author_id=stable_author_id(row),
+        author_username=row.get("author_username"),
+    )
 
 
 def _author_rolling_quality(stats: Dict[str, Any]) -> float:
@@ -352,9 +368,9 @@ def _build_trending_subnets_uncached(
             continue
         s_val = _sentiment_value(row.get("sentiment"))
         conviction = _coerce_float(row.get("conviction"))
-        author_id = stable_author_id(row)
-        if is_desk_author(author_id=author_id, author_username=row.get("author_username")):
+        if is_desk_message_row(row):
             continue
+        author_id = stable_author_id(row)
         netuids = _netuids_from_row(row)
         for netuid in netuids:
             b = buckets[netuid]
@@ -472,6 +488,8 @@ def build_yesterday_leader(
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < yesterday_start or ts >= today_start:
             continue
+        if is_desk_message_row(row):
+            continue
         netuids = _netuids_from_row(row)
         if not netuids:
             continue
@@ -497,6 +515,8 @@ def build_yesterday_leader(
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < yesterday_start or ts >= today_start:
+            continue
+        if is_desk_message_row(row):
             continue
         if top_netuid not in _netuids_from_row(row):
             continue
@@ -605,9 +625,9 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < cutoff:
             continue
-        author_id = stable_author_id(row)
-        if is_desk_author(author_id=author_id, author_username=row.get("author_username")):
+        if is_desk_message_row(row):
             continue
+        author_id = stable_author_id(row)
         entry = authors.setdefault(
             author_id,
             {
@@ -733,9 +753,9 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
         rx = _reaction_score(row.get("reactions"))
         if not any(rx.values()):
             continue
-        author_id = stable_author_id(row)
-        if is_desk_author(author_id=author_id, author_username=row.get("author_username")):
+        if is_desk_message_row(row):
             continue
+        author_id = stable_author_id(row)
         name = row.get("author_name") or "Unknown"
         username = row.get("author_username") or ""
         for key, _, _ in _REACTION_KEYS:
@@ -829,6 +849,8 @@ def build_today_reaction_leaders(*, db=None, limit: int = 3) -> List[Dict[str, A
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < today_start:
+            continue
+        if is_desk_message_row(row):
             continue
         rx = _reaction_score(row.get("reactions"))
         if not any(rx.values()):
@@ -938,6 +960,8 @@ def build_week_top_comment(*, days: int = 7, db=None) -> Optional[Dict[str, Any]
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < cutoff:
             continue
+        if is_desk_message_row(row):
+            continue
         content = str(row.get("content") or "").strip()
         if not content:
             continue
@@ -998,6 +1022,8 @@ def build_topics(*, limit: int = 12, db=None) -> List[Dict[str, Any]]:
     subnet_counts: Dict[int, int] = defaultdict(int)
 
     for row in _load_message_rows(db):
+        if is_desk_message_row(row):
+            continue
         group = str(row.get("group_name") or "").strip()
         if group:
             group_counts[group] += 1
@@ -1120,6 +1146,8 @@ def _author_reliability_for_conviction(rows: List[Dict[str, Any]]) -> Dict[str, 
     """Reliability uses resolved qualified receipts only, with beta smoothing."""
     stats: Dict[str, Dict[str, Any]] = {}
     for row in rows:
+        if is_desk_message_row(row):
+            continue
         proof = classify_call(row)
         if not proof["resolved"] or proof["status"] not in ("hit", "miss"):
             continue
@@ -1179,6 +1207,8 @@ def build_subnet_telegram_conviction(
     buckets: Dict[int, Dict[str, Any]] = {}
     cutoff = now - timedelta(hours=CONVICTION_WINDOW_HOURS)
     for row in rows:
+        if is_desk_message_row(row):
+            continue
         timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if timestamp is None or timestamp < cutoff:
             continue
@@ -1837,6 +1867,8 @@ def build_24h_summary(
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < prev_start:
             continue
+        if is_desk_message_row(row):
+            continue
         in_current = ts >= window_start
         in_prev = prev_start <= ts < window_start
         if not in_current and not in_prev:
@@ -2087,6 +2119,8 @@ def build_today_conversation_summary(
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < today_start:
+            continue
+        if is_desk_message_row(row):
             continue
         message_count += 1
         sentiment_sum += _sentiment_value(row.get("sentiment"))
@@ -2672,6 +2706,8 @@ def build_yesterday_chat_summary(
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < day_before_start:
             continue
+        if is_desk_message_row(row):
+            continue
         in_yesterday = yesterday_start <= ts < today_start
         in_prev = day_before_start <= ts < yesterday_start
         if not in_yesterday and not in_prev:
@@ -2853,7 +2889,9 @@ def build_high_conviction_strip(
         return []
 
     out: List[Dict[str, Any]] = []
-    for row in rows[:limit]:
+    for row in rows:
+        if is_desk_message_row(row):
+            continue
         verdict = row.get("verdict") if isinstance(row.get("verdict"), dict) else {}
         analysis = row.get("analysis") if isinstance(row.get("analysis"), dict) else {}
         conviction = verdict.get("conviction") if verdict else row.get("conviction")
@@ -2878,5 +2916,7 @@ def build_high_conviction_strip(
                 "source_url": telegram_message_url(row),
             }
         )
+        if len(out) >= limit:
+            break
     return out
 
