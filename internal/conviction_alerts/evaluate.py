@@ -52,8 +52,11 @@ def _load_json(path: str) -> Any:
         return None
 
 
+from internal.council.pick_day import pick_day_str
+
+
 def _today_str() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    return pick_day_str()
 
 
 def _collect_candidates() -> List[Dict[str, Any]]:
@@ -63,28 +66,27 @@ def _collect_candidates() -> List[Dict[str, Any]]:
     picks_path = os.environ.get("DAILY_PICKS_PATH", "data/daily_picks.json")
     picks = _load_json(picks_path)
     if isinstance(picks, list):
-        for rec in reversed(picks):
-            if rec.get("date") != _today_str():
-                continue
+        from internal.council.daily_pick_reader import load_current_daily_pick
+
+        rec, meta = load_current_daily_pick(picks)
+        if isinstance(rec, dict) and not meta.get("prior_pick_day"):
             pick = rec.get("pick") or rec.get("candidate") or {}
-            if not isinstance(pick, dict):
-                break
-            conf = _normalize_confidence(
-                pick.get("final_confidence") or pick.get("confidence")
-            )
-            subnet = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else pick
-            netuid = subnet.get("netuid") if isinstance(subnet, dict) else pick.get("netuid")
-            out.append(
-                {
-                    "source": "daily_pick",
-                    "netuid": netuid,
-                    "name": (subnet or {}).get("name") if isinstance(subnet, dict) else None,
-                    "confidence": conf,
-                    "tier": _tier_for(conf),
-                    "action": pick.get("action"),
-                }
-            )
-            break
+            if isinstance(pick, dict):
+                conf = _normalize_confidence(
+                    pick.get("final_confidence") or pick.get("confidence")
+                )
+                subnet = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else pick
+                netuid = subnet.get("netuid") if isinstance(subnet, dict) else pick.get("netuid")
+                out.append(
+                    {
+                        "source": "daily_pick",
+                        "netuid": netuid,
+                        "name": (subnet or {}).get("name") if isinstance(subnet, dict) else None,
+                        "confidence": conf,
+                        "tier": _tier_for(conf),
+                        "action": pick.get("action"),
+                    }
+                )
 
     soul_path = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
     soul = _load_json(soul_path)

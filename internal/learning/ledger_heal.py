@@ -28,8 +28,9 @@ def _utcnow() -> datetime:
 
 
 def _today_record(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    from internal.council.daily_pick_reader import load_current_daily_pick
+
     picks_path = path or DAILY_PICKS_PATH
-    today = _utcnow().date().isoformat()
     try:
         with open(picks_path, "r", encoding="utf-8") as handle:
             records = json.load(handle)
@@ -37,10 +38,10 @@ def _today_record(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
     if not isinstance(records, list):
         return None
-    for rec in reversed(records):
-        if isinstance(rec, dict) and rec.get("date") == today:
-            return rec
-    return None
+    row, meta = load_current_daily_pick(records)
+    if meta.get("prior_pick_day"):
+        return None
+    return row if isinstance(row, dict) else None
 
 
 def _subnet_row_for_heal(stored_pick: Dict[str, Any], netuid: Any) -> Optional[Dict[str, Any]]:
@@ -134,15 +135,49 @@ def heal_daily_pick_ledger(
             "reference_price": subnet_row.get("price"),
         }
 
+    from internal.council.daily_pick_write_token import (
+        current_write_generation,
+        guarded_bounded_commit,
+    )
+    from internal.council.resolver_scheduler import (
+        active_cycle_write_generation,
+        resolver_cycle_owns_persist_write,
+    )
     from internal.learning.prediction_loop import record_pick_prediction
 
     market_context = today_rec.get("market_context") if isinstance(today_rec, dict) else {}
-    stored = record_pick_prediction(
-        stored_pick,
-        subnet_row,
-        horizon_type="day",
-        market_context=market_context if isinstance(market_context, dict) else {},
-    )
+    stored_holder: Dict[str, Any] = {}
+
+    def _commit() -> None:
+        from internal.learning.predictions_store import (
+            reset_predictions_write_ticket,
+            set_predictions_write_ticket,
+        )
+        from internal.store.domain_write_gate import mint_ticket
+
+        pred_ticket = mint_ticket("predictions", f"ledger-heal-{netuid}")
+        pred_ctx = set_predictions_write_ticket(pred_ticket)
+        try:
+            stored_holder["value"] = record_pick_prediction(
+                stored_pick,
+                subnet_row,
+                horizon_type="day",
+                market_context=market_context if isinstance(market_context, dict) else {},
+            )
+        finally:
+            reset_predictions_write_ticket(pred_ctx)
+
+    if not resolver_cycle_owns_persist_write():
+        return {"ok": False, "healed": False, "reason": "resolver_cycle_abandoned", "netuid": netuid}
+
+    write_gen = active_cycle_write_generation()
+    if write_gen is None:
+        write_gen = current_write_generation()
+
+    if not guarded_bounded_commit(_commit, write_generation=write_gen):
+        return {"ok": False, "healed": False, "reason": "write_token_rejected", "netuid": netuid}
+
+    stored = stored_holder.get("value")
     if stored:
         logger.info("ledger heal: backfilled day row for SN%s", netuid)
         return {
@@ -204,7 +239,18 @@ def archive_predictions_epoch(
         },
         "epoch_reset_at": _utcnow().isoformat().replace("+00:00", "Z"),
     }
-    save_predictions(empty)
+    from internal.learning.predictions_store import (
+        reset_predictions_write_ticket,
+        set_predictions_write_ticket,
+    )
+    from internal.store.domain_write_gate import mint_ticket
+
+    archive_ticket = mint_ticket("predictions", "epoch-archive")
+    pred_ctx = set_predictions_write_ticket(archive_ticket)
+    try:
+        save_predictions(empty, ticket=archive_ticket)
+    finally:
+        reset_predictions_write_ticket(pred_ctx)
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:
@@ -226,32 +272,50 @@ def archive_predictions_epoch(
 
 def _downgrade_today_to_hold(*, reason: str, daily_picks_path: Optional[str] = None) -> bool:
     picks_path = daily_picks_path or DAILY_PICKS_PATH
-    today = _utcnow().date().isoformat()
-    from internal.council.daily_pick_engine import _locked_daily_picks
+    from internal.council.daily_pick_engine import _load, _locked_daily_picks
+    from internal.council.daily_pick_write_token import (
+        current_write_generation,
+        guarded_bounded_commit,
+    )
+    from internal.council.pick_day import pick_day_str, v2_pick_id
+    from internal.store.domain_write_gate import commit, mint_ticket
 
-    with _locked_daily_picks(picks_path):
-        try:
-            with open(picks_path, "r", encoding="utf-8") as handle:
-                records = json.load(handle)
-        except Exception:
-            return False
-        if not isinstance(records, list):
-            return False
-        changed = False
-        out: List[Dict[str, Any]] = []
-        for rec in records:
-            if isinstance(rec, dict) and rec.get("date") == today:
-                rec = dict(rec)
-                rec["action"] = "HOLD"
-                rec["pick"] = None
-                rec["reason"] = reason
-                rec["epoch_reset_note"] = True
-                changed = True
-            out.append(rec)
-        if not changed:
-            return False
-        tmp = picks_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(out, handle, indent=2)
-        os.replace(tmp, picks_path)
-        return True
+    day = pick_day_str()
+    pick_id = v2_pick_id(day)
+    applied = {"ok": False}
+
+    def _body() -> None:
+        with _locked_daily_picks(picks_path):
+            records = _load(picks_path)
+            changed = False
+            out: List[Dict[str, Any]] = []
+            for rec in records:
+                if not isinstance(rec, dict):
+                    out.append(rec)
+                    continue
+                is_today = rec.get("pick_id") == pick_id or (
+                    not rec.get("pick_id") and rec.get("date") == day
+                )
+                if is_today:
+                    rec = dict(rec)
+                    rec["action"] = "HOLD"
+                    rec["pick"] = None
+                    rec["reason"] = reason
+                    rec["epoch_reset_note"] = True
+                    changed = True
+                out.append(rec)
+            if not changed:
+                return
+            tmp = picks_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as handle:
+                json.dump(out, handle, indent=2)
+            os.replace(tmp, picks_path)
+            applied["ok"] = True
+
+    write_gen = current_write_generation()
+    if guarded_bounded_commit(_body, write_generation=write_gen):
+        return applied["ok"]
+    ticket = mint_ticket("daily_pick", f"epoch-downgrade-{day}")
+    if commit(ticket, _body):
+        return applied["ok"]
+    return False

@@ -19,8 +19,8 @@ def test_home_hero_context_does_not_call_get_or_create_today_pick(monkeypatch):
     )
     monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {
             "action": "HOLD",
             "candidate": {"subnet": {"netuid": 42, "name": "SN42"}},
         },
@@ -45,8 +45,8 @@ def test_pick_sections_does_not_call_get_or_create_today_pick(monkeypatch):
     )
     monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {
             "pick": {
                 "subnet": {"netuid": 9, "name": "Gamma"},
                 "score": 0.8,
@@ -77,8 +77,8 @@ def test_homepage_warm_does_not_call_get_or_create_today_pick(monkeypatch):
     )
     monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {
             "action": "HOLD",
             "candidate": {"subnet": {"netuid": 14, "name": "SN14"}},
         },

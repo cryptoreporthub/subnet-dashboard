@@ -557,8 +557,8 @@ def test_home_hero_and_pick_sections_do_not_call_engine(monkeypatch):
     )
     monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {
             "action": "HOLD",
             "pick": {"subnet": {"netuid": 4, "name": "Delta"}, "score": 0.1, "confidence": 0.2},
         },

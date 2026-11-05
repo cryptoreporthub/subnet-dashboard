@@ -18,7 +18,18 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
+
+def _apply_web_malloc_arena_max() -> None:
+    """memory-fix-2: cap web process glibc arenas (default 2)."""
+    raw = os.environ.get("WEB_MALLOC_ARENA_MAX", "2").strip()
+    if raw.isdigit() and int(raw) > 0:
+        os.environ["MALLOC_ARENA_MAX"] = raw
+    else:
+        os.environ["MALLOC_ARENA_MAX"] = "2"
+
+
 if __name__ == "__main__":
+    _apply_web_malloc_arena_max()
     from internal.snapshot_guard import install
 
     # Spawned multiprocessing children re-import this module as __main__ on Fly;

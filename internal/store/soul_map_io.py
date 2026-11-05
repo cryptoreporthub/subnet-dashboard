@@ -11,9 +11,14 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+_soul_map_write_ticket: ContextVar[Optional[Any]] = ContextVar(
+    "soul_map_write_ticket", default=None
+)
 
 _locks: Dict[str, threading.Lock] = {}
 _meta_lock = threading.Lock()
@@ -148,21 +153,84 @@ def read_soul_map(path: Optional[str] = None, *, copy_blob: bool = True) -> Dict
         return copy.deepcopy(cached) if copy_blob else cached
 
 
+def set_soul_map_write_ticket(ticket: Any):
+    return _soul_map_write_ticket.set(ticket)
+
+
+def reset_soul_map_write_ticket(token) -> None:
+    _soul_map_write_ticket.reset(token)
+
+
+def get_soul_map_write_ticket() -> Optional[Any]:
+    return _soul_map_write_ticket.get()
+
+
 def write_soul_map(
     mutator: Callable[[Dict[str, Any]], None],
     path: Optional[str] = None,
+    *,
+    ticket: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """Thread-safe read-modify-write under a per-path lock.
+    """Read-modify-write under domain ticket + flock (Design A)."""
+    from internal.store.domain_write_gate import TicketRefused, commit
 
-    Resolves path=None to weights.SOUL_MAP_PATH (lazy import).
-    Acquires a lock for this path, reads current blob ({} if missing/bad),
-    calls mutator(blob) which mutates the dict in place, then atomically
-    writes it back. Exceptions from mutator propagate. Never raises from I/O.
-    On a disk-write failure, logs a warning and returns the pre-mutation blob
-    without updating the cache. Successful writes immediately refresh the
-    in-process cache, so a write followed by a read in the same process
-    always sees the new data.
-    """
+    active = ticket or get_soul_map_write_ticket()
+    if active is None:
+        raise TicketRefused("write_soul_map refused: missing ticket")
+
+    resolved = _resolve_path(path)
+    result_holder: Dict[str, Any] = {}
+
+    def _body() -> None:
+        with _lock_for(resolved + ".writers"):
+            now = time.monotonic()
+            cached = _cache_get_fresh(resolved, now)
+            blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
+            prior = copy.deepcopy(blob)
+            mutator(blob)
+            temp_path = ""
+            try:
+                os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
+                fd, temp_path = tempfile.mkstemp(
+                    dir=os.path.dirname(resolved) or ".", suffix=".tmp"
+                )
+                with os.fdopen(fd, "w") as f:
+                    json.dump(blob, f, indent=2)
+                os.replace(temp_path, resolved)
+                _cache_put(resolved, blob, time.monotonic())
+                temp_path = ""
+                result_holder["blob"] = blob
+            except Exception as exc:
+                logger.warning(
+                    "soul_map persistence failed path=%s error_type=%s error=%s",
+                    resolved,
+                    type(exc).__name__,
+                    exc,
+                    extra={
+                        "event": "soul_map_persistence_failed",
+                        "path": resolved,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                result_holder["blob"] = prior
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except Exception:
+                        pass
+
+    if not commit(active, _body):
+        raise TicketRefused("write_soul_map refused: stale or invalid ticket")
+    return result_holder.get("blob") or _read_blob(resolved)
+
+
+def write_soul_map_legacy(
+    mutator: Callable[[Dict[str, Any]], None],
+    path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Legacy path: thread + file lock without domain ticket (tests only)."""
     resolved = _resolve_path(path)
     with _lock_for(resolved + ".writers"):
         with _file_and_reader_locks(resolved):

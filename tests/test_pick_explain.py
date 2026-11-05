@@ -1,6 +1,5 @@
 """§32 — pick explain API."""
 
-from datetime import datetime, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -28,12 +27,15 @@ _LIVE_SCORE_CAL = {
     "method": "live-rescore",
 }
 
-_TODAY = datetime.now(timezone.utc).date().isoformat()
+_TODAY = "2026-11-04"
 
 # Persisted pick record (as returned by _find_today from the JSON store).
 # judge_scores_at_creation is pre-populated so attach_judge_scores_to_daily_pick
 # skips the live conviction_bands IO path.
 _FIXTURE_PICK_RECORD = {
+    "pick_id": f"v2:{_TODAY}",
+    "schema_version": 2,
+    "pick_day": _TODAY,
     "date": _TODAY,
     "status": "ok",
     "action": "long",
@@ -88,10 +90,13 @@ _FIXTURE_AUDIT = {"adjusted_confidence": 0.82, "concerns": []}
 # Fixture subnet row — survives tradable_subnets filter (integer netuid > 0).
 _FIXTURE_SUBNET = {"netuid": 42, "name": "MockNet", "symbol": "MOCK", "price": 1.0}
 
-# Fixture get_or_create_today_pick result — SN42 is the published pick.
+# Fixture get_current_daily_pick result — SN42 is the published pick.
 # Carries the sentinel calibration on the pick sub-object so the fix can
 # return the persisted value instead of the live re-score (_LIVE_SCORE_CAL).
 _FIXTURE_TODAY_PICK_STATE = {
+    "pick_id": f"v2:{_TODAY}",
+    "schema_version": 2,
+    "pick_day": _TODAY,
     "date": _TODAY,
     "action": "long",
     "pick": {
@@ -158,7 +163,6 @@ def test_daily_pick_calibration_survives_enrichment():
     """
     with (
         patch("internal.council.daily_pick_engine._load", return_value=[_FIXTURE_PICK_RECORD]),
-        patch("internal.council.daily_pick_engine._find_today", return_value=_FIXTURE_PICK_RECORD),
     ):
         resp = client.get("/api/daily-pick")
 
@@ -191,7 +195,7 @@ def test_pick_explain_calibration_field_contract():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_today_only_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_STATE,
         ),
     ):
@@ -229,7 +233,6 @@ def test_calibration_field_consistent_across_endpoints():
     """
     with (
         patch("internal.council.daily_pick_engine._load", return_value=[_FIXTURE_PICK_RECORD]),
-        patch("internal.council.daily_pick_engine._find_today", return_value=_FIXTURE_PICK_RECORD),
     ):
         daily_resp = client.get("/api/daily-pick")
 
@@ -256,7 +259,7 @@ def test_calibration_field_consistent_across_endpoints():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_today_only_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_STATE,
         ),
     ):
@@ -324,7 +327,7 @@ def test_pick_explain_calibration_source_live_when_persisted_record_lacks_field(
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_today_only_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_NO_CAL,
         ),
     ):
@@ -393,7 +396,7 @@ def test_pick_explain_gated_candidate_calibration_from_live_score():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_today_only_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_GATED_CANDIDATE,
         ),
     ):
@@ -433,7 +436,7 @@ def test_pick_explain_not_today_pick_calibration_from_live_score():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.get_today_only_daily_pick",
             return_value=_FIXTURE_TODAY_PICK_OTHER_PUBLISHED,
         ),
     ):

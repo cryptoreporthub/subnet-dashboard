@@ -42,6 +42,11 @@ def test_conviction_creates_alert_when_enabled(engine, tmp_path, monkeypatch):
             [
                 {
                     "date": "2099-01-01",
+                    "pick_day": "2099-01-01",
+                    "pick_id": "v2:2099-01-01",
+                    "schema_version": 2,
+                    "action": "LONG",
+                    "build_started_at": "2099-01-01T14:05:00Z",
                     "pick": {
                         "final_confidence": 0.82,
                         "action": "long",
@@ -56,6 +61,12 @@ def test_conviction_creates_alert_when_enabled(engine, tmp_path, monkeypatch):
     from internal.conviction_alerts import evaluate as ev
 
     monkeypatch.setattr(ev, "_today_str", lambda: "2099-01-01")
+    monkeypatch.setattr(
+        "internal.council.pick_day.pick_day_str", lambda now=None: "2099-01-01"
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_reader.pick_day_str", lambda now=None: "2099-01-01"
+    )
 
     result = run_conviction_evaluation(engine)
     assert result["created_count"] == 1
@@ -70,6 +81,11 @@ def test_conviction_dedupes_second_run(engine, tmp_path, monkeypatch):
             [
                 {
                     "date": "2099-01-01",
+                    "pick_day": "2099-01-01",
+                    "pick_id": "v2:2099-01-01",
+                    "schema_version": 2,
+                    "action": "LONG",
+                    "build_started_at": "2099-01-01T14:05:00Z",
                     "pick": {
                         "final_confidence": 80,
                         "subnet": {"netuid": 3, "name": "Test"},
@@ -83,6 +99,12 @@ def test_conviction_dedupes_second_run(engine, tmp_path, monkeypatch):
     from internal.conviction_alerts import evaluate as ev
 
     monkeypatch.setattr(ev, "_today_str", lambda: "2099-01-01")
+    monkeypatch.setattr(
+        "internal.council.pick_day.pick_day_str", lambda now=None: "2099-01-01"
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_reader.pick_day_str", lambda now=None: "2099-01-01"
+    )
     first = run_conviction_evaluation(engine)
     second = run_conviction_evaluation(engine)
     assert first["created_count"] == 1

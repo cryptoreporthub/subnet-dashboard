@@ -16,6 +16,32 @@ from __future__ import annotations
 import pytest
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "pick_day_boundaries: use real pick_day rollover/slot clock (no autouse freeze)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "no_persist_gate: opt out of autouse persist write tickets",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _reset_homepage_shell_cache():
+    """Drop poisoned instant-shell HTML from the byte cache between tests."""
+    try:
+        import server as _srv
+
+        cached = _srv._HOMEPAGE_HTML_CACHE.get("html")
+        if isinstance(cached, str) and "Loading council desk" in cached:
+            _srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+            _srv._HOMEPAGE_HTML_CACHE["html"] = None
+    except Exception:
+        pass
+    yield
+
+
 @pytest.fixture(autouse=True)
 def _isolate_message_intel_db(tmp_path, monkeypatch):
     """Redirect message-intel DB to a per-test temp file (prevents live-DB pollution)."""
@@ -73,6 +99,79 @@ def _clear_message_intel_load_cache():
         pass
 
 
+@pytest.fixture(autouse=True)
+def _daily_pick_write_token_for_tests():
+    """Resolver/pick guarded commits require an issued token (§5)."""
+    try:
+        from internal.council.daily_pick_write_token import issue_daily_pick_write_token
+
+        issue_daily_pick_write_token()
+    except Exception as exc:
+        import pytest
+
+        pytest.fail(f"daily_pick_write_token fixture could not issue token: {exc}")
+    yield
+    try:
+        import threading
+
+        import internal.council.pick_scheduler as pick_scheduler
+        from internal.council.daily_pick_write_token import revoke_daily_pick_write_token
+
+        pick_scheduler.stop_pick_schedulers()
+        revoke_daily_pick_write_token(reason="pytest teardown")
+        for thread in threading.enumerate():
+            name = thread.name or ""
+            if "daily-pick" in name and thread is not threading.current_thread():
+                thread.join(timeout=2.0)
+        issue_daily_pick_write_token()
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _daily_pick_creation_open_for_scheduler(monkeypatch, request):
+    """Keep scheduler unit tests exercising ticks unless they override the gate."""
+    if request.node.get_closest_marker("pick_day_boundaries"):
+        return
+    try:
+        monkeypatch.setattr(
+            "internal.council.pick_day.daily_pick_creation_open",
+            lambda now=None: True,
+        )
+        monkeypatch.setattr(
+            "internal.council.daily_pick_engine.daily_pick_creation_open",
+            lambda now=None: True,
+        )
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _stable_default_pick_day_str(monkeypatch, request):
+    """Before 14:00 UTC rollover, wall clock would skew pick_day vs calendar tests."""
+    if request.node.get_closest_marker("pick_day_boundaries"):
+        return
+    try:
+        fixed = "2026-11-04"
+
+        def _pick_day(now=None):
+            return fixed
+
+        for target in (
+            "internal.council.pick_day.pick_day_str",
+            "internal.council.daily_pick_reader.pick_day_str",
+            "internal.council.daily_pick_engine.pick_day_str",
+            "internal.council.daily_pick_engine._today_str",
+            "internal.learning.loop_health.pick_day_str",
+        ):
+            try:
+                monkeypatch.setattr(target, _pick_day)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 @pytest.fixture
 def usable_soul_map(tmp_path, monkeypatch):
     """A valid soul_map for tests that run the real snapshot producer.
@@ -83,3 +182,35 @@ def usable_soul_map(tmp_path, monkeypatch):
     from tests.score_snapshot_testutil import install_soul_map
 
     return install_soul_map(tmp_path, monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def _persist_write_tickets_for_tests(request, tmp_path, monkeypatch):
+    """Default pytest tickets so store writes fail closed only when explicitly tested."""
+    if request.node.get_closest_marker("no_persist_gate"):
+        yield
+        return
+    epoch_dir = tmp_path / "persist_gate"
+    epoch_dir.mkdir(exist_ok=True)
+    monkeypatch.setenv("PREDICTIONS_EPOCH_PATH", str(epoch_dir / "predictions.epoch"))
+    monkeypatch.setenv("PREDICTIONS_LOCK_PATH", str(epoch_dir / "predictions.lock"))
+    monkeypatch.setenv("SOUL_MAP_EPOCH_PATH", str(epoch_dir / "soul_map.epoch"))
+    monkeypatch.setenv("SOUL_MAP_LOCK_PATH", str(epoch_dir / "soul_map.lock"))
+    monkeypatch.setenv("DAILY_PICK_EPOCH_PATH", str(epoch_dir / "daily_pick.epoch"))
+    monkeypatch.setenv("DAILY_PICKS_LOCK_PATH", str(epoch_dir / "daily_picks.lock"))
+    monkeypatch.setenv("CYCLE_SUMMARY_EPOCH_PATH", str(epoch_dir / "cycle_summary.epoch"))
+    from internal.learning.predictions_store import (
+        reset_predictions_write_ticket,
+        set_predictions_write_ticket,
+    )
+    from internal.store.domain_write_gate import mint_ticket
+    from internal.store.soul_map_io import (
+        reset_soul_map_write_ticket,
+        set_soul_map_write_ticket,
+    )
+
+    pred_ctx = set_predictions_write_ticket(mint_ticket("predictions", "pytest"))
+    soul_ctx = set_soul_map_write_ticket(mint_ticket("soul_map", "pytest"))
+    yield
+    reset_predictions_write_ticket(pred_ctx)
+    reset_soul_map_write_ticket(soul_ctx)

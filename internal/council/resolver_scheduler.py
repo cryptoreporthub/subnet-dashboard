@@ -32,7 +32,9 @@ from typing import Any, Callable, Dict, Iterator, Optional
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import write_soul_map as _write_soul_map_raw
+
+write_soul_map = _write_soul_map_raw
 
 from internal.liveness import LivenessTracker
 from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
@@ -156,21 +158,66 @@ def _load_json(path: str) -> Dict[str, Any]:
     return {}
 
 
-def _save_json(path: str, data: Dict[str, Any]) -> None:
+def _write_soul_map_guarded(
+    mutator,
+    path: str,
+    *,
+    write_generation: Optional[int] = None,
+    ticket_domain: str = "soul_map",
+) -> bool:
+    from internal.store.domain_write_gate import TicketRefused
+    from internal.store.soul_map_io import write_soul_map
+
+    timing = _cycle_timing.get()
+    ticket = None
+    if timing is not None:
+        if ticket_domain == "cycle_summary":
+            ticket = timing.cycle_summary_ticket()
+        else:
+            ticket = timing.soul_map_ticket()
+    if ticket is None:
+        from internal.store.domain_write_gate import mint_web_ticket
+
+        ticket = mint_web_ticket(ticket_domain, purpose="resolver-scheduler")
     try:
-        from internal.file_utils import ensure_data_dir
-        ensure_data_dir()
-    except Exception:
-        os.makedirs(os.path.dirname(path) or "data", exist_ok=True)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(temp_path, path)
-    finally:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
+        write_soul_map(mutator, path, ticket=ticket)
+        return True
+    except TicketRefused:
+        logger.info(
+            "resolver_scheduler soul_map write refused domain=%s gen=%s",
+            ticket_domain,
+            write_generation,
+        )
+        return False
+
+
+def _save_json(
+    path: str,
+    data: Dict[str, Any],
+    *,
+    write_generation: Optional[int] = None,
+) -> None:
+    from internal.council.daily_pick_write_token import guarded_bounded_commit
+
+    def _commit() -> None:
+        try:
+            from internal.file_utils import ensure_data_dir
+
+            ensure_data_dir()
+        except Exception:
+            os.makedirs(os.path.dirname(path) or "data", exist_ok=True)
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_path, path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    if not guarded_bounded_commit(_commit, write_generation=write_generation):
+        logger.info("resolver_scheduler _save_json skipped: write token revoked")
 
 
 class _CycleTiming:
@@ -195,6 +242,11 @@ class _CycleTiming:
         self._closing_stamp: Optional[float] = None
         # Phase 3: cycle generation that owns persist writes for this timing.
         self._owner_gen: Optional[int] = None
+        self._owner_write_gen: Optional[int] = None
+        self._predictions_ticket: Optional[Any] = None
+        self._soul_map_ticket: Optional[Any] = None
+        self._cycle_summary_ticket: Optional[Any] = None
+        self._scheduler: Optional[Any] = None
         # Dark-region sub-timers inside persist_partial (ms).
         self._persist_apply_ms: float = 0.0
         self._persist_rmw_ms: float = 0.0
@@ -269,6 +321,45 @@ class _CycleTiming:
     def owner_gen(self) -> Optional[int]:
         with self._lock:
             return self._owner_gen
+
+    def set_owner_write_gen(self, gen: Optional[int]) -> None:
+        with self._lock:
+            self._owner_write_gen = gen
+
+    def owner_write_gen(self) -> Optional[int]:
+        with self._lock:
+            return self._owner_write_gen
+
+    def set_persist_tickets(
+        self,
+        predictions: Any,
+        soul_map: Any,
+        cycle_summary: Any,
+    ) -> None:
+        with self._lock:
+            self._predictions_ticket = predictions
+            self._soul_map_ticket = soul_map
+            self._cycle_summary_ticket = cycle_summary
+
+    def predictions_ticket(self) -> Optional[Any]:
+        with self._lock:
+            return self._predictions_ticket
+
+    def soul_map_ticket(self) -> Optional[Any]:
+        with self._lock:
+            return self._soul_map_ticket
+
+    def cycle_summary_ticket(self) -> Optional[Any]:
+        with self._lock:
+            return self._cycle_summary_ticket
+
+    def bind_scheduler(self, sched: Any) -> None:
+        with self._lock:
+            self._scheduler = sched
+
+    def scheduler(self) -> Optional[Any]:
+        with self._lock:
+            return self._scheduler
 
     def record_persist_subtimer(self, name: str, duration_ms: float) -> None:
         with self._lock:
@@ -402,9 +493,63 @@ class _CycleTiming:
         }
 
 
+def _bind_cycle_persist_tickets(timing: _CycleTiming, cycle_id: str) -> None:
+    from internal.store.domain_write_gate import mint_ticket
+
+    timing.set_persist_tickets(
+        mint_ticket("predictions", cycle_id),
+        mint_ticket("soul_map", cycle_id),
+        mint_ticket("cycle_summary", cycle_id),
+    )
+
+
+def _enter_cycle_persist_context(timing: _CycleTiming) -> tuple[Any, Any]:
+    from internal.learning.predictions_store import set_predictions_write_ticket
+    from internal.store.soul_map_io import set_soul_map_write_ticket
+
+    return (
+        set_predictions_write_ticket(timing.predictions_ticket()),
+        set_soul_map_write_ticket(timing.soul_map_ticket()),
+    )
+
+
+def _exit_cycle_persist_context(pred_token: Any, soul_token: Any) -> None:
+    from internal.learning.predictions_store import reset_predictions_write_ticket
+    from internal.store.soul_map_io import reset_soul_map_write_ticket
+
+    reset_predictions_write_ticket(pred_token)
+    reset_soul_map_write_ticket(soul_token)
+
+
 _cycle_timing: ContextVar[Optional[_CycleTiming]] = ContextVar(
     "resolver_cycle_timing", default=None
 )
+
+
+def active_cycle_write_generation() -> Optional[int]:
+    """Daily-pick write gen captured at resolver cycle start (worker thread only)."""
+    timing = _cycle_timing.get()
+    if timing is None:
+        return None
+    return timing.owner_write_gen()
+
+
+def resolver_cycle_owns_persist_write() -> bool:
+    """True when resolver worker may commit tick side effects (heal, predictions RMW)."""
+    timing = _cycle_timing.get()
+    if timing is None:
+        return True
+    if timing.is_abandoned():
+        return False
+    owner = timing.owner_gen()
+    if owner is None:
+        return True
+    sched = timing.scheduler()
+    if sched is None:
+        sched = get_prediction_resolver_scheduler()
+    if sched is None:
+        return False
+    return sched._persist_owner_gen == owner
 
 
 class PredictionResolverScheduler:
@@ -602,7 +747,12 @@ class PredictionResolverScheduler:
                     "expired_now": 0,
                     "pending": 0,
                 }
-                self._persist_cycle_summary(skipped)
+                from internal.council.daily_pick_write_token import current_write_generation
+
+                self._persist_cycle_summary(
+                    skipped,
+                    write_generation=current_write_generation(),
+                )
                 # Skips are recorded honestly; they never produce ok (spec §2).
                 self.liveness.record_skip(reason="heavy_job_busy")
                 with self._lock:
@@ -748,8 +898,16 @@ class PredictionResolverScheduler:
         }
         def _mutator(data: Dict[str, Any]) -> None:
             data.setdefault("prediction_resolver_scheduler", {}).update(state)
+
         try:
-            write_soul_map(_mutator, self.soul_map_path)
+            from internal.council.daily_pick_write_token import current_write_generation
+
+            # Lifecycle metadata: live write gen (outside resolver cycle ownership).
+            _write_soul_map_guarded(
+                _mutator,
+                self.soul_map_path,
+                write_generation=current_write_generation(),
+            )
         except Exception:
             pass
 
@@ -820,7 +978,12 @@ class PredictionResolverScheduler:
                     "skipped": "cycle_in_flight",
                     "abandoned_live": abandoned_live,
                 }
-                self._persist_cycle_summary(result)
+                from internal.council.daily_pick_write_token import current_write_generation
+
+                self._persist_cycle_summary(
+                    result,
+                    write_generation=current_write_generation(),
+                )
                 return result
         # Phase 3 revive budget: boot revive uses full cycle ceiling, not the
         # first-tick min(cycle, 90) cap that starves post-revive run_once.
@@ -839,12 +1002,18 @@ class PredictionResolverScheduler:
             cycle_id = make_resolver_cycle_id(gen, run_at)
             timing = _CycleTiming(abandoned_live)
             timing.set_owner_gen(gen)
+            from internal.council.daily_pick_write_token import current_write_generation
+
+            timing.set_owner_write_gen(current_write_generation())
+            timing.bind_scheduler(self)
+            _bind_cycle_persist_tickets(timing, cycle_id)
             token = _cycle_timing.set(timing)
             ctx_token = bind_patchd_context(
                 cycle_generation=gen,
                 resolver_cycle_id=cycle_id,
                 trigger="resolver_cycle",
             )
+            pred_ctx, soul_ctx = _enter_cycle_persist_context(timing)
             try:
                 result = self._run_refresh_cycle()
                 if isinstance(result, dict):
@@ -852,6 +1021,7 @@ class PredictionResolverScheduler:
                     result["resolver_cycle_id"] = cycle_id
                 return result
             finally:
+                _exit_cycle_persist_context(pred_ctx, soul_ctx)
                 reset_patchd_context(ctx_token)
                 _cycle_timing.reset(token)
                 self._cycle_lock.release()
@@ -864,6 +1034,13 @@ class PredictionResolverScheduler:
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
         timing = _CycleTiming(abandoned_live)
         timing.set_owner_gen(gen)
+        from internal.council.daily_pick_write_token import current_write_generation
+
+        timing.set_owner_write_gen(current_write_generation())
+        timing.bind_scheduler(self)
+        _bind_cycle_persist_tickets(timing, cycle_id)
+
+        cycle_write_gen = timing.owner_write_gen()
 
         def _run_cycle() -> Dict[str, Any]:
             ctx_token = bind_patchd_context(
@@ -872,6 +1049,7 @@ class PredictionResolverScheduler:
                 trigger="resolver_cycle",
             )
             token = _cycle_timing.set(timing)
+            pred_ctx, soul_ctx = _enter_cycle_persist_context(timing)
             _rss_t0 = time.perf_counter()
             log_heavy_job_rss("prediction_resolver_worker", "start", started_at=_rss_t0)
             try:
@@ -892,6 +1070,7 @@ class PredictionResolverScheduler:
                     result["resolver_cycle_id"] = cycle_id
                 return result
             finally:
+                _exit_cycle_persist_context(pred_ctx, soul_ctx)
                 log_heavy_job_rss("prediction_resolver_worker", "end", started_at=_rss_t0)
                 _cycle_timing.reset(token)
                 reset_patchd_context(ctx_token)
@@ -932,7 +1111,11 @@ class PredictionResolverScheduler:
                 self._apply_cycle_timing(result, timing)
                 # force=True: timeout path owns the summary write after orphan
                 # ownership was revoked in _abandon_inflight_cycle.
-                self._persist_cycle_summary(result, force=True)
+                self._persist_cycle_summary(
+                    result,
+                    force=True,
+                    write_generation=cycle_write_gen,
+                )
                 return result
         except BaseException:
             if not submitted:
@@ -1018,7 +1201,11 @@ class PredictionResolverScheduler:
             timing.record_persist_subtimer(
                 "apply_cycle_timing", (time.perf_counter() - t_apply) * 1000
             )
-            self._persist_cycle_summary(result, owner_gen=owner)
+            self._persist_cycle_summary(
+                result,
+                owner_gen=owner,
+                write_generation=timing.owner_write_gen(),
+            )
 
         try:
             # B1b t1: pre-flight boundary (immediately before ledger_heal).
@@ -1135,7 +1322,11 @@ class PredictionResolverScheduler:
                 # B1b closing stamp after end size + mark_complete.
                 timing.mark_closing_stamp()
                 self._apply_cycle_timing(result, timing)
-                self._persist_cycle_summary(result, owner_gen=owner)
+                self._persist_cycle_summary(
+                    result,
+                    owner_gen=owner,
+                    write_generation=timing.owner_write_gen(),
+                )
         return result
 
     def _persist_cycle_summary(
@@ -1144,20 +1335,32 @@ class PredictionResolverScheduler:
         *,
         owner_gen: Optional[int] = None,
         force: bool = False,
+        write_generation: Optional[int] = None,
     ) -> None:
         """Persist last_cycle with single-writer ownership (Phase 3).
 
         Abandoned orphans pass ``owner_gen`` that no longer matches
         ``_persist_owner_gen`` and skip the 24MB soul_map RMW. Timeout /
-        control-plane writers use ``force=True``.
+        control-plane writers use ``force=True`` with the cycle-captured
+        ``write_generation`` (caller thread has no ``_cycle_timing``).
         """
         with self._persist_lock:
             if not force and owner_gen is not None:
                 if self._persist_owner_gen != owner_gen:
                     return
-            self._persist_cycle_summary_locked(result)
+            if force and write_generation is None:
+                return
+            self._persist_cycle_summary_locked(
+                result,
+                write_generation=write_generation,
+            )
 
-    def _persist_cycle_summary_locked(self, result: Dict[str, Any]) -> None:
+    def _persist_cycle_summary_locked(
+        self,
+        result: Dict[str, Any],
+        *,
+        write_generation: Optional[int] = None,
+    ) -> None:
         stage_timing_ms = dict(result.get("stage_timing_ms") or {})
         # Prefer explicit rollups on the result; else derive from stage_timing_ms.
         if "stages_sum_ms" in result and "nonstage_ms" in result:
@@ -1189,6 +1392,9 @@ class PredictionResolverScheduler:
             "lifecycle": self._lifecycle,
         }
         timing = _cycle_timing.get()
+        write_gen = write_generation
+        if write_gen is None and timing is not None:
+            write_gen = timing.owner_write_gen()
 
         def _mutator(data: Dict[str, Any]) -> None:
             # Phase 3 fix-up: time mutator body alone (persist_summary_mutator_ms).
@@ -1216,7 +1422,12 @@ class PredictionResolverScheduler:
         # Full RMW wall (read+mutator+disk); invariant: rmw >= mutator.
         t_rmw = time.perf_counter()
         try:
-            write_soul_map(_mutator, self.soul_map_path)
+            _write_soul_map_guarded(
+                _mutator,
+                self.soul_map_path,
+                write_generation=write_gen,
+                ticket_domain="cycle_summary",
+            )
             if timing is not None:
                 timing.record_persist_subtimer(
                     "summary_rmw", (time.perf_counter() - t_rmw) * 1000

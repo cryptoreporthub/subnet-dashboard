@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 from fastapi.templating import Jinja2Templates
 
@@ -13,6 +14,8 @@ from internal.analytics.cockpit_render import (
 )
 from internal.cockpit.sections import COCKPIT_SECTION_IDS
 from server import _jinja_shorten, app, templates
+
+pytestmark = pytest.mark.pick_day_boundaries
 
 
 H_FULL_SECTION_IDS = [
@@ -335,7 +338,7 @@ def test_h_full_daily_pick_hero_or_honest_empty():
     assert "council-stage" in html
     assert "Council decision" in html or "Today" in html
     # Stage always states a stance (audited call or HOLD)
-    assert "council-call" in html or "HOLD" in html or "Predicted" in html
+    assert "council-call" in html or "HOLD" in html or "Predicted" in html or "tribunal-hero" in html
 
 
 def test_phase_l_cockpit_signals_and_summary():

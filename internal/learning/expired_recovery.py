@@ -145,7 +145,18 @@ def recover_expired_predictions(
 
     if not dry_run and recovered:
         update_stats(data)
-        save_predictions(data)
+        from internal.store.domain_write_gate import mint_web_ticket
+        from internal.learning.predictions_store import (
+            reset_predictions_write_ticket,
+            set_predictions_write_ticket,
+        )
+
+        ticket = mint_web_ticket("predictions", purpose="expired_recovery")
+        token = set_predictions_write_ticket(ticket)
+        try:
+            save_predictions(data, ticket=ticket)
+        finally:
+            reset_predictions_write_ticket(token)
         logger.info("expired recovery: recovered=%s skipped=%s", recovered, skipped)
 
     return {

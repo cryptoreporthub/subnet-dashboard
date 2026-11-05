@@ -17,7 +17,8 @@ import copy
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +105,34 @@ def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
 
 def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
     """Apply a mutation to the latest serialized blob under the store lock."""
-    from internal.store.soul_map_io import write_soul_map
+    from internal.store.domain_write_gate import TicketRefused
+    from internal.store.soul_map_io import get_soul_map_write_ticket, write_soul_map
 
-    return write_soul_map(mutator, path)
+    ticket = get_soul_map_write_ticket()
+    if ticket is None:
+        raise TicketRefused("_mutate_raw refused: missing soul_map write ticket")
+    return write_soul_map(mutator, path, ticket=ticket)
+
+
+@contextmanager
+def _scoped_soul_map_ticket(*, purpose: str) -> Iterator[None]:
+    """Bind a short-lived web ticket when resolver/cycle context is absent."""
+    from internal.store.domain_write_gate import mint_web_ticket
+    from internal.store.soul_map_io import (
+        get_soul_map_write_ticket,
+        reset_soul_map_write_ticket,
+        set_soul_map_write_ticket,
+    )
+
+    if get_soul_map_write_ticket() is not None:
+        yield
+        return
+    ticket = mint_web_ticket("soul_map", purpose=purpose)
+    token = set_soul_map_write_ticket(ticket)
+    try:
+        yield
+    finally:
+        reset_soul_map_write_ticket(token)
 
 
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
@@ -520,16 +546,19 @@ def repair_stale_contrarian_weights(
 
 def load_weights(path: Optional[str] = None) -> Dict[str, float]:
     """Read learned weights from soul_map.json, defaulting to DEFAULT_WEIGHTS."""
+    from internal.store.soul_map_io import get_soul_map_write_ticket
+
     path = path or SOUL_MAP_PATH
-    for attempt in range(2):
-        try:
-            repair_stale_contrarian_weights(path)
-            break
-        except ConcurrentWeightUpdate as exc:
-            if attempt == 1:
-                raise ConcurrentWeightUpdate(
-                    "legacy weight repair did not settle after bounded retries"
-                ) from exc
+    if get_soul_map_write_ticket() is not None:
+        for attempt in range(2):
+            try:
+                repair_stale_contrarian_weights(path)
+                break
+            except ConcurrentWeightUpdate as exc:
+                if attempt == 1:
+                    raise ConcurrentWeightUpdate(
+                        "legacy weight repair did not settle after bounded retries"
+                    ) from exc
     data = _load_raw(path)
     raw_weights = _council_weight_snapshot(data)
     if isinstance(raw_weights, dict):
@@ -658,7 +687,9 @@ def save_weights(
         # Mirror to root expert_weights so legacy readers always see learned values.
         data["expert_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
 
-    _mutate_raw(replace_weights, path)
+    path = path or SOUL_MAP_PATH
+    with _scoped_soul_map_ticket(purpose="save-weights"):
+        _mutate_raw(replace_weights, path)
 
 
 def nudge_expert(
@@ -674,50 +705,47 @@ def nudge_expert(
     if not expert:
         return None
     path = path or SOUL_MAP_PATH
-    # Preserve the legacy contrarian-ledger repair that load_weights() used to
-    # trigger before applying a nudge; the repair produces a fresh full map.
-    try:
-        repair_stale_contrarian_weights(path)
-    except ConcurrentWeightUpdate:
-        # Another same-process nudge repaired the legacy map first; the delta
-        # below recomputes from that latest serialized state.
-        pass
-    base = (
-        (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
-        if correct
-        else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
-    )
-    delta = round(base * max(0.0, float(scale)), 4)
-    desired: Optional[float] = None
-
-    def apply_delta(data: Dict[str, Any]) -> None:
-        nonlocal desired
-        adv = data.get("adversarial_state")
-        raw = adv.get("council_weights") if isinstance(adv, dict) else None
-        if not isinstance(raw, dict):
-            sms = data.get("soul_map_state")
-            raw = sms.get("expert_weights") if isinstance(sms, dict) else None
-        if not isinstance(raw, dict):
-            raw = data.get("expert_weights")
-        weights = normalize_council_weights(raw if isinstance(raw, dict) else {})
-        if expert not in weights:
-            return
-        before = float(weights[expert])
-        desired = round(
-            max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
-            4,
+    with _scoped_soul_map_ticket(purpose="nudge-expert"):
+        try:
+            repair_stale_contrarian_weights(path)
+        except ConcurrentWeightUpdate:
+            pass
+        base = (
+            (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
+            if correct
+            else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
         )
-        weights[expert] = desired
-        canonical = {k: round(float(v), 4) for k, v in weights.items()}
-        adv = data.setdefault("adversarial_state", {})
-        if not isinstance(adv, dict):
-            adv = {}
-            data["adversarial_state"] = adv
-        adv["council_weights"] = canonical
-        adv["last_weight_update"] = _now_iso()
-        data["expert_weights"] = dict(canonical)
+        delta = round(base * max(0.0, float(scale)), 4)
+        desired: Optional[float] = None
 
-    persisted = _mutate_raw(apply_delta, path)
+        def apply_delta(data: Dict[str, Any]) -> None:
+            nonlocal desired
+            adv = data.get("adversarial_state")
+            raw = adv.get("council_weights") if isinstance(adv, dict) else None
+            if not isinstance(raw, dict):
+                sms = data.get("soul_map_state")
+                raw = sms.get("expert_weights") if isinstance(sms, dict) else None
+            if not isinstance(raw, dict):
+                raw = data.get("expert_weights")
+            weights = normalize_council_weights(raw if isinstance(raw, dict) else {})
+            if expert not in weights:
+                return
+            before = float(weights[expert])
+            desired = round(
+                max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
+                4,
+            )
+            weights[expert] = desired
+            canonical = {k: round(float(v), 4) for k, v in weights.items()}
+            adv = data.setdefault("adversarial_state", {})
+            if not isinstance(adv, dict):
+                adv = {}
+                data["adversarial_state"] = adv
+            adv["council_weights"] = canonical
+            adv["last_weight_update"] = _now_iso()
+            data["expert_weights"] = dict(canonical)
+
+        persisted = _mutate_raw(apply_delta, path)
     root_weights = persisted.get("expert_weights")
     return (
         desired
@@ -876,7 +904,8 @@ def save_signal_weights(
             for horizon, weights in signal_weights.items()
         }
 
-    _mutate_raw(replace_signal_weights, path)
+    with _scoped_soul_map_ticket(purpose="save-signal-weights"):
+        _mutate_raw(replace_signal_weights, path)
 
 
 def nudge_signal_weight(
@@ -889,42 +918,43 @@ def nudge_signal_weight(
     extra: Optional[Dict[str, Any]] = None,
 ) -> Optional[float]:
     """Nudge a single signal weight up (correct) or down (wrong), clamped to [0.1, 2.0]."""
-    base = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
-    delta = base * max(0.0, float(scale))
-    before = 1.0
-    new_val = 1.0
+    with _scoped_soul_map_ticket(purpose="nudge-signal-weight"):
+        base = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
+        delta = base * max(0.0, float(scale))
+        before = 1.0
+        new_val = 1.0
 
-    def apply_signal_delta(data: Dict[str, Any]) -> None:
-        nonlocal before, new_val
-        signal_weights = copy.deepcopy(DEFAULT_SIGNAL_WEIGHTS)
-        adv = data.get("adversarial_state")
-        raw = adv.get("signal_weights") if isinstance(adv, dict) else None
-        if isinstance(raw, dict):
-            for raw_horizon, raw_weights in raw.items():
-                if isinstance(raw_weights, dict):
-                    clean_weights = {}
-                    for key, value in raw_weights.items():
-                        try:
-                            clean_weights[key] = float(value)
-                        except (TypeError, ValueError):
-                            continue
-                    signal_weights.setdefault(raw_horizon, {}).update(clean_weights)
-        horizon_weights = signal_weights.setdefault(horizon_type, {})
-        before = float(horizon_weights.get(signal_name, 1.0))
-        new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta))
-        horizon_weights[signal_name] = round(new_val, 4)
-        target = data.setdefault("adversarial_state", {})
-        if not isinstance(target, dict):
-            target = {}
-            data["adversarial_state"] = target
-        target["signal_weights"] = {
-            raw_horizon: {
-                key: round(float(value), 4) for key, value in raw_weights.items()
+        def apply_signal_delta(data: Dict[str, Any]) -> None:
+            nonlocal before, new_val
+            signal_weights = copy.deepcopy(DEFAULT_SIGNAL_WEIGHTS)
+            adv = data.get("adversarial_state")
+            raw = adv.get("signal_weights") if isinstance(adv, dict) else None
+            if isinstance(raw, dict):
+                for raw_horizon, raw_weights in raw.items():
+                    if isinstance(raw_weights, dict):
+                        clean_weights = {}
+                        for key, value in raw_weights.items():
+                            try:
+                                clean_weights[key] = float(value)
+                            except (TypeError, ValueError):
+                                continue
+                        signal_weights.setdefault(raw_horizon, {}).update(clean_weights)
+            horizon_weights = signal_weights.setdefault(horizon_type, {})
+            before = float(horizon_weights.get(signal_name, 1.0))
+            new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta))
+            horizon_weights[signal_name] = round(new_val, 4)
+            target = data.setdefault("adversarial_state", {})
+            if not isinstance(target, dict):
+                target = {}
+                data["adversarial_state"] = target
+            target["signal_weights"] = {
+                raw_horizon: {
+                    key: round(float(value), 4) for key, value in raw_weights.items()
+                }
+                for raw_horizon, raw_weights in signal_weights.items()
             }
-            for raw_horizon, raw_weights in signal_weights.items()
-        }
 
-    persisted = _mutate_raw(apply_signal_delta, path)
+        persisted = _mutate_raw(apply_signal_delta, path)
     persisted_adv = persisted.get("adversarial_state")
     persisted_signal = (
         persisted_adv.get("signal_weights") if isinstance(persisted_adv, dict) else None
@@ -1040,7 +1070,8 @@ def save_impact_strength(strength: float, path: Optional[str] = None) -> float:
         adv["impact_strength"] = round(clamped, 4)
         adv["last_impact_strength_update"] = _now_iso()
 
-    _mutate_raw(replace_impact_strength, path)
+    with _scoped_soul_map_ticket(purpose="save-impact-strength"):
+        _mutate_raw(replace_impact_strength, path)
     return clamped
 
 
@@ -1069,26 +1100,27 @@ def nudge_impact_strength(
         delta = _IMPACT_STRENGTH_DELTA if correct else -_IMPACT_STRENGTH_DELTA
     new_value = DEFAULT_IMPACT_STRENGTH
 
-    def apply_impact_delta(data: Dict[str, Any]) -> None:
-        nonlocal new_value
-        adv = data.get("adversarial_state")
-        current = DEFAULT_IMPACT_STRENGTH
-        if isinstance(adv, dict) and adv.get("impact_strength") is not None:
-            try:
-                current = float(adv["impact_strength"])
-            except (TypeError, ValueError):
-                pass
-        new_value = max(
-            _IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, current + delta)
-        )
-        target = data.setdefault("adversarial_state", {})
-        if not isinstance(target, dict):
-            target = {}
-            data["adversarial_state"] = target
-        target["impact_strength"] = round(new_value, 4)
-        target["last_impact_strength_update"] = _now_iso()
+    with _scoped_soul_map_ticket(purpose="nudge-impact-strength"):
+        def apply_impact_delta(data: Dict[str, Any]) -> None:
+            nonlocal new_value
+            adv = data.get("adversarial_state")
+            current = DEFAULT_IMPACT_STRENGTH
+            if isinstance(adv, dict) and adv.get("impact_strength") is not None:
+                try:
+                    current = float(adv["impact_strength"])
+                except (TypeError, ValueError):
+                    pass
+            new_value = max(
+                _IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, current + delta)
+            )
+            target = data.setdefault("adversarial_state", {})
+            if not isinstance(target, dict):
+                target = {}
+                data["adversarial_state"] = target
+            target["impact_strength"] = round(new_value, 4)
+            target["last_impact_strength_update"] = _now_iso()
 
-    persisted = _mutate_raw(apply_impact_delta, path)
+        persisted = _mutate_raw(apply_impact_delta, path)
     persisted_adv = persisted.get("adversarial_state")
     if isinstance(persisted_adv, dict) and persisted_adv.get(
         "impact_strength"

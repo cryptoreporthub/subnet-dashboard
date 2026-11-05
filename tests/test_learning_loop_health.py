@@ -37,7 +37,24 @@ def _reset_resolver_snapshot_caches():
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).date().isoformat()
+    from internal.council.pick_day import pick_day_str
+
+    return pick_day_str()
+
+
+def _v2_row(*, action: str, pick: dict | None, **extra: object) -> dict:
+    day = _today()
+    row = {
+        "pick_id": f"v2:{day}",
+        "schema_version": 2,
+        "pick_day": day,
+        "date": day,
+        "action": action,
+        "build_started_at": f"{day}T14:05:00Z",
+        "pick": pick,
+    }
+    row.update(extra)
+    return row
 
 
 def _write_json(path: Path, payload) -> None:
@@ -462,11 +479,10 @@ def test_published_long_without_ledger_is_stalled(tmp_path, monkeypatch):
     _write_json(
         daily,
         [
-            {
-                "date": _today(),
-                "action": "long",
-                "pick": {"netuid": 58, "subnet": {"netuid": 58, "name": "Test"}},
-            }
+            _v2_row(
+                action="LONG",
+                pick={"netuid": 58, "subnet": {"netuid": 58, "name": "Test"}},
+            )
         ],
     )
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
@@ -514,11 +530,10 @@ def test_published_long_with_day_row_ok(tmp_path, monkeypatch):
     _write_json(
         daily,
         [
-            {
-                "date": _today(),
-                "action": "BUY",
-                "pick": {"subnet": {"netuid": 12, "name": "SN12"}},
-            }
+            _v2_row(
+                action="BUY",
+                pick={"subnet": {"netuid": 12, "name": "SN12"}},
+            )
         ],
     )
     _write_json(

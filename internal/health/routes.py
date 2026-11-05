@@ -65,7 +65,11 @@ async def api_data_freshness():
 @health_router.get("/api/health")
 async def api_health_check():
     """JSON health probe mirroring plain-text ``/health``."""
-    return {"status": "ok"}
+    from internal.council.daily_pick_write_token import health_flags
+
+    payload = {"status": "ok"}
+    payload.update(health_flags())
+    return payload
 
 
 @health_router.get("/api/liveness")

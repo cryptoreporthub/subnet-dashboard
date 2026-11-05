@@ -36,6 +36,16 @@ def isolate_liveness_persistence(tmp_path, monkeypatch):
     monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
 
 
+@pytest.fixture(autouse=True)
+def _drain_daily_pick_worker_threads():
+    yield
+    pick_scheduler.stop_pick_schedulers()
+    for thread in threading.enumerate():
+        name = thread.name or ""
+        if "daily-pick" in name and thread is not threading.current_thread():
+            thread.join(timeout=20.0)
+
+
 def test_pick_scheduler_disabled(monkeypatch):
     monkeypatch.setenv("PICK_SCHEDULER_ENABLED", "off")
     pick_scheduler.stop_pick_schedulers()
@@ -48,7 +58,7 @@ def test_daily_run_once_calls_get_or_create(monkeypatch):
     pick_scheduler.stop_pick_schedulers()
     called = {}
 
-    def _fake_get(subnets, market_context=None, force=False, is_cancelled=None):
+    def _fake_get(subnets, market_context=None, force=False, is_cancelled=None, **kwargs):
         called["force"] = force
         called["n"] = len(subnets or [])
         return {"action": "HOLD", "date": "2026-07-26", "pick": None}
@@ -152,7 +162,7 @@ def test_daily_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
     pick_scheduler.stop_pick_schedulers()
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, is_cancelled=None: {
+        lambda subnets, market_context=None, force=False, is_cancelled=None, **kwargs: {
             "action": "LONG",
             "date": "2026-08-28",
             "pick": {"netuid": 9},
@@ -198,13 +208,13 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
 
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, is_cancelled=None: (_ for _ in ()).throw(
+        lambda subnets, market_context=None, force=False, is_cancelled=None, **kwargs: (_ for _ in ()).throw(
             RuntimeError("boom")
         ),
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: holds.append(reason) or {
+        lambda reason, **kwargs: holds.append(reason) or {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,
@@ -239,7 +249,7 @@ def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
 
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, is_cancelled=None: {
+        lambda subnets, market_context=None, force=False, is_cancelled=None, **kwargs: {
             "action": "HOLD",
             "date": "2026-08-03",
             "pick": None,
@@ -280,7 +290,7 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: holds.append(reason) or {
+        lambda reason, **kwargs: holds.append(reason) or {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,
@@ -301,6 +311,58 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     assert "timed out" in str(result.get("error") or holds[0])
 
 
+def test_daily_tick_timeout_superseded_skips_bump_and_hold(monkeypatch):
+    """If inflight was replaced before timeout handling, do not bump gen or HOLD."""
+    from concurrent.futures import TimeoutError as FuturesTimeoutError
+
+    from internal.council import daily_pick_write_token as tok
+
+    pick_scheduler.stop_pick_schedulers()
+    holds = []
+    gen_before = tok.current_write_generation()
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason, **kwargs: holds.append((reason, kwargs)) or {
+            "action": "HOLD",
+            "scheduler_hold": True,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_write_token.fence_revoke_if_resolver_wait_exceeded",
+        lambda **_: True,
+    )
+
+    sched = pick_scheduler.DailyPickScheduler()
+    _arm_daily_sched(sched)
+
+    class _SupersededFuture:
+        def result(self, timeout=None):
+            sched._inflight_future = object()
+            raise FuturesTimeoutError()
+
+    fake = _SupersededFuture()
+
+    class _Pool:
+        def submit(self, fn):
+            return fake
+
+        def shutdown(self, wait=False, cancel_futures=False):
+            return None
+
+    monkeypatch.setattr(pick_scheduler, "ThreadPoolExecutor", lambda **kwargs: _Pool())
+
+    result = sched._tick(reschedule=False)
+    assert "superseded" in str(result.get("error") or "").lower()
+    assert holds == []
+    assert tok.current_write_generation() == gen_before
+
+
 def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch, caplog):
     """After timeout, the next tick must start fresh work — not skip forever."""
     import logging
@@ -312,7 +374,7 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch, 
     calls = {"n": 0}
     second_started = threading.Event()
 
-    def _slow_then_fast(subnets, market_context=None, force=False, is_cancelled=None):
+    def _slow_then_fast(subnets, market_context=None, force=False, is_cancelled=None, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             import time
@@ -328,7 +390,7 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch, 
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: {
+        lambda reason, **kwargs: {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,
@@ -376,7 +438,7 @@ def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch
     )
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: {
+        lambda reason, **kwargs: {
             "action": "HOLD",
             "date": "2026-08-03",
             "scheduler_hold": True,
@@ -474,7 +536,7 @@ def test_daily_run_once_rearms_when_singleton(monkeypatch):
     scheduled = []
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, is_cancelled=None: {
+        lambda subnets, market_context=None, force=False, is_cancelled=None, **kwargs: {
             "action": "HOLD",
             "date": "2026-08-29",
             "pick": None,
@@ -528,7 +590,7 @@ def test_daily_run_once_does_not_schedule_when_not_singleton(monkeypatch):
     scheduled = []
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, is_cancelled=None: {
+        lambda subnets, market_context=None, force=False, is_cancelled=None, **kwargs: {
             "action": "HOLD",
             "date": "2026-08-29",
             "pick": None,

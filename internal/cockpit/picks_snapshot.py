@@ -108,9 +108,9 @@ def _load_hour_picks() -> List[Dict[str, Any]]:
 
 def _day_from_disk() -> Optional[Dict[str, Any]]:
     try:
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_current_daily_pick
 
-        daily = _find_today(_load())
+        daily = get_current_daily_pick()
         if isinstance(daily, dict):
             return daily
     except Exception:
@@ -120,11 +120,13 @@ def _day_from_disk() -> Optional[Dict[str, Any]]:
 
 def _load_day_snapshot() -> Dict[str, Any]:
     emitted_at = _emitted_at_z()
+    from internal.council.pick_day import pick_day_str
+
     day: Dict[str, Any] = {
         "action": "HOLD",
         "published": False,
         "reason": "No long call published",
-        "date": datetime.now(timezone.utc).date().isoformat(),
+        "date": pick_day_str(),
         "timestamp_utc": emitted_at,
         "pick": None,
         "candidate": None,

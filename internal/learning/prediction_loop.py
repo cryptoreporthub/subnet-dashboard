@@ -499,19 +499,25 @@ def _mirror_pick_to_soul_map(
 ) -> None:
     """Keep soul_map_state.last_pick in sync for dashboard / rotation readers."""
     try:
-        from internal.council.weights import _load_raw, _save_raw
+        from internal.store.domain_write_gate import TicketRefused, mint_web_ticket
+        from internal.store.soul_map_io import get_soul_map_write_ticket, write_soul_map
 
-        data = _load_raw()
-        sms = data.setdefault("soul_map_state", {})
-        if not isinstance(sms, dict):
-            sms = {}
-            data["soul_map_state"] = sms
-        sms[f"last_{horizon_type}_pick"] = {
-            "pick": pick,
-            "prediction_id": prediction.get("id"),
-            "updated_at": prediction.get("created_at"),
-        }
-        _save_raw(data)
+        ticket = get_soul_map_write_ticket()
+        if ticket is None:
+            ticket = mint_web_ticket("soul_map", purpose="pick-mirror")
+
+        def _mutator(data: Dict[str, Any]) -> None:
+            sms = data.setdefault("soul_map_state", {})
+            if not isinstance(sms, dict):
+                sms = {}
+                data["soul_map_state"] = sms
+            sms[f"last_{horizon_type}_pick"] = {
+                "pick": pick,
+                "prediction_id": prediction.get("id"),
+                "updated_at": prediction.get("created_at"),
+            }
+
+        write_soul_map(_mutator, ticket=ticket)
     except Exception as exc:
         logger.warning("Soul-map pick mirror failed: %s", exc)
 

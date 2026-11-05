@@ -866,8 +866,8 @@ def test_daily_pick_cached_hit_skips_scoring_engine(monkeypatch):
     monkeypatch.setattr("internal.council.daily_pick.select_daily_pick", _boom)
     monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {
             "date": _today_str(),
             "status": "ok",
             "action": "HOLD",
@@ -904,7 +904,7 @@ def test_daily_pick_enrich_timeout_returns_stored_hold_not_timeout(monkeypatch):
         "pick": None,
     }
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today", lambda _rows: stored
+        "internal.council.daily_pick_engine.get_current_daily_pick", lambda: stored
     )
     release = threading.Event()
 
@@ -940,8 +940,8 @@ def test_daily_pick_ignores_saturated_dashboard_executor(monkeypatch):
 
     futs = [srv._DASHBOARD_EXECUTOR.submit(_block) for _ in range(8)]
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {
             "date": _today_str(),
             "action": "HOLD",
             "candidate": {"subnet": {"netuid": 3}},
@@ -989,8 +989,8 @@ def test_daily_pick_full_query_stays_on_pick_read_pool(monkeypatch):
 
     futs = [srv._DASHBOARD_EXECUTOR.submit(_block) for _ in range(8)]
     monkeypatch.setattr(
-        "internal.council.daily_pick_engine._find_today",
-        lambda _rows: {
+        "internal.council.daily_pick_engine.get_current_daily_pick",
+        lambda: {
             "date": _today_str(),
             "action": "HOLD",
             "candidate": {"subnet": {"netuid": 3}},
@@ -1020,7 +1020,7 @@ def test_daily_pick_stage_timing_on_fast_degraded(monkeypatch, caplog):
     import server as srv
 
     monkeypatch.setenv("DAILY_PICK_STAGE_TIMING", "1")
-    monkeypatch.setattr("internal.council.daily_pick_engine._find_today", lambda _rows: None)
+    monkeypatch.setattr("internal.council.daily_pick_engine.get_current_daily_pick", lambda: None)
     caplog.set_level(logging.INFO, logger="server")
     resp = TestClient(app).get("/api/daily-pick")
     assert resp.status_code == 200

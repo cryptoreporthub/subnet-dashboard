@@ -6,7 +6,7 @@ import asyncio
 import concurrent.futures
 import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -1026,9 +1026,9 @@ def _safe_mindmap_graph_context(*, timeout_s: float = 2.0) -> Dict[str, Any]:
 def _read_shell_daily_pick() -> Dict[str, Any]:
     """Lite pick from local JSON — instant SSR, no scoring or live feeds."""
     try:
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_current_daily_pick
 
-        existing = _find_today(_load())
+        existing = get_current_daily_pick()
         if existing is None:
             return {}
         return _enrich_daily_pick_payload_lite(dict(existing))
@@ -2341,6 +2341,21 @@ def get_recommendations():
 @limit_or_noop(strict_limit(), override_defaults=True)
 async def post_feedback(request: Request):
     """Close the mindmap feedback path into learning + soul-map alignment logs."""
+    from internal.store.domain_write_gate import mint_web_ticket
+    from internal.store.soul_map_io import (
+        reset_soul_map_write_ticket,
+        set_soul_map_write_ticket,
+    )
+
+    soul_ticket = mint_web_ticket("soul_map", purpose="mindmap-feedback")
+    soul_ctx = set_soul_map_write_ticket(soul_ticket)
+    try:
+        return await _post_feedback_body(request)
+    finally:
+        reset_soul_map_write_ticket(soul_ctx)
+
+
+async def _post_feedback_body(request: Request):
     try:
         payload = await request.json()
     except Exception:
@@ -2696,6 +2711,38 @@ def _record_pick_in_learning_loop(
     horizon_type: str,
 ) -> None:
     """Pick → prediction → resolver → weights (closes the learning loop)."""
+    _record_pick_in_learning_loop_inner(pick, subnets, market_context, horizon_type)
+
+
+@contextmanager
+def _hour_pick_persist_context():
+    from internal.learning.predictions_store import (
+        reset_predictions_write_ticket,
+        set_predictions_write_ticket,
+    )
+    from internal.store.domain_write_gate import mint_web_ticket
+    from internal.store.soul_map_io import (
+        reset_soul_map_write_ticket,
+        set_soul_map_write_ticket,
+    )
+
+    pred_ticket = mint_web_ticket("predictions", purpose="hour-pick-batch")
+    soul_ticket = mint_web_ticket("soul_map", purpose="hour-pick-batch")
+    pred_ctx = set_predictions_write_ticket(pred_ticket)
+    soul_ctx = set_soul_map_write_ticket(soul_ticket)
+    try:
+        yield
+    finally:
+        reset_predictions_write_ticket(pred_ctx)
+        reset_soul_map_write_ticket(soul_ctx)
+
+
+def _record_pick_in_learning_loop_inner(
+    pick: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+    market_context: Dict[str, Any],
+    horizon_type: str,
+) -> None:
     if not pick:
         return
     if str(pick.get("action") or "").upper() == "HOLD":
@@ -2910,39 +2957,40 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 
     src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
     picks.append(_unify(audited, src))
-    # Close the learning loop for the audited #1 hour pick.
-    _record_pick_in_learning_loop(audited, subnets, market_context, "hour")
+    with _hour_pick_persist_context():
+        # Close the learning loop for the audited #1 hour pick.
+        _record_pick_in_learning_loop(audited, subnets, market_context, "hour")
 
-    if _PICKS_ENGINE:
-        from internal.council.score_cache import score_universe
+        if _PICKS_ENGINE:
+            from internal.council.score_cache import score_universe
 
-        hour_scored, _ = score_universe(
-            subnets,
-            market_context,
-            score_hour=score_subnet_for_hour,
-            score_day=score_subnet_for_day,
-        )
-        scored = [
-            item for item in hour_scored
-            if top_netuid is None or item["subnet"].get("netuid") != top_netuid
-        ]
-        scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-        for item in scored[: max(0, limit - len(picks))]:
-            payload = _unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"])
-            picks.append(payload)
-            # Phase 4 — near-miss hour picks as shadows (no RF-2 / no weight nudge).
-            try:
-                from internal.learning.prediction_loop import record_pick_prediction
+            hour_scored, _ = score_universe(
+                subnets,
+                market_context,
+                score_hour=score_subnet_for_hour,
+                score_day=score_subnet_for_day,
+            )
+            scored = [
+                item for item in hour_scored
+                if top_netuid is None or item["subnet"].get("netuid") != top_netuid
+            ]
+            scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+            for item in scored[: max(0, limit - len(picks))]:
+                payload = _unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"])
+                picks.append(payload)
+                # Phase 4 — near-miss hour picks as shadows (no RF-2 / no weight nudge).
+                try:
+                    from internal.learning.prediction_loop import record_pick_prediction
 
-                record_pick_prediction(
-                    payload,
-                    item["subnet"],
-                    horizon_type="hour",
-                    market_context=market_context,
-                    shadow=True,
-                )
-            except Exception:
-                pass
+                    record_pick_prediction(
+                        payload,
+                        item["subnet"],
+                        horizon_type="hour",
+                        market_context=market_context,
+                        shadow=True,
+                    )
+                except Exception:
+                    pass
 
     return picks[:limit]
 
@@ -3187,9 +3235,9 @@ async def api_daily_pick_weighed():
     """Deferred hydrate read — shortlist only, scored on live-priced subnets."""
 
     def _build():
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_today_only_daily_pick
 
-        existing = _find_today(_load())
+        existing = get_today_only_daily_pick()
         if existing is None:
             return {"shortlist": []}
         return {"shortlist": _daily_pick_weighed_shortlist(existing)}
@@ -3231,12 +3279,13 @@ def _daily_pick_pending_hold() -> Dict[str, Any]:
 
 def _hydrate_daily_pick_lite(stash: Dict[str, Any]) -> Dict[str, Any]:
     """One JSON load + lite enrich — never scores. Shared by single-flight GET."""
-    from internal.council.daily_pick_engine import _find_today, _load
+    from internal.council.daily_pick_engine import get_current_daily_pick
     from internal.whales.enrichment_badge import empty_whale_flow_badge
 
-    existing = _find_today(_load())
+    existing = get_current_daily_pick()
     if existing is None:
         pending = _daily_pick_pending_hold()
+        pending["enrichment_badge"] = empty_whale_flow_badge("lite_read")
         stash["payload"] = pending
         return pending
     # Stash stored JSON before enrich so waiters of THIS flight can shed to it
@@ -3345,9 +3394,9 @@ async def api_top_pick_day():
     """Top pick for the current day — read persisted pick only; never run pick engine on API."""
 
     def _build():
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_today_only_daily_pick
 
-        existing = _find_today(_load())
+        existing = get_today_only_daily_pick()
         if isinstance(existing, dict):
             day_pick = existing.get("pick")
             if not day_pick and existing.get("candidate"):

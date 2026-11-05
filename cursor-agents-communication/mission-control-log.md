@@ -330,3 +330,48 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-11-04 — PR #1561 gates @ `b3b00ebf` (draft, no deploy)
+
+- **HEAD:** `b3b00ebf` — Ditto run `809176cc` fixes (prior-day guards, resolver `_save_json` without pick token, conftest fail-hard, lock slot 19:05).
+- **Gates:** morning bundle **213×2** pass; **`comm -23` vs `0299d354` = 0** (full suite ~8m); CI smoke + full-suite + contract green.
+- **Ditto:** [run `97db989c`](https://developer.heyditto.ai/review/runs/97db989c-d5bb-441b-8a95-c274f9ded470) @ `b3b00eb` — **pass**, no new comments (prior 8+9 addressed in code).
+- **Still open:** Replit (last MODIFY `78c3d790`), Claude adversarial @ head, Cursor Auto-Review **MODIFY** (PR title/body still plan-only / 13:05 vs code **19:00/19:05 UTC** Phase B — intentional per Joshua; body refresh pending).
+- **Slot:** rollover **19:00 UTC**, creation **19:05 UTC** (12:05 PM Arizona); tests/docs goal line aligned.
+
+## 2026-11-04 — PR #1561 doc + panel fix (Joshua: refresh PR, Replit, gates)
+
+- **PR title/body** refreshed — implementation @ **19:05 UTC**, DO NOT MERGE.
+- **Code/doc:** plan §3/§7/§8 → **19:00/19:05**; `summarize_picks` → `get_today_only_daily_pick`; repro test added.
+- **@claude** implementation ask posted @ `b53da884`; **@Replit** re-review comment posted @ new head after push.
+- **Gates:** morning **213×2**; **`comm-23`** re-run post-push.
+
+## 2026-11-04 — PR #1561 Claude MODIFY @ `d87d42ca`
+
+- **Blockers addressed:** PR title/body authoritative **19:05 UTC** (Joshua deploy catch-up); plan §1 slot table; resolver `_write_soul_map_guarded` passes captured **write_generation** + test; `write_scheduler_hold` requires explicit gen to persist.
+- **HEAD:** pushed after fixes (resolver_scheduler + engine + test + loop_health note).
+- **Gates:** morning **215×2**; **`comm-23`** post-push.
+
+## 2026-11-05 — PR #1561 Round six STOP GATE @ `dec6760f` (Joshua GO — Design A blocked)
+
+- **STOP GATE:** worker-only persist **not satisfied** — web/Uvicorn still mutates **predictions** + **soul map** (cycle summary when resolver allowed on web). **No Design A push.**
+- **Evidence:** PR #1561 comment (file:line table); Ditto memory `219f9f8d`.
+- **Picks/holds:** web daily-pick paths read-only (no `get_or_create_today_pick` in `server.py` / learning routes).
+- **`commit_direct`:** absent in repo.
+- **Awaiting:** retire web mutators / tickets on resolve+hour-pick+feedback+rebalance, or Joshua waives gate.
+
+## 2026-11-05 — PR #1561 Round six cross-process Design A (Joshua GO revised)
+
+- **Implemented:** `internal/store/domain_write_gate.py` — per-domain epoch file + flock; `commit(ticket)` / `revoke(domain)`; separate domains (predictions, soul_map, cycle_summary, daily_pick, resolver).
+- **Wired writers:** predictions (`append_prediction`, `save_predictions`, resolver `_save_json` merge-by-id); soul_map (`write_soul_map` ticket); web routes 1257/1830/1191/1172; hour-pick batch tickets; resolver cycle tickets; mindmap feedback.
+- **Also:** reader v2 HOLD blocks same-day legacy; corrupt `daily_picks.json` raises `DailyPickFileCorrupt`; `ledger_heal` pick_day downgrade.
+- **Tests:** `test_domain_write_gate.py` (cross-process subprocess race), `test_v2_hold_on_disk_not_served_by_reader`, conftest epoch isolation + persist tickets.
+- **Gates:** resolver+morning+gate modules green locally; full bundle run with pick_scheduler may need CI confirmation.
+
+## 2026-11-05 — PR #1561 Push 2 Design A completion @ `3c25290f` (draft, no deploy)
+
+- **HEAD:** `3c25290f` (stack `9bc644ff` → `07a851c2` → `3c25290f`) on `cursor/daily-pick-morning-plan-3740`.
+- **Push 2:** ledger_heal pick_id + domain gate; corrupt daily_picks raise; predictions merge-by-id + stale ticket tests; domain gate corrupt epoch fail-closed + daily_pick lock nesting; Ditto High fixes (append web ticket, resolve_due preserves cycle ticket, expired recovery ticket, merge keeps concurrent pending).
+- **CI smoke fix:** `data_seeds/score_snapshots.json` scorer_digest refresh (`stamp_scorer_fields`); `_scoped_soul_map_ticket` for weights mutators + f04 mock `ticket=` kwarg.
+- **Gates (local @ `3c25290f`):** static guards OK (`check_score_snapshot_seed.py`); **comm-23=0** (`PR_fail_count=0` vs `/tmp/fail-merge-base-v2.txt`); morning bundle **229×2** exit 0; full-suite comm-23 re-run post-weights fix pending CI.
+- **Slot:** 19:00/19:05 UTC unchanged.

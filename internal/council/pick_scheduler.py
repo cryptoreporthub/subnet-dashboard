@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from internal.council import stage_trace
+from internal.council.pick_day import DAILY_PICK_SLOT_UTC_HOUR, DAILY_PICK_SLOT_UTC_MINUTE
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker, get_tracker
 
@@ -29,8 +30,6 @@ DAILY_JOB_ID = "daily-pick-scheduler"
 HOUR_JOB_ID = "hour-pick-scheduler"
 
 HOUR_PICK_REFRESH_MINUTES = int(os.environ.get("HOUR_PICK_REFRESH_MINUTES", "180"))
-DAILY_PICK_SLOT_UTC_HOUR = int(os.environ.get("DAILY_PICK_SLOT_UTC_HOUR", "0"))
-DAILY_PICK_SLOT_UTC_MINUTE = int(os.environ.get("DAILY_PICK_SLOT_UTC_MINUTE", "15"))
 # ponytail: one failed cold-start/slot tick must not wait until tomorrow 00:15.
 DAILY_PICK_RETRY_MINUTES = int(os.environ.get("DAILY_PICK_RETRY_MINUTES", "15"))
 DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "90"))
@@ -66,17 +65,17 @@ def _rss_bookend(name: str) -> contextlib.AbstractContextManager[None]:
 
 
 def _seconds_until_daily_slot() -> float:
-    """Seconds until next DAILY_PICK_SLOT_UTC_* (at least 30s)."""
+    """Seconds until next pick-day creation slot (at least 30s)."""
+    from datetime import date as date_cls
+
+    from internal.council.pick_day import pick_day_str, slot_open_utc
+
     now = datetime.now(timezone.utc)
-    target = now.replace(
-        hour=max(0, min(23, DAILY_PICK_SLOT_UTC_HOUR)),
-        minute=max(0, min(59, DAILY_PICK_SLOT_UTC_MINUTE)),
-        second=0,
-        microsecond=0,
-    )
-    if target <= now:
-        target = target + timedelta(days=1)
-    return max(30.0, (target - now).total_seconds())
+    open_at = slot_open_utc(pick_day_str(now))
+    if now >= open_at:
+        next_day = date_cls.fromisoformat(pick_day_str(now)) + timedelta(days=1)
+        open_at = slot_open_utc(next_day.isoformat())
+    return max(30.0, (open_at - now).total_seconds())
 
 
 def _seconds_until_next_daily_tick(*, today_ready: bool) -> float:
@@ -88,16 +87,13 @@ def _seconds_until_next_daily_tick(*, today_ready: bool) -> float:
 
 
 def _today_pick_ready() -> bool:
-    """True when today's record is a finished decision (not a scheduler_hold placeholder)."""
+    """True when current pick day has a published v2 (or legacy) decision."""
     try:
-        from internal.council.daily_pick_engine import _find_today, _load
+        from internal.council.daily_pick_engine import get_current_daily_pick
+        from internal.council.daily_pick_reader import is_published_daily_pick_row
 
-        rec = _find_today(_load())
-        if not isinstance(rec, dict):
-            return False
-        if rec.get("scheduler_hold"):
-            return False
-        return True
+        rec = get_current_daily_pick()
+        return is_published_daily_pick_row(rec)
     except Exception:
         return False
 
@@ -267,15 +263,26 @@ class DailyPickScheduler:
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="daily-pick-tick").start()
         else:
-            # Cold start: create today soon, then align to UTC slot.
-            # Persisted lifecycle=started is not proof a DateTrigger is armed
-            # (new process generation after prior boot).
-            schedule_in_seconds(DAILY_JOB_ID, self._tick, 45)
+            from internal.council.daily_pick_write_token import is_daily_pick_schedule_disabled
+            from internal.council.pick_day import daily_pick_creation_open
+
+            if is_daily_pick_schedule_disabled():
+                delay = max(3600.0, _seconds_until_daily_slot())
+            elif daily_pick_creation_open():
+                delay = 30.0
+            else:
+                delay = _seconds_until_daily_slot()
+            schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
         if already:
             return {"started": False, "reason": "already running"}
         return {"started": True, "job": DAILY_JOB_ID}
 
     def stop(self) -> Dict[str, Any]:
+        from internal.council.daily_pick_write_token import bump_write_generation
+
+        with self._work_lock:
+            self._work_generation += 1
+        bump_write_generation(reason="daily pick scheduler stopped")
         cancel_job(DAILY_JOB_ID)
         return {"stopped": True}
 
@@ -322,10 +329,44 @@ class DailyPickScheduler:
         return result
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
+        from internal.council.daily_pick_write_token import is_daily_pick_schedule_disabled
+        from internal.council.pick_day import daily_pick_creation_open
+
+        if is_daily_pick_schedule_disabled():
+            result = {"ok": False, "run_at": _now_iso(), "skipped": "write_token_revoked"}
+            if reschedule:
+                schedule_in_seconds(DAILY_JOB_ID, self._tick, max(3600.0, _seconds_until_daily_slot()))
+            return result
+        if not daily_pick_creation_open():
+            result = {"ok": False, "run_at": _now_iso(), "skipped": "creation_closed"}
+            if reschedule:
+                schedule_in_seconds(DAILY_JOB_ID, self._tick, _seconds_until_daily_slot())
+            return result
+        from internal.council.daily_pick_write_token import fence_revoke_if_resolver_wait_exceeded
+
+        if not fence_revoke_if_resolver_wait_exceeded(
+            reason="daily pick slot: resolver cycle did not finish within fence"
+        ):
+            result = {
+                "ok": False,
+                "run_at": _now_iso(),
+                "skipped": "resolver_fence_timeout",
+                "error": "resolver fence timeout",
+            }
+            if reschedule:
+                schedule_in_seconds(DAILY_JOB_ID, self._tick, max(3600.0, _seconds_until_daily_slot()))
+            _write_scheduler_state({"last_tick": result})
+            return result
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
+        write_gen: Optional[int] = None
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
+            from internal.council.daily_pick_write_token import current_write_generation
+
+            write_gen = current_write_generation()
+            with self._work_lock:
+                self._work_generation += 1
 
             with _rss_bookend("daily_pick_scheduler:load_subnets"):
                 subnets = _load_subnets()
@@ -333,8 +374,6 @@ class DailyPickScheduler:
                 ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
-            with self._work_lock:
-                self._work_generation += 1
 
             def _run_pick() -> Optional[Dict[str, Any]]:
                 import contextlib
@@ -354,6 +393,7 @@ class DailyPickScheduler:
                         ctx,
                         False,
                         is_cancelled=lambda: self._work_generation != tick_gen,
+                        write_generation=write_gen,
                     )
 
             with self._submit_lock:
@@ -368,11 +408,27 @@ class DailyPickScheduler:
             try:
                 payload = fut.result(timeout=timeout)
             except FuturesTimeoutError:
-                with self._work_lock:
-                    self._work_generation += 1
-                result["error"] = f"daily pick tick timed out after {timeout}s"
-                result["stall"] = stage_trace.describe_stall(trace)
-                logger.warning("%s (worker abandoned)", result["error"])
+                from internal.council.daily_pick_write_token import (
+                    bump_write_generation,
+                    current_write_generation,
+                )
+
+                superseded = False
+                with self._submit_lock:
+                    if self._inflight_future is not fut:
+                        superseded = True
+                if superseded:
+                    result["error"] = "daily pick tick superseded before timeout handling"
+                    logger.warning(result["error"])
+                    write_gen = None
+                else:
+                    with self._work_lock:
+                        self._work_generation += 1
+                    bump_write_generation(reason="daily pick tick timed out")
+                    write_gen = current_write_generation()
+                    result["error"] = f"daily pick tick timed out after {timeout}s"
+                    result["stall"] = stage_trace.describe_stall(trace)
+                    logger.warning("%s (worker abandoned)", result["error"])
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
             result["stages"] = trace.report()
@@ -394,11 +450,11 @@ class DailyPickScheduler:
                 # ponytail: timeout/error ticks must retry soon — abandoned worker
                 # writes to disk must not defer scheduling to tomorrow's UTC slot.
                 today_ready = False
-            if not today_ready and result.get("error"):
+            if not today_ready and result.get("error") and write_gen is not None:
                 try:
                     from internal.council.daily_pick_engine import write_scheduler_hold
 
-                    hold = write_scheduler_hold(str(result["error"]))
+                    hold = write_scheduler_hold(str(result["error"]), write_generation=write_gen)
                     result["scheduler_hold"] = True
                     result["action"] = hold.get("action")
                     result["date"] = hold.get("date")
@@ -415,7 +471,7 @@ class DailyPickScheduler:
                 try:
                     from internal.council.daily_pick_engine import write_scheduler_hold
 
-                    write_scheduler_hold(str(exc))
+                    write_scheduler_hold(str(exc), write_generation=write_gen)
                     result["scheduler_hold"] = True
                 except Exception as hold_exc:
                     logger.warning("scheduler hold write failed: %s", hold_exc)
@@ -557,11 +613,16 @@ def start_pick_schedulers(immediate: bool = False) -> Dict[str, Any]:
         return {"started": False, "reason": "disabled"}
     global _daily, _hour
     with _lock:
+        first_boot = _daily is None
         if _daily is None:
             _daily = DailyPickScheduler()
         if _hour is None:
             _hour = HourPickScheduler()
         daily, hour = _daily, _hour
+    if first_boot:
+        from internal.council.daily_pick_write_token import issue_daily_pick_write_token
+
+        issue_daily_pick_write_token()
     return {
         "started": True,
         "daily": daily.start(immediate=immediate),
@@ -571,10 +632,14 @@ def start_pick_schedulers(immediate: bool = False) -> Dict[str, Any]:
 
 def stop_pick_schedulers() -> Dict[str, Any]:
     global _daily, _hour
+    from internal.council.daily_pick_write_token import bump_write_generation
+
     with _lock:
         daily, hour = _daily, _hour
         _daily = None
         _hour = None
+    if daily is not None or hour is not None:
+        bump_write_generation(reason="pick schedulers stopped")
     out: Dict[str, Any] = {}
     if daily is not None:
         out["daily"] = daily.stop()

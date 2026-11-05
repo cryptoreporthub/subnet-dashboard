@@ -8,10 +8,15 @@ import json
 import logging
 import os
 import time
+from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+_predictions_write_ticket: ContextVar[Optional[Any]] = ContextVar(
+    "predictions_write_ticket", default=None
+)
 
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PREDICTIONS_LOCK_PATH = os.path.join("data", "predictions.json.lock")
@@ -29,6 +34,95 @@ _V1_TO_V2_PHASE = {
 class FileLockTimeout(Exception):
     """Raised when file lock acquisition times out."""
     pass
+
+
+def set_predictions_write_ticket(ticket: Any):
+    """Bind active predictions WriteTicket for nested store/resolver calls."""
+    return _predictions_write_ticket.set(ticket)
+
+
+def reset_predictions_write_ticket(token) -> None:
+    _predictions_write_ticket.reset(token)
+
+
+def get_predictions_write_ticket() -> Optional[Any]:
+    return _predictions_write_ticket.get()
+
+
+def _require_predictions_ticket():
+    from internal.store.domain_write_gate import TicketRefused, WriteTicket
+
+    ticket = get_predictions_write_ticket()
+    if not isinstance(ticket, WriteTicket):
+        raise TicketRefused("missing predictions write ticket")
+    return ticket
+
+
+def _read_predictions_file_raw() -> Dict[str, Any]:
+    try:
+        with open(PREDICTIONS_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        return _default_data()
+    if not isinstance(data, dict):
+        return _default_data()
+    data.setdefault("predictions", [])
+    data.setdefault("resolved", [])
+    data.setdefault("stats", _default_data()["stats"])
+    return data
+
+
+def merge_predictions_by_row_id(
+    disk: Dict[str, Any], patch: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Merge patch into disk: pending/resolved upsert by id; keep disk-only pending rows."""
+    out = dict(disk)
+    if "predictions" in patch:
+        disk_pending = [
+            row
+            for row in (out.get("predictions") or [])
+            if isinstance(row, dict)
+        ]
+        patch_pending = [
+            row for row in (patch.get("predictions") or []) if isinstance(row, dict)
+        ]
+        by_id: Dict[str, Dict[str, Any]] = {
+            str(row.get("id")): row for row in disk_pending if row.get("id") is not None
+        }
+        no_id: List[Dict[str, Any]] = [row for row in disk_pending if not row.get("id")]
+        for row in patch_pending:
+            rid = row.get("id")
+            if rid is not None:
+                by_id[str(rid)] = row
+            else:
+                no_id.append(row)
+        # Rows appended concurrently on disk keep their slot unless patch replaces same id.
+        out["predictions"] = list(by_id.values()) + no_id
+    if "resolved" in patch:
+        by_id: Dict[str, Dict[str, Any]] = {
+            str(row.get("id")): row
+            for row in (out.get("resolved") or [])
+            if isinstance(row, dict) and row.get("id") is not None
+        }
+        no_id: List[Dict[str, Any]] = [
+            row
+            for row in (out.get("resolved") or [])
+            if isinstance(row, dict) and not row.get("id")
+        ]
+        for row in patch.get("resolved") or []:
+            if not isinstance(row, dict):
+                continue
+            rid = row.get("id")
+            if rid is not None:
+                by_id[str(rid)] = row
+            else:
+                no_id.append(row)
+        out["resolved"] = list(by_id.values()) + no_id
+    for key, value in (patch or {}).items():
+        if key not in ("predictions", "resolved"):
+            out[key] = value
+    update_stats(out)
+    return out
 
 
 @contextlib.contextmanager
@@ -146,19 +240,43 @@ def load_predictions(*, persist: bool = False) -> Dict[str, Any]:
     return data
 
 
-def save_predictions(data: Dict[str, Any], *, trigger: str = "save_predictions") -> None:
-    """Write predictions.json atomically with cross-process file locking.
-
-    Uses fcntl.flock to prevent race conditions between web and worker processes.
-    Lock acquisition times out after 5 seconds to avoid hanging request handlers.
-    """
+def save_predictions(
+    data: Dict[str, Any],
+    *,
+    trigger: str = "save_predictions",
+    ticket: Optional[Any] = None,
+    merge_by_id: bool = False,
+) -> None:
+    """Write predictions.json under domain ticket + flock (Design A)."""
     from internal.ops.mutation_log import log_mutation
+    from internal.store.domain_write_gate import TicketRefused, commit
+
+    active = ticket or get_predictions_write_ticket()
+    if active is None:
+        raise TicketRefused("save_predictions refused: missing ticket")
+
+    payload = data
+
+    def _body() -> None:
+        nonlocal payload
+        if merge_by_id:
+            fresh = _read_predictions_file_raw()
+            payload = merge_predictions_by_row_id(fresh, data)
+        _write_predictions_unlocked(
+            payload, writer_function="save_predictions", trigger=trigger
+        )
 
     try:
-        with locked_predictions_file(timeout_seconds=5.0):
-            _write_predictions_unlocked(
-                data, writer_function="save_predictions", trigger=trigger
-            )
+        if not commit(active, _body, lock_timeout=5.0):
+            raise TicketRefused("save_predictions refused: stale or invalid ticket")
+    except TimeoutError as exc:
+        log_mutation(
+            operation="failed",
+            path=PREDICTIONS_PATH,
+            writer_function="save_predictions",
+            trigger=trigger,
+        )
+        raise FileLockTimeout(str(exc)) from exc
     except FileLockTimeout:
         log_mutation(
             operation="failed",
@@ -247,16 +365,23 @@ def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bo
     return False
 
 
-def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_prediction") -> bool:
-    """Append a pending prediction if no duplicate is already pending.
-
-    Duplicate key: same ``netuid`` + ``horizon_type`` + shadow flag while pending.
-    Returns True when the prediction was stored.
-    Uses cross-process file locking to prevent concurrent write races.
-    """
+def append_prediction(
+    prediction: Dict[str, Any],
+    *,
+    trigger: str = "append_prediction",
+    ticket: Optional[Any] = None,
+) -> bool:
+    """Append a pending prediction if no duplicate is already pending (ticket required)."""
     if not isinstance(prediction, dict):
         return False
     from internal.learning.evidence import stamp_evidence
+    from internal.store.domain_write_gate import TicketRefused, commit, mint_web_ticket
+
+    active = ticket or get_predictions_write_ticket()
+    owned_ticket = False
+    if active is None:
+        active = mint_web_ticket("predictions", purpose=trigger)
+        owned_ticket = True
 
     _normalize_prediction_timestamps(prediction)
     stamp_evidence(prediction)
@@ -265,9 +390,10 @@ def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_pred
     if netuid is None:
         return False
     shadow = bool(prediction.get("shadow") or prediction.get("counterfactual"))
+    stored = {"ok": False}
 
-    with locked_predictions_file(timeout_seconds=5.0):
-        data = load_predictions()
+    def _body() -> None:
+        data = _read_predictions_file_raw()
         pending = data.get("predictions", [])
         for existing in pending:
             if (
@@ -276,7 +402,7 @@ def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_pred
                 and existing.get("status") == "pending"
                 and bool(existing.get("shadow") or existing.get("counterfactual")) == shadow
             ):
-                return False
+                return
 
         pending.append(prediction)
         data["predictions"] = pending
@@ -284,7 +410,11 @@ def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_pred
         _write_predictions_unlocked(
             data, writer_function="append_prediction", trigger=trigger
         )
-    return True
+        stored["ok"] = True
+
+    if not commit(active, _body, lock_timeout=5.0):
+        return False
+    return bool(stored["ok"])
 
 
 def update_stats(data: Dict[str, Any]) -> None:

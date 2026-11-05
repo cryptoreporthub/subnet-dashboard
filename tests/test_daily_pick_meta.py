@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 
 def test_daily_pick_includes_generated_at_meta():
-    with patch("internal.council.daily_pick_engine._find_today") as find_today:
+    with patch("internal.council.daily_pick_engine.get_current_daily_pick") as find_today:
         find_today.return_value = {
             "status": "ok",
             "action": "HOLD",
@@ -27,7 +27,7 @@ def test_daily_pick_includes_generated_at_meta():
 
 
 def test_daily_pick_pending_has_status_and_stale_meta():
-    with patch("internal.council.daily_pick_engine._find_today", return_value=None):
+    with patch("internal.council.daily_pick_engine.get_current_daily_pick", return_value=None):
         with patch("internal.council.daily_pick_engine._load", return_value=[]):
             from server import app
 
