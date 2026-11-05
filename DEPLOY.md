@@ -161,6 +161,10 @@ build pass; seed the Fly volume or configure the external feed/secret instead.
 
 Runtime state lives on the Fly volume `data_volume` → `/app/data` (`soul_map.json`, predictions, SQLite). **Do not** create a second volume without human `flyctl` access.
 
+**Single-writer step 1 (owner lock):** Fly attaches a volume to **one machine at a time**. Do not scale a dedicated `worker` process group above **one** machine with the same volume role — the second VM cannot share the lock safely. On first bootstrap the volume marker records `exclusive_machine_id` from `FLY_MACHINE_ID` when present; a **cloned** volume or a second machine with the same pin but a different machine id **fail-closed** at acquire (`marker_mismatch:exclusive_machine_id`). Replacing the Fly machine requires operator care (clear or rewrite `.data_volume_marker.json` on the volume, or follow volume recovery runbooks).
+
+**Before enabling owner-guard deploy:** set Fly secret `DATA_VOLUME_ID` to the `vol_…` id from `flyctl volumes list -a subnet-dashboard` (read-only). The app refuses prod-like bootstrap without it (`volume_pin_missing`). Do **not** commit the id in `fly.toml` unless Joshua explicitly approves a pinned env line — secret-only is merge-safe.
+
 ---
 
 ### Automated check

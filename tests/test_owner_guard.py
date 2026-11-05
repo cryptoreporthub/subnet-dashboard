@@ -312,14 +312,12 @@ def test_reads_unaffected_without_owner_guard(owner_env):
     assert read_soul_map(str(soul)) == {"x": 1}
 
 
-def test_lock_released_after_process_exit(owner_env, monkeypatch):
+def test_lock_released_after_process_exit(owner_env):
     data = owner_env
-    monkeypatch.setenv("OWNER_GUARD_SKIP", "on")
     script = textwrap.dedent(
         f"""
         import os
         os.environ["DATA_DIR"] = {str(data)!r}
-        os.environ["OWNER_GUARD_SKIP"] = "on"
         from internal.owner_guard import try_acquire_write_owner_lock
         ok, _ = try_acquire_write_owner_lock()
         assert ok
@@ -447,6 +445,7 @@ def test_symlinked_lock_refused(prod_mount):
 
 def _subprocess_env(**extra: str) -> dict[str, str]:
     env = os.environ.copy()
+    env.pop("PYTEST_CURRENT_TEST", None)
     env["PYTHONPATH"] = _REPO_ROOT
     env.update(extra)
     return env
@@ -635,3 +634,163 @@ def test_failed_bootstrap_leaves_no_tmp(prod_mount, monkeypatch):
     assert ok is False
     tmps = list(data.glob(f"{og.VOLUME_MARKER_NAME}.*.tmp"))
     assert tmps == []
+
+
+def test_exclusive_machine_id_mismatch_blocks(prod_mount, monkeypatch):
+    data = prod_mount
+    (data / "soul_map.json").write_text("{}\n")
+    monkeypatch.setenv("FLY_MACHINE_ID", "machine-a")
+    _write_v2_marker(data, pinned_volume_id="vol_test123")
+    payload = json.loads((data / og.VOLUME_MARKER_NAME).read_text())
+    payload["exclusive_machine_id"] = "machine-b"
+    (data / og.VOLUME_MARKER_NAME).write_text(json.dumps(payload) + "\n")
+    ok, detail = og.try_acquire_write_owner_lock()
+    assert ok is False
+    assert "marker_mismatch" in detail
+    assert "exclusive_machine_id" in detail
+
+
+def test_env_and_signals_restored_after_owner_tests(owner_env):
+    assert os.environ.get("FLY_APP_NAME") is None
+    assert os.environ.get("OWNER_GUARD_SKIP") is None
+    og.try_acquire_write_owner_lock()
+    og.reset_owner_guard_for_tests()
+    assert os.environ.get("FLY_APP_NAME") is None
+    from internal import worker as worker_mod
+
+    assert not worker_mod._shutdown.is_set()
+
+
+def test_forked_child_atexit_does_not_release_parent_lock_subprocess(owner_env):
+    data = owner_env
+    script = textwrap.dedent(
+        f"""
+        import os
+        os.environ["DATA_DIR"] = {str(data)!r}
+        import internal.owner_guard as og
+        ok, _ = og.try_acquire_write_owner_lock()
+        assert ok
+        pid = os.fork()
+        if pid == 0:
+            og._release_write_owner_lock()
+            ok_c, detail_c = og.try_acquire_write_owner_lock()
+            print(f"CHILD_TRY={{ok_c}}|{{detail_c}}", flush=True)
+            os._exit(0)
+        os.waitpid(pid, 0)
+        ok2, detail2 = og.try_acquire_write_owner_lock()
+        print(f"PARENT_STILL={{ok2}}|{{detail2}}", flush=True)
+        pid2 = os.fork()
+        if pid2 == 0:
+            ok3, detail3 = og.try_acquire_write_owner_lock()
+            print(f"PEER={{ok3}}|{{detail3}}", flush=True)
+            os._exit(0)
+        os.waitpid(pid2, 0)
+        """
+    )
+    result = _fork_subprocess(script)
+    assert result.returncode == 0
+    assert "PARENT_STILL=True|" in result.stdout
+    assert "CHILD_TRY=False|write_owner_lock_contended" in result.stdout
+    assert "PEER=False|write_owner_lock_contended" in result.stdout
+
+
+def test_parent_release_while_child_alive_lock_acquirable_subprocess(owner_env):
+    data = owner_env
+    script = textwrap.dedent(
+        f"""
+        import os, time
+        os.environ["DATA_DIR"] = {str(data)!r}
+        import internal.owner_guard as og
+        ok, _ = og.try_acquire_write_owner_lock()
+        assert ok
+        pid = os.fork()
+        if pid == 0:
+            time.sleep(5)
+            os._exit(0)
+        og.reset_owner_guard_for_tests()
+        ok2, detail = og.try_acquire_write_owner_lock()
+        print(f"REACQUIRE={{ok2}}|{{detail}}", flush=True)
+        os.kill(pid, 9)
+        os.waitpid(pid, 0)
+        """
+    )
+    result = _fork_subprocess(script, timeout=20)
+    assert result.returncode == 0
+    assert "REACQUIRE=True|" in result.stdout
+
+
+def test_marker_change_terminal_exits_3_subprocess(prod_mount):
+    data = prod_mount
+    (data / "soul_map.json").write_text("{}\n")
+    _write_v2_marker(data)
+    script = textwrap.dedent(
+        f"""
+        import os
+        os.environ["DATA_DIR"] = {str(data)!r}
+        os.environ["FLY_APP_NAME"] = "subnet-dashboard"
+        os.environ["DATA_VOLUME_ID"] = "vol_test123"
+        os.environ.pop("PYTEST_CURRENT_TEST", None)
+        import internal.data_volume as dv
+        import internal.owner_guard as og
+        dv._read_mountinfo = lambda: {repr(_fake_mountinfo_for(data))}
+        ok, _ = og.try_acquire_write_owner_lock()
+        assert ok
+        marker_path = og.volume_marker_path()
+        with open(marker_path, "a", encoding="utf-8") as handle:
+            handle.write(" ")
+        reason = og.owner_guard_reason()
+        assert reason and reason.startswith("owner_lost:")
+        import time
+        time.sleep(2)
+        """
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=os.getcwd(),
+        env=_subprocess_env(),
+        timeout=15,
+    )
+    assert proc.returncode == 3
+
+
+def test_dedicated_worker_uvicorn_blocked_exits_3_subprocess(prod_mount):
+    data = prod_mount
+    (data / "soul_map.json").write_text("{}\n")
+    port = "19877"
+    env = _subprocess_env(
+        RUN_MODE="worker",
+        FLY_APP_NAME="subnet-dashboard",
+        DATA_DIR=str(data),
+        PORT=port,
+    )
+    env.pop("DATA_VOLUME_ID", None)
+    env.pop("DISABLE_BACKGROUND_SCANS", None)
+    env["RUN_MODE"] = "worker"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "server:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            port,
+        ],
+        cwd=os.getcwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert proc.returncode == 3
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import urllib.request; urllib.request.urlopen('http://127.0.0.1:{port}/health', timeout=1)",
+        ],
+        capture_output=True,
+        timeout=5,
+    )
+    assert probe.returncode != 0

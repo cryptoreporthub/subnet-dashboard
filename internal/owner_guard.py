@@ -113,6 +113,10 @@ def _fly_app_name() -> str:
     return os.environ.get("FLY_APP_NAME", "").strip()
 
 
+def _fly_machine_id() -> str:
+    return os.environ.get("FLY_MACHINE_ID", "").strip()
+
+
 def _read_marker_json(path: str) -> Tuple[str, Optional[Dict[str, Any]], str]:
     """Classify marker file without writing. Returns (state, payload|None, detail)."""
     try:
@@ -162,6 +166,15 @@ def _read_marker_json(path: str) -> Tuple[str, Optional[Dict[str, Any]], str]:
     marker_pin = pinned if isinstance(pinned, str) else ""
     if env_pin and marker_pin != env_pin:
         return "MISMATCH", payload, "pinned_volume_id"
+    exclusive = payload.get("exclusive_machine_id")
+    machine = _fly_machine_id()
+    if (
+        machine
+        and isinstance(exclusive, str)
+        and exclusive
+        and exclusive != machine
+    ):
+        return "MISMATCH", payload, "exclusive_machine_id"
     return "VALID", payload, ""
 
 
@@ -199,6 +212,9 @@ def _bootstrap_marker_payload() -> Dict[str, Any]:
     }
     if pin:
         payload["pinned_volume_id"] = pin
+    machine = _fly_machine_id()
+    if machine:
+        payload["exclusive_machine_id"] = machine
     return payload
 
 

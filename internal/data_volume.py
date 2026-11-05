@@ -29,6 +29,30 @@ def _read_mountinfo() -> list[str]:
         return []
 
 
+def decode_mountinfo_path(raw: str) -> str:
+    """Decode octal escape sequences in mountinfo mount/source fields."""
+    out: list[str] = []
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+        if ch == "\\" and i + 3 < len(raw):
+            esc = raw[i + 1 : i + 4]
+            if esc in ("040", "011", "012", "134"):
+                out.append(
+                    {
+                        "040": " ",
+                        "011": "\t",
+                        "012": "\n",
+                        "134": "\\",
+                    }[esc]
+                )
+                i += 4
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def strict_mount_proof(root: str) -> tuple[bool, str, dict[str, str]]:
     """True only when root is the exact mount point of a block-device mount."""
     target = os.path.realpath(root)
@@ -42,7 +66,7 @@ def strict_mount_proof(root: str) -> tuple[bool, str, dict[str, str]]:
             dash_idx = parts.index("-")
         except ValueError:
             continue
-        mount_point = parts[4]
+        mount_point = decode_mountinfo_path(parts[4])
         if mount_point != target:
             continue
         fstype = parts[dash_idx + 1] if dash_idx + 1 < len(parts) else ""
