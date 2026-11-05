@@ -290,9 +290,7 @@ def _build_resolver_liveness_view() -> Dict[str, Any]:
             # stale→ok alone when timestamps are equal (keeps stale-tick tests).
             cur_success = _parse_iso(snap.get("last_success_at"))
             merged_success = _parse_iso(merged.get("last_success_at"))
-            if cur_status in ("no_success_yet", "failing") and merged_status == "ok":
-                snap = merged
-            elif merged_success is not None and (
+            if merged_success is not None and (
                 cur_success is None or merged_success > cur_success
             ):
                 snap = merged
@@ -400,7 +398,20 @@ def _resolver_liveness_view() -> Dict[str, Any]:
     try:
         seq_before = _resolver_tracker_seq()
         view = _build_resolver_liveness_view()
-        if isinstance(view, dict):
+        if _resolver_tracker_seq() != seq_before:
+            view = {
+                "at": None,
+                "lifecycle": "stopped",
+                "warming": False,
+                "refresh_minutes": RESOLVER_REFRESH_MINUTES,
+                "worker_peer": {},
+                "liveness": {},
+                "status": "unavailable",
+                "last_success_at": None,
+                "success_age_seconds": None,
+                "stage_timing_ms": {},
+            }
+        elif isinstance(view, dict):
             with _RESOLVER_LIVENESS_CACHE_LOCK:
                 if _resolver_tracker_seq() == seq_before:
                     _RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()

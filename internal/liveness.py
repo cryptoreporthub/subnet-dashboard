@@ -443,6 +443,7 @@ class LivenessTracker:
             else:
                 write_soul_map(mutator)
         except Exception:
-            return
-        with _REG_LOCK:
-            _WRITE_SEQ[self.name] = _WRITE_SEQ.get(self.name, 0) + 1
+            pass
+        finally:
+            with _REG_LOCK:
+                _WRITE_SEQ[self.name] = _WRITE_SEQ.get(self.name, 0) + 1

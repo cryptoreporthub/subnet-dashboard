@@ -474,9 +474,10 @@ def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
         "success_age_seconds": 9999,
         "stage_timing_ms": {},
     }
+    seq = liveness.write_seq("prediction_resolver")
     loop_health._RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
     loop_health._RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
-    loop_health._RESOLVER_LIVENESS_CACHE["seq"] = 0
+    loop_health._RESOLVER_LIVENESS_CACHE["seq"] = seq - 1
 
     def _slow_build():
         started.set()
@@ -487,7 +488,12 @@ def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
     monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
     tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
 
-    builder = threading.Thread(target=loop_health._resolver_liveness_view)
+    builder_out: list = []
+
+    def _run_builder():
+        builder_out.append(loop_health._resolver_liveness_view())
+
+    builder = threading.Thread(target=_run_builder)
     builder.start()
     assert started.wait(timeout=1)
     tracker.record_success({"noop": True})
@@ -496,6 +502,80 @@ def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
     builder.join(timeout=2)
 
     assert waiter["status"] == "unavailable"
+    assert builder_out[0]["status"] == "unavailable"
+
+
+def test_failed_persist_still_advances_write_seq(monkeypatch, tmp_path):
+    import internal.store.soul_map_io as smio
+    from internal import liveness
+
+    target = tmp_path / "soul_map.json"
+    monkeypatch.setattr(smio, "_resolve_path", lambda path=None: str(target))
+
+    def _boom(*_a, **_k):
+        raise OSError("persist failed")
+
+    monkeypatch.setattr("internal.liveness.write_soul_map", _boom)
+    t = liveness.LivenessTracker("persist-fail-test", 60, persist=True)
+    t.record_failure("disk")
+    assert liveness.write_seq("persist-fail-test") == 1
+
+
+def test_failed_persist_invalidates_cached_ok_view(monkeypatch, tmp_path):
+    import internal.store.soul_map_io as smio
+    from internal import liveness
+
+    target = tmp_path / "soul_map.json"
+    monkeypatch.setattr(smio, "_resolve_path", lambda path=None: str(target))
+    ok_view = {
+        "status": "ok",
+        "last_success_at": "2099-01-01T00:00:00Z",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {},
+        "liveness": {"status": "ok"},
+        "success_age_seconds": 0,
+        "stage_timing_ms": {},
+    }
+    seq = liveness.write_seq("prediction_resolver")
+    loop_health._RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
+    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = dict(ok_view)
+    loop_health._RESOLVER_LIVENESS_CACHE["seq"] = seq
+
+    def _boom(*_a, **_k):
+        raise OSError("persist failed")
+
+    monkeypatch.setattr("internal.liveness.write_soul_map", _boom)
+    t = liveness.LivenessTracker("prediction_resolver", 60, persist=True)
+    t.record_failure("disk")
+    cached = loop_health._cached_resolver_liveness_view()
+    assert cached is None
+
+
+def test_build_after_seq_change_returns_unavailable(monkeypatch):
+    from internal import liveness
+
+    view = {"status": "stale", "last_success_at": "2026-01-01T00:00:00Z", "lifecycle": "ticking"}
+    started = threading.Event()
+    release = threading.Event()
+
+    def _slow_build():
+        started.set()
+        release.wait(timeout=2)
+        return dict(view)
+
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _slow_build)
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+    builder = threading.Thread(target=loop_health._resolver_liveness_view)
+    builder.start()
+    assert started.wait(timeout=1)
+    tracker.record_success({"noop": True})
+    built = loop_health._resolver_liveness_view()
+    release.set()
+    builder.join(timeout=2)
+    assert built["status"] == "unavailable"
 
 
 def test_resolver_cache_drops_after_in_process_tick_write(monkeypatch):
