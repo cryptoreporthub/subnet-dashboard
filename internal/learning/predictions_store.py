@@ -75,10 +75,29 @@ def _read_predictions_file_raw() -> Dict[str, Any]:
 def merge_predictions_by_row_id(
     disk: Dict[str, Any], patch: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Merge patch into disk: pending list authoritative from patch; resolved upserts by id."""
+    """Merge patch into disk: pending/resolved upsert by id; keep disk-only pending rows."""
     out = dict(disk)
     if "predictions" in patch:
-        out["predictions"] = list(patch.get("predictions") or [])
+        disk_pending = [
+            row
+            for row in (out.get("predictions") or [])
+            if isinstance(row, dict)
+        ]
+        patch_pending = [
+            row for row in (patch.get("predictions") or []) if isinstance(row, dict)
+        ]
+        by_id: Dict[str, Dict[str, Any]] = {
+            str(row.get("id")): row for row in disk_pending if row.get("id") is not None
+        }
+        no_id: List[Dict[str, Any]] = [row for row in disk_pending if not row.get("id")]
+        for row in patch_pending:
+            rid = row.get("id")
+            if rid is not None:
+                by_id[str(rid)] = row
+            else:
+                no_id.append(row)
+        # Rows appended concurrently on disk keep their slot unless patch replaces same id.
+        out["predictions"] = list(by_id.values()) + no_id
     if "resolved" in patch:
         by_id: Dict[str, Dict[str, Any]] = {
             str(row.get("id")): row
@@ -356,11 +375,13 @@ def append_prediction(
     if not isinstance(prediction, dict):
         return False
     from internal.learning.evidence import stamp_evidence
-    from internal.store.domain_write_gate import TicketRefused, commit
+    from internal.store.domain_write_gate import TicketRefused, commit, mint_web_ticket
 
     active = ticket or get_predictions_write_ticket()
+    owned_ticket = False
     if active is None:
-        raise TicketRefused("append_prediction refused: missing ticket")
+        active = mint_web_ticket("predictions", purpose=trigger)
+        owned_ticket = True
 
     _normalize_prediction_timestamps(prediction)
     stamp_evidence(prediction)

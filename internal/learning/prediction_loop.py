@@ -499,12 +499,12 @@ def _mirror_pick_to_soul_map(
 ) -> None:
     """Keep soul_map_state.last_pick in sync for dashboard / rotation readers."""
     try:
-        from internal.store.domain_write_gate import TicketRefused
+        from internal.store.domain_write_gate import TicketRefused, mint_web_ticket
         from internal.store.soul_map_io import get_soul_map_write_ticket, write_soul_map
 
         ticket = get_soul_map_write_ticket()
         if ticket is None:
-            raise TicketRefused("hour pick mirror refused: missing soul_map ticket")
+            ticket = mint_web_ticket("soul_map", purpose="pick-mirror")
 
         def _mutator(data: Dict[str, Any]) -> None:
             sms = data.setdefault("soul_map_state", {})

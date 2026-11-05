@@ -11,6 +11,8 @@ import pytest
 
 from internal.council.daily_pick_engine import (
     DAILY_PICKS_PATH,
+    DailyPickFileCorrupt,
+    _load,
     _save,
     _upsert_today,
     get_or_create_today_pick,
@@ -486,3 +488,15 @@ def test_prior_day_tiebreak_v2_wins_over_legacy_on_2026_11_05_gap():
     assert row is not None
     assert row.get("pick_id") == v2_pick_id("2026-11-04")
     assert meta.get("prior_pick_day") is True
+
+
+def test_corrupt_daily_picks_json_raises_not_empty(picks_path):
+    picks_path.write_text("{not-json", encoding="utf-8")
+    with pytest.raises(DailyPickFileCorrupt):
+        _load(str(picks_path))
+
+
+def test_corrupt_daily_picks_non_list_raises(picks_path):
+    picks_path.write_text(json.dumps({"oops": 1}), encoding="utf-8")
+    with pytest.raises(DailyPickFileCorrupt):
+        _load(str(picks_path))

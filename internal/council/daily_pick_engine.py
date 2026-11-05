@@ -92,7 +92,12 @@ def _now_stamp() -> str:
 @contextmanager
 def _locked_daily_picks(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
     """Cross-process lock for the daily-picks read-merge-replace."""
-    lock_path = path + ".lock"
+    from internal.store.domain_write_gate import domain_lock_held
+
+    if domain_lock_held("daily_pick"):
+        yield
+        return
+    lock_path = os.environ.get("DAILY_PICKS_LOCK_PATH", path + ".lock")
     os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
     with open(lock_path, "a+", encoding="utf-8") as lock_file:
         deadline = time.monotonic() + timeout_seconds

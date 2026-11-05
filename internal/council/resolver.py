@@ -1408,15 +1408,23 @@ def resolve_due_predictions(
 ) -> Dict[str, Any]:
     """Resolve due predictions without network hydration on cache misses."""
     from internal.learning.predictions_store import (
+        get_predictions_write_ticket,
         reset_predictions_write_ticket,
         set_predictions_write_ticket,
     )
     from internal.store.domain_write_gate import mint_web_ticket
 
-    ticket = predictions_ticket
+    existing = get_predictions_write_ticket()
+    ticket = predictions_ticket or existing
+    restore = False
+    token = None
     if ticket is None:
         ticket = mint_web_ticket("predictions", purpose="resolve_due")
-    token = set_predictions_write_ticket(ticket)
+        token = set_predictions_write_ticket(ticket)
+        restore = True
+    elif predictions_ticket is not None:
+        token = set_predictions_write_ticket(ticket)
+        restore = True
     try:
         with resolver_hydration_budget(0):
             return _resolve_due_predictions(
@@ -1425,7 +1433,8 @@ def resolve_due_predictions(
                 tolerance=tolerance,
             )
     finally:
-        reset_predictions_write_ticket(token)
+        if restore and token is not None:
+            reset_predictions_write_ticket(token)
 
 
 def _resolve_due_predictions(
