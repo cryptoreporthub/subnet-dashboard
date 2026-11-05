@@ -11,7 +11,7 @@ import json
 import logging
 import math
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Optional, Tuple
@@ -284,6 +284,33 @@ def _load_json(path: str, default: Any) -> Any:
     return result
 
 
+def _cycle_writes_revoked_safe() -> bool:
+    """Return True only when this thread's resolver cycle was revoked.
+
+    Fails open: if the check itself raises, the write proceeds as it did before
+    the guard existed. A broken guard must not silently drop legitimate state.
+    """
+    try:
+        from internal.council.resolver_scheduler import cycle_writes_revoked
+
+        return bool(cycle_writes_revoked())
+    except Exception:
+        return False
+
+
+def _cycle_persist_guard_safe():
+    """Return the bound cycle's release guard, or a no-op context.
+
+    Fails open to a no-op so a broken guard never blocks a legitimate write.
+    """
+    try:
+        from internal.council.resolver_scheduler import cycle_persist_guard
+
+        return cycle_persist_guard()
+    except Exception:
+        return nullcontext()
+
+
 def _save_json(
     path: str,
     data: Any,
@@ -291,7 +318,11 @@ def _save_json(
     caller: Optional[str] = None,
     trigger: Optional[str] = None,
 ) -> None:
-    """Write JSON file atomically with caller attribution."""
+    """Write JSON atomically with caller attribution.
+
+    Skips the write when the calling thread is bound to a resolver cycle whose
+    persist ownership was revoked. Writes from unbound threads are not guarded.
+    """
     from internal.ops.mutation_log import log_mutation
 
     reason = trigger or "resolver_save"
@@ -306,7 +337,21 @@ def _save_json(
         from internal.file_utils import safe_write_json
         from internal.learning.predictions_store import locked_predictions_file
 
-        with locked_predictions_file():
+        # The scheduler's release guard is held across the check and the write, so
+        # an abandon cannot revoke ownership between them. Lock order is release
+        # guard, then predictions lock; nothing takes the guard while holding the
+        # predictions lock.
+        with _cycle_persist_guard_safe(), locked_predictions_file():
+            # A cycle abandoned by timeout or revive must not overwrite newer state.
+            if _cycle_writes_revoked_safe():
+                log_mutation(
+                    operation="skipped_abandoned",
+                    path=path,
+                    writer_function="resolver._save_json",
+                    trigger=reason,
+                    caller=caller,
+                )
+                return
             safe_write_json(path, data)
         log_mutation(
             operation="completed",
@@ -413,7 +458,9 @@ def _stamp_and_nudge_expert(
         else None
     )
     if nudge_expert and not _skip_council_learning(prediction):
-        _nudge_weights(bool(correct), nudge_expert, capture=capture)
+        with _cycle_persist_guard_safe():
+            if not _cycle_writes_revoked_safe():
+                _nudge_weights(bool(correct), nudge_expert, capture=capture)
     return stamped_expert, nudge_expert
 
 
@@ -807,22 +854,25 @@ def _record_scenario_outcome(
             }.items()
             if v is not None
         }
-        scenario = scenario_memory.record_outcome(
-            name=prediction.get("name", "unknown"),
-            outcome="correct" if correct else "wrong",
-            features=features,
-            regime=regime,
-            metadata=metadata,
-            scenario_id=prediction.get("scenario_id"),
-        )
-        # This grades a scenario every resolve, but was invisible to the
-        # trail/mindmap — the loop was learning silently.
-        try:
-            from internal.learning import trail_bus
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return
+            scenario = scenario_memory.record_outcome(
+                name=prediction.get("name", "unknown"),
+                outcome="correct" if correct else "wrong",
+                features=features,
+                regime=regime,
+                metadata=metadata,
+                scenario_id=prediction.get("scenario_id"),
+            )
+            # This grades a scenario every resolve, but was invisible to the
+            # trail/mindmap — the loop was learning silently.
+            try:
+                from internal.learning import trail_bus
 
-            trail_bus.emit_scenario_tagged(scenario, netuid=prediction.get("netuid"))
-        except Exception:
-            pass
+                trail_bus.emit_scenario_tagged(scenario, netuid=prediction.get("netuid"))
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -915,8 +965,12 @@ def atomic_finalize_resolution(
 
     warnings: List[str] = []
 
+    # Revocation is sticky for a cycle, so one revoked check ends the whole finalize.
     try:
-        on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
     except Exception:
         logger.exception("atomic_finalize: on_prediction_resolved failed")
         warnings.append("on_prediction_resolved")
@@ -924,7 +978,10 @@ def atomic_finalize_resolution(
     try:
         from internal.council.prediction_trace import record_prediction_resolved
 
-        record_prediction_resolved(prediction)
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            record_prediction_resolved(prediction)
     except Exception:
         logger.exception("atomic_finalize: record_prediction_resolved failed")
         warnings.append("record_prediction_resolved")
@@ -932,7 +989,10 @@ def atomic_finalize_resolution(
     try:
         from internal.learning.trail_events import emit_prediction_resolved
 
-        emit_prediction_resolved(prediction, prediction.get("expert"))
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            emit_prediction_resolved(prediction, prediction.get("expert"))
     except Exception:
         logger.exception("atomic_finalize: emit_prediction_resolved failed")
         warnings.append("emit_prediction_resolved")
@@ -940,7 +1000,10 @@ def atomic_finalize_resolution(
     try:
         from internal.council import pick_history
 
-        pick_history.finalize_from_prediction(prediction)
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            pick_history.finalize_from_prediction(prediction)
     except Exception:
         logger.exception("atomic_finalize: pick_history.finalize_from_prediction failed")
         warnings.append("pick_history_finalize")
@@ -974,7 +1037,9 @@ def resolve_prediction(
         _ensure_subnet_snapshot(prediction)
         # Impact dial before finalize so prediction_resolved trail includes after value.
         if not _skip_council_learning(prediction):
-            _nudge_impact_strength(prediction, bool(correct))
+            with _cycle_persist_guard_safe():
+                if not _cycle_writes_revoked_safe():
+                    _nudge_impact_strength(prediction, bool(correct))
         atomic_finalize_resolution(
             prediction,
             actual_pct=actual_pct,
@@ -1033,13 +1098,16 @@ def _nudge_signal_weights(
         extra = {"band": capture.band, "capture": capture.capture_capped}
     for signal_name in active_signals:
         try:
-            nudge_signal_weight(
-                horizon_type,
-                signal_name,
-                nudge_correct,
-                scale=scale,
-                extra=extra or None,
-            )
+            with _cycle_persist_guard_safe():
+                if _cycle_writes_revoked_safe():
+                    return
+                nudge_signal_weight(
+                    horizon_type,
+                    signal_name,
+                    nudge_correct,
+                    scale=scale,
+                    extra=extra or None,
+                )
         except Exception:
             pass
 
@@ -1055,6 +1123,10 @@ def resolve_prediction_at_horizon(
     cache: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Grade at ``resolve_at`` price; expire late rows; never use stale live price."""
+    # An abandoned cycle must not nudge learning state. Its predictions save is
+    # skipped by _save_json, so the revived cycle would grade and nudge this row again.
+    if _cycle_writes_revoked_safe():
+        return prediction
     if _already_graded(prediction):
         return prediction
     now = now or datetime.now(timezone.utc)
@@ -1093,14 +1165,25 @@ def resolve_prediction_at_horizon(
     correct, outcome = grade_prediction(prediction, actual_pct)
     capture = stamp_capture_fields(prediction, actual_pct)
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
+    # Revocation can land after the entry check, so every learning write re-checks.
+    if _cycle_writes_revoked_safe():
+        return prediction
     expert, _nudge_expert = _stamp_and_nudge_expert(
         prediction, correct=bool(correct), capture=capture
     )
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
+    if _cycle_writes_revoked_safe():
+        return prediction
     # Impact dial before finalize so prediction_resolved trail includes after value.
     if not _skip_council_learning(prediction):
-        _nudge_impact_strength(prediction, bool(correct))
+        # Check and write under the release guard so an abandon cannot land between them.
+        with _cycle_persist_guard_safe():
+            if _cycle_writes_revoked_safe():
+                return prediction
+            _nudge_impact_strength(prediction, bool(correct))
+        if _cycle_writes_revoked_safe():
+            return prediction
     atomic_finalize_resolution(
         prediction,
         actual_pct=actual_pct,
@@ -1112,7 +1195,11 @@ def resolve_prediction_at_horizon(
         apply_judge_nudge=apply_judge_nudge,
     )
     if not _skip_council_learning(prediction):
+        if _cycle_writes_revoked_safe():
+            return prediction
         _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
+        if _cycle_writes_revoked_safe():
+            return prediction
         _nudge_signal_weights(prediction, bool(correct), capture=capture)
     else:
         try:
