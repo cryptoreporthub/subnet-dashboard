@@ -347,8 +347,13 @@ def test_abandon_of_older_generation_keeps_lock_owned_by_current_generation():
     assert not sched._cycle_lock.locked()
 
 
-def test_stale_revive_keeps_lock_a_new_cycle_takes_after_abandon(monkeypatch):
+def test_stale_revive_keeps_lock_a_new_cycle_takes_after_abandon(tmp_path, monkeypatch):
     """Abandon frees the wedged lock; a cycle that takes it in that gap must keep it."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
     monkeypatch.setattr(rs, "_resolver_cycle_lock_stale", lambda *a, **k: True)
     rs.stop_prediction_resolver_scheduler()
@@ -522,11 +527,13 @@ def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypat
     sched = _fresh_scheduler()
     stop = threading.Event()
     unowned = []
+    lock = threading.Lock()
 
     def _watch():
         while not stop.is_set():
-            if sched._cycle_lock.locked() and sched._lock_owner_gen is None:
-                unowned.append(time.monotonic())
+            with lock:
+                if sched._cycle_lock.locked() and sched._lock_owner_gen is None:
+                    unowned.append(time.monotonic())
             time.sleep(0.0005)
 
     watcher = threading.Thread(target=_watch, daemon=True)
@@ -592,5 +599,71 @@ def test_revive_at_owner_barrier_abandons_without_overlap(tmp_path, monkeypatch)
         rs._cycle_lock_post_register_barrier = None
         barrier_released.set()
         probe.release.set()
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_revive_full_budget_retained_after_failed_lock_acquire(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._revive_use_full_budget = True
+    sched._first_tick_pending = True
+    sched._cycle_lock.acquire()
+    try:
+        out = sched._run_refresh_cycle_with_timeout()
+        assert out.get("skipped") == "cycle_in_flight"
+        assert sched._revive_use_full_budget is True
+    finally:
+        sched._cycle_lock.release()
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_revive_not_blocked_during_skip_summary_persist(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = True
+    gen = sched._cycle_generation
+    sched._cycle_lock.acquire()
+    sched._lock_owner_gen = gen
+    rs._scheduler = sched
+    persist_gate = threading.Event()
+    persist_release = threading.Event()
+    real_persist = sched._persist_cycle_summary
+
+    def slow_skip_persist(result, *args, **kwargs):
+        if isinstance(result, dict) and result.get("skipped") == "cycle_in_flight":
+            persist_gate.set()
+            persist_release.wait(timeout=2)
+        return real_persist(result, *args, **kwargs)
+
+    monkeypatch.setattr(sched, "_persist_cycle_summary", slow_skip_persist)
+    try:
+        skip_thread = threading.Thread(target=sched._run_refresh_cycle_with_timeout, daemon=True)
+        skip_thread.start()
+        assert persist_gate.wait(timeout=2)
+        revived = {}
+
+        def _revive():
+            revived["out"] = rs.revive_prediction_resolver_scheduler(force=True)
+
+        rt = threading.Thread(target=_revive, daemon=True)
+        rt.start()
+        rt.join(timeout=2)
+        assert not rt.is_alive()
+        assert "out" in revived
+        persist_release.set()
+        skip_thread.join(timeout=2)
+    finally:
+        persist_release.set()
         rs.stop_prediction_resolver_scheduler()
 

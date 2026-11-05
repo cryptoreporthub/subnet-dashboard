@@ -819,12 +819,11 @@ class PredictionResolverScheduler:
             if use_full
             else RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
         )
-        if self._revive_use_full_budget:
-            self._revive_use_full_budget = False
         increment_gen = timeout > 0
+        skip_result: Optional[Dict[str, Any]] = None
         with self._release_guard:
             if not self._cycle_lock.acquire(blocking=False):
-                result = {
+                skip_result = {
                     "run_at": _now_iso(),
                     "resolved_now": 0,
                     "expired_now": 0,
@@ -832,13 +831,17 @@ class PredictionResolverScheduler:
                     "skipped": "cycle_in_flight",
                     "abandoned_live": abandoned_live,
                 }
-                self._persist_cycle_summary(result)
-                return result
-            if increment_gen:
-                self._cycle_generation += 1
-            gen = self._cycle_generation
-            self._persist_owner_gen = gen
-            self._lock_owner_gen = gen
+            else:
+                if self._revive_use_full_budget:
+                    self._revive_use_full_budget = False
+                if increment_gen:
+                    self._cycle_generation += 1
+                gen = self._cycle_generation
+                self._persist_owner_gen = gen
+                self._lock_owner_gen = gen
+        if skip_result is not None:
+            self._persist_cycle_summary(skip_result)
+            return skip_result
         post_barrier = _cycle_lock_post_register_barrier
         if post_barrier is not None:
             post_barrier(self, gen)
