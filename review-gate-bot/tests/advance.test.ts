@@ -45,15 +45,29 @@ function world(
   const listComments = () => {};
   const listReviews = () => {};
   const live = { head: HEAD };
+  const baseRepo = { owner: { login: REF.owner }, name: REF.repo };
   const octokit = {
     paginate: async (fn: unknown) => (fn === listComments ? comments : fn === listReviews ? (options.reviews ?? []) : []),
     rest: {
       pulls: {
-        get: async () => ({ data: { head: { sha: live.head }, base: { sha: BASE }, draft: options.draft ?? false } }),
+        get: async () => ({
+          data: {
+            number: REF.number,
+            head: { sha: live.head },
+            base: { sha: BASE, ref: "main", repo: baseRepo },
+            draft: options.draft ?? false,
+          },
+        }),
         listReviews,
       },
       repos: {
-        compareCommitsWithBasehead: async () => ({ data: { files: (options.changedFiles ?? []).map((filename) => ({ filename, status: "modified" })) } }),
+        compareCommitsWithBasehead: async () => ({
+          data: {
+            files: (options.changedFiles ?? []).map((filename) => ({ filename, status: "modified" })),
+            merge_base_commit: { sha: BASE },
+          },
+        }),
+        getBranch: async () => ({ data: { commit: { sha: BASE } } }),
       },
       issues: {
         listComments,

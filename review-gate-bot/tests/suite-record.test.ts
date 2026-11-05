@@ -12,6 +12,23 @@ const HEAD = "c".repeat(40);
 const BASE = "b".repeat(40);
 const CLEAN = '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="a"/></testsuite></testsuites>';
 
+function livePullMocks(mergeBase: string = BASE, tip: string = BASE) {
+  return {
+    pulls: {
+      get: async () => ({
+        data: {
+          head: { sha: HEAD },
+          base: { sha: mergeBase, ref: "main", repo: { owner: { login: REF.owner }, name: REF.repo } },
+          draft: false,
+        },
+      }),
+    },
+    repos: {
+      getBranch: async () => ({ data: { commit: { sha: tip } } }),
+    },
+  };
+}
+
 /** A stored zip with one JUnit file, which is all the reader needs. */
 function zipOf(text: string): Uint8Array {
   const name = Buffer.from("pytest.xml");
@@ -53,8 +70,15 @@ function fixture(changedFiles: string[]) {
   } as unknown as HostKvApi;
   const octokit = {
     rest: {
+      ...livePullMocks(),
       repos: {
-        compareCommitsWithBasehead: async () => ({ data: { files: changedFiles.map((filename) => ({ filename, status: "modified" })) } }),
+        ...livePullMocks().repos,
+        compareCommitsWithBasehead: async () => ({
+          data: {
+            files: changedFiles.map((filename) => ({ filename, status: "modified" })),
+            merge_base_commit: { sha: BASE },
+          },
+        }),
       },
     },
   } as unknown as Octokit;
@@ -187,10 +211,12 @@ function compareOf(data: { files?: Array<{ filename: string; previous_filename?:
   const calls = { count: 0 };
   const octokit = {
     rest: {
+      ...livePullMocks(),
       repos: {
+        ...livePullMocks().repos,
         compareCommitsWithBasehead: async () => {
           calls.count += 1;
-          return { data };
+          return { data: { ...data, merge_base_commit: { sha: BASE } } };
         },
       },
     },

@@ -58,18 +58,34 @@ function seedClean(w: ReturnType<typeof world>) {
   w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
 }
 
-function world(heads: string[], bases: string[] = [BASE]) {
+function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases) {
   const checks: Check[] = [];
   const store = new Map<string, unknown>();
   let reads = 0;
+  const baseRepo = { owner: { login: REF.owner }, name: REF.repo };
   const octokit = {
     rest: {
       pulls: {
-        get: async () => ({
-          data: {
-            head: { sha: heads[Math.min(reads, heads.length - 1)] },
-            base: { sha: bases[Math.min(reads++, bases.length - 1)] },
-          },
+        get: async () => {
+          const i = Math.min(reads, heads.length - 1);
+          const baseSha = bases[Math.min(reads, bases.length - 1)];
+          const tipSha = tips[Math.min(reads++, tips.length - 1)];
+          return {
+            data: {
+              number: REF.number,
+              head: { sha: heads[i] },
+              base: { sha: baseSha, ref: "main", repo: baseRepo },
+              draft: false,
+            },
+          };
+        },
+      },
+      repos: {
+        getBranch: async () => ({
+          data: { commit: { sha: tips[Math.min(reads - 1, tips.length - 1)] ?? BASE } },
+        }),
+        compareCommitsWithBasehead: async () => ({
+          data: { merge_base_commit: { sha: bases[0] }, files: [] },
         }),
       },
     },

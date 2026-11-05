@@ -21,9 +21,12 @@ type Execute = (input: unknown, ctx: unknown) => Promise<unknown>;
 const run = (tool: unknown): Execute => (tool as { execute: Execute }).execute;
 
 function pr(
-  options: { head?: string; base?: string; files?: object[]; compare?: object[]; side?: object[]; compares?: string[] } = {},
+  options: { head?: string; base?: string; tip?: string; files?: object[]; compare?: object[]; side?: object[]; compares?: string[] } = {},
 ): Octokit {
   const listFiles = () => {};
+  const mergeBase = options.base ?? BASE;
+  const tip = options.tip ?? mergeBase;
+  const baseRepo = { owner: { login: "cryptoreporthub" }, name: "subnet-dashboard" };
   return {
     paginate: async (fn: unknown) => (fn === listFiles ? (options.files ?? []) : []),
     rest: {
@@ -32,7 +35,7 @@ function pr(
           data: {
             number: 1522,
             head: { sha: options.head ?? HEAD },
-            base: { sha: options.base ?? BASE },
+            base: { sha: mergeBase, ref: "main", repo: baseRepo },
             draft: false,
             title: "t",
             html_url: "u",
@@ -43,12 +46,11 @@ function pr(
       },
       issues: { listComments: () => {} },
       repos: {
-        // The head's own changes answer the carried-from...head compare; the merge-base
-        // side answers the merge-base...carried-from compare.
+        getBranch: async () => ({ data: { commit: { sha: tip } } }),
         compareCommitsWithBasehead: async ({ basehead }: { basehead: string }) => {
           options.compares?.push(basehead);
           const files = basehead === `${OLD}...${HEAD}` ? (options.compare ?? []) : (options.side ?? []);
-          return { data: { files, merge_base_commit: { sha: "d".repeat(40) } } };
+          return { data: { files, merge_base_commit: { sha: mergeBase } } };
         },
       },
       actions: {
@@ -141,7 +143,7 @@ test("a carry-over also reads the merge-base side, so a change only the carried-
   )) as Record<string, unknown>;
   assert.equal(result.carried, false);
   assert.equal(result.reason, "code-changed");
-  assert.deepEqual(compares, [`${OLD}...${HEAD}`, `${"d".repeat(40)}...${OLD}`]);
+  assert.deepEqual(compares, [`${BASE}...${HEAD}`, `${OLD}...${HEAD}`, `${BASE}...${OLD}`]);
 });
 
 test("a carry-over whose compare is at GitHub's 300-file cap is refused, not read as complete", async () => {

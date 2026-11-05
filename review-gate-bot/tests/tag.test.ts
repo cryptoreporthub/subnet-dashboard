@@ -57,6 +57,7 @@ function fakeOctokit(
   const comments = [...initial];
   const created: string[] = [];
   let nextId = 9000;
+  const baseRepo = { owner: { login: REF.owner }, name: REF.repo };
   const octokit = {
     comments,
     created,
@@ -88,7 +89,18 @@ function fakeOctokit(
       pulls: {
         listReviews: async () => ({ data: reviews }),
         get: async () => ({
-          data: { head: { sha: octokit.liveHead }, base: { sha: BASE }, draft: octokit.liveDraft },
+          data: {
+            number: REF.number,
+            head: { sha: octokit.liveHead },
+            base: { sha: BASE, ref: "main", repo: baseRepo },
+            draft: octokit.liveDraft,
+          },
+        }),
+      },
+      repos: {
+        getBranch: async () => ({ data: { commit: { sha: BASE } } }),
+        compareCommitsWithBasehead: async () => ({
+          data: { merge_base_commit: { sha: BASE }, files: [] },
         }),
       },
     },

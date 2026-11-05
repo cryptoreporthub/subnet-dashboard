@@ -10,30 +10,83 @@ export type PrRef = { owner: string; repo: string; number: number };
 export type PrSnapshot = {
   number: number;
   headSha: string;
+  /** Merge-base of head vs base.ref; JUnit compare target. */
   baseSha: string;
+  /** Live tip of base.repo@base.ref; suite pair key identity. */
+  baseTipSha: string;
   draft: boolean;
   title: string;
   files: string[];
   url: string;
 };
 
-export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> {
+export type LivePair = {
+  headSha: string;
+  baseSha: string;
+  baseTipSha: string;
+  baseRef: string;
+  draft: boolean;
+};
+
+/** Head, merge-base, and live base-branch tip. Single source for pair identity and suite compare. */
+export async function readLivePair(octokit: Octokit, ref: PrRef, options?: { identityOnly?: boolean }): Promise<LivePair> {
   const { data: pr } = await octokit.rest.pulls.get({
     owner: ref.owner,
     repo: ref.repo,
     pull_number: ref.number,
   });
+  const baseRef = pr.base.ref;
+  if (baseRef === undefined || baseRef === "") {
+    return { headSha: pr.head.sha, baseSha: "", baseTipSha: "", baseRef: "", draft: pr.draft ?? false };
+  }
+  const baseOwner = pr.base.repo?.owner?.login ?? ref.owner;
+  const baseRepo = pr.base.repo?.name ?? ref.repo;
+  const { data: branch } = await octokit.rest.repos.getBranch({
+    owner: baseOwner,
+    repo: baseRepo,
+    branch: baseRef,
+  });
+  const baseTipSha = branch.commit.sha;
+  const pulledBase = pr.base.sha;
+  if (options?.identityOnly) {
+    const baseSha =
+      pulledBase !== undefined && pulledBase !== "" ? pulledBase : baseTipSha;
+    return { headSha: pr.head.sha, baseSha, baseTipSha, baseRef, draft: pr.draft ?? false };
+  }
+  const { data: compare } = await octokit.rest.repos.compareCommitsWithBasehead({
+    owner: ref.owner,
+    repo: ref.repo,
+    basehead: `${baseTipSha}...${pr.head.sha}`,
+  });
+  const mergeBase = compare.merge_base_commit?.sha;
+  const baseSha =
+    mergeBase !== undefined && mergeBase !== ""
+      ? mergeBase
+      : pulledBase !== undefined && pulledBase !== ""
+        ? pulledBase
+        : baseTipSha;
+  return { headSha: pr.head.sha, baseSha, baseTipSha, baseRef, draft: pr.draft ?? false };
+}
+
+export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> {
+  const pair = await readLivePair(octokit, ref);
   const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
     owner: ref.owner,
     repo: ref.repo,
     pull_number: ref.number,
     per_page: 100,
   });
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner: ref.owner,
+    repo: ref.repo,
+    pull_number: ref.number,
+  });
   return {
     number: pr.number,
-    headSha: pr.head.sha,
-    baseSha: pr.base.sha,
-    draft: pr.draft ?? false,
+    headSha: pair.headSha,
+    baseSha: pair.baseSha,
+    baseTipSha: pair.baseTipSha,
+    draft: pair.draft,
     title: pr.title,
     // A rename touches both paths. `x.py` renamed to `x.md` must not look like a
     // prose-only change, so the old path is a changed file too.
@@ -104,9 +157,9 @@ export async function readReviews(octokit: Octokit, ref: PrRef): Promise<ReviewL
   return raw.map(asReview);
 }
 
-/** kv key for the recorded suite result at one head against one PR base. */
-export function suiteKey(ref: PrRef, headSha: string, baseSha: string): string {
-  return `suite:${prKey(ref)}:${headSha}:${baseSha}`;
+/** kv key for the recorded suite result at one head against the live base-branch tip. */
+export function suiteKey(ref: PrRef, headSha: string, baseTipSha: string): string {
+  return `suite:${prKey(ref)}:${headSha}:${baseTipSha}`;
 }
 
 /** Pre–pair-key records and head-only holds (NEEDS-JOSHUA refusals). */
@@ -159,14 +212,14 @@ export async function readSuiteRecord(
   kv: HostKvApi,
   ref: PrRef,
   headSha: string,
-  baseSha: string | undefined,
+  baseTipSha: string | undefined,
 ): Promise<RecordedSuite | undefined> {
   const legacy = parseRecorded(await kv.get(legacySuiteKey(ref, headSha)));
   if (legacy !== undefined && isHeadHold(legacy)) {
     return legacy;
   }
-  if (baseSha !== undefined) {
-    const pair = parseRecorded(await kv.get(suiteKey(ref, headSha, baseSha)));
+  if (baseTipSha !== undefined) {
+    const pair = parseRecorded(await kv.get(suiteKey(ref, headSha, baseTipSha)));
     if (pair !== undefined) {
       return pair;
     }
@@ -190,9 +243,9 @@ export async function readSuiteState(
   kv: HostKvApi,
   ref: PrRef,
   headSha: string,
-  baseSha: string | undefined,
+  baseTipSha: string | undefined,
 ): Promise<SuiteState> {
-  return suiteOf(await readSuiteRecord(kv, ref, headSha, baseSha));
+  return suiteOf(await readSuiteRecord(kv, ref, headSha, baseTipSha));
 }
 
 /**
@@ -300,8 +353,8 @@ export async function readGateState(input: {
     readPr(input.octokit, input.ref),
   ]);
 
-  const baseSha = pr.baseSha;
-  if (baseSha === undefined || baseSha === "") {
+  const baseTipSha = pr.baseTipSha;
+  if (baseTipSha === undefined || baseTipSha === "") {
     return gateStateFrom({
       headSha: input.headSha,
       comments,
@@ -313,7 +366,7 @@ export async function readGateState(input: {
     });
   }
 
-  const record = await readSuiteRecord(input.kv, input.ref, input.headSha, baseSha);
+  const record = await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha);
   return gateStateFrom({
     headSha: input.headSha,
     comments,

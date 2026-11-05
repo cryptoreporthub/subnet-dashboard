@@ -1,7 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { prKey } from "./gate.js";
-import { readSuiteRecord, legacySuiteKey, suiteKey, SUITE_HEAD_HOLDS, type PrRef } from "./gh.js";
+import { readSuiteRecord, legacySuiteKey, suiteKey, SUITE_HEAD_HOLDS, readLivePair, type PrRef } from "./gh.js";
 import { knownFlakes } from "./flakes.js";
 import { exclusive } from "./lock.js";
 import { fetchJunit, octokitRunner, pickRun, type RunnerReader } from "./runner.js";
@@ -95,9 +95,16 @@ type ComparisonInput = {
   kv: HostKvApi;
   ref: PrRef;
   headSha: string;
+  /** Merge-base JUnit compare target. */
   baseSha: string;
+  /** Live base-branch tip for the pair key; defaults to baseSha when omitted (tests). */
+  baseTipSha?: string;
   reader?: RunnerReader;
 };
+
+function tipOf(input: Pick<ComparisonInput, "baseSha" | "baseTipSha">): string {
+  return input.baseTipSha ?? input.baseSha;
+}
 
 /**
  * Compare the full suite at `baseSha` and `headSha` from their JUnit artifacts, and record the head's
@@ -124,6 +131,8 @@ export async function recordSuiteComparison(input: ComparisonInput): Promise<Sui
  */
 async function recordComparison(input: ComparisonInput): Promise<SuiteComparison> {
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
+  const headSha = input.headSha;
+  const baseTipSha = tipOf(input);
   const head = await fetchJunit(reader, input.headSha);
   if (!head.ok) {
     return { ok: false, step: "head", reason: head.reason, detail: head.detail };
@@ -134,18 +143,20 @@ async function recordComparison(input: ComparisonInput): Promise<SuiteComparison
   }
   const flakes = knownFlakes();
   const diff = diffJunit({ baseXml: base.xml, headXml: head.xml, knownFlakes: flakes.ids });
-  // The record keeps the reason and the test IDs behind it: a missing or newly skipped test is a person's call to clear.
-  // A removed or newly skipped test needs a person's decision, so it is recorded with the IDs behind it.
   const detail =
     diff.invalid === "baseline-test-missing"
       ? listed("missing at head", diff.missing)
       : diff.invalid === "newly-skipped"
         ? listed("newly skipped at head", diff.skipped)
         : undefined;
+  const live = await readLivePair(input.octokit, input.ref, { identityOnly: true });
+  if (live.headSha !== headSha || live.baseTipSha !== baseTipSha) {
+    return { ok: false, step: "head", reason: "stale-pair", detail: "head or base tip moved before the suite record was written" };
+  }
   await input.kv.put(
     diff.invalid !== undefined && SUITE_HEAD_HOLDS.has(diff.invalid)
       ? legacySuiteKey(input.ref, input.headSha)
-      : suiteKey(input.ref, input.headSha, input.baseSha),
+      : suiteKey(input.ref, input.headSha, baseTipSha),
     {
     state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
     newFailures: diff.newFailures,
@@ -186,16 +197,16 @@ export async function runSuiteIfDue(input: {
   ref: PrRef;
   headSha: string;
   baseSha: string;
+  baseTipSha?: string;
   reader?: RunnerReader;
 }): Promise<string> {
   const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
+  const baseTipSha = input.baseTipSha ?? input.baseSha;
   return exclusive(`suite-run:${prKey(input.ref)}:${input.headSha}`, async () => {
-    // Final: a head refused as NEEDS-JOSHUA is not looked up again, and the definition is checked before any run is,
-    // so a PR that stops its suite from finishing is still refused.
-    if ((await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseSha))?.invalid === "needs-joshua") {
+    if ((await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha))?.invalid === "needs-joshua") {
       return "already-refused";
     }
-    const prior = await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseSha);
+    const prior = await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha);
     if (prior !== undefined && typeof prior.invalid === "string" && SUITE_HEAD_HOLDS.has(prior.invalid)) {
       return "already-refused";
     }
@@ -208,7 +219,7 @@ export async function runSuiteIfDue(input: {
     if (latest === undefined) {
       return "waiting:no-run";
     }
-    const recorded = await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseSha);
+    const recorded = await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha);
     if (recorded !== undefined && recorded.runId === latest.id && recorded.state !== "carried") {
       return "already-recorded";
     }
@@ -216,9 +227,12 @@ export async function runSuiteIfDue(input: {
     if (refused?.runId === latest.id) {
       return "already-refused";
     }
-    const outcome = await recordComparison({ ...input, reader });
+    const outcome = await recordComparison({ ...input, baseTipSha });
     if (outcome.ok) {
       return "recorded";
+    }
+    if (!outcome.ok && outcome.reason === "stale-pair") {
+      return "stale-pair";
     }
     // Only a permanent fact about this run is remembered. A lookup or a download that failed on GitHub is transient.
     if (outcome.step === "head" && (outcome.reason === "unreadable" || outcome.reason === "no-artifact")) {

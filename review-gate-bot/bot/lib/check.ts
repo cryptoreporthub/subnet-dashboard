@@ -3,7 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GitHubHandle } from "@grok/agent-sdk/channels/github";
 import { prKey, type GateState } from "./gate.js";
 import type { PrRef } from "./gh.js";
-import { readSuiteRecord, suiteStateFromRecord } from "./gh.js";
+import { readLivePair, readSuiteRecord, suiteStateFromRecord } from "./gh.js";
 import { exclusive } from "./lock.js";
 
 /** The merge-box check this bot owns. A branch rule can require it by this name. */
@@ -41,9 +41,9 @@ export function gateConclusion(state: GateState): GateConclusion {
 }
 
 /** One line of facts the check page and the dedupe key share. */
-function summaryOf(state: GateState, baseSha: string | undefined): string {
+function summaryOf(state: GateState, baseTipSha: string | undefined): string {
   const baseLine =
-    baseSha === undefined || baseSha === "" ? "base missing" : `base ${baseSha.slice(0, 7)}`;
+    baseTipSha === undefined || baseTipSha === "" ? "base missing" : `base tip ${baseTipSha.slice(0, 7)}`;
   return [
     `MC ${state.mc}`,
     `Cursor ${state.cursor}`,
@@ -55,19 +55,14 @@ function summaryOf(state: GateState, baseSha: string | undefined): string {
   ].join(" · ");
 }
 
-async function readLivePair(octokit: Octokit, ref: PrRef): Promise<{ headSha: string; baseSha: string | undefined }> {
-  const { data } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
-  return { headSha: data.head.sha, baseSha: data.base?.sha };
-}
-
 async function livePairIs(
   octokit: Octokit,
   ref: PrRef,
   headSha: string,
-  baseSha: string | undefined,
+  baseTipSha: string | undefined,
 ): Promise<boolean> {
   const live = await readLivePair(octokit, ref);
-  return live.headSha === headSha && live.baseSha === baseSha;
+  return live.headSha === headSha && live.baseTipSha === baseTipSha;
 }
 
 export type CheckPost = "posted" | "unchanged" | "stale-head";
@@ -103,9 +98,9 @@ export async function postGateCheck(input: {
   return exclusive(`check:${prKey(ref)}:${input.state.headSha}`, async () => {
     const live = await readLivePair(octokit, ref);
     const state = await read();
-    const baseSha = live.baseSha;
-    const key = `check:${prKey(ref)}:${state.headSha}:${baseSha ?? "none"}`;
-    const summary = summaryOf(state, baseSha);
+    const baseTipSha = live.baseTipSha;
+    const key = `check:${prKey(ref)}:${state.headSha}:${baseTipSha ?? "none"}`;
+    const summary = summaryOf(state, baseTipSha);
 
     if ((await kv.get(key)) === summary) {
       return "unchanged";
@@ -113,7 +108,7 @@ export async function postGateCheck(input: {
     if (live.headSha !== state.headSha) {
       return "stale-head";
     }
-    if (baseSha === undefined || baseSha === "") {
+    if (baseTipSha === undefined || baseTipSha === "") {
       const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
       await check.conclude({
         conclusion: "action_required",
@@ -125,7 +120,7 @@ export async function postGateCheck(input: {
 
     let conclusion = gateConclusion(state);
     if (conclusion === "success") {
-      const suite = suiteStateFromRecord(await readSuiteRecord(kv, ref, state.headSha, baseSha));
+      const suite = suiteStateFromRecord(await readSuiteRecord(kv, ref, state.headSha, baseTipSha));
       if (suite !== "clean" && suite !== "carried") {
         conclusion = "action_required";
       }
@@ -133,7 +128,7 @@ export async function postGateCheck(input: {
 
     const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
     const superseded =
-      conclusion === "success" && !(await livePairIs(octokit, ref, state.headSha, baseSha));
+      conclusion === "success" && !(await livePairIs(octokit, ref, state.headSha, baseTipSha));
     if (superseded) {
       await check.conclude({
         conclusion: "cancelled",
