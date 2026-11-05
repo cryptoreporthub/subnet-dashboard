@@ -70,6 +70,43 @@ def test_missing_volume_marker_refuses_write_prod_like(isolated_data_dir, monkey
         og.owner_guard(operation="test_persist")
 
 
+def test_prod_volume_bootstraps_marker_with_existing_data(
+    isolated_data_dir, monkeypatch
+):
+    data = isolated_data_dir
+    (data / "soul_map.json").write_text("{}\n")
+    monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
+
+    ok, detail = og.try_acquire_write_owner_lock()
+    assert ok is True
+    assert detail == ""
+    assert (data / og.VOLUME_MARKER_NAME).is_file()
+    assert og.owner_guard_reason() is None
+
+
+def test_matching_volume_marker_allows_acquire(isolated_data_dir, monkeypatch):
+    data = isolated_data_dir
+    (data / "soul_map.json").write_text("{}\n")
+    monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
+    fingerprint = og.data_dir_fingerprint()
+    (data / og.VOLUME_MARKER_NAME).write_text(
+        json.dumps({"version": 1, "fingerprint": fingerprint}) + "\n"
+    )
+
+    ok, detail = og.try_acquire_write_owner_lock()
+    assert ok is True
+    assert detail == ""
+
+
+def test_unmounted_empty_prod_like_volume_blocked(isolated_data_dir, monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.delenv("DATA_DIR_IS_VOLUME", raising=False)
+
+    ok, detail = og.try_acquire_write_owner_lock()
+    assert ok is False
+    assert detail == "volume_marker_missing"
+
+
 def test_try_acquire_fails_closed_on_volume_marker_not_ok(isolated_data_dir, monkeypatch):
     """Volume failure must not return ok=True (Ditto high)."""
     monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
@@ -94,22 +131,39 @@ def test_wrong_volume_marker_refuses_write(isolated_data_dir, monkeypatch):
         og.owner_guard()
 
 
+def test_volume_marker_check_error_releases_lock(isolated_data_dir, monkeypatch):
+    real_fp = og.data_dir_fingerprint
+
+    def _flaky_fingerprint():
+        if getattr(_flaky_fingerprint, "raised", False):
+            return real_fp()
+        _flaky_fingerprint.raised = True
+        raise OSError(errno.EIO, "simulated stat failure")
+
+    monkeypatch.setattr(og, "data_dir_fingerprint", _flaky_fingerprint)
+
+    ok, detail = og.try_acquire_write_owner_lock()
+    assert ok is False
+    assert detail.startswith("volume_marker_check_error:")
+    assert og.inspect_owner_guard().lock_held is False
+
+    ok2, _ = og.try_acquire_write_owner_lock()
+    assert ok2 is True
+
+
 def test_reads_unaffected_without_owner_guard(isolated_data_dir, monkeypatch):
     data = isolated_data_dir
     soul = data / "soul_map.json"
     soul.write_text('{"x": 1}\n')
     monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
-    monkeypatch.delenv("OWNER_GUARD_SKIP", raising=False)
-
-    ok, _ = og.try_acquire_write_owner_lock()
-    assert ok is False
+    assert og.owner_guard_reason() == "write_owner_lock_not_held"
 
     from internal.store.soul_map_io import read_soul_map
 
     assert read_soul_map(str(soul)) == {"x": 1}
 
 
-def test_lock_released_after_process_exit(isolated_data_dir, monkeypatch):
+def test_lock_released_after_process_exit(isolated_data_dir):
     data = isolated_data_dir
     script = textwrap.dedent(
         f"""
@@ -125,6 +179,7 @@ def test_lock_released_after_process_exit(isolated_data_dir, monkeypatch):
     og.reset_owner_guard_for_tests()
     ok, _ = og.try_acquire_write_owner_lock()
     assert ok is True
+    assert os.environ.get("DATA_DIR") == str(data)
 
 
 def test_owner_guard_skip_blocked_in_prod_like(isolated_data_dir, monkeypatch):
@@ -141,6 +196,7 @@ def test_owner_guard_skip_blocked_in_prod_like(isolated_data_dir, monkeypatch):
 def test_dev_creates_volume_marker_when_not_prod_like(isolated_data_dir, monkeypatch):
     data = isolated_data_dir
     monkeypatch.delenv("DATA_DIR_IS_VOLUME", raising=False)
+    monkeypatch.delenv("FLY_APP_NAME", raising=False)
 
     ok, _ = og.try_acquire_write_owner_lock()
     assert ok is True
@@ -170,6 +226,14 @@ def test_acquire_write_owner_at_worker_startup_returns_false_on_lock_failure(
 ):
     monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
     assert og.acquire_write_owner_at_worker_startup() is False
+
+
+def test_acquire_write_owner_at_worker_startup_true_after_volume_bootstrap(
+    isolated_data_dir, monkeypatch
+):
+    (isolated_data_dir / "soul_map.json").write_text("{}\n")
+    monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
+    assert og.acquire_write_owner_at_worker_startup() is True
 
 
 def test_worker_does_not_start_background_writers_when_owner_guard_blocks(

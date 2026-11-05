@@ -15,7 +15,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from internal.data_volume import resolved_data_dir
+from internal.data_volume import has_local_volume_data, resolved_data_dir
 from internal.file_utils import ensure_data_dir
 
 logger = logging.getLogger(__name__)
@@ -108,11 +108,48 @@ def _write_volume_marker(fingerprint: str) -> None:
     os.replace(tmp, path)
 
 
+def _abort_lock_acquire(fd: int) -> None:
+    """Release a lock fd acquired in try_acquire_write_owner_lock (fail closed)."""
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+
+
+def _prod_volume_marker_bootstrap_allowed() -> bool:
+    """Fly/existing volume: safe one-time marker when committed data already on disk."""
+    from internal.data_volume import data_dir_is_mounted_volume
+
+    if not volume_check_prod_like():
+        return False
+    if not data_dir_is_mounted_volume():
+        return False
+    return has_local_volume_data()
+
+
 def volume_marker_status() -> tuple[bool, str]:
     """Same-volume proof via marker fingerprint on DATA_DIR."""
-    fingerprint = data_dir_fingerprint()
+    try:
+        fingerprint = data_dir_fingerprint()
+    except OSError as exc:
+        return False, f"volume_marker_check_error:{exc}"
+
     marker = _read_volume_marker()
     if marker is None:
+        if _prod_volume_marker_bootstrap_allowed():
+            try:
+                _write_volume_marker(fingerprint)
+                logger.info(
+                    "owner_guard: bootstrapped volume marker on existing data volume at %s",
+                    volume_marker_path(),
+                )
+            except OSError as exc:
+                return False, f"volume_marker_create_failed:{exc}"
+            return True, ""
         if volume_check_prod_like():
             return False, "volume_marker_missing"
         try:
@@ -236,9 +273,19 @@ def try_acquire_write_owner_lock() -> tuple[bool, str]:
         logger.error("owner_guard: flock failed on %s: %s", path, exc)
         return False, f"write_owner_lock_error:{exc}"
 
-    vol_ok, vol_reason = volume_marker_status()
+    try:
+        vol_ok, vol_reason = volume_marker_status()
+    except OSError as exc:
+        _abort_lock_acquire(fd)
+        logger.error("owner_guard: volume check raised (%s) — lock released", exc)
+        return False, f"volume_marker_check_error:{exc}"
+    except Exception as exc:
+        _abort_lock_acquire(fd)
+        logger.error("owner_guard: volume check failed (%s) — lock released", exc)
+        return False, f"volume_marker_check_error:{exc}"
+
     if not vol_ok:
-        os.close(fd)
+        _abort_lock_acquire(fd)
         logger.error("owner_guard: volume check failed (%s) — writes refused", vol_reason)
         return False, vol_reason
 
