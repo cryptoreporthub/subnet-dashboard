@@ -367,3 +367,11 @@
 - **Also:** reader v2 HOLD blocks same-day legacy; corrupt `daily_picks.json` raises `DailyPickFileCorrupt`; `ledger_heal` pick_day downgrade.
 - **Tests:** `test_domain_write_gate.py` (cross-process subprocess race), `test_v2_hold_on_disk_not_served_by_reader`, conftest epoch isolation + persist tickets.
 - **Gates:** resolver+morning+gate modules green locally; full bundle run with pick_scheduler may need CI confirmation.
+
+## 2026-11-05 — PR #1561 Push 2 Design A completion @ `3c25290f` (draft, no deploy)
+
+- **HEAD:** `3c25290f` (stack `9bc644ff` → `07a851c2` → `3c25290f`) on `cursor/daily-pick-morning-plan-3740`.
+- **Push 2:** ledger_heal pick_id + domain gate; corrupt daily_picks raise; predictions merge-by-id + stale ticket tests; domain gate corrupt epoch fail-closed + daily_pick lock nesting; Ditto High fixes (append web ticket, resolve_due preserves cycle ticket, expired recovery ticket, merge keeps concurrent pending).
+- **CI smoke fix:** `data_seeds/score_snapshots.json` scorer_digest refresh (`stamp_scorer_fields`); `_scoped_soul_map_ticket` for weights mutators + f04 mock `ticket=` kwarg.
+- **Gates (local @ `3c25290f`):** static guards OK (`check_score_snapshot_seed.py`); **comm-23=0** (`PR_fail_count=0` vs `/tmp/fail-merge-base-v2.txt`); morning bundle **229×2** exit 0; full-suite comm-23 re-run post-weights fix pending CI.
+- **Slot:** 19:00/19:05 UTC unchanged.
