@@ -330,3 +330,9 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-10-17 — Agent-friendly rearchitecture (Project worker bc-4c093946)
+
+- **Deliverables (Project store):** `docs/agent-friendly-rearchitecture-plan.md`, `internal/pitfalls-evidence.md`, verification skill `workflows/verify-subnet-dashboard/SKILL.md`.
+- **Prototype branch:** `cursor/agent-friendly-guards-3f1a` — `tests/test_agent_foundation_guards.py`, `internal/routing/mount_registry.py`, ci-smoke hook; draft PR pending push.
+- **Evidence:** pytest `test_agent_foundation_guards` + contract green locally; Joshua steering mined from filtered GitHub comments (shared-account caveat documented).
