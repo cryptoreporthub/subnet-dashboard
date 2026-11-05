@@ -7,6 +7,7 @@ Do not infer write authority from RUN_MODE or env alone.
 from __future__ import annotations
 
 import atexit
+import errno
 import fcntl
 import json
 import logging
@@ -217,41 +218,47 @@ def try_acquire_write_owner_lock() -> tuple[bool, str]:
 
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (OSError, BlockingIOError):
+    except BlockingIOError:
         os.close(fd)
         logger.error(
             "owner_guard: another process holds %s — writes will be refused",
             path,
         )
         return False, "write_owner_lock_contended"
+    except OSError as exc:
+        os.close(fd)
+        if exc.errno in (errno.EWOULDBLOCK, errno.EAGAIN):
+            logger.error(
+                "owner_guard: another process holds %s — writes will be refused",
+                path,
+            )
+            return False, "write_owner_lock_contended"
+        logger.error("owner_guard: flock failed on %s: %s", path, exc)
+        return False, f"write_owner_lock_error:{exc}"
+
+    vol_ok, vol_reason = volume_marker_status()
+    if not vol_ok:
+        os.close(fd)
+        logger.error("owner_guard: volume check failed (%s) — writes refused", vol_reason)
+        return False, vol_reason
 
     _owner_lock_fd = fd
     _write_owner_lock_held = True
     atexit.register(_release_write_owner_lock)
-    vol_ok, vol_reason = volume_marker_status()
-    if not vol_ok:
-        logger.error(
-            "owner_guard: hold write lock but volume check failed: %s", vol_reason
-        )
-    else:
-        logger.info("owner_guard: write owner lock acquired on %s", path)
-    return True, vol_reason if not vol_ok else ""
+    logger.info("owner_guard: write owner lock acquired on %s", path)
+    return True, ""
 
 
-def acquire_write_owner_at_worker_startup() -> None:
-    """Worker entry: take exclusive lock; log and continue if lock or volume uncertain."""
+def acquire_write_owner_at_worker_startup() -> bool:
+    """Worker entry: take exclusive lock + volume proof, or fail closed (no writers)."""
     ok, detail = try_acquire_write_owner_lock()
-    if not ok:
-        logger.warning(
-            "owner_guard: worker startup without write lock (%s) — persist refused",
-            detail,
-        )
-        return
-    if detail:
-        logger.warning(
-            "owner_guard: worker holds lock but volume check failed (%s) — persist refused",
-            detail,
-        )
+    if ok:
+        return True
+    logger.error(
+        "owner_guard: worker startup blocked (%s) — background writers will not start",
+        detail,
+    )
+    return False
 
 
 def reset_owner_guard_for_tests() -> None:
