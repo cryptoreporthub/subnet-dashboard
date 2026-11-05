@@ -1,0 +1,14 @@
+{
+  "number": 1519,
+  "title": "chore(ci): remove Enable Worker Split v2 workflow",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1519",
+  "headSha": "d59d432a41abb1f5acc85932fd03b6ab7318dfa3",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    ".github/workflows/fly-enable-v2.yml",
+    "cursor-agents-communication/fly-worker-split-v2-lock.md",
+    "cursor-agents-communication/split-v2-rollback-runbook.md",
+    "scripts/fly_disable_worker_v2.sh"
+  ]
+}
