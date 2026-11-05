@@ -813,13 +813,9 @@ class PredictionResolverScheduler:
             logger.info("resolver abandoned_live=%d", abandoned_live)
         # Phase 3 revive budget: boot revive uses full cycle ceiling, not the
         # first-tick min(cycle, 90) cap that starves post-revive run_once.
-        use_full = bool(self._revive_use_full_budget) or not self._first_tick_pending
-        timeout = (
-            RESOLVER_CYCLE_TIMEOUT_SECONDS
-            if use_full
-            else RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
-        )
-        increment_gen = timeout > 0
+        increment_gen = True
+        timeout = RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
+        gen = self._cycle_generation
         skip_result: Optional[Dict[str, Any]] = None
         with self._release_guard:
             if not self._cycle_lock.acquire(blocking=False):
@@ -830,10 +826,21 @@ class PredictionResolverScheduler:
                     "pending": 0,
                     "skipped": "cycle_in_flight",
                     "abandoned_live": abandoned_live,
+                    "cycle_generation": self._cycle_generation,
                 }
             else:
+                barrier = _revive_budget_acquire_barrier
+                if barrier is not None:
+                    barrier(self)
+                use_full = bool(self._revive_use_full_budget) or not self._first_tick_pending
                 if self._revive_use_full_budget:
                     self._revive_use_full_budget = False
+                timeout = (
+                    RESOLVER_CYCLE_TIMEOUT_SECONDS
+                    if use_full
+                    else RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
+                )
+                increment_gen = timeout > 0
                 if increment_gen:
                     self._cycle_generation += 1
                 gen = self._cycle_generation
@@ -939,7 +946,7 @@ class PredictionResolverScheduler:
                 self._apply_cycle_timing(result, timing)
                 # force=True: timeout path owns the summary write after orphan
                 # ownership was revoked in _abandon_inflight_cycle.
-                self._persist_cycle_summary(result, force=True)
+                self._persist_cycle_summary(result, owner_gen=gen, force=True)
                 return result
         except BaseException:
             if not submitted:
@@ -1162,9 +1169,15 @@ class PredictionResolverScheduler:
             if not force and owner_gen is not None:
                 if self._persist_owner_gen != owner_gen:
                     return
-            self._persist_cycle_summary_locked(result)
+            pub_gen = result.get("cycle_generation")
+            if force and pub_gen is not None and self._persist_owner_gen is not None:
+                if int(pub_gen) != int(self._persist_owner_gen):
+                    return
+            self._persist_cycle_summary_locked(result, force=force)
 
-    def _persist_cycle_summary_locked(self, result: Dict[str, Any]) -> None:
+    def _persist_cycle_summary_locked(
+        self, result: Dict[str, Any], *, force: bool = False
+    ) -> None:
         stage_timing_ms = dict(result.get("stage_timing_ms") or {})
         # Prefer explicit rollups on the result; else derive from stage_timing_ms.
         if "stages_sum_ms" in result and "nonstage_ms" in result:
@@ -1194,6 +1207,7 @@ class PredictionResolverScheduler:
             "active_stage": result.get("active_stage"),
             "abandoned_live": result.get("abandoned_live", 0),
             "lifecycle": self._lifecycle,
+            "cycle_generation": result.get("cycle_generation"),
         }
         timing = _cycle_timing.get()
 
@@ -1202,6 +1216,27 @@ class PredictionResolverScheduler:
             t_mut = time.perf_counter()
             try:
                 sched = data.setdefault("prediction_resolver_scheduler", {})
+                existing = sched.get("last_cycle") if isinstance(sched.get("last_cycle"), dict) else {}
+                existing_at = existing.get("run_at")
+                new_at = summary.get("run_at")
+                if existing_at and new_at and str(new_at) <= str(existing_at):
+                    if not summary.get("ok") or existing.get("ok"):
+                        return
+                incoming_gen = summary.get("cycle_generation")
+                existing_gen = existing.get("cycle_generation")
+                if incoming_gen is not None and existing_gen is not None:
+                    if int(incoming_gen) < int(existing_gen):
+                        return
+                if not force and incoming_gen is not None and self._persist_owner_gen is not None:
+                    if int(incoming_gen) != int(self._persist_owner_gen):
+                        return
+                if summary.get("skipped") == "cycle_in_flight":
+                    history = sched.get("cycle_history")
+                    if not isinstance(history, list):
+                        history = []
+                    history.append(summary)
+                    sched["cycle_history"] = bound_cycle_history(history, CYCLE_HISTORY_MAX)
+                    return
                 sched["last_cycle"] = summary
                 history = sched.get("cycle_history")
                 if not isinstance(history, list):
@@ -1263,6 +1298,9 @@ _scheduler_lock = threading.Lock()
 # Tests may set; production leaves None. Runs after atomic acquire + owner publish.
 _cycle_lock_post_register_barrier: Optional[
     Callable[["PredictionResolverScheduler", int], None]
+] = None
+_revive_budget_acquire_barrier: Optional[
+    Callable[["PredictionResolverScheduler"], None]
 ] = None
 
 
@@ -1465,7 +1503,8 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
             sched.liveness.clear_burst_counters()
         except Exception:
             pass
-        sched._revive_use_full_budget = True
+        with sched._release_guard:
+            sched._revive_use_full_budget = True
         tick_out = sched.run_once()
         # Even if the revive tick timed out, ensure next_run_at is armed.
         state_after = sched.state()

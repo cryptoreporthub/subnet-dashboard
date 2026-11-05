@@ -526,14 +526,12 @@ def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypat
     rs.stop_prediction_resolver_scheduler()
     sched = _fresh_scheduler()
     stop = threading.Event()
-    unowned = []
-    lock = threading.Lock()
 
     def _watch():
         while not stop.is_set():
-            with lock:
+            with sched._release_guard:
                 if sched._cycle_lock.locked() and sched._lock_owner_gen is None:
-                    unowned.append(time.monotonic())
+                    raise AssertionError("unowned locked cycle observed under release_guard")
             time.sleep(0.0005)
 
     watcher = threading.Thread(target=_watch, daemon=True)
@@ -542,7 +540,6 @@ def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypat
         _caller, fut = _start_blocked_cycle(sched, probe)
         assert sched._lock_owner_gen is not None
         assert sched._cycle_lock.locked()
-        assert unowned == []
         probe.release.set()
         futures_wait([fut], timeout=5)
     finally:
@@ -666,4 +663,187 @@ def test_revive_not_blocked_during_skip_summary_persist(tmp_path, monkeypatch):
     finally:
         persist_release.set()
         rs.stop_prediction_resolver_scheduler()
+
+
+def test_stale_skip_summary_cannot_clobber_new_scheduler_last_cycle(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": {
+                        "run_at": "2099-01-02T00:00:00Z",
+                        "ok": True,
+                        "cycle_generation": 2,
+                    },
+                    "lifecycle": "running",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = True
+    gen = sched._cycle_generation
+    sched._cycle_lock.acquire()
+    sched._lock_owner_gen = gen
+    rs._scheduler = sched
+    persist_gate = threading.Event()
+    persist_release = threading.Event()
+    real_persist = sched._persist_cycle_summary
+
+    def slow_skip_persist(result, *args, **kwargs):
+        if isinstance(result, dict) and result.get("skipped") == "cycle_in_flight":
+            persist_gate.set()
+            persist_release.wait(timeout=2)
+        return real_persist(result, *args, **kwargs)
+
+    monkeypatch.setattr(sched, "_persist_cycle_summary", slow_skip_persist)
+    try:
+        skip_thread = threading.Thread(target=sched._run_refresh_cycle_with_timeout, daemon=True)
+        skip_thread.start()
+        assert persist_gate.wait(timeout=2)
+        rs.revive_prediction_resolver_scheduler(force=True)
+        persist_release.set()
+        skip_thread.join(timeout=2)
+        data = json.loads(soul.read_text(encoding="utf-8"))
+        assert data["prediction_resolver_scheduler"]["last_cycle"]["run_at"] == "2099-01-02T00:00:00Z"
+    finally:
+        persist_release.set()
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_revive_full_budget_selects_full_timeout_on_acquire(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 3)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 1)
+    started = threading.Event()
+    release = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=5)
+        return {
+            "ok": True,
+            "run_at": rs._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(rs.PredictionResolverScheduler, "_run_refresh_cycle", _blocked)
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._first_tick_pending = True
+    sched._revive_use_full_budget = True
+    try:
+        t0 = time.monotonic()
+        out = sched._run_refresh_cycle_with_timeout()
+        elapsed = time.monotonic() - t0
+        assert started.wait(timeout=1)
+        assert elapsed >= 2.0
+        assert "cycle_timeout_3" in str(out.get("error", ""))
+    finally:
+        release.set()
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_revive_budget_barrier_before_selection_uses_full_timeout(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 2)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 1)
+    barrier_hit = threading.Event()
+    continue_barrier = threading.Event()
+    worker_release = threading.Event()
+
+    def _barrier(sched):
+        sched._revive_use_full_budget = True
+        barrier_hit.set()
+        continue_barrier.wait(timeout=2)
+
+    rs._revive_budget_acquire_barrier = _barrier
+    started = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        worker_release.wait(timeout=5)
+        return {
+            "ok": True,
+            "run_at": rs._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(rs.PredictionResolverScheduler, "_run_refresh_cycle", _blocked)
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._first_tick_pending = True
+    result: dict = {}
+
+    def _run():
+        result["out"] = sched._run_refresh_cycle_with_timeout()
+
+    try:
+        runner = threading.Thread(target=_run, daemon=True)
+        runner.start()
+        assert barrier_hit.wait(timeout=2)
+        continue_barrier.set()
+        runner.join(timeout=8)
+        assert started.wait(timeout=1)
+        assert "cycle_timeout_2" in str(result.get("out", {}).get("error", ""))
+    finally:
+        continue_barrier.set()
+        worker_release.set()
+        rs._revive_budget_acquire_barrier = None
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_old_generation_timeout_cannot_clobber_newer_last_cycle(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": {
+                        "run_at": "2099-06-01T00:00:00Z",
+                        "ok": True,
+                        "cycle_generation": 10,
+                    },
+                    "lifecycle": "running",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._persist_owner_gen = None
+    sched._lifecycle = "running"
+    stale = {
+        "run_at": "2026-01-01T00:00:00Z",
+        "ok": False,
+        "resolved_now": 0,
+        "expired_now": 0,
+        "pending": 0,
+        "error": "cycle_timeout_90s",
+        "cycle_generation": 3,
+    }
+    sched._persist_cycle_summary(stale, owner_gen=3, force=True)
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    assert data["prediction_resolver_scheduler"]["last_cycle"]["cycle_generation"] == 10
 
