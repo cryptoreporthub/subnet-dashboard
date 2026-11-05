@@ -1474,7 +1474,7 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
                             "reason": "tick_in_progress",
                             "recycled": False,
                             "age_before": age_before,
-                            "age_after": _resolver_tick_age_seconds(),
+                            "age_after": age_before,
                         }
                     sched._abandon_inflight_cycle()
                     stale_lock_recycled = True
