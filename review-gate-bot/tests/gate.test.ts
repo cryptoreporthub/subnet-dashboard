@@ -223,8 +223,30 @@ test("MODIFY from a reviewer holds the gate at the awaiting step, not blocked", 
 });
 
 test("the latest verdict at a head wins", () => {
-  const verdicts = [v("cursor", "MODIFY"), v("cursor", "PASS")];
+  // Times required: without them, disagreeing verdicts are simultaneous and fail closed.
+  const verdicts = [
+    { reviewer: "cursor" as const, headSha: HEAD, verdict: "MODIFY" as const, at: "2026-11-04T09:00:00Z" },
+    { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const, at: "2026-11-04T10:00:00Z" },
+  ];
   assert.equal(verdictAt(verdicts, "cursor", HEAD), "PASS");
+});
+
+test("no times: FAIL then PASS gives FAIL", () => {
+  const untimedFail = { reviewer: "cursor" as const, headSha: HEAD, verdict: "FAIL" as const };
+  const untimedPass = { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const };
+  assert.equal(verdictAt([untimedFail, untimedPass], "cursor", HEAD), "FAIL");
+});
+
+test("no times: all PASS gives PASS", () => {
+  const a = { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const };
+  const b = { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const, at: "" };
+  assert.equal(verdictAt([a, b], "cursor", HEAD), "PASS");
+});
+
+test("untimed PASS plus timed MODIFY gives MODIFY", () => {
+  const untimedPass = { reviewer: "cursor" as const, headSha: HEAD, verdict: "PASS" as const };
+  const timedModify = { reviewer: "cursor" as const, headSha: HEAD, verdict: "MODIFY" as const, at: "2026-11-04T10:00:00Z" };
+  assert.equal(verdictAt([untimedPass, timedModify], "cursor", HEAD), "MODIFY");
 });
 
 test("a FAIL with no readable time is not hidden by a timed PASS", () => {

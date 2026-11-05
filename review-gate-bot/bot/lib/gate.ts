@@ -84,10 +84,8 @@ export function verdictAt(
     const t = timeOf(v);
     return t !== undefined && !Number.isNaN(t);
   };
-  // No verdict has a readable time: the caller's order is the only order, so the last one is the latest.
-  if (!mine.some(readable)) {
-    return last.verdict;
-  }
+  // No readable time: every verdict joins the simultaneous group below (fail closed on disagreement).
+  // A disagreement stays stuck until a new head is pushed; that is the exit.
   const simultaneous = (
     lastTime === undefined || Number.isNaN(lastTime)
       ? mine
