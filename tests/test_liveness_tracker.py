@@ -1,6 +1,7 @@
 """Self-tests for the LivenessTracker contract itself."""
 
 import json
+import threading
 
 import pytest
 
@@ -94,3 +95,34 @@ def test_persistence_round_trip_real_soul_map(tmp_path, monkeypatch):
     assert snap["source"] == "persisted", snap
     assert snap["last_success_at"] is not None
     assert snap["status"] == "ok", snap
+
+
+def test_write_seq_published_after_persist_not_before(monkeypatch, tmp_path):
+    """Seq bump must follow soul_map write so cache invalidation matches disk."""
+    import internal.store.soul_map_io as smio
+    from internal import liveness
+
+    target = tmp_path / "soul_map.json"
+    monkeypatch.setattr(smio, "_resolve_path", lambda path=None: str(target))
+    gate = threading.Event()
+    release = threading.Event()
+
+    real_write = smio.write_soul_map
+
+    def slow_write(mutator, path=None):
+        gate.set()
+        release.wait(timeout=2)
+        return real_write(mutator, path)
+
+    monkeypatch.setattr(smio, "write_soul_map", slow_write)
+    monkeypatch.setattr("internal.liveness.write_soul_map", slow_write)
+    t = LivenessTracker("seq-order", interval_seconds=60, persist=True)
+    assert liveness.write_seq("seq-order") == 0
+
+    writer = threading.Thread(target=lambda: t.record_success({"noop": True}))
+    writer.start()
+    assert gate.wait(timeout=1)
+    assert liveness.write_seq("seq-order") == 0
+    release.set()
+    writer.join(timeout=2)
+    assert liveness.write_seq("seq-order") == 1

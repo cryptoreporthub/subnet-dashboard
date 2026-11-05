@@ -417,9 +417,9 @@ class LivenessTracker:
         return path() if callable(path) else path
 
     def _save(self) -> None:
-        with _REG_LOCK:
-            _WRITE_SEQ[self.name] = _WRITE_SEQ.get(self.name, 0) + 1
         if not self.persist or write_soul_map is None:
+            with _REG_LOCK:
+                _WRITE_SEQ[self.name] = _WRITE_SEQ.get(self.name, 0) + 1
             return
         snap = self.snapshot()
 
@@ -443,4 +443,6 @@ class LivenessTracker:
             else:
                 write_soul_map(mutator)
         except Exception:
-            pass
+            return
+        with _REG_LOCK:
+            _WRITE_SEQ[self.name] = _WRITE_SEQ.get(self.name, 0) + 1
