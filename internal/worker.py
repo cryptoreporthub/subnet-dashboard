@@ -90,6 +90,16 @@ def main() -> None:
 
     bootstrap_worker_runtime()
 
+    from internal.owner_guard import acquire_write_owner_at_worker_startup
+
+    write_owner_ready, block_reason = acquire_write_owner_at_worker_startup()
+    if not write_owner_ready:
+        logger.error(
+            "owner_guard: worker BLOCKED (%s) — no background writers started; exiting 3",
+            block_reason,
+        )
+        sys.exit(3)
+
     from internal.background_boot import (
         schedule_summary_bot_worker_watchdog,
         start_background_workers,
@@ -139,9 +149,12 @@ def main() -> None:
                 from internal.job_scheduler import state as _sched_state
 
                 _st = _sched_state()
-                if not _st.get("running") or int(_st.get("job_count", 0) or 0) <= 0:
+                if not _st.get("running") or int(
+                    _st.get("job_count", 0) or 0
+                ) <= 0:
                     _logger.warning(
-                        "background scheduler unhealthy (%s); heartbeat paused", _st
+                        "background scheduler unhealthy (%s); heartbeat paused",
+                        _st,
                     )
                     continue
                 touch_heartbeat()

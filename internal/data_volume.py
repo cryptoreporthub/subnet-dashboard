@@ -15,6 +15,73 @@ def resolved_data_dir() -> str:
     return os.path.realpath(_data_dir())
 
 
+_DISALLOWED_MOUNT_FSTYPES = frozenset(
+    {"overlay", "rootfs", "tmpfs", "proc", "sysfs", "devtmpfs"}
+)
+
+
+def _read_mountinfo() -> list[str]:
+    """Return /proc/self/mountinfo lines (empty when unavailable)."""
+    try:
+        with open("/proc/self/mountinfo", "r", encoding="utf-8") as handle:
+            return handle.read().splitlines()
+    except OSError:
+        return []
+
+
+def decode_mountinfo_path(raw: str) -> str:
+    """Decode octal escape sequences in mountinfo mount/source fields."""
+    out: list[str] = []
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+        if ch == "\\" and i + 3 < len(raw):
+            esc = raw[i + 1 : i + 4]
+            if esc in ("040", "011", "012", "134"):
+                out.append(
+                    {
+                        "040": " ",
+                        "011": "\t",
+                        "012": "\n",
+                        "134": "\\",
+                    }[esc]
+                )
+                i += 4
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def strict_mount_proof(root: str) -> tuple[bool, str, dict[str, str]]:
+    """True only when root is the exact mount point of a block-device mount."""
+    target = os.path.realpath(root)
+    facts: dict[str, str] = {"root": target}
+    for line in _read_mountinfo():
+        parts = line.split()
+        if len(parts) < 10:
+            continue
+        # mountinfo: ... mount_point ... - fstype source ...
+        try:
+            dash_idx = parts.index("-")
+        except ValueError:
+            continue
+        mount_point = decode_mountinfo_path(parts[4])
+        if mount_point != target:
+            continue
+        fstype = parts[dash_idx + 1] if dash_idx + 1 < len(parts) else ""
+        source = parts[dash_idx + 2] if dash_idx + 2 < len(parts) else ""
+        facts["mount_point"] = mount_point
+        facts["fstype"] = fstype
+        facts["source"] = source
+        if fstype in _DISALLOWED_MOUNT_FSTYPES:
+            return False, f"disallowed_fstype:{fstype}", facts
+        if not source.startswith("/dev/"):
+            return False, f"source_not_block_dev:{source}", facts
+        return True, "", facts
+    return False, "no_exact_mount_entry", facts
+
+
 def data_dir_is_mounted_volume() -> bool:
     """True when DATA_DIR is a real mount (Fly volume), not ephemeral container FS."""
     root = os.path.realpath(_data_dir())
@@ -43,17 +110,18 @@ def data_dir_is_mounted_volume() -> bool:
     )
 
 
-def has_local_volume_data() -> bool:
+def has_local_volume_data(*, for_volume_bootstrap: bool = False) -> bool:
     """True when soul_map, pump ladder, or a non-trivial message_intel DB is present."""
     root = _data_dir()
     if not os.path.isdir(root):
         return False
-    markers = (
+    markers: tuple[str, ...] = (
         "soul_map.json",
         "pump_ladder.json",
-        ".worker_heartbeat",
         os.path.join("pump_desk", "latest.json"),
     )
+    if not for_volume_bootstrap:
+        markers = (".worker_heartbeat",) + markers
     for rel in markers:
         if os.path.isfile(os.path.join(root, rel)):
             return True
