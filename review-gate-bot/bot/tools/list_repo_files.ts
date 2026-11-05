@@ -39,7 +39,10 @@ export default defineTool({
     }
     const octokit = await ctx.host.github.getOctokit();
     const pr = await readPr(octokit, ref);
-    const sha = at === "head" ? pr.headSha : pr.baseSha;
+    if (at === "base" && (pr.baseSha === undefined || pr.baseSha === "")) {
+      return { ok: false, reason: "base not available" };
+    }
+    const sha = at === "head" ? pr.headSha : (pr.baseSha as string);
     return { ok: true, ...(await listRepoFiles(octokit, ref, sha, { prefix: input.prefix })), source: "github" };
   },
 });

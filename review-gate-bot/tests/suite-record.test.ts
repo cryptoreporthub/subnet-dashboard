@@ -87,7 +87,7 @@ function fixture(changedFiles: string[]) {
 
 test("a PR that changes the suite's own definition is refused before any report is read", async () => {
   const f = fixture([".github/workflows/full-suite-junit.yml"]);
-  const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome.ok, false);
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0, "no artifact is downloaded for a PR that rewrote how the suite runs");
@@ -99,14 +99,14 @@ test("a PR that changes the suite's own definition is refused before any report 
 test("changing pytest.ini or a conftest anywhere in the tree is also refused", async () => {
   for (const file of ["pytest.ini", "tests/conftest.py", "pyproject.toml"]) {
     const f = fixture([file]);
-    const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+    const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
     assert.equal(!outcome.ok && outcome.reason, "needs-joshua", file);
   }
 });
 
 test("a PR that changes no suite-definition file is recorded as before", async () => {
   const f = fixture(["review-gate-bot/bot/lib/suite.ts"]);
-  const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome.ok, true);
   assert.equal((f.store.get(suiteKey(REF, HEAD, BASE)) as { state?: string }).state, "clean");
 });
@@ -122,7 +122,7 @@ test("renaming a suite-definition file away from its path is refused: the old pa
       },
     },
   } as unknown as Octokit;
-  const outcome = await recordSuiteComparison({ octokit: renamed, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await recordSuiteComparison({ octokit: renamed, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0);
 });
@@ -130,7 +130,7 @@ test("renaming a suite-definition file away from its path is refused: the old pa
 
 test("a NEEDS-JOSHUA refusal is recorded with its reason and files, so the check can say why", async () => {
   const f = fixture(["pytest.ini"]);
-  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   const record = f.store.get(legacySuiteKey(REF, HEAD)) as { state?: string; invalid?: string; detail?: string } | undefined;
   assert.equal(record?.state, "regressed", "not clean, and not left as an unrecorded wait");
   assert.equal(record?.invalid, "needs-joshua");
@@ -149,21 +149,21 @@ test("a comparison with a base test missing at head records which tests are miss
     ...reader,
     artifactZip: async () => zipOf(++call === 1 ? '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>' : baseXml),
   };
-  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: reader2 });
-  const record = f.store.get(legacySuiteKey(REF, HEAD)) as { invalid?: string; missing?: string[] } | undefined;
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: reader2 });
+  const record = f.store.get(suiteKey(REF, HEAD, BASE)) as { invalid?: string; missing?: string[] } | undefined;
   assert.equal(record?.invalid, "baseline-test-missing");
   assert.deepEqual(record?.missing, ["tests.test_x::a"]);
 });
 
-test("a missing baseline test reads as NEEDS-JOSHUA for the gate, not as a retryable regression", async () => {
+test("a missing baseline test reads as regressed for the gate, not NEEDS-JOSHUA", async () => {
   const f = fixture([]);
   let call = 0;
   const reader: RunnerReader = {
     ...f.reader,
     artifactZip: async () => zipOf(++call === 1 ? '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>' : '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="a"/><testcase classname="tests.test_x" name="b"/></testsuite></testsuites>'),
   };
-  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
-  assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua");
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader });
+  assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "regressed");
 });
 
 
@@ -178,10 +178,10 @@ test("a suite-definition change is refused even when no run has finished, and la
     artifactsForRun: async () => [],
     artifactZip: async () => new Uint8Array(),
   };
-  const first = await runSuiteIfDue({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunYet });
+  const first = await runSuiteIfDue({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: noRunYet });
   assert.equal(first, "refused:head-needs-joshua");
   const afterFirst = lookups;
-  const second = await runSuiteIfDue({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunYet });
+  const second = await runSuiteIfDue({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: noRunYet });
   assert.equal(second, "already-refused");
   assert.equal(lookups, afterFirst, "a refused head is not checked against the run list again");
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua");
@@ -199,8 +199,8 @@ test("a long list of missing tests is summarised in the detail, and the full lis
     ...f.reader,
     artifactZip: async () => zipOf(++call === 1 ? many(["h"]) : many(names)),
   };
-  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
-  const record = f.store.get(legacySuiteKey(REF, HEAD)) as { detail?: string; missing?: string[] } | undefined;
+  await recordSuiteComparison({ octokit: f.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader });
+  const record = f.store.get(suiteKey(REF, HEAD, BASE)) as { detail?: string; missing?: string[] } | undefined;
   assert.equal(record?.missing?.length, 3000, "the full list is kept");
   assert.ok((record?.detail ?? "").length <= 1000, `detail is ${record?.detail?.length} characters`);
   assert.match(record?.detail ?? "", /3000/);
@@ -242,7 +242,7 @@ test("a compare cut off at GitHub's file cap is refused as NEEDS-JOSHUA even whe
   const f = fixture([]);
   const { octokit } = compareOf({ files: CAPPED });
   const lookups = { count: 0 };
-  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader(lookups) });
+  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: noRunReader(lookups) });
   assert.equal(outcome, "refused:head-diff-incomplete", "not waiting:no-run, which would let a PR that never finishes its run pass");
   assert.equal(lookups.count, 0, "the refusal comes before any run is looked up");
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua");
@@ -255,21 +255,23 @@ test("a compare with no file list is a failed lookup: it records nothing, never 
   const f = fixture([]);
   const lookups = { count: 0 };
   const broken = compareOf({});
-  await assert.rejects(runSuiteIfDue({ octokit: broken.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader(lookups) }));
+  const first = await runSuiteIfDue({ octokit: broken.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: noRunReader(lookups) });
+  assert.equal(first, "refused:head-compare-unavailable");
   assert.equal(lookups.count, 0, "no run is looked up on a compare that could not be read");
   assert.equal(f.store.get(suiteKey(REF, HEAD, BASE)), undefined, "a glitch is not recorded as a permanent block on this head");
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "missing");
-  await assert.rejects(recordSuiteComparison({ octokit: broken.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader }));
+  const tool = await recordSuiteComparison({ octokit: broken.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
+  assert.equal(tool.ok, false);
   assert.equal(f.downloads.count, 0);
   const good = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
-  const retry = await runSuiteIfDue({ octokit: good.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const retry = await runSuiteIfDue({ octokit: good.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(retry, "recorded");
 });
 
 test("a genuinely empty diff has no suite files to refuse and goes on to the run", async () => {
   const f = fixture([]);
   const { octokit } = compareOf({ files: [] });
-  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome, "recorded");
 });
 
@@ -278,9 +280,9 @@ test("a capped compare is final: the next delivery neither compares nor looks up
   const { octokit, calls } = compareOf({ files: CAPPED });
   const lookups = { count: 0 };
   const reader = noRunReader(lookups);
-  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
+  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader });
   const afterFirst = calls.count;
-  const second = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader });
+  const second = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader });
   assert.equal(second, "already-refused");
   assert.equal(calls.count, afterFirst);
   assert.equal(lookups.count, 0);
@@ -289,7 +291,7 @@ test("a capped compare is final: the next delivery neither compares nor looks up
 test("the compare_suite_runs path records a capped compare as NEEDS-JOSHUA too, so both paths record the same thing", async () => {
   const f = fixture([]);
   const { octokit } = compareOf({ files: CAPPED });
-  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0, "no report is read for a diff that cannot be checked whole");
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua");
@@ -298,7 +300,7 @@ test("the compare_suite_runs path records a capped compare as NEEDS-JOSHUA too, 
 test("a compare just under the cap that changes no suite file still goes on to the run", async () => {
   const f = fixture([]);
   const { octokit } = compareOf({ files: CAPPED.slice(1) });
-  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome, "recorded");
 });
 
@@ -306,7 +308,7 @@ test("a refusal for more than five suite-definition files keeps every path in th
   const paths = Array.from({ length: 12 }, (_, i) => `service_${i}/conftest.py`);
   const f = fixture([]);
   const { octokit } = compareOf({ files: [...paths.map((filename) => ({ filename, status: "modified" })), { filename: "app/x.py", status: "modified" }] });
-  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader({ count: 0 }) });
+  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: noRunReader({ count: 0 }) });
   const record = f.store.get(legacySuiteKey(REF, HEAD)) as { invalid?: string; detail?: string; definitionFiles?: string[] } | undefined;
   assert.equal(record?.invalid, "needs-joshua");
   assert.deepEqual(record?.definitionFiles, paths, "all twelve paths can be inspected from the stored record");
@@ -325,7 +327,7 @@ test("the compare_suite_runs path keeps the full suite-definition list in the re
       { filename: "d/conftest.py", status: "modified" },
     ],
   });
-  await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   const record = f.store.get(legacySuiteKey(REF, HEAD)) as { definitionFiles?: string[] } | undefined;
   assert.deepEqual(record?.definitionFiles, ["tests/conftest.py", "pytest.ini", "a/conftest.py", "b/conftest.py", "c/conftest.py", "d/conftest.py"]);
 });
@@ -334,43 +336,43 @@ test("the widest refusal GitHub's compare allows stays bounded: every path kept,
   const paths = Array.from({ length: 299 }, (_, i) => `pkg_${i}/${"d".repeat(60)}/conftest.py`);
   const f = fixture([]);
   const { octokit } = compareOf({ files: paths.map((filename) => ({ filename, status: "modified" })) });
-  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: noRunReader({ count: 0 }) });
+  await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: noRunReader({ count: 0 }) });
   const record = f.store.get(legacySuiteKey(REF, HEAD)) as { detail?: string; definitionFiles?: string[] } | undefined;
   assert.equal(record?.definitionFiles?.length, 299);
   assert.ok((record?.detail ?? "").length <= 1000, `detail is ${record?.detail?.length} characters`);
 });
 
-test("one comparison makes one compare call, whichever path records it", async () => {
+test("one comparison makes definition and stale-pair compare calls", async () => {
   const f = fixture([]);
   const direct = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
-  const outcome = await recordSuiteComparison({ octokit: direct.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await recordSuiteComparison({ octokit: direct.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome.ok, true);
-  assert.equal(direct.calls.count, 1, "compare_suite_runs reads the compare once");
+  assert.equal(direct.calls.count, 2, "definition read plus live merge-base re-read before put");
 });
 
-test("a delivery that goes on to record the comparison reuses the compare it already read", async () => {
+test("a delivery that goes on to record the comparison reuses the definition compare", async () => {
   const f = fixture([]);
   const gate = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
-  const outcome = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  const outcome = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome, "recorded");
-  assert.equal(gate.calls.count, 1, "the definition check and the comparison share one compare response");
+  assert.equal(gate.calls.count, 2, "definition compare plus stale-pair merge-base re-read");
   assert.equal((f.store.get(suiteKey(REF, HEAD, BASE)) as { state?: string }).state, "clean");
 });
 
-test("a delivery that finds the run already recorded still makes only the one compare", async () => {
+test("a delivery that finds the run already recorded still compares once per delivery", async () => {
   const f = fixture([]);
   const gate = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
-  await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
-  const again = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader });
+  await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
+  const again = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(again, "already-recorded");
-  assert.equal(gate.calls.count, 2, "one compare per delivery, none extra");
+  assert.equal(gate.calls.count, 3, "first delivery records with two compares; second delivery makes one definition compare");
 });
 
 test("the exported comparison reads its own compare: a forged empty definition passed in cannot record a changed suite definition as clean", async () => {
   const f = fixture([]);
   const { octokit, calls } = compareOf({ files: [{ filename: "pytest.ini", status: "modified" }] });
   const forged = { definition: { complete: true as const, files: [] as string[] } };
-  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader, ...forged });
+  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader, ...forged });
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0, "no report is read for a PR that changed how the suite runs");
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua", "the head is not recorded clean");
@@ -381,7 +383,7 @@ test("the exported comparison ignores a stale or incomplete definition passed in
   const f = fixture([]);
   const { octokit } = compareOf({ files: CAPPED });
   const stale = { definition: { complete: true as const, files: [] as string[] } };
-  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, reader: f.reader, ...stale });
+  const outcome = await recordSuiteComparison({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader, ...stale });
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0);
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua");

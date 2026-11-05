@@ -3,7 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GitHubHandle } from "@grok/agent-sdk/channels/github";
 import { prKey, type GateState } from "./gate.js";
 import type { PrRef } from "./gh.js";
-import { readLivePair, readSuiteRecord, suiteStateFromRecord } from "./gh.js";
+import { readLivePair, readSuiteRecord, suiteStateFromRecord, pairCompareReady, GITHUB_PAIR_READ_DETAIL } from "./gh.js";
 import { exclusive } from "./lock.js";
 
 /** The merge-box check this bot owns. A branch rule can require it by this name. */
@@ -40,19 +40,20 @@ export function gateConclusion(state: GateState): GateConclusion {
   }
 }
 
+/** Check title when live GitHub reads omit the PR base pair — not a Joshua decision. */
+export const GITHUB_READ_FAILURE_TITLE = "GitHub read failed";
+
 /** One line of facts the check page and the dedupe key share. */
 function summaryOf(state: GateState, baseTipSha: string | undefined): string {
   const baseLine =
     baseTipSha === undefined || baseTipSha === "" ? "base missing" : `base tip ${baseTipSha.slice(0, 7)}`;
-  return [
-    `MC ${state.mc}`,
-    `Cursor ${state.cursor}`,
-    `Ditto ${state.ditto}`,
-    state.suite === "needs-joshua" ? `suite NEEDS-JOSHUA (${state.suiteDetail ?? "see the head's suite record"})` : `suite ${state.suite}`,
-    `Replit ${state.replit}`,
-    baseLine,
-    `next: ${state.next}`,
-  ].join(" · ");
+  const suiteLine =
+    state.suite === "needs-joshua"
+      ? `suite NEEDS-JOSHUA (${state.suiteDetail ?? "see the head's suite record"})`
+      : state.suite === "regressed" && state.suiteDetail !== undefined && state.suiteDetail !== ""
+        ? `suite regressed (${state.suiteDetail})`
+        : `suite ${state.suite}`;
+  return [`MC ${state.mc}`, `Cursor ${state.cursor}`, `Ditto ${state.ditto}`, suiteLine, `Replit ${state.replit}`, baseLine, `next: ${state.next}`].join(" · ");
 }
 
 async function livePairIs(
@@ -60,9 +61,15 @@ async function livePairIs(
   ref: PrRef,
   headSha: string,
   baseTipSha: string | undefined,
+  baseSha: string | undefined,
 ): Promise<boolean> {
   const live = await readLivePair(octokit, ref);
-  return live.headSha === headSha && live.baseTipSha === baseTipSha;
+  return (
+    live.headSha === headSha &&
+    live.baseTipSha === baseTipSha &&
+    live.baseSha === (baseSha ?? "") &&
+    pairCompareReady(live)
+  );
 }
 
 export type CheckPost = "posted" | "unchanged" | "stale-head";
@@ -108,11 +115,14 @@ export async function postGateCheck(input: {
     if (live.headSha !== state.headSha) {
       return "stale-head";
     }
-    if (baseTipSha === undefined || baseTipSha === "") {
+    if (!pairCompareReady(live)) {
       const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
       await check.conclude({
         conclusion: "action_required",
-        output: { title: "Needs Joshua", summary: `${summary} · PR base commit is not available` },
+        output: {
+          title: GITHUB_READ_FAILURE_TITLE,
+          summary: `${summary} · ${GITHUB_PAIR_READ_DETAIL}`,
+        },
       });
       await kv.put(key, summary);
       return "posted";
@@ -128,7 +138,8 @@ export async function postGateCheck(input: {
 
     const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
     const superseded =
-      conclusion === "success" && !(await livePairIs(octokit, ref, state.headSha, baseTipSha));
+      conclusion === "success" &&
+      !(await livePairIs(octokit, ref, state.headSha, baseTipSha, live.baseSha));
     if (superseded) {
       await check.conclude({
         conclusion: "cancelled",

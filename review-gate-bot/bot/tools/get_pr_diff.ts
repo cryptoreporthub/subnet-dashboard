@@ -42,6 +42,9 @@ export default defineTool({
     if (pr.headSha !== input.headSha) {
       return { ok: false, reason: "stale-head", current: pr.headSha };
     }
+    if (pr.baseSha === undefined || pr.baseSha === "") {
+      return { ok: false, reason: "base not available" };
+    }
     const diff = await readDiff(octokit, ref, { head: pr.headSha, base: pr.baseSha, paths: input.paths });
     return diff.ok ? { ...diff, source: "github" } : diff;
   },

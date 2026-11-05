@@ -172,7 +172,7 @@ test("the same base and run id is not downloaded again", async () => {
       return zipOf(CLEAN);
     },
   };
-  const label = await runSuiteIfDue({ ...w.deps, headSha: HEAD, baseSha: BASE_A, reader: counted });
+  const label = await runSuiteIfDue({ ...w.deps, headSha: HEAD, baseSha: BASE_A, baseTipSha: BASE_A, reader: counted });
   assert.equal(label, "already-recorded");
   assert.equal(downloads, 0);
 });
@@ -219,12 +219,12 @@ test("carry against the live base uses the pair key", async () => {
   assert.equal(await readSuiteRecord(w.deps.kv, REF, HEAD, BASE_B), undefined);
 });
 
-test("undefined base reads as NEEDS-JOSHUA", async () => {
+test("undefined base omits merge-base but does not force NEEDS-JOSHUA before computeGate", async () => {
   const w = world({ comments: [mcPass], reviews: botReviews });
   w.live.base = undefined;
   const state = await readGateState({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });
-  assert.equal(state.suite, "needs-joshua");
-  assert.equal(state.next, "needs_joshua");
+  assert.equal(state.suite, "missing");
+  assert.equal(state.next, "run_suite");
 });
 
 test("push to the PR base reconciles open pull requests", async () => {
@@ -297,7 +297,7 @@ test("a mergeable check is not green when the base tip moves before conclude", a
   assert.equal(w.checks[0]?.conclusion, "cancelled");
 });
 
-test("recordSuiteComparison writes baseline-test-missing on the head-only key", async () => {
+test("recordSuiteComparison writes baseline-test-missing on the pair key", async () => {
   const w = world();
   let call = 0;
   const headXml = '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="t" name="b"/></testsuite></testsuites>';
@@ -307,8 +307,8 @@ test("recordSuiteComparison writes baseline-test-missing on the head-only key", 
     artifactZip: async () => zipOf(++call === 1 ? headXml : baseXml),
   };
   await recordSuiteComparison({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD, baseSha: BASE_A, baseTipSha: BASE_A, reader: r });
-  assert.ok(w.store.has(legacySuiteKey(REF, HEAD)));
-  assert.equal(w.store.has(suiteKey(REF, HEAD, BASE_A)), false);
+  assert.equal(w.store.has(legacySuiteKey(REF, HEAD)), false);
+  assert.equal((w.store.get(suiteKey(REF, HEAD, BASE_A)) as { invalid?: string })?.invalid, "baseline-test-missing");
 });
 
 test("a stale pulls base with an advanced branch tip orphans the old pair clean", async () => {
@@ -435,4 +435,85 @@ test("a tip move between artifact read and record write returns stale-pair and w
   assert.equal(!outcome.ok && outcome.reason, "stale-pair");
   assert.equal(w.store.has(suiteKey(REF, HEAD, BASE_A)), false);
   assert.equal(w.store.has(suiteKey(REF, HEAD, TIP_D)), false);
+});
+
+test("compareCommitsWithBasehead failure omits merge-base and blocks a stale green check", async () => {
+  const w = world({
+    comments: [mcPass],
+    reviews: botReviews,
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } },
+  });
+  const octokit = {
+    ...w.octokit,
+    rest: {
+      ...w.octokit.rest,
+      repos: {
+        ...w.octokit.rest.repos,
+        compareCommitsWithBasehead: async () => {
+          throw new Error("github 503");
+        },
+      },
+    },
+  } as unknown as Octokit;
+  const state = await readGateState({ octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });
+  assert.notEqual(state.next, "mergeable");
+  await postGateCheck({
+    octokit,
+    kv: w.deps.kv,
+    ref: REF,
+    createCheck: w.deps.createCheck,
+    state: { ...state, next: "mergeable" as const, suite: "clean" as const },
+    read: async () => state,
+  });
+  assert.equal(w.checks[0]?.conclusion, "action_required");
+  assert.equal(w.checks[0]?.summary?.includes("GitHub could not resolve"), true);
+});
+
+test("a pair-key baseline-test-missing at an old tip does not block re-record at a new tip", async () => {
+  const w = world({
+    seed: {
+      [suiteKey(REF, HEAD, BASE_A)]: { state: "regressed", invalid: "baseline-test-missing", at: 1 },
+    },
+  });
+  w.live.tip = TIP_D;
+  let downloads = 0;
+  const label = await runSuiteIfDue({
+    ...w.deps,
+    headSha: HEAD,
+    baseSha: BASE_A,
+    baseTipSha: TIP_D,
+    reader: {
+      ...reader(),
+      artifactZip: async () => {
+        downloads += 1;
+        return zipOf(CLEAN);
+      },
+    },
+  });
+  assert.equal(label, "recorded");
+  assert.ok(downloads > 0);
+  assert.equal((w.store.get(suiteKey(REF, HEAD, TIP_D)) as { state?: string })?.state, "clean");
+});
+
+test("unavailable merge-base refuses recordComparison without downloading JUnit", async () => {
+  const w = world();
+  let downloads = 0;
+  const outcome = await recordSuiteComparison({
+    octokit: w.octokit,
+    kv: w.deps.kv,
+    ref: REF,
+    headSha: HEAD,
+    baseSha: "",
+    baseTipSha: BASE_A,
+    reader: {
+      ...reader(),
+      artifactZip: async () => {
+        downloads += 1;
+        return zipOf(CLEAN);
+      },
+    },
+  });
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.reason, "base-unavailable");
+  assert.equal(downloads, 0);
 });

@@ -127,6 +127,10 @@ export default defineTool({
       };
     }
 
+    if (currentBaseSha === undefined || currentBaseSha === "" || currentBaseTipSha === undefined || currentBaseTipSha === "") {
+      return { recorded: false, reason: "base-unavailable", carried: false, clean: false };
+    }
+
     // Carry-over: the head must have changed nothing a suite can observe, and
     // the SHA being carried from must itself have a recorded *clean* run.
     if (input.carryFromSha !== undefined) {
@@ -210,6 +214,7 @@ export default defineTool({
       ref: repoRef,
       headSha: input.headSha,
       baseSha: input.baseSha,
+      baseTipSha: currentBaseTipSha as string,
     });
     if (!outcome.ok) {
       return {

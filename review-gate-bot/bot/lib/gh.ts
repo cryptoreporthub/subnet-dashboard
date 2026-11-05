@@ -10,10 +10,10 @@ export type PrRef = { owner: string; repo: string; number: number };
 export type PrSnapshot = {
   number: number;
   headSha: string;
-  /** Merge-base of head vs base.ref; JUnit compare target. */
-  baseSha: string;
-  /** Live tip of base.repo@base.ref; suite pair key identity. */
-  baseTipSha: string;
+  /** Merge-base of head vs base.ref; JUnit compare target. Omitted when GitHub cannot resolve it. */
+  baseSha?: string;
+  /** Live tip of base.repo@base.ref; suite pair key identity. Omitted when unavailable. */
+  baseTipSha?: string;
   draft: boolean;
   title: string;
   files: string[];
@@ -28,44 +28,79 @@ export type LivePair = {
   draft: boolean;
 };
 
+export const GITHUB_PAIR_READ_DETAIL = "GitHub could not resolve the PR base pair for suite compare";
+
+export function isValidHeadSha(sha: string): boolean {
+  return /^[0-9a-f]{40}$/.test(sha);
+}
+
+export function pairCompareReady(pair: Pick<LivePair, "headSha" | "baseSha" | "baseTipSha">): boolean {
+  return isValidHeadSha(pair.headSha) && pair.baseSha !== "" && pair.baseTipSha !== "";
+}
+
+/** After computeGate: never report mergeable when live pair compare fields are missing. */
+export function downgradeIfStaleGreen(state: GateState, pair: Pick<LivePair, "headSha" | "baseSha" | "baseTipSha">): GateState {
+  if (state.next !== "mergeable") {
+    return state;
+  }
+  if (pairCompareReady(pair)) {
+    return state;
+  }
+  return { ...state, next: "run_suite", suiteDetail: GITHUB_PAIR_READ_DETAIL };
+}
+
 /** Head, merge-base, and live base-branch tip. Single source for pair identity and suite compare. */
 export async function readLivePair(octokit: Octokit, ref: PrRef, options?: { identityOnly?: boolean }): Promise<LivePair> {
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner: ref.owner,
-    repo: ref.repo,
-    pull_number: ref.number,
-  });
-  const baseRef = pr.base.ref;
-  if (baseRef === undefined || baseRef === "") {
-    return { headSha: pr.head.sha, baseSha: "", baseTipSha: "", baseRef: "", draft: pr.draft ?? false };
+  let headSha = "";
+  let draft = false;
+  try {
+    const { data: pr } = await octokit.rest.pulls.get({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.number,
+    });
+    headSha = pr.head?.sha ?? "";
+    draft = pr.draft ?? false;
+    if (!isValidHeadSha(headSha)) {
+      return { headSha: "", baseSha: "", baseTipSha: "", baseRef: "", draft };
+    }
+    const baseRef = pr.base.ref;
+    if (baseRef === undefined || baseRef === "") {
+      return { headSha, baseSha: "", baseTipSha: "", baseRef: "", draft };
+    }
+    const baseOwner = pr.base.repo?.owner?.login ?? ref.owner;
+    const baseRepo = pr.base.repo?.name ?? ref.repo;
+    let baseTipSha = "";
+    try {
+      const { data: branch } = await octokit.rest.repos.getBranch({
+        owner: baseOwner,
+        repo: baseRepo,
+        branch: baseRef,
+      });
+      baseTipSha = branch.commit.sha;
+    } catch {
+      return { headSha, baseSha: "", baseTipSha: "", baseRef, draft };
+    }
+    if (options?.identityOnly) {
+      return { headSha, baseSha: "", baseTipSha, baseRef, draft };
+    }
+    try {
+      const { data: compare } = await octokit.rest.repos.compareCommitsWithBasehead({
+        owner: ref.owner,
+        repo: ref.repo,
+        basehead: `${baseTipSha}...${headSha}`,
+      });
+      const mergeBase = compare.merge_base_commit?.sha;
+      if (mergeBase === undefined || mergeBase === "") {
+        return { headSha, baseSha: "", baseTipSha, baseRef, draft };
+      }
+      return { headSha, baseSha: mergeBase, baseTipSha, baseRef, draft };
+    } catch {
+      return { headSha, baseSha: "", baseTipSha, baseRef, draft };
+    }
+  } catch {
+    return { headSha: "", baseSha: "", baseTipSha: "", baseRef: "", draft };
   }
-  const baseOwner = pr.base.repo?.owner?.login ?? ref.owner;
-  const baseRepo = pr.base.repo?.name ?? ref.repo;
-  const { data: branch } = await octokit.rest.repos.getBranch({
-    owner: baseOwner,
-    repo: baseRepo,
-    branch: baseRef,
-  });
-  const baseTipSha = branch.commit.sha;
-  const pulledBase = pr.base.sha;
-  if (options?.identityOnly) {
-    const baseSha =
-      pulledBase !== undefined && pulledBase !== "" ? pulledBase : baseTipSha;
-    return { headSha: pr.head.sha, baseSha, baseTipSha, baseRef, draft: pr.draft ?? false };
-  }
-  const { data: compare } = await octokit.rest.repos.compareCommitsWithBasehead({
-    owner: ref.owner,
-    repo: ref.repo,
-    basehead: `${baseTipSha}...${pr.head.sha}`,
-  });
-  const mergeBase = compare.merge_base_commit?.sha;
-  const baseSha =
-    mergeBase !== undefined && mergeBase !== ""
-      ? mergeBase
-      : pulledBase !== undefined && pulledBase !== ""
-        ? pulledBase
-        : baseTipSha;
-  return { headSha: pr.head.sha, baseSha, baseTipSha, baseRef, draft: pr.draft ?? false };
 }
 
 export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> {
@@ -84,8 +119,8 @@ export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> 
   return {
     number: pr.number,
     headSha: pair.headSha,
-    baseSha: pair.baseSha,
-    baseTipSha: pair.baseTipSha,
+    ...(pair.baseSha !== "" ? { baseSha: pair.baseSha } : {}),
+    ...(pair.baseTipSha !== "" ? { baseTipSha: pair.baseTipSha } : {}),
     draft: pair.draft,
     title: pr.title,
     // A rename touches both paths. `x.py` renamed to `x.md` must not look like a
@@ -167,8 +202,8 @@ export function legacySuiteKey(ref: PrRef, headSha: string): string {
   return `suite:${prKey(ref)}:${headSha}`;
 }
 
-/** Refusals pinned to the head only; they outrank a pair-key clean or carried record. */
-export const SUITE_HEAD_HOLDS = new Set(["needs-joshua", "baseline-test-missing", "newly-skipped"]);
+/** Refusals pinned to the head only (`needs-joshua` from suite-definition / diff cap). */
+export const SUITE_HEAD_HOLDS = new Set(["needs-joshua"]);
 
 export type RecordedSuite = {
   state: SuiteState;
@@ -227,12 +262,15 @@ export async function readSuiteRecord(
   return undefined;
 }
 
-/** The gate's suite state for a record: NEEDS-JOSHUA is final, anything else is what the record says. */
+/** The gate's suite state for a record: NEEDS-JOSHUA is final; pair-key compare invalids stay regressed. */
 export function suiteStateFromRecord(record: RecordedSuite | undefined): SuiteState {
   if (record === undefined) {
     return "missing";
   }
-  return isHeadHold(record) ? "needs-joshua" : record.state;
+  if (record.invalid === "needs-joshua") {
+    return "needs-joshua";
+  }
+  return record.state;
 }
 
 function suiteOf(record: RecordedSuite | undefined): SuiteState {
@@ -354,20 +392,11 @@ export async function readGateState(input: {
   ]);
 
   const baseTipSha = pr.baseTipSha;
-  if (baseTipSha === undefined || baseTipSha === "") {
-    return gateStateFrom({
-      headSha: input.headSha,
-      comments,
-      reviews,
-      suite: "needs-joshua",
-      suiteDetail: "PR base commit is not available",
-      replitTaggedForSha: replitTaggedIn(comments, input.headSha),
-      replitTaggedAt: replitTagTimeIn(comments, input.headSha),
-    });
-  }
-
-  const record = await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha);
-  return gateStateFrom({
+  const record =
+    baseTipSha !== undefined && baseTipSha !== ""
+      ? await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha)
+      : undefined;
+  const state = gateStateFrom({
     headSha: input.headSha,
     comments,
     reviews,
@@ -375,5 +404,10 @@ export async function readGateState(input: {
     suiteDetail: record?.detail,
     replitTaggedForSha: replitTaggedIn(comments, input.headSha),
     replitTaggedAt: replitTagTimeIn(comments, input.headSha),
+  });
+  return downgradeIfStaleGreen(state, {
+    headSha: pr.headSha,
+    baseSha: pr.baseSha ?? "",
+    baseTipSha: baseTipSha ?? "",
   });
 }
