@@ -511,3 +511,86 @@ def test_stale_lock_revive_stops_live_orphan_from_expiring(tmp_path, monkeypatch
         probe.release.set()
         rs.stop_prediction_resolver_scheduler()
 
+
+def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypatch):
+    """Regression: acquire + owner publish share _release_guard (no revive/abandon wedge)."""
+    probe = _OrphanProbe()
+    _patch_orphan_env(tmp_path, monkeypatch, probe)
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 30)
+    rs.stop_prediction_resolver_scheduler()
+    sched = _fresh_scheduler()
+    stop = threading.Event()
+    unowned = []
+
+    def _watch():
+        while not stop.is_set():
+            if sched._cycle_lock.locked() and sched._lock_owner_gen is None:
+                unowned.append(time.monotonic())
+            time.sleep(0.0005)
+
+    watcher = threading.Thread(target=_watch, daemon=True)
+    watcher.start()
+    try:
+        _caller, fut = _start_blocked_cycle(sched, probe)
+        assert sched._lock_owner_gen is not None
+        assert sched._cycle_lock.locked()
+        assert unowned == []
+        probe.release.set()
+        futures_wait([fut], timeout=5)
+    finally:
+        stop.set()
+        probe.release.set()
+        watcher.join(timeout=2)
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_revive_at_owner_barrier_abandons_without_overlap(tmp_path, monkeypatch):
+    """Pause after atomic owner publish; stale revive abandons once, no second persist overlap."""
+    probe = _OrphanProbe()
+    _patch_orphan_env(tmp_path, monkeypatch, probe)
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
+    rs.stop_prediction_resolver_scheduler()
+    sched = _fresh_scheduler()
+    barrier_released = threading.Event()
+    at_barrier = threading.Event()
+    first_gen = {}
+
+    def _barrier(_sched, gen):
+        first_gen["gen"] = gen
+        at_barrier.set()
+        assert _sched._lock_owner_gen == gen
+        assert _sched._cycle_lock.locked()
+        barrier_released.wait(timeout=3)
+
+    rs._cycle_lock_post_register_barrier = _barrier
+    persist_gens = []
+    real_persist = sched._persist_cycle_summary
+
+    def _track_persist(result, *args, **kwargs):
+        if isinstance(result, dict) and result.get("ok") is True:
+            persist_gens.append(result.get("cycle_generation"))
+        return real_persist(result, *args, **kwargs)
+
+    monkeypatch.setattr(sched, "_persist_cycle_summary", _track_persist)
+    try:
+        caller = threading.Thread(target=sched._run_refresh_cycle_with_timeout, daemon=True)
+        caller.start()
+        assert at_barrier.wait(timeout=5)
+        out = rs.revive_prediction_resolver_scheduler(force=True)
+        assert out.get("stale_lock_recycled") is True
+        barrier_released.set()
+        probe.release.set()
+        caller.join(timeout=5)
+        assert not caller.is_alive()
+        assert len(persist_gens) <= 1
+        if persist_gens:
+            assert persist_gens[0] != first_gen.get("gen")
+    finally:
+        rs._cycle_lock_post_register_barrier = None
+        barrier_released.set()
+        probe.release.set()
+        rs.stop_prediction_resolver_scheduler()
+

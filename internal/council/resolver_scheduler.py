@@ -811,6 +811,18 @@ class PredictionResolverScheduler:
                 return {"ok": False, "skipped": "previous_cycle_inflight"}
             abandoned_live = self._get_abandoned_live()
             logger.info("resolver abandoned_live=%d", abandoned_live)
+        # Phase 3 revive budget: boot revive uses full cycle ceiling, not the
+        # first-tick min(cycle, 90) cap that starves post-revive run_once.
+        use_full = bool(self._revive_use_full_budget) or not self._first_tick_pending
+        timeout = (
+            RESOLVER_CYCLE_TIMEOUT_SECONDS
+            if use_full
+            else RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
+        )
+        if self._revive_use_full_budget:
+            self._revive_use_full_budget = False
+        increment_gen = timeout > 0
+        with self._release_guard:
             if not self._cycle_lock.acquire(blocking=False):
                 result = {
                     "run_at": _now_iso(),
@@ -822,22 +834,16 @@ class PredictionResolverScheduler:
                 }
                 self._persist_cycle_summary(result)
                 return result
-        # Phase 3 revive budget: boot revive uses full cycle ceiling, not the
-        # first-tick min(cycle, 90) cap that starves post-revive run_once.
-        use_full = bool(self._revive_use_full_budget) or not self._first_tick_pending
-        timeout = (
-            RESOLVER_CYCLE_TIMEOUT_SECONDS
-            if use_full
-            else RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
-        )
-        if self._revive_use_full_budget:
-            self._revive_use_full_budget = False
+            if increment_gen:
+                self._cycle_generation += 1
+            gen = self._cycle_generation
+            self._persist_owner_gen = gen
+            self._lock_owner_gen = gen
+        post_barrier = _cycle_lock_post_register_barrier
+        if post_barrier is not None:
+            post_barrier(self, gen)
         if timeout <= 0:
             run_at = _now_iso()
-            with self._release_guard:
-                gen = self._cycle_generation
-                self._persist_owner_gen = gen
-                self._lock_owner_gen = gen
             cycle_id = make_resolver_cycle_id(gen, run_at)
             timing = _CycleTiming(abandoned_live)
             timing.set_owner_gen(gen)
@@ -858,11 +864,6 @@ class PredictionResolverScheduler:
                 _cycle_timing.reset(token)
                 self._release_cycle_lock_if_owner(gen)
 
-        with self._release_guard:
-            self._cycle_generation += 1
-            gen = self._cycle_generation
-            self._persist_owner_gen = gen
-            self._lock_owner_gen = gen
         run_at = _now_iso()
         cycle_id = make_resolver_cycle_id(gen, run_at)
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
@@ -1256,6 +1257,10 @@ def _default_subnets() -> Any:
 
 _scheduler: Optional[PredictionResolverScheduler] = None
 _scheduler_lock = threading.Lock()
+# Tests may set; production leaves None. Runs after atomic acquire + owner publish.
+_cycle_lock_post_register_barrier: Optional[
+    Callable[["PredictionResolverScheduler", int], None]
+] = None
 
 
 def start_prediction_resolver_scheduler(
