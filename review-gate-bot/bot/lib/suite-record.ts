@@ -116,20 +116,30 @@ function unavailableBase(): SuiteComparison {
  * the suite-definition check with an empty, stale or other-head value.
  */
 export async function recordSuiteComparison(input: ComparisonInput): Promise<SuiteComparison> {
-  if (!pairCompareReady(input)) {
+  const live = await readLivePair(input.octokit, input.ref);
+  if (!pairCompareReady(live)) {
+    return unavailableBase();
+  }
+  const aligned: ComparisonInput = {
+    ...input,
+    headSha: live.headSha,
+    baseSha: live.baseSha,
+    baseTipSha: live.baseTipSha,
+  };
+  if (!pairCompareReady(aligned)) {
     return unavailableBase();
   }
   let definition: DefinitionRead;
   try {
-    definition = await readDefinition(input);
+    definition = await readDefinition(aligned);
   } catch {
     return { ok: false, step: "head", reason: "compare-unavailable", detail: "the PR file compare could not be read" };
   }
-  const refusal = await refuseUnlessDefinitionClear(input, definition);
+  const refusal = await refuseUnlessDefinitionClear(aligned, definition);
   if (refusal !== undefined) {
     return { ok: false, step: "head", reason: "needs-joshua", detail: refusal.detail };
   }
-  return recordComparison(input);
+  return recordComparison(aligned);
 }
 
 /**
@@ -198,38 +208,48 @@ export async function runSuiteIfDue(input: {
   baseTipSha: string;
   reader?: RunnerReader;
 }): Promise<string> {
-  if (!pairCompareReady(input)) {
+  const live = await readLivePair(input.octokit, input.ref);
+  if (!pairCompareReady(live)) {
     return "refused:base-unavailable";
   }
-  const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
-  const baseTipSha = input.baseTipSha;
-  return exclusive(`suite-run:${prKey(input.ref)}:${input.headSha}`, async () => {
-    if ((await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha))?.invalid === "needs-joshua") {
+  const aligned = {
+    ...input,
+    headSha: live.headSha,
+    baseSha: live.baseSha,
+    baseTipSha: live.baseTipSha,
+  };
+  if (!pairCompareReady(aligned)) {
+    return "refused:base-unavailable";
+  }
+  const reader = aligned.reader ?? octokitRunner(aligned.octokit, { owner: aligned.ref.owner, repo: aligned.ref.repo });
+  const baseTipSha = aligned.baseTipSha;
+  return exclusive(`suite-run:${prKey(aligned.ref)}:${aligned.headSha}`, async () => {
+    if ((await readSuiteRecord(aligned.kv, aligned.ref, aligned.headSha, baseTipSha))?.invalid === "needs-joshua") {
       return "already-refused";
     }
     let definition: DefinitionRead;
     try {
-      definition = await readDefinition(input);
+      definition = await readDefinition(aligned);
     } catch {
       return "refused:head-compare-unavailable";
     }
-    const refusal = await refuseUnlessDefinitionClear(input, definition);
+    const refusal = await refuseUnlessDefinitionClear(aligned, definition);
     if (refusal !== undefined) {
       return refusal.reason === "diff-incomplete" ? "refused:head-diff-incomplete" : "refused:head-needs-joshua";
     }
-    const latest = pickRun(await reader.runsForSha(input.headSha));
+    const latest = pickRun(await reader.runsForSha(aligned.headSha));
     if (latest === undefined) {
       return "waiting:no-run";
     }
-    const recorded = await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha);
+    const recorded = await readSuiteRecord(aligned.kv, aligned.ref, aligned.headSha, baseTipSha);
     if (recorded !== undefined && recorded.runId === latest.id && recorded.state !== "carried") {
       return "already-recorded";
     }
-    const refused = (await input.kv.get(refusalKey(input.ref, input.headSha))) as { runId?: number } | undefined;
+    const refused = (await aligned.kv.get(refusalKey(aligned.ref, aligned.headSha))) as { runId?: number } | undefined;
     if (refused?.runId === latest.id) {
       return "already-refused";
     }
-    const outcome = await recordComparison(input);
+    const outcome = await recordComparison({ ...aligned, reader });
     if (outcome.ok) {
       return "recorded";
     }
@@ -241,7 +261,7 @@ export async function runSuiteIfDue(input: {
     }
     // Only a permanent fact about this run is remembered. A lookup or a download that failed on GitHub is transient.
     if (outcome.step === "head" && (outcome.reason === "unreadable" || outcome.reason === "no-artifact")) {
-      await input.kv.put(refusalKey(input.ref, input.headSha), { runId: latest.id, reason: outcome.reason });
+      await aligned.kv.put(refusalKey(aligned.ref, aligned.headSha), { runId: latest.id, reason: outcome.reason });
     }
     return `refused:${outcome.step}-${outcome.reason}`;
   });

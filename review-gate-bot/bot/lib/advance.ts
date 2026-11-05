@@ -1,8 +1,8 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { postGateCheck, type CreateCheck } from "./check.js";
-import { readGateState, readLivePair, readSuiteRecord, suiteStateFromRecord, isValidHeadSha, pairCompareReady, type PrRef } from "./gh.js";
+import { openGateCheckWorking, postGateCheck, type CreateCheck, type GateCheckHandle } from "./check.js";
+import { readGateState, readLivePair, readSuiteRecord, suiteStateFromRecord, gateSuiteRecord, isValidHeadSha, pairCompareReady, type PrRef } from "./gh.js";
 import { gateActions, prKey, reviewTurnKey } from "./gate.js";
 import { leaseToken, releaseLeaseIfHolder } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
@@ -63,16 +63,18 @@ async function pairSuiteReady(input: {
   headSha: string;
   baseTipSha: string | undefined;
 }): Promise<boolean> {
-  if (input.baseTipSha === undefined || input.baseTipSha === "") {
+  const live = await readLivePair(input.octokit, input.ref);
+  if (!pairCompareReady(live)) {
     return false;
   }
-  const live = await readLivePair(input.octokit, input.ref);
   if (live.headSha !== input.headSha || live.baseTipSha !== input.baseTipSha) {
     return false;
   }
-  const suite = suiteStateFromRecord(
+  const record = gateSuiteRecord(
     await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseTipSha),
+    true,
   );
+  const suite = suiteStateFromRecord(record);
   return suite === "clean" || suite === "carried";
 }
 
@@ -194,14 +196,33 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   // The suite is the gate's own step. When it is due, record it now and read the gate again, so the
   // lease, tags, ask and check below all see the result. A wait or a refusal leaves the gate as read.
   let suite = "skipped";
+  let workingCheck: GateCheckHandle | undefined;
   if (actions.runSuite) {
     if (!pairCompareReady({ headSha, baseSha: baseSha ?? "", baseTipSha: baseTipSha ?? "" })) {
       console.warn(JSON.stringify({ level: "warn", event: "suite_base_missing", pr: prKey(ref), head: headSha }));
       suite = "skipped:no-base";
     } else {
-      suite = await attempt("run-suite", () =>
-        runSuiteIfDue({ octokit, kv, ref, headSha, baseSha: baseSha as string, baseTipSha: baseTipSha as string, reader }),
-      );
+      let opened: GateCheckHandle | undefined;
+      const openLabel = await attempt("check-working", async () => {
+        opened = await openGateCheckWorking({
+          octokit,
+          kv,
+          ref,
+          headSha,
+          baseSha: baseSha as string,
+          baseTipSha: baseTipSha as string,
+          createCheck,
+        });
+        return opened === undefined ? "skipped:stale-pair" : "opened";
+      });
+      workingCheck = opened;
+      if (openLabel === "opened") {
+        suite = await attempt("run-suite", () =>
+          runSuiteIfDue({ octokit, kv, ref, headSha, baseSha: baseSha as string, baseTipSha: baseTipSha as string, reader }),
+        );
+      } else {
+        suite = openLabel;
+      }
     }
     // A recorded result, or any refusal of the head (a changed suite definition, a compare cut off at the file cap),
     // changes what the gate says: read it again. Every head refusal label is `refused:head-*`.
@@ -256,7 +277,15 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   // The check reports the gate as read at the top of this delivery; a verdict
   // posted later arrives as its own event and replaces it.
   const check = await attempt("check", () =>
-    postGateCheck({ octokit, kv, ref, state, createCheck, read: () => readGateState({ octokit, kv, ref, headSha }) }),
+    postGateCheck({
+      octokit,
+      kv,
+      ref,
+      state,
+      createCheck,
+      workingCheck,
+      read: () => readGateState({ octokit, kv, ref, headSha }),
+    }),
   );
 
   return {

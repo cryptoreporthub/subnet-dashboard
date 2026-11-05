@@ -115,9 +115,14 @@ test("renaming a suite-definition file away from its path is refused: the old pa
   const f = fixture([]);
   const renamed = {
     rest: {
+      ...livePullMocks(),
       repos: {
+        ...livePullMocks().repos,
         compareCommitsWithBasehead: async () => ({
-          data: { files: [{ filename: "tests/conftest_old.py", previous_filename: "tests/conftest.py", status: "renamed" }] },
+          data: {
+            files: [{ filename: "tests/conftest_old.py", previous_filename: "tests/conftest.py", status: "renamed" }],
+            merge_base_commit: { sha: BASE },
+          },
         }),
       },
     },
@@ -284,7 +289,7 @@ test("a capped compare is final: the next delivery neither compares nor looks up
   const afterFirst = calls.count;
   const second = await runSuiteIfDue({ octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader });
   assert.equal(second, "already-refused");
-  assert.equal(calls.count, afterFirst);
+  assert.equal(calls.count, afterFirst + 1, "retry still re-reads live merge-base, but not the definition compare again");
   assert.equal(lookups.count, 0);
 });
 
@@ -347,7 +352,7 @@ test("one comparison makes definition and stale-pair compare calls", async () =>
   const direct = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
   const outcome = await recordSuiteComparison({ octokit: direct.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome.ok, true);
-  assert.equal(direct.calls.count, 2, "definition read plus live merge-base re-read before put");
+  assert.equal(direct.calls.count, 3, "live merge-base read, definition read, stale-pair re-read before put");
 });
 
 test("a delivery that goes on to record the comparison reuses the definition compare", async () => {
@@ -355,7 +360,7 @@ test("a delivery that goes on to record the comparison reuses the definition com
   const gate = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
   const outcome = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome, "recorded");
-  assert.equal(gate.calls.count, 2, "definition compare plus stale-pair merge-base re-read");
+  assert.equal(gate.calls.count, 3, "live merge-base read, definition compare, stale-pair re-read");
   assert.equal((f.store.get(suiteKey(REF, HEAD, BASE)) as { state?: string }).state, "clean");
 });
 
@@ -365,7 +370,7 @@ test("a delivery that finds the run already recorded still compares once per del
   await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   const again = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(again, "already-recorded");
-  assert.equal(gate.calls.count, 3, "first delivery records with two compares; second delivery makes one definition compare");
+  assert.equal(gate.calls.count, 5, "first delivery: live+definition+stale; second: live+definition only");
 });
 
 test("the exported comparison reads its own compare: a forged empty definition passed in cannot record a changed suite definition as clean", async () => {
@@ -376,7 +381,7 @@ test("the exported comparison reads its own compare: a forged empty definition p
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0, "no report is read for a PR that changed how the suite runs");
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua", "the head is not recorded clean");
-  assert.equal(calls.count, 1, "the exported call made its own compare");
+  assert.equal(calls.count, 2, "live merge-base read plus definition compare");
 });
 
 test("the exported comparison ignores a stale or incomplete definition passed in, and refuses a capped compare", async () => {

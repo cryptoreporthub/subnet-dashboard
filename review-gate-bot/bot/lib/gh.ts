@@ -277,6 +277,29 @@ function suiteOf(record: RecordedSuite | undefined): SuiteState {
   return suiteStateFromRecord(record);
 }
 
+/**
+ * Gate reads ignore pair-key clean/carried when the live merge-base is unavailable.
+ * Head-only operator NEEDS-JOSHUA and pair-key regressions still apply.
+ */
+export function gateSuiteRecord(
+  record: RecordedSuite | undefined,
+  compareReady: boolean,
+): RecordedSuite | undefined {
+  if (record === undefined) {
+    return undefined;
+  }
+  if (compareReady) {
+    return record;
+  }
+  if (record.invalid === "needs-joshua") {
+    return record;
+  }
+  if (record.state === "clean" || record.state === "carried") {
+    return undefined;
+  }
+  return record;
+}
+
 export async function readSuiteState(
   kv: HostKvApi,
   ref: PrRef,
@@ -392,22 +415,31 @@ export async function readGateState(input: {
   ]);
 
   const baseTipSha = pr.baseTipSha;
-  const record =
+  const pairFields = {
+    headSha: pr.headSha,
+    baseSha: pr.baseSha ?? "",
+    baseTipSha: baseTipSha ?? "",
+  };
+  const compareReady = pairCompareReady(pairFields);
+  const rawRecord =
     baseTipSha !== undefined && baseTipSha !== ""
       ? await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha)
       : undefined;
+  const record = gateSuiteRecord(rawRecord, compareReady);
+  const suiteDetail =
+    !compareReady &&
+    rawRecord !== undefined &&
+    (rawRecord.state === "clean" || rawRecord.state === "carried")
+      ? GITHUB_PAIR_READ_DETAIL
+      : record?.detail;
   const state = gateStateFrom({
     headSha: input.headSha,
     comments,
     reviews,
     suite: suiteOf(record),
-    suiteDetail: record?.detail,
+    suiteDetail,
     replitTaggedForSha: replitTaggedIn(comments, input.headSha),
     replitTaggedAt: replitTagTimeIn(comments, input.headSha),
   });
-  return downgradeIfStaleGreen(state, {
-    headSha: pr.headSha,
-    baseSha: pr.baseSha ?? "",
-    baseTipSha: baseTipSha ?? "",
-  });
+  return downgradeIfStaleGreen(state, pairFields);
 }

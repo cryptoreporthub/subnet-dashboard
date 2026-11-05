@@ -21,7 +21,7 @@ type Execute = (input: unknown, ctx: unknown) => Promise<unknown>;
 const run = (tool: unknown): Execute => (tool as { execute: Execute }).execute;
 
 function pr(
-  options: { head?: string; base?: string; tip?: string; files?: object[]; compare?: object[]; side?: object[]; compares?: string[] } = {},
+  options: { head?: string; base?: string; tip?: string; files?: object[]; compare?: object[]; side?: object[]; compares?: string[]; noMergeBase?: boolean } = {},
 ): Octokit {
   const listFiles = () => {};
   const mergeBase = options.base ?? BASE;
@@ -50,7 +50,12 @@ function pr(
         compareCommitsWithBasehead: async ({ basehead }: { basehead: string }) => {
           options.compares?.push(basehead);
           const files = basehead === `${OLD}...${HEAD}` ? (options.compare ?? []) : (options.side ?? []);
-          return { data: { files, merge_base_commit: { sha: mergeBase } } };
+          return {
+            data: {
+              files,
+              merge_base_commit: options.noMergeBase ? null : { sha: mergeBase },
+            },
+          };
         },
       },
       actions: {
@@ -94,6 +99,19 @@ test("check_gate_state reads the PR's live head, so the model never names one", 
   assert.equal(result.next, "review");
   assert.equal(result.mc, "missing");
   assert.equal(result.source, "github");
+});
+
+test("check_gate_state reports base not available when merge-base is missing", async () => {
+  const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+  const result = (await run(checkGateState)(
+    {},
+    toolContext(pr({ head: HEAD, base: BASE, tip: BASE, noMergeBase: true }), {
+      [suiteKey(REF, HEAD, BASE)]: { state: "clean", at: 1 },
+    }),
+  )) as Record<string, unknown>;
+  assert.equal(result.baseAvailable, false);
+  assert.equal(result.reason, "base not available");
+  assert.notEqual(result.next, "mergeable");
 });
 
 test("compare_suite_runs takes its base from the PR, not from the model", async () => {

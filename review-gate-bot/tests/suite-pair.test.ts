@@ -60,7 +60,7 @@ type World = {
   octokit: Octokit;
 };
 
-function world(options: { seed?: Record<string, unknown>; comments?: object[]; reviews?: object[] } = {}): World {
+function world(options: { seed?: Record<string, unknown>; comments?: object[]; reviews?: object[]; mergeBaseMissing?: boolean } = {}): World {
   const posted: string[] = [];
   const checks: World["checks"] = [];
   const live = { head: HEAD, base: BASE_A as string | undefined, tip: BASE_A as string | undefined };
@@ -85,7 +85,10 @@ function world(options: { seed?: Record<string, unknown>; comments?: object[]; r
       },
       repos: {
         compareCommitsWithBasehead: async () => ({
-          data: { merge_base_commit: { sha: live.base }, files: [] },
+          data: {
+            merge_base_commit: options.mergeBaseMissing ? null : { sha: live.base },
+            files: [],
+          },
         }),
         getBranch: async () => ({
           data: { commit: { sha: live.tip ?? live.base } },
@@ -115,7 +118,11 @@ function world(options: { seed?: Record<string, unknown>; comments?: object[]; r
     mcp: { names: () => [], listTools: async () => [], callTool: async () => ({ isError: true, content: [] }) } as GateDeps["mcp"],
     ref: REF,
     createCheck: async () => ({
-      update: async () => {},
+      update: async (patch: { status?: string }) => {
+        if (patch.status === "in_progress") {
+          checks.push({ conclusion: undefined, summary: "in_progress" });
+        }
+      },
       conclude: async (done: { conclusion: string; output?: { summary: string } }) => {
         checks.push({ conclusion: done.conclusion, summary: done.output?.summary });
       },
@@ -496,14 +503,14 @@ test("a pair-key baseline-test-missing at an old tip does not block re-record at
 });
 
 test("unavailable merge-base refuses recordComparison without downloading JUnit", async () => {
-  const w = world();
+  const w = world({ mergeBaseMissing: true });
   let downloads = 0;
   const outcome = await recordSuiteComparison({
     octokit: w.octokit,
     kv: w.deps.kv,
     ref: REF,
     headSha: HEAD,
-    baseSha: "",
+    baseSha: BASE_A,
     baseTipSha: BASE_A,
     reader: {
       ...reader(),
@@ -516,4 +523,86 @@ test("unavailable merge-base refuses recordComparison without downloading JUnit"
   assert.equal(outcome.ok, false);
   assert.equal(!outcome.ok && outcome.reason, "base-unavailable");
   assert.equal(downloads, 0);
+});
+
+test("amended6 B: seeded pair clean ignored when merge-base lookup is empty", async () => {
+  const w = world({
+    comments: [mcPass],
+    reviews: botReviews,
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } },
+    mergeBaseMissing: true,
+  });
+  const state = await readGateState({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });
+  assert.equal(state.suite, "missing");
+  assert.notEqual(state.next, "mergeable");
+  await postGateCheck({
+    ...w.deps,
+    state: { ...state, next: "mergeable" as const, suite: "clean" as const },
+    read: async () => state,
+  });
+  assert.equal(w.checks[0]?.conclusion, "action_required");
+});
+
+test("amended6 C: empty merge_base_commit never downloads tip JUnit", async () => {
+  const MERGE_M = "e".repeat(40);
+  const TIP_T = TIP_D;
+  let downloads = 0;
+  const failAtTip = '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="t" name="fail"/></testsuite></testsuites>';
+  const w = world({ mergeBaseMissing: true });
+  w.live.tip = TIP_T;
+  w.live.base = MERGE_M;
+  const octokit = {
+    ...w.octokit,
+    rest: {
+      ...w.octokit.rest,
+      repos: {
+        ...w.octokit.rest.repos,
+        compareCommitsWithBasehead: async () => ({ data: { merge_base_commit: null, files: [] } }),
+      },
+    },
+  } as unknown as Octokit;
+  const r: RunnerReader = {
+    ...reader(),
+    artifactZip: async () => {
+      downloads += 1;
+      return zipOf(CLEAN);
+    },
+  };
+  const outcome = await recordSuiteComparison({
+    octokit,
+    kv: w.deps.kv,
+    ref: REF,
+    headSha: HEAD,
+    baseSha: MERGE_M,
+    baseTipSha: TIP_T,
+    reader: r,
+  });
+  assert.equal(outcome.ok, false);
+  assert.equal(downloads, 0);
+  assert.equal(w.store.has(suiteKey(REF, HEAD, TIP_T)), false);
+});
+
+test("amended6 E: runSuiteIfDue opens in_progress check before artifact download", async () => {
+  const w = world({ comments: [mcPass], reviews: botReviews });
+  let downloads = 0;
+  let resolveDownload: (() => void) | undefined;
+  const downloadGate = new Promise<void>((resolve) => {
+    resolveDownload = resolve;
+  });
+  const slow: RunnerReader = {
+    ...reader(),
+    artifactZip: async () => {
+      downloads += 1;
+      await downloadGate;
+      return zipOf(CLEAN);
+    },
+  };
+  w.deps.reader = slow;
+  const advancePromise = pullRequestReviewTurn(w.deps, { action: "opened", draft: false });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(w.checks.some((c) => c.summary === "in-progress" || c.conclusion === undefined));
+  resolveDownload?.();
+  await advancePromise;
+  assert.ok(downloads > 0);
+  assert.ok(w.checks.some((c) => c.conclusion === "action_required" || c.conclusion === "success"));
 });

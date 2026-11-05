@@ -48,7 +48,7 @@ test("a waiting head never reads as passed: not success, neutral or skipped, whi
   }
 });
 
-type Check = { name: string; sha: string; conclusion?: string; summary?: string };
+type Check = { name: string; sha: string; conclusion?: string; summary?: string; status?: string };
 
 /** The PR's head is read in the order given; the last value repeats. */
 /** A delivery that reads the gate it was handed, then the same gate again under the lock. */
@@ -58,7 +58,7 @@ function seedClean(w: ReturnType<typeof world>) {
   w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
 }
 
-function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases) {
+function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases, mergeBases: (string | null)[] = bases) {
   const checks: Check[] = [];
   const store = new Map<string, unknown>();
   let reads = 0;
@@ -69,7 +69,7 @@ function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases
         get: async () => {
           const i = Math.min(reads, heads.length - 1);
           const baseSha = bases[Math.min(reads, bases.length - 1)];
-          const tipSha = tips[Math.min(reads++, tips.length - 1)];
+          tips[Math.min(reads++, tips.length - 1)];
           return {
             data: {
               number: REF.number,
@@ -79,14 +79,23 @@ function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases
             },
           };
         },
+        listFiles: async () => [],
+        listReviews: async () => [],
       },
+      issues: { listComments: async () => [] },
       repos: {
         getBranch: async () => ({
           data: { commit: { sha: tips[Math.min(reads - 1, tips.length - 1)] ?? BASE } },
         }),
-        compareCommitsWithBasehead: async () => ({
-          data: { merge_base_commit: { sha: bases[0] }, files: [] },
-        }),
+        compareCommitsWithBasehead: async () => {
+          const mb = mergeBases[0];
+          return {
+            data: {
+              merge_base_commit: mb === null ? null : { sha: mb ?? bases[0] },
+              files: [],
+            },
+          };
+        },
       },
     },
   } as unknown as Octokit;
@@ -99,7 +108,11 @@ function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases
     const check: Check = { name: input.name, sha: input.sha };
     checks.push(check);
     return {
-      update: async () => {},
+      update: async (patch: { status?: string; output?: { summary: string } }) => {
+        if (patch.status !== undefined) {
+          check.status = patch.status;
+        }
+      },
       conclude: async (done: { conclusion: string; output?: { summary: string } }) => {
         check.conclusion = done.conclusion;
         check.summary = done.output?.summary;

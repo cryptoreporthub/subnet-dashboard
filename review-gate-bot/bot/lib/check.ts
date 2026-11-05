@@ -3,7 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GitHubHandle } from "@grok/agent-sdk/channels/github";
 import { prKey, type GateState } from "./gate.js";
 import type { PrRef } from "./gh.js";
-import { readLivePair, readSuiteRecord, suiteStateFromRecord, pairCompareReady, GITHUB_PAIR_READ_DETAIL } from "./gh.js";
+import { readLivePair, readSuiteRecord, suiteStateFromRecord, gateSuiteRecord, pairCompareReady, GITHUB_PAIR_READ_DETAIL } from "./gh.js";
 import { exclusive } from "./lock.js";
 
 /** The merge-box check this bot owns. A branch rule can require it by this name. */
@@ -11,6 +11,14 @@ export const CHECK_NAME = "review-gate";
 
 /** `ctx.github.createCheck`, narrowed to what the gate calls. */
 export type CreateCheck = GitHubHandle["createCheck"];
+
+export type GateCheckHandle = Awaited<ReturnType<CreateCheck>>;
+
+function checkDedupeKey(ref: PrRef, headSha: string, baseTipSha: string, baseSha: string): string {
+  const merge = baseSha === "" ? "none" : baseSha.slice(0, 7);
+  const tip = baseTipSha === "" ? "none" : baseTipSha.slice(0, 7);
+  return `check:${prKey(ref)}:${headSha}:${tip}:${merge}`;
+}
 
 export type GateConclusion = "success" | "failure" | "action_required";
 
@@ -75,6 +83,37 @@ async function livePairIs(
 export type CheckPost = "posted" | "unchanged" | "stale-head";
 
 /**
+ * Open a non-terminal review-gate check while a slow suite compare runs.
+ * The same handle must be passed to `postGateCheck` to conclude this run.
+ */
+export async function openGateCheckWorking(input: {
+  octokit: Octokit;
+  kv: HostKvApi;
+  ref: PrRef;
+  headSha: string;
+  baseSha: string;
+  baseTipSha: string;
+  createCheck: CreateCheck;
+}): Promise<GateCheckHandle | undefined> {
+  if (!pairCompareReady(input)) {
+    return undefined;
+  }
+  const live = await readLivePair(input.octokit, input.ref);
+  if (live.headSha !== input.headSha || live.baseTipSha !== input.baseTipSha || live.baseSha !== input.baseSha) {
+    return undefined;
+  }
+  const check = await input.createCheck({ name: CHECK_NAME, sha: input.headSha });
+  await check.update({
+    status: "in_progress",
+    output: {
+      title: "Gate working",
+      summary: `suite compare running · merge-base ${input.baseSha.slice(0, 7)} · base tip ${input.baseTipSha.slice(0, 7)}`,
+    },
+  });
+  return check;
+}
+
+/**
  * Report the gate on the PR head as a `review-gate` check run.
  *
  * - **Stale head never green.** The head is re-read before the run opens, and a
@@ -95,8 +134,10 @@ export async function postGateCheck(input: {
   /** The gate as it is now, read by the caller. Read again under the lock, never trusted from above. */
   read: () => Promise<GateState>;
   createCheck: CreateCheck;
+  /** When set, conclude this in-progress run instead of opening a new check. */
+  workingCheck?: GateCheckHandle;
 }): Promise<CheckPost> {
-  const { octokit, kv, ref, createCheck, read } = input;
+  const { octokit, kv, ref, createCheck, read, workingCheck } = input;
   // One post at a time per head, and the gate is read inside that turn. Two deliveries that
   // overlap would otherwise conclude in whatever order their slow reads finish, so an earlier
   // read could land after a newer one and leave the required check showing a stale verdict.
@@ -106,7 +147,7 @@ export async function postGateCheck(input: {
     const live = await readLivePair(octokit, ref);
     const state = await read();
     const baseTipSha = live.baseTipSha;
-    const key = `check:${prKey(ref)}:${state.headSha}:${baseTipSha ?? "none"}`;
+    const key = checkDedupeKey(ref, state.headSha, baseTipSha, live.baseSha);
     const summary = summaryOf(state, baseTipSha);
 
     if ((await kv.get(key)) === summary) {
@@ -116,7 +157,7 @@ export async function postGateCheck(input: {
       return "stale-head";
     }
     if (!pairCompareReady(live)) {
-      const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
+      const check = workingCheck ?? (await createCheck({ name: CHECK_NAME, sha: state.headSha }));
       await check.conclude({
         conclusion: "action_required",
         output: {
@@ -130,13 +171,15 @@ export async function postGateCheck(input: {
 
     let conclusion = gateConclusion(state);
     if (conclusion === "success") {
-      const suite = suiteStateFromRecord(await readSuiteRecord(kv, ref, state.headSha, baseTipSha));
+      const suite = suiteStateFromRecord(
+        gateSuiteRecord(await readSuiteRecord(kv, ref, state.headSha, baseTipSha), pairCompareReady(live)),
+      );
       if (suite !== "clean" && suite !== "carried") {
         conclusion = "action_required";
       }
     }
 
-    const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
+    const check = workingCheck ?? (await createCheck({ name: CHECK_NAME, sha: state.headSha }));
     const superseded =
       conclusion === "success" &&
       !(await livePairIs(octokit, ref, state.headSha, baseTipSha, live.baseSha));
