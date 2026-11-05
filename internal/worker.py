@@ -90,6 +90,10 @@ def main() -> None:
 
     bootstrap_worker_runtime()
 
+    from internal.owner_guard import acquire_write_owner_at_worker_startup
+
+    acquire_write_owner_at_worker_startup()
+
     from internal.background_boot import (
         schedule_summary_bot_worker_watchdog,
         start_background_workers,
