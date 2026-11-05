@@ -115,7 +115,7 @@ test("a carry-over diffs the carried-from SHA against the head, so a code change
   });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, false);
   assert.equal(result.reason, "code-changed");
@@ -125,7 +125,7 @@ test("a carry-over whose carried-from SHA and head differ only in prose still ca
   const octokit = pr({ compare: [{ filename: "docs/notes.md", status: "modified" }] });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, true);
   assert.equal(result.clean, true);
@@ -137,7 +137,7 @@ test("a carry-over also reads the merge-base side, so a change only the carried-
   const octokit = pr({ side: [{ filename: "internal/x.py", status: "modified" }], compares });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, false);
   assert.equal(result.reason, "code-changed");
@@ -149,7 +149,7 @@ test("a carry-over whose compare is at GitHub's 300-file cap is refused, not rea
   const octokit = pr({ compare: capped });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, false);
   assert.equal(result.reason, "carry-diff-incomplete");

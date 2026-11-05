@@ -104,10 +104,18 @@ export async function readReviews(octokit: Octokit, ref: PrRef): Promise<ReviewL
   return raw.map(asReview);
 }
 
-/** kv key for the recorded suite result at one head. */
-export function suiteKey(ref: PrRef, headSha: string): string {
+/** kv key for the recorded suite result at one head against one PR base. */
+export function suiteKey(ref: PrRef, headSha: string, baseSha: string): string {
+  return `suite:${prKey(ref)}:${headSha}:${baseSha}`;
+}
+
+/** Pre–pair-key records and head-only holds (NEEDS-JOSHUA refusals). */
+export function legacySuiteKey(ref: PrRef, headSha: string): string {
   return `suite:${prKey(ref)}:${headSha}`;
 }
+
+/** Refusals pinned to the head only; they outrank a pair-key clean or carried record. */
+export const SUITE_HEAD_HOLDS = new Set(["needs-joshua", "baseline-test-missing", "newly-skipped"]);
 
 export type RecordedSuite = {
   state: SuiteState;
@@ -125,13 +133,7 @@ export type RecordedSuite = {
   at?: number;
 };
 
-/** A recorded suite result, or undefined when this head has none. */
-export async function readSuiteRecord(
-  kv: HostKvApi,
-  ref: PrRef,
-  headSha: string,
-): Promise<RecordedSuite | undefined> {
-  const raw = await kv.get(suiteKey(ref, headSha));
+function parseRecorded(raw: unknown): RecordedSuite | undefined {
   if (typeof raw !== "object" || raw === null) {
     return undefined;
   }
@@ -143,19 +145,54 @@ export async function readSuiteRecord(
   return record;
 }
 
-/** Refusals a person must clear: the gate stops asking for a suite run once one is recorded. */
-const NEEDS_JOSHUA = new Set(["needs-joshua", "baseline-test-missing", "newly-skipped"]);
+function isHeadHold(record: RecordedSuite): boolean {
+  return typeof record.invalid === "string" && SUITE_HEAD_HOLDS.has(record.invalid);
+}
+
+/**
+ * A recorded suite result for this head and live base, or undefined when none applies.
+ *
+ * Head-only holds are read from the legacy key and outrank a pair-key clean or carried
+ * record. Other legacy keys are orphaned and ignored.
+ */
+export async function readSuiteRecord(
+  kv: HostKvApi,
+  ref: PrRef,
+  headSha: string,
+  baseSha: string | undefined,
+): Promise<RecordedSuite | undefined> {
+  const legacy = parseRecorded(await kv.get(legacySuiteKey(ref, headSha)));
+  if (legacy !== undefined && isHeadHold(legacy)) {
+    return legacy;
+  }
+  if (baseSha !== undefined) {
+    const pair = parseRecorded(await kv.get(suiteKey(ref, headSha, baseSha)));
+    if (pair !== undefined) {
+      return pair;
+    }
+  }
+  return undefined;
+}
 
 /** The gate's suite state for a record: NEEDS-JOSHUA is final, anything else is what the record says. */
-function suiteOf(record: RecordedSuite | undefined): SuiteState {
+export function suiteStateFromRecord(record: RecordedSuite | undefined): SuiteState {
   if (record === undefined) {
     return "missing";
   }
-  return typeof record.invalid === "string" && NEEDS_JOSHUA.has(record.invalid) ? "needs-joshua" : record.state;
+  return isHeadHold(record) ? "needs-joshua" : record.state;
 }
 
-export async function readSuiteState(kv: HostKvApi, ref: PrRef, headSha: string): Promise<SuiteState> {
-  return suiteOf(await readSuiteRecord(kv, ref, headSha));
+function suiteOf(record: RecordedSuite | undefined): SuiteState {
+  return suiteStateFromRecord(record);
+}
+
+export async function readSuiteState(
+  kv: HostKvApi,
+  ref: PrRef,
+  headSha: string,
+  baseSha: string | undefined,
+): Promise<SuiteState> {
+  return suiteOf(await readSuiteRecord(kv, ref, headSha, baseSha));
 }
 
 /**
@@ -257,12 +294,26 @@ export async function readGateState(input: {
   ref: PrRef;
   headSha: string;
 }): Promise<GateState> {
-  const [comments, reviews] = await Promise.all([
+  const [comments, reviews, pr] = await Promise.all([
     readComments(input.octokit, input.ref),
     readReviews(input.octokit, input.ref),
+    readPr(input.octokit, input.ref),
   ]);
 
-  const record = await readSuiteRecord(input.kv, input.ref, input.headSha);
+  const baseSha = pr.baseSha;
+  if (baseSha === undefined || baseSha === "") {
+    return gateStateFrom({
+      headSha: input.headSha,
+      comments,
+      reviews,
+      suite: "needs-joshua",
+      suiteDetail: "PR base commit is not available",
+      replitTaggedForSha: replitTaggedIn(comments, input.headSha),
+      replitTaggedAt: replitTagTimeIn(comments, input.headSha),
+    });
+  }
+
+  const record = await readSuiteRecord(input.kv, input.ref, input.headSha, baseSha);
   return gateStateFrom({
     headSha: input.headSha,
     comments,

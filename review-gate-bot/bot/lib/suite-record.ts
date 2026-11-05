@@ -1,7 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { prKey } from "./gate.js";
-import { readSuiteRecord, suiteKey, type PrRef } from "./gh.js";
+import { readSuiteRecord, legacySuiteKey, suiteKey, SUITE_HEAD_HOLDS, type PrRef } from "./gh.js";
 import { knownFlakes } from "./flakes.js";
 import { exclusive } from "./lock.js";
 import { fetchJunit, octokitRunner, pickRun, type RunnerReader } from "./runner.js";
@@ -55,7 +55,7 @@ async function recordRefusal(
   refusal: { reason: string; detail: string; files?: string[] },
 ): Promise<string> {
   console.warn(JSON.stringify({ level: "warn", event: "needs_joshua", reason: refusal.reason, pr: prKey(input.ref), head: input.headSha, files: refusal.files ?? [] }));
-  await input.kv.put(suiteKey(input.ref, input.headSha), {
+  await input.kv.put(legacySuiteKey(input.ref, input.headSha), {
     state: "regressed",
     invalid: "needs-joshua",
     detail: refusal.detail,
@@ -142,7 +142,11 @@ async function recordComparison(input: ComparisonInput): Promise<SuiteComparison
       : diff.invalid === "newly-skipped"
         ? listed("newly skipped at head", diff.skipped)
         : undefined;
-  await input.kv.put(suiteKey(input.ref, input.headSha), {
+  await input.kv.put(
+    diff.invalid !== undefined && SUITE_HEAD_HOLDS.has(diff.invalid)
+      ? legacySuiteKey(input.ref, input.headSha)
+      : suiteKey(input.ref, input.headSha, input.baseSha),
+    {
     state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
     newFailures: diff.newFailures,
     runId: head.runId,
@@ -151,7 +155,8 @@ async function recordComparison(input: ComparisonInput): Promise<SuiteComparison
     skipped: diff.skipped,
     ...(detail === undefined ? {} : { detail }),
     at: Date.now(),
-  });
+  },
+  );
   return { ok: true, diff, headRunId: head.runId, baseRunId: base.runId, flakeList: flakes.source };
 }
 
@@ -187,7 +192,11 @@ export async function runSuiteIfDue(input: {
   return exclusive(`suite-run:${prKey(input.ref)}:${input.headSha}`, async () => {
     // Final: a head refused as NEEDS-JOSHUA is not looked up again, and the definition is checked before any run is,
     // so a PR that stops its suite from finishing is still refused.
-    if ((await readSuiteRecord(input.kv, input.ref, input.headSha))?.invalid === "needs-joshua") {
+    if ((await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseSha))?.invalid === "needs-joshua") {
+      return "already-refused";
+    }
+    const prior = await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseSha);
+    if (prior !== undefined && typeof prior.invalid === "string" && SUITE_HEAD_HOLDS.has(prior.invalid)) {
       return "already-refused";
     }
     const definition = await readDefinition(input);
@@ -199,7 +208,7 @@ export async function runSuiteIfDue(input: {
     if (latest === undefined) {
       return "waiting:no-run";
     }
-    const recorded = await readSuiteRecord(input.kv, input.ref, input.headSha);
+    const recorded = await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseSha);
     if (recorded !== undefined && recorded.runId === latest.id && recorded.state !== "carried") {
       return "already-recorded";
     }

@@ -3,6 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GitHubHandle } from "@grok/agent-sdk/channels/github";
 import { prKey, type GateState } from "./gate.js";
 import type { PrRef } from "./gh.js";
+import { readSuiteRecord, suiteStateFromRecord } from "./gh.js";
 import { exclusive } from "./lock.js";
 
 /** The merge-box check this bot owns. A branch rule can require it by this name. */
@@ -40,20 +41,33 @@ export function gateConclusion(state: GateState): GateConclusion {
 }
 
 /** One line of facts the check page and the dedupe key share. */
-function summaryOf(state: GateState): string {
+function summaryOf(state: GateState, baseSha: string | undefined): string {
+  const baseLine =
+    baseSha === undefined || baseSha === "" ? "base missing" : `base ${baseSha.slice(0, 7)}`;
   return [
     `MC ${state.mc}`,
     `Cursor ${state.cursor}`,
     `Ditto ${state.ditto}`,
     state.suite === "needs-joshua" ? `suite NEEDS-JOSHUA (${state.suiteDetail ?? "see the head's suite record"})` : `suite ${state.suite}`,
     `Replit ${state.replit}`,
+    baseLine,
     `next: ${state.next}`,
   ].join(" · ");
 }
 
-async function headIs(octokit: Octokit, ref: PrRef, headSha: string): Promise<boolean> {
+async function readLivePair(octokit: Octokit, ref: PrRef): Promise<{ headSha: string; baseSha: string | undefined }> {
   const { data } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
-  return data.head.sha === headSha;
+  return { headSha: data.head.sha, baseSha: data.base?.sha };
+}
+
+async function livePairIs(
+  octokit: Octokit,
+  ref: PrRef,
+  headSha: string,
+  baseSha: string | undefined,
+): Promise<boolean> {
+  const live = await readLivePair(octokit, ref);
+  return live.headSha === headSha && live.baseSha === baseSha;
 }
 
 export type CheckPost = "posted" | "unchanged" | "stale-head";
@@ -87,29 +101,51 @@ export async function postGateCheck(input: {
   // `exclusive` queues callers in this process only; across processes the summary dedupe in kv
   // and the next delivery's post remain the backstop.
   return exclusive(`check:${prKey(ref)}:${input.state.headSha}`, async () => {
+    const live = await readLivePair(octokit, ref);
     const state = await read();
-    const key = `check:${prKey(ref)}:${state.headSha}`;
-    const summary = summaryOf(state);
+    const baseSha = live.baseSha;
+    const key = `check:${prKey(ref)}:${state.headSha}:${baseSha ?? "none"}`;
+    const summary = summaryOf(state, baseSha);
 
     if ((await kv.get(key)) === summary) {
       return "unchanged";
     }
-    if (!(await headIs(octokit, ref, state.headSha))) {
+    if (live.headSha !== state.headSha) {
       return "stale-head";
     }
+    if (baseSha === undefined || baseSha === "") {
+      const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
+      await check.conclude({
+        conclusion: "action_required",
+        output: { title: "Needs Joshua", summary: `${summary} · PR base commit is not available` },
+      });
+      await kv.put(key, summary);
+      return "posted";
+    }
 
-    const conclusion = gateConclusion(state);
+    let conclusion = gateConclusion(state);
+    if (conclusion === "success") {
+      const suite = suiteStateFromRecord(await readSuiteRecord(kv, ref, state.headSha, baseSha));
+      if (suite !== "clean" && suite !== "carried") {
+        conclusion = "action_required";
+      }
+    }
+
     const check = await createCheck({ name: CHECK_NAME, sha: state.headSha });
-    const superseded = conclusion === "success" && !(await headIs(octokit, ref, state.headSha));
+    const superseded =
+      conclusion === "success" && !(await livePairIs(octokit, ref, state.headSha, baseSha));
     if (superseded) {
       await check.conclude({
         conclusion: "cancelled",
-        output: { title: "Superseded", summary: `The PR head moved while this was posted, so it is not reported green. ${summary}` },
+        output: {
+          title: "Superseded",
+          summary: `The PR head or base moved while this was posted, so it is not reported green. ${summary}`,
+        },
       });
       return "stale-head";
     }
     const title = state.next === "needs_joshua" ? "Needs Joshua" : titleOf(conclusion);
-  await check.conclude({ conclusion, output: { title, summary } });
+    await check.conclude({ conclusion, output: { title, summary } });
     await kv.put(key, summary);
     return "posted";
   });

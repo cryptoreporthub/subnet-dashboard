@@ -130,7 +130,7 @@ export default defineTool({
     if (input.carryFromSha !== undefined) {
       const prior = isEval
         ? "clean"
-        : ((await readSuiteRecord(ctx.host.kv, requirePr(prRef), input.carryFromSha))?.state ??
+        : ((await readSuiteRecord(ctx.host.kv, requirePr(prRef), input.carryFromSha, currentBaseSha))?.state ??
           "missing");
       // What a suite can observe is what differs between the carried-from SHA and the head.
       // The PR's diff against base is not that: a force-push can leave it prose-only while
@@ -175,7 +175,7 @@ export default defineTool({
       }
 
       if (!isEval) {
-        await ctx.host.kv.put(suiteKey(requirePr(prRef), input.headSha), {
+        await ctx.host.kv.put(suiteKey(requirePr(prRef), input.headSha, currentBaseSha as string), {
           state: "carried",
           carriedFrom: input.carryFromSha,
           at: Date.now(),

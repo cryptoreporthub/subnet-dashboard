@@ -258,7 +258,7 @@ test("the gate runs the suite itself when it is due: it records a clean result a
   const w = world({ comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
   const { reader } = suiteReader({ runId: 77 });
   await reviewEventTurn({ ...w.deps, reader });
-  const record = w.store.get(suiteKey(REF, HEAD)) as { state?: string; runId?: number } | undefined;
+  const record = w.store.get(suiteKey(REF, HEAD, BASE)) as { state?: string; runId?: number } | undefined;
   assert.equal(record?.state, "clean");
   assert.equal(record?.runId, 77);
   assert.ok(w.posted.some((body) => body.includes("@replit review")), "the tag follows the recorded clean suite");
@@ -268,7 +268,7 @@ test("a regressed result from the same suite run is not downloaded again on the 
   const w = world({
     comments: [mcPass],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD)]: { state: "regressed", newFailures: ["x"], runId: 77, at: 1 } },
+    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "regressed", newFailures: ["x"], runId: 77, at: 1 } },
   });
   const { reader, downloads } = suiteReader({ runId: 77 });
   await reviewEventTurn({ ...w.deps, reader });
@@ -279,7 +279,7 @@ test("no suite artifact yet means waiting: nothing is recorded and Replit is not
   const w = world({ comments: [mcPass], reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")] });
   const { reader } = suiteReader({});
   await reviewEventTurn({ ...w.deps, reader });
-  assert.equal(w.store.get(suiteKey(REF, HEAD)), undefined, "a missing run is a wait, never a regressed record");
+  assert.equal(w.store.get(suiteKey(REF, HEAD, BASE)), undefined, "a missing run is a wait, never a regressed record");
   assert.ok(!w.posted.some((body) => body.includes("@replit review")), "no suite result, so no Replit tag");
 });
 
@@ -292,7 +292,7 @@ test("a draft delivery downloads nothing, whatever suite state the PR is in", as
   const { reader, downloads } = suiteReader({ runId: 77 });
   await reviewEventTurn({ ...w.deps, reader });
   assert.equal(downloads.count, 0);
-  assert.equal(w.store.get(suiteKey(REF, HEAD)), undefined);
+  assert.equal(w.store.get(suiteKey(REF, HEAD, BASE)), undefined);
 });
 
 test("two deliveries at once for one head download the suite once, not once each", async () => {
@@ -324,7 +324,7 @@ test("a corrupt suite artifact is remembered for its run, so the next delivery d
   const afterFirst = downloads.count;
   await reviewEventTurn({ ...w.deps, reader });
   assert.equal(downloads.count, afterFirst, "the refused run is not fetched again while it is still the newest");
-  assert.equal(w.store.get(suiteKey(REF, HEAD)), undefined, "a refusal is never a suite result");
+  assert.equal(w.store.get(suiteKey(REF, HEAD, BASE)), undefined, "a refusal is never a suite result");
 });
 
 test("a draft gets no check at all", async () => {
@@ -360,7 +360,7 @@ function readyForReplit(options: { createFails?: boolean; seed?: Record<string, 
   return world({
     comments: [mcPass, ...(options.comments ?? [])],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD)]: { state: "clean" }, ...options.seed },
+    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "clean" }, ...options.seed },
     createFails: options.createFails,
   });
 }
@@ -461,7 +461,7 @@ test("a gate step whose error echoes a credential logs the error without the cre
     checkFails: true,
     comments: [mcPass],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD)]: { state: "clean" } },
+    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "clean" } },
   });
   w.deps.createCheck = async () => {
     throw new Error(`github 403 for token ${token}`);
@@ -485,7 +485,7 @@ test("a failed gate step is logged under the repository-qualified PR key", async
     checkFails: true,
     comments: [mcPass],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD)]: { state: "clean" } },
+    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "clean" } },
   });
   const lines: string[] = [];
   const original = console.error;

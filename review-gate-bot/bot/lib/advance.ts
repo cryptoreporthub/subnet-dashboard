@@ -2,7 +2,7 @@ import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { postGateCheck, type CreateCheck } from "./check.js";
-import { readGateState, type PrRef } from "./gh.js";
+import { readGateState, readSuiteRecord, suiteStateFromRecord, type PrRef } from "./gh.js";
 import { gateActions, prKey, reviewTurnKey } from "./gate.js";
 import { leaseToken, releaseLeaseIfHolder } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
@@ -49,6 +49,27 @@ async function readHead(octokit: Octokit, ref: PrRef): Promise<{ headSha: string
     pull_number: ref.number,
   });
   return { headSha: data.head.sha, baseSha: data.base?.sha, draft: data.draft ?? false };
+}
+
+/** The suite is green for this exact head and PR base, read live. */
+async function pairSuiteReady(input: {
+  octokit: Octokit;
+  kv: HostKvApi;
+  ref: PrRef;
+  headSha: string;
+  baseSha: string | undefined;
+}): Promise<boolean> {
+  if (input.baseSha === undefined || input.baseSha === "") {
+    return false;
+  }
+  const live = await readHead(input.octokit, input.ref);
+  if (live.headSha !== input.headSha || live.baseSha !== input.baseSha) {
+    return false;
+  }
+  const suite = suiteStateFromRecord(
+    await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseSha),
+  );
+  return suite === "clean" || suite === "carried";
 }
 
 export type AdvanceResult = {
@@ -185,7 +206,13 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     : "skipped";
 
   const taggedReplit = actions.tagReplit
-    ? await attempt("tag-replit", async () => (await tagReplit({ octokit, kv, ref, headSha, currentHeadSha: headSha })).reason)
+    ? await attempt("tag-replit", async () => {
+        const live = await readHead(octokit, ref);
+        if (!(await pairSuiteReady({ octokit, kv, ref, headSha: live.headSha, baseSha: live.baseSha }))) {
+          return "skipped:stale-pair";
+        }
+        return (await tagReplit({ octokit, kv, ref, headSha, currentHeadSha: live.headSha })).reason;
+      })
     : "skipped";
 
   // The ask follows the tag. When this delivery had to post the tag, the ask
@@ -196,8 +223,12 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   const replitAsk =
     actions.askReplit && (!actions.tagReplit || tagConfirmed)
       ? await attempt("ask-replit", async () => {
-          const ask = await askReplitOnce({ kv, mcp, ref, headSha });
-          logAsk(ask, prKey(ref), headSha);
+          const live = await readHead(octokit, ref);
+          if (!(await pairSuiteReady({ octokit, kv, ref, headSha: live.headSha, baseSha: live.baseSha }))) {
+            return "skipped:stale-pair";
+          }
+          const ask = await askReplitOnce({ kv, mcp, ref, headSha: live.headSha });
+          logAsk(ask, prKey(ref), live.headSha);
           return askLabel(ask);
         })
       : "skipped";
@@ -284,13 +315,35 @@ export function reviewLeaseFromState(value: unknown): ReviewTurnLease | undefine
  */
 export async function pullRequestReviewTurn(
   deps: GateDeps,
-  pr: { action: string; draft: boolean },
+  pr: { action: string; draft: boolean; changes?: { base?: unknown } },
 ): Promise<ReviewTurnLease | undefined> {
+  if (pr.action === "edited" && pr.changes?.base !== undefined) {
+    await advanceGate(deps);
+    return undefined;
+  }
   if (pr.draft || !REVIEW_ACTIONS.has(pr.action)) {
     return undefined;
   }
   // Tags first, in plain code, so they land even if the model turn fails.
   return (await advanceGate(deps)).reviewLease;
+}
+
+/**
+ * A push to a branch that is some open PR's base: re-run the gate for each such PR with no model turn.
+ */
+export async function pushToBaseBranch(deps: GateDeps, push: { ref: string }): Promise<void> {
+  const branch = push.ref.replace(/^refs\/heads\//, "");
+  const { octokit, ref: anchor } = deps;
+  const prs = await octokit.paginate(octokit.rest.pulls.list, {
+    owner: anchor.owner,
+    repo: anchor.repo,
+    state: "open",
+    base: branch,
+    per_page: 100,
+  });
+  for (const pr of prs) {
+    await advanceGate({ ...deps, ref: { owner: anchor.owner, repo: anchor.repo, number: pr.number } });
+  }
 }
 
 export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draft: boolean }): Promise<boolean> {

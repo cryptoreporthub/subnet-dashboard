@@ -4,9 +4,11 @@ import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { CHECK_NAME, gateConclusion, postGateCheck } from "../bot/lib/check.js";
 import type { GateNext, GateState } from "../bot/lib/gate.js";
+import { suiteKey } from "../bot/lib/gh.js";
 
 const HEAD = "a".repeat(40);
 const MOVED = "b".repeat(40);
+const BASE = "c".repeat(40);
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 
 function state(next: GateNext, overrides: Partial<GateState> = {}): GateState {
@@ -52,14 +54,23 @@ type Check = { name: string; sha: string; conclusion?: string; summary?: string 
 /** A delivery that reads the gate it was handed, then the same gate again under the lock. */
 const same = (s: GateState) => ({ state: s, read: async () => s });
 
-function world(heads: string[]) {
+function seedClean(w: ReturnType<typeof world>) {
+  w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
+}
+
+function world(heads: string[], bases: string[] = [BASE]) {
   const checks: Check[] = [];
   const store = new Map<string, unknown>();
   let reads = 0;
   const octokit = {
     rest: {
       pulls: {
-        get: async () => ({ data: { head: { sha: heads[Math.min(reads++, heads.length - 1)] } } }),
+        get: async () => ({
+          data: {
+            head: { sha: heads[Math.min(reads, heads.length - 1)] },
+            base: { sha: bases[Math.min(reads++, bases.length - 1)] },
+          },
+        }),
       },
     },
   } as unknown as Octokit;
@@ -84,6 +95,7 @@ function world(heads: string[]) {
 
 test("a mergeable gate at the live head posts a green review-gate check on that head", async () => {
   const w = world([HEAD]);
+  w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
   assert.deepEqual(w.checks.map((c) => [c.name, c.sha, c.conclusion]), [[CHECK_NAME, HEAD, "success"]]);
 });
@@ -95,11 +107,12 @@ test("a head that moved before the post gets no check, green or otherwise", asyn
 });
 
 test("a head that moves after the check opens is never concluded green", async () => {
-  const w = world([HEAD, MOVED]);
+  const w = world([HEAD, MOVED], [BASE, BASE]);
+  w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
   await postGateCheck({ ...w.deps, ...same(state("mergeable")) });
   assert.equal(w.checks.length, 1);
   assert.equal(w.checks[0]?.conclusion, "cancelled");
-  assert.match(w.checks[0]?.summary ?? "", /head moved/i);
+  assert.match(w.checks[0]?.summary ?? "", /head or base moved/i);
 });
 
 test("the summary names each reviewer's verdict and the next step, so a red or grey check explains itself", async () => {
@@ -115,6 +128,7 @@ test("an unchanged gate state at the same head does not open another check; a ch
   const w = world([HEAD]);
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("await_cursor_ditto", { ditto: "missing" })) }), "posted");
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("await_cursor_ditto", { ditto: "missing" })) }), "unchanged");
+  seedClean(w);
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
   assert.deepEqual(w.checks.map((c) => c.conclusion), ["action_required", "success"]);
 });
@@ -134,6 +148,7 @@ test("a delivery that read the gate earlier cannot conclude over a newer deliver
   const first = postGateCheck({ ...w.deps, createCheck: stalled, read, state: gate });
   await new Promise((resolve) => setImmediate(resolve));
   gate = state("mergeable");
+  seedClean(w);
   const second = postGateCheck({ ...w.deps, read, state: gate });
   // Give the newer delivery a chance to conclude first; a delivery that waits behind the stalled one
   // is still pending after this, and is released below.
@@ -146,6 +161,7 @@ test("a delivery that read the gate earlier cannot conclude over a newer deliver
 test("the check reports the gate as read under the lock, not the state the delivery was handed", async () => {
   // Another process posted a newer verdict after this delivery read the gate. The fresh read is the truth.
   const w = world([HEAD]);
+  seedClean(w);
   const stale = state("await_cursor_ditto", { ditto: "missing" });
   const fresh = state("mergeable");
   await postGateCheck({ ...w.deps, state: stale, read: async () => fresh });
@@ -154,13 +170,16 @@ test("the check reports the gate as read under the lock, not the state the deliv
 
 test("the same PR number and head in another repository is a different PR, so its check is posted", async () => {
   const w = world([HEAD]);
+  seedClean(w);
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
+  seedClean(w);
   assert.equal(await postGateCheck({ ...w.deps, ref: { ...REF, owner: "someone-else" }, ...same(state("mergeable")) }), "posted");
   assert.equal(w.checks.length, 2);
 });
 
 test("a check that failed to open is retried by the next delivery", async () => {
   const w = world([HEAD]);
+  seedClean(w);
   const failing = { ...w.deps, createCheck: async () => { throw new Error("github 403"); } };
   await assert.rejects(postGateCheck({ ...failing, ...same(state("mergeable")) }), /403/);
   assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");

@@ -3,7 +3,7 @@ import {
   githubChannel,
   type GitHubEventContext,
 } from "@grok/agent-sdk/channels/github";
-import { commentReviewTurn, pullRequestReviewTurn, reviewEventReviewTurn, type GateDeps, type ReviewTurnLease } from "../lib/advance.js";
+import { commentReviewTurn, pullRequestReviewTurn, pushToBaseBranch, reviewEventReviewTurn, type GateDeps, type ReviewTurnLease } from "../lib/advance.js";
 
 async function depsOf(ctx: GitHubEventContext): Promise<GateDeps> {
   return {
@@ -58,6 +58,7 @@ export default githubChannel({
     "issue_comment",
     "pull_request_review_comment",
     "pull_request_review",
+    "push",
   ],
 
   onPullRequest: async (ctx, pr) => turnFor(ctx, await pullRequestReviewTurn(await depsOf(ctx), pr)),
@@ -85,6 +86,17 @@ export default githubChannel({
    * delivery on such a channel would start a fresh session. Verdicts arrive on
    * `pull_request_review`, which is in the membership.
    */
-  onEvent: async (ctx) =>
-    ctx.eventName === "pull_request_review" ? turnFor(ctx, await reviewEventReviewTurn(await depsOf(ctx))) : null,
+  onEvent: async (ctx) => {
+    if (ctx.eventName === "pull_request_review") {
+      return turnFor(ctx, await reviewEventReviewTurn(await depsOf(ctx)));
+    }
+    if (ctx.eventName === "push") {
+      const payload = ctx.payload as { ref?: string };
+      if (typeof payload.ref === "string") {
+        await pushToBaseBranch(await depsOf(ctx), { ref: payload.ref });
+      }
+      return null;
+    }
+    return null;
+  },
 });

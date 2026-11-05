@@ -9,6 +9,7 @@ import { marker } from "../bot/lib/verdicts.js";
 
 const HEAD = "a".repeat(40);
 const OTHER = "b".repeat(40);
+const BASE = "c".repeat(40);
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 
 function kv(): HostKvApi & { store: Map<string, unknown> } {
@@ -86,7 +87,9 @@ function fakeOctokit(
       },
       pulls: {
         listReviews: async () => ({ data: reviews }),
-        get: async () => ({ data: { head: { sha: octokit.liveHead }, draft: octokit.liveDraft } }),
+        get: async () => ({
+          data: { head: { sha: octokit.liveHead }, base: { sha: BASE }, draft: octokit.liveDraft },
+        }),
       },
     },
   };
@@ -97,7 +100,7 @@ function fakeOctokit(
 function passesAtHead(): { comments: RawComment[]; reviews: RawReview[]; kv: HostKvApi & { store: Map<string, unknown> } } {
   const store = kv();
   // The suite result is part of the gate input; without it `next` is run_suite.
-  store.store.set(suiteKey(REF, HEAD), { state: "clean", at: 1 });
+  store.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
   return {
     kv: store,
     comments: [ownComment(1, `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``)],

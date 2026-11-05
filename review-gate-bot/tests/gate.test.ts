@@ -17,6 +17,7 @@ import {
 
 const HEAD = "a".repeat(40);
 const OTHER = "b".repeat(40);
+const BASE = "c".repeat(40);
 
 function input(overrides: Partial<GateInput> = {}): GateInput {
   return { headSha: HEAD, verdicts: [], suite: "missing", ...overrides };
@@ -278,7 +279,8 @@ test("tag, ask and suite keys are distinct per slot and per head", () => {
   assert.notEqual(replitTagKey(pr, HEAD), replitAskKey(pr, HEAD));
   assert.notEqual(cursorDittoTagKey(pr, HEAD), cursorDittoTagKey(pr, OTHER));
   assert.notEqual(cursorDittoTagKey(pr, HEAD), cursorDittoTagKey({ ...pr, number: 1516 }, HEAD));
-  assert.notEqual(suiteKey(pr, HEAD), suiteKey(pr, OTHER));
+  assert.notEqual(suiteKey(pr, HEAD, BASE), suiteKey(pr, OTHER, BASE));
+  assert.notEqual(suiteKey(pr, HEAD, BASE), suiteKey(pr, HEAD, OTHER));
 });
 
 test("the same PR number in another repository has its own tag, ask and suite keys", () => {
@@ -287,7 +289,7 @@ test("the same PR number in another repository has its own tag, ask and suite ke
   assert.notEqual(cursorDittoTagKey(pr, HEAD), cursorDittoTagKey(other, HEAD));
   assert.notEqual(replitTagKey(pr, HEAD), replitTagKey(other, HEAD));
   assert.notEqual(replitAskKey(pr, HEAD), replitAskKey(other, HEAD));
-  assert.notEqual(suiteKey(pr, HEAD), suiteKey(other, HEAD));
+  assert.notEqual(suiteKey(pr, HEAD, BASE), suiteKey(other, HEAD, BASE));
 });
 
 test("a PR's key tells two repositories' PR 1522 apart and is stable for one PR", () => {
