@@ -456,6 +456,48 @@ def test_resolver_liveness_view_single_flight(monkeypatch):
     assert second["status"] == "unavailable"
 
 
+def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
+    """Waiter during build must not return seq-invalidated snapshot."""
+    from internal import liveness
+
+    started = threading.Event()
+    release = threading.Event()
+    view = {
+        "at": "2026-09-01T12:00:00Z",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {},
+        "liveness": {"status": "stale"},
+        "status": "stale",
+        "last_success_at": "2026-09-01T12:00:00Z",
+        "success_age_seconds": 9999,
+        "stage_timing_ms": {},
+    }
+    loop_health._RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
+    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
+    loop_health._RESOLVER_LIVENESS_CACHE["seq"] = 0
+
+    def _slow_build():
+        started.set()
+        release.wait(timeout=2)
+        return dict(view)
+
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _slow_build)
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+
+    builder = threading.Thread(target=loop_health._resolver_liveness_view)
+    builder.start()
+    assert started.wait(timeout=1)
+    tracker.record_success({"noop": True})
+    waiter = loop_health._resolver_liveness_view()
+    release.set()
+    builder.join(timeout=2)
+
+    assert waiter["status"] == "unavailable"
+
+
 def test_resolver_cache_drops_after_in_process_tick_write(monkeypatch):
     from internal import liveness
 

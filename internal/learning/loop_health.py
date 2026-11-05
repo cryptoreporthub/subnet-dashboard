@@ -381,7 +381,8 @@ def _resolver_liveness_view() -> Dict[str, Any]:
         if _RESOLVER_LIVENESS_BUILDING:
             stale = _RESOLVER_LIVENESS_CACHE.get("payload")
             if isinstance(stale, dict):
-                return dict(stale)
+                if _RESOLVER_LIVENESS_CACHE.get("seq") == _resolver_tracker_seq():
+                    return dict(stale)
             return {
                 "at": None,
                 "lifecycle": "stopped",
@@ -401,9 +402,10 @@ def _resolver_liveness_view() -> Dict[str, Any]:
         view = _build_resolver_liveness_view()
         if isinstance(view, dict):
             with _RESOLVER_LIVENESS_CACHE_LOCK:
-                _RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
-                _RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
-                _RESOLVER_LIVENESS_CACHE["seq"] = seq_before
+                if _resolver_tracker_seq() == seq_before:
+                    _RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
+                    _RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
+                    _RESOLVER_LIVENESS_CACHE["seq"] = seq_before
         return view
     finally:
         with _RESOLVER_LIVENESS_CACHE_LOCK:
