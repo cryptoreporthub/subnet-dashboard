@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from internal.council.expert_attribution import CANONICAL_EXPERTS, resolve_expert_attribution
 from internal.learning.predictions_store import load_predictions, save_predictions
 
 
-def backfill_expert_attribution(*, dry_run: bool = True) -> Dict[str, Any]:
+def backfill_expert_attribution(*, dry_run: bool = True, ticket: Any = None) -> Dict[str, Any]:
     """Re-derive expert labels from signal_impact / pick metadata (expert fields only)."""
     data = load_predictions()
     would_update = 0
@@ -37,7 +37,7 @@ def backfill_expert_attribution(*, dry_run: bool = True) -> Dict[str, Any]:
             updated += 1
 
     if not dry_run and updated > 0:
-        save_predictions(data)
+        save_predictions(data, ticket=ticket)
 
     return {
         "dry_run": bool(dry_run),

@@ -389,9 +389,7 @@ def test_v2_hold_on_disk_not_served_by_reader(picks_path):
     records = [legacy_today, hold]
     with patch("internal.council.daily_pick_reader.pick_day_str", return_value=day):
         row, meta = load_current_daily_pick(records)
-    assert row is not None
-    assert row.get("pick_id") is None
-    assert row.get("pick", {}).get("subnet", {}).get("netuid") == 99
+    assert row is None
     assert meta.get("prior_pick_day") is False
 
 

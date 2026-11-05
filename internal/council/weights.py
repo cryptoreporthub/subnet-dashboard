@@ -104,9 +104,13 @@ def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
 
 def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
     """Apply a mutation to the latest serialized blob under the store lock."""
-    from internal.store.soul_map_io import write_soul_map
+    from internal.store.domain_write_gate import TicketRefused
+    from internal.store.soul_map_io import get_soul_map_write_ticket, write_soul_map
 
-    return write_soul_map(mutator, path)
+    ticket = get_soul_map_write_ticket()
+    if ticket is None:
+        raise TicketRefused("_mutate_raw refused: missing soul_map write ticket")
+    return write_soul_map(mutator, path, ticket=ticket)
 
 
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
@@ -520,16 +524,19 @@ def repair_stale_contrarian_weights(
 
 def load_weights(path: Optional[str] = None) -> Dict[str, float]:
     """Read learned weights from soul_map.json, defaulting to DEFAULT_WEIGHTS."""
+    from internal.store.soul_map_io import get_soul_map_write_ticket
+
     path = path or SOUL_MAP_PATH
-    for attempt in range(2):
-        try:
-            repair_stale_contrarian_weights(path)
-            break
-        except ConcurrentWeightUpdate as exc:
-            if attempt == 1:
-                raise ConcurrentWeightUpdate(
-                    "legacy weight repair did not settle after bounded retries"
-                ) from exc
+    if get_soul_map_write_ticket() is not None:
+        for attempt in range(2):
+            try:
+                repair_stale_contrarian_weights(path)
+                break
+            except ConcurrentWeightUpdate as exc:
+                if attempt == 1:
+                    raise ConcurrentWeightUpdate(
+                        "legacy weight repair did not settle after bounded retries"
+                    ) from exc
     data = _load_raw(path)
     raw_weights = _council_weight_snapshot(data)
     if isinstance(raw_weights, dict):

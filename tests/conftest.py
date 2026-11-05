@@ -21,6 +21,10 @@ def pytest_configure(config):
         "markers",
         "pick_day_boundaries: use real pick_day rollover/slot clock (no autouse freeze)",
     )
+    config.addinivalue_line(
+        "markers",
+        "no_persist_gate: opt out of autouse persist write tickets",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -178,3 +182,35 @@ def usable_soul_map(tmp_path, monkeypatch):
     from tests.score_snapshot_testutil import install_soul_map
 
     return install_soul_map(tmp_path, monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def _persist_write_tickets_for_tests(request, tmp_path, monkeypatch):
+    """Default pytest tickets so store writes fail closed only when explicitly tested."""
+    if request.node.get_closest_marker("no_persist_gate"):
+        yield
+        return
+    epoch_dir = tmp_path / "persist_gate"
+    epoch_dir.mkdir(exist_ok=True)
+    monkeypatch.setenv("PREDICTIONS_EPOCH_PATH", str(epoch_dir / "predictions.epoch"))
+    monkeypatch.setenv("PREDICTIONS_LOCK_PATH", str(epoch_dir / "predictions.lock"))
+    monkeypatch.setenv("SOUL_MAP_EPOCH_PATH", str(epoch_dir / "soul_map.epoch"))
+    monkeypatch.setenv("SOUL_MAP_LOCK_PATH", str(epoch_dir / "soul_map.lock"))
+    monkeypatch.setenv("DAILY_PICK_EPOCH_PATH", str(epoch_dir / "daily_pick.epoch"))
+    monkeypatch.setenv("DAILY_PICKS_LOCK_PATH", str(epoch_dir / "daily_picks.lock"))
+    monkeypatch.setenv("CYCLE_SUMMARY_EPOCH_PATH", str(epoch_dir / "cycle_summary.epoch"))
+    from internal.learning.predictions_store import (
+        reset_predictions_write_ticket,
+        set_predictions_write_ticket,
+    )
+    from internal.store.domain_write_gate import mint_ticket
+    from internal.store.soul_map_io import (
+        reset_soul_map_write_ticket,
+        set_soul_map_write_ticket,
+    )
+
+    pred_ctx = set_predictions_write_ticket(mint_ticket("predictions", "pytest"))
+    soul_ctx = set_soul_map_write_ticket(mint_ticket("soul_map", "pytest"))
+    yield
+    reset_predictions_write_ticket(pred_ctx)
+    reset_soul_map_write_ticket(soul_ctx)

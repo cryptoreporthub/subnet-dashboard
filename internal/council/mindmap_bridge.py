@@ -41,9 +41,15 @@ class MindmapBridge:
             self.feedback_logs = []
 
     def _save_to_disk(self):
+        from internal.store.domain_write_gate import TicketRefused, mint_web_ticket
+        from internal.store.soul_map_io import get_soul_map_write_ticket, write_soul_map
+
         dir_name = os.path.dirname(self.persistence_path)
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
+        ticket = get_soul_map_write_ticket()
+        if ticket is None:
+            ticket = mint_web_ticket("soul_map", purpose="mindmap-bridge")
         try:
             write_soul_map(
                 lambda blob: (
@@ -51,7 +57,10 @@ class MindmapBridge:
                     blob.__setitem__("feedback_logs", self.feedback_logs),
                 ),
                 self.persistence_path,
+                ticket=ticket,
             )
+        except TicketRefused:
+            pass
         except Exception:
             pass
 

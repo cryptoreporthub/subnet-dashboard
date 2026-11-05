@@ -290,9 +290,14 @@ def _save_json(
     *,
     caller: Optional[str] = None,
     trigger: Optional[str] = None,
+    ticket: Optional[Any] = None,
 ) -> None:
-    """Write predictions JSON atomically (plan §5: predictions_store lock only, not pick token)."""
+    """Write predictions JSON under ticket gate; merge by row id for predictions path."""
     from internal.ops.mutation_log import log_mutation
+    from internal.learning.predictions_store import (
+        get_predictions_write_ticket,
+        save_predictions,
+    )
 
     reason = trigger or "resolver_save"
     log_mutation(
@@ -302,27 +307,59 @@ def _save_json(
         trigger=reason,
         caller=caller,
     )
+    active = ticket or get_predictions_write_ticket()
+    if active is None:
+        log_mutation(
+            operation="failed",
+            path=path,
+            writer_function="resolver._save_json",
+            trigger=reason,
+            caller=caller,
+        )
+        logger.info(
+            "resolver._save_json refused: missing predictions write ticket (%s)",
+            os.path.basename(path),
+        )
+        return
+    from internal.council.resolver_scheduler import resolver_cycle_owns_persist_write
+
+    if not resolver_cycle_owns_persist_write():
+        log_mutation(
+            operation="failed",
+            path=path,
+            writer_function="resolver._save_json",
+            trigger=reason,
+            caller=caller,
+        )
+        logger.info(
+            "resolver._save_json refused: resolver cycle abandoned (%s)",
+            os.path.basename(path),
+        )
+        return
     try:
-        from internal.council.resolver_scheduler import resolver_cycle_owns_persist_write
+        if path != PREDICTIONS_PATH:
+            from internal.file_utils import safe_write_json
+            from internal.store.domain_write_gate import commit
 
-        if not resolver_cycle_owns_persist_write():
-            log_mutation(
-                operation="failed",
-                path=path,
-                writer_function="resolver._save_json",
+            def _raw() -> None:
+                safe_write_json(path, data)
+
+            if not commit(active, _raw):
+                log_mutation(
+                    operation="failed",
+                    path=path,
+                    writer_function="resolver._save_json",
+                    trigger=reason,
+                    caller=caller,
+                )
+                return
+        else:
+            save_predictions(
+                data if isinstance(data, dict) else {},
                 trigger=reason,
-                caller=caller,
+                ticket=active,
+                merge_by_id=True,
             )
-            logger.info(
-                "resolver._save_json skipped: resolver cycle no longer owns persist (%s)",
-                os.path.basename(path),
-            )
-            return
-        from internal.file_utils import safe_write_json
-        from internal.learning.predictions_store import locked_predictions_file
-
-        with locked_predictions_file():
-            safe_write_json(path, data)
         log_mutation(
             operation="completed",
             path=path,
@@ -1367,16 +1404,28 @@ def resolve_due_predictions(
     *,
     horizon_hours: float = 24.0,
     tolerance: float = 0.5,
+    predictions_ticket: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Resolve due predictions without network hydration on cache misses."""
-    # The critical cycle must remain bounded by local cache work. Missing
-    # candles stay pending for the separately bounded recovery sweep.
-    with resolver_hydration_budget(0):
-        return _resolve_due_predictions(
-            subnets,
-            horizon_hours=horizon_hours,
-            tolerance=tolerance,
-        )
+    from internal.learning.predictions_store import (
+        reset_predictions_write_ticket,
+        set_predictions_write_ticket,
+    )
+    from internal.store.domain_write_gate import mint_web_ticket
+
+    ticket = predictions_ticket
+    if ticket is None:
+        ticket = mint_web_ticket("predictions", purpose="resolve_due")
+    token = set_predictions_write_ticket(ticket)
+    try:
+        with resolver_hydration_budget(0):
+            return _resolve_due_predictions(
+                subnets,
+                horizon_hours=horizon_hours,
+                tolerance=tolerance,
+            )
+    finally:
+        reset_predictions_write_ticket(token)
 
 
 def _resolve_due_predictions(

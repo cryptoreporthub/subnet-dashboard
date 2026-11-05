@@ -163,13 +163,32 @@ def _write_soul_map_guarded(
     path: str,
     *,
     write_generation: Optional[int] = None,
+    ticket_domain: str = "soul_map",
 ) -> bool:
-    from internal.council.daily_pick_write_token import guarded_bounded_commit
+    from internal.store.domain_write_gate import TicketRefused
+    from internal.store.soul_map_io import write_soul_map
 
-    return guarded_bounded_commit(
-        lambda: write_soul_map(mutator, path),
-        write_generation=write_generation,
-    )
+    timing = _cycle_timing.get()
+    ticket = None
+    if timing is not None:
+        if ticket_domain == "cycle_summary":
+            ticket = timing.cycle_summary_ticket()
+        else:
+            ticket = timing.soul_map_ticket()
+    if ticket is None:
+        from internal.store.domain_write_gate import mint_web_ticket
+
+        ticket = mint_web_ticket(ticket_domain, purpose="resolver-scheduler")
+    try:
+        write_soul_map(mutator, path, ticket=ticket)
+        return True
+    except TicketRefused:
+        logger.info(
+            "resolver_scheduler soul_map write refused domain=%s gen=%s",
+            ticket_domain,
+            write_generation,
+        )
+        return False
 
 
 def _save_json(
@@ -224,6 +243,9 @@ class _CycleTiming:
         # Phase 3: cycle generation that owns persist writes for this timing.
         self._owner_gen: Optional[int] = None
         self._owner_write_gen: Optional[int] = None
+        self._predictions_ticket: Optional[Any] = None
+        self._soul_map_ticket: Optional[Any] = None
+        self._cycle_summary_ticket: Optional[Any] = None
         self._scheduler: Optional[Any] = None
         # Dark-region sub-timers inside persist_partial (ms).
         self._persist_apply_ms: float = 0.0
@@ -307,6 +329,29 @@ class _CycleTiming:
     def owner_write_gen(self) -> Optional[int]:
         with self._lock:
             return self._owner_write_gen
+
+    def set_persist_tickets(
+        self,
+        predictions: Any,
+        soul_map: Any,
+        cycle_summary: Any,
+    ) -> None:
+        with self._lock:
+            self._predictions_ticket = predictions
+            self._soul_map_ticket = soul_map
+            self._cycle_summary_ticket = cycle_summary
+
+    def predictions_ticket(self) -> Optional[Any]:
+        with self._lock:
+            return self._predictions_ticket
+
+    def soul_map_ticket(self) -> Optional[Any]:
+        with self._lock:
+            return self._soul_map_ticket
+
+    def cycle_summary_ticket(self) -> Optional[Any]:
+        with self._lock:
+            return self._cycle_summary_ticket
 
     def bind_scheduler(self, sched: Any) -> None:
         with self._lock:
@@ -446,6 +491,34 @@ class _CycleTiming:
             "stages_sum_ms": rollup["stages_sum_ms"],
             "nonstage_ms": rollup["nonstage_ms"],
         }
+
+
+def _bind_cycle_persist_tickets(timing: _CycleTiming, cycle_id: str) -> None:
+    from internal.store.domain_write_gate import mint_ticket
+
+    timing.set_persist_tickets(
+        mint_ticket("predictions", cycle_id),
+        mint_ticket("soul_map", cycle_id),
+        mint_ticket("cycle_summary", cycle_id),
+    )
+
+
+def _enter_cycle_persist_context(timing: _CycleTiming) -> tuple[Any, Any]:
+    from internal.learning.predictions_store import set_predictions_write_ticket
+    from internal.store.soul_map_io import set_soul_map_write_ticket
+
+    return (
+        set_predictions_write_ticket(timing.predictions_ticket()),
+        set_soul_map_write_ticket(timing.soul_map_ticket()),
+    )
+
+
+def _exit_cycle_persist_context(pred_token: Any, soul_token: Any) -> None:
+    from internal.learning.predictions_store import reset_predictions_write_ticket
+    from internal.store.soul_map_io import reset_soul_map_write_ticket
+
+    reset_predictions_write_ticket(pred_token)
+    reset_soul_map_write_ticket(soul_token)
 
 
 _cycle_timing: ContextVar[Optional[_CycleTiming]] = ContextVar(
@@ -933,12 +1006,14 @@ class PredictionResolverScheduler:
 
             timing.set_owner_write_gen(current_write_generation())
             timing.bind_scheduler(self)
+            _bind_cycle_persist_tickets(timing, cycle_id)
             token = _cycle_timing.set(timing)
             ctx_token = bind_patchd_context(
                 cycle_generation=gen,
                 resolver_cycle_id=cycle_id,
                 trigger="resolver_cycle",
             )
+            pred_ctx, soul_ctx = _enter_cycle_persist_context(timing)
             try:
                 result = self._run_refresh_cycle()
                 if isinstance(result, dict):
@@ -946,6 +1021,7 @@ class PredictionResolverScheduler:
                     result["resolver_cycle_id"] = cycle_id
                 return result
             finally:
+                _exit_cycle_persist_context(pred_ctx, soul_ctx)
                 reset_patchd_context(ctx_token)
                 _cycle_timing.reset(token)
                 self._cycle_lock.release()
@@ -962,6 +1038,7 @@ class PredictionResolverScheduler:
 
         timing.set_owner_write_gen(current_write_generation())
         timing.bind_scheduler(self)
+        _bind_cycle_persist_tickets(timing, cycle_id)
 
         cycle_write_gen = timing.owner_write_gen()
 
@@ -972,6 +1049,7 @@ class PredictionResolverScheduler:
                 trigger="resolver_cycle",
             )
             token = _cycle_timing.set(timing)
+            pred_ctx, soul_ctx = _enter_cycle_persist_context(timing)
             _rss_t0 = time.perf_counter()
             log_heavy_job_rss("prediction_resolver_worker", "start", started_at=_rss_t0)
             try:
@@ -992,6 +1070,7 @@ class PredictionResolverScheduler:
                     result["resolver_cycle_id"] = cycle_id
                 return result
             finally:
+                _exit_cycle_persist_context(pred_ctx, soul_ctx)
                 log_heavy_job_rss("prediction_resolver_worker", "end", started_at=_rss_t0)
                 _cycle_timing.reset(token)
                 reset_patchd_context(ctx_token)
@@ -1347,6 +1426,7 @@ class PredictionResolverScheduler:
                 _mutator,
                 self.soul_map_path,
                 write_generation=write_gen,
+                ticket_domain="cycle_summary",
             )
             if timing is not None:
                 timing.record_persist_subtimer(

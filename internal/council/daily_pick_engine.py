@@ -46,16 +46,24 @@ logger = logging.getLogger(__name__)
 DAILY_PICKS_PATH = os.path.join("data", "daily_picks.json")
 
 
+class DailyPickFileCorrupt(Exception):
+    """Raised when daily_picks.json exists but is not valid JSON list."""
+
+
 def _load(path: Optional[str] = None) -> List[Dict[str, Any]]:
     path = path or DAILY_PICKS_PATH
     try:
         with open(path, "r") as f:
             data = json.load(f)
-        if isinstance(data, list):
-            return data
-    except Exception:
-        pass
-    return []
+    except FileNotFoundError:
+        return []
+    except json.JSONDecodeError as exc:
+        raise DailyPickFileCorrupt(f"corrupt daily picks file: {path}") from exc
+    except OSError as exc:
+        raise DailyPickFileCorrupt(f"unreadable daily picks file: {path}") from exc
+    if not isinstance(data, list):
+        raise DailyPickFileCorrupt(f"daily picks must be a JSON list: {path}")
+    return data
 
 
 def _parse_iso(raw: Any) -> Optional[datetime]:

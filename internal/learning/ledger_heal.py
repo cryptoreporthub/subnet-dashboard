@@ -149,12 +149,23 @@ def heal_daily_pick_ledger(
     stored_holder: Dict[str, Any] = {}
 
     def _commit() -> None:
-        stored_holder["value"] = record_pick_prediction(
-            stored_pick,
-            subnet_row,
-            horizon_type="day",
-            market_context=market_context if isinstance(market_context, dict) else {},
+        from internal.learning.predictions_store import (
+            reset_predictions_write_ticket,
+            set_predictions_write_ticket,
         )
+        from internal.store.domain_write_gate import mint_ticket
+
+        pred_ticket = mint_ticket("predictions", f"ledger-heal-{netuid}")
+        pred_ctx = set_predictions_write_ticket(pred_ticket)
+        try:
+            stored_holder["value"] = record_pick_prediction(
+                stored_pick,
+                subnet_row,
+                horizon_type="day",
+                market_context=market_context if isinstance(market_context, dict) else {},
+            )
+        finally:
+            reset_predictions_write_ticket(pred_ctx)
 
     if not resolver_cycle_owns_persist_write():
         return {"ok": False, "healed": False, "reason": "resolver_cycle_abandoned", "netuid": netuid}
@@ -250,7 +261,9 @@ def archive_predictions_epoch(
 
 def _downgrade_today_to_hold(*, reason: str, daily_picks_path: Optional[str] = None) -> bool:
     picks_path = daily_picks_path or DAILY_PICKS_PATH
-    today = _utcnow().date().isoformat()
+    from internal.council.pick_day import pick_day_str
+
+    today = pick_day_str()
     from internal.council.daily_pick_engine import _locked_daily_picks
 
     with _locked_daily_picks(picks_path):

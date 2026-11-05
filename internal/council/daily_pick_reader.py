@@ -131,8 +131,13 @@ def resolve_current_daily_pick(
         rec.get("pick_id") == target_id and is_published_daily_pick_row(rec)
         for rec in records
     )
+    v2_hold_for_day = any(
+        rec.get("pick_id") == target_id
+        and str(rec.get("action") or "").upper() == "HOLD"
+        for rec in records
+    )
 
-    if not v2_published_for_day:
+    if not v2_published_for_day and not v2_hold_for_day:
         same_day: Optional[Dict[str, Any]] = None
         for rec in records:
             if not is_published_daily_pick_row(rec):

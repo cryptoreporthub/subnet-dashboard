@@ -1,4 +1,8 @@
-"""Generation-token fence for guarded local disk commits (plan §5)."""
+"""Generation-token fence for guarded local disk commits (plan §5).
+
+Cross-process epoch for ``daily_pick`` lives in ``data/daily_pick.epoch`` (Design A).
+In-process ``_revoked`` / schedule flags remain for scheduler control.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +18,6 @@ daily_pick_write_token_lock = threading.RLock()
 _COMMIT_SLOW_SECONDS = 5.0
 
 _state_lock = threading.Lock()
-_generation = 0
 _revoked = False
 _fence_timeout = False
 _commit_slow = False
@@ -23,28 +26,30 @@ _schedule_disabled = False
 
 
 def issue_daily_pick_write_token() -> int:
-    global _generation, _revoked, _fence_timeout, _schedule_disabled
+    global _revoked, _fence_timeout, _schedule_disabled
+    from internal.store.domain_write_gate import revoke
+
     with daily_pick_write_token_lock:
-        _generation += 1
         _revoked = False
         _fence_timeout = False
         _schedule_disabled = False
-        gen = _generation
+        gen = revoke("daily_pick", reason="issue_daily_pick_write_token")
     logger.info("daily_pick_write_token issued generation=%s", gen)
     return gen
 
 
 def current_write_generation() -> int:
+    from internal.store.domain_write_gate import read_epoch
+
     with daily_pick_write_token_lock:
-        return _generation
+        return read_epoch("daily_pick")
 
 
 def bump_write_generation(*, reason: str = "") -> int:
-    """Invalidate in-flight workers without revoking the schedule (P1-b)."""
-    global _generation
-    with daily_pick_write_token_lock:
-        _generation += 1
-        gen = _generation
+    """Invalidate in-flight daily-pick workers without revoking resolver epoch."""
+    from internal.store.domain_write_gate import revoke
+
+    gen = revoke("daily_pick", reason=reason or "unspecified")
     logger.info(
         "daily_pick_write_token generation bumped to %s reason=%s",
         gen,
@@ -54,10 +59,10 @@ def bump_write_generation(*, reason: str = "") -> int:
 
 
 def revoke_daily_pick_write_token(*, fence_timeout: bool = False, reason: str = "") -> None:
-    global _generation, _revoked, _fence_timeout, _schedule_disabled
+    global _revoked, _fence_timeout, _schedule_disabled
+    bump_write_generation(reason=reason or "revoke_daily_pick_write_token")
     with daily_pick_write_token_lock:
         _revoked = True
-        _generation += 1
         if fence_timeout:
             _fence_timeout = True
             _schedule_disabled = True
@@ -79,7 +84,6 @@ def is_daily_pick_schedule_disabled() -> bool:
 
 
 def reenable_daily_pick_schedule() -> None:
-    global _schedule_disabled, _revoked
     issue_daily_pick_write_token()
 
 
@@ -88,20 +92,25 @@ def guarded_bounded_commit(
     *,
     write_generation: Optional[int] = None,
 ) -> bool:
-    """Validate token + generation then run local atomic commit under lock (§5.1 / P1-b)."""
+    """Validate daily_pick ticket epoch then run commit under domain lock."""
+    from internal.store.domain_write_gate import WriteTicket, commit
+
     global _commit_slow, _last_commit_seconds
     started = time.monotonic()
     with daily_pick_write_token_lock:
         if not daily_pick_write_token_allowed():
             return False
-        if write_generation is not None and write_generation != _generation:
+        epoch = current_write_generation()
+        if write_generation is not None and write_generation != epoch:
             logger.info(
                 "daily_pick guarded commit rejected stale generation=%s current=%s",
                 write_generation,
-                _generation,
+                epoch,
             )
             return False
-        commit_fn()
+        ticket = WriteTicket("daily_pick", epoch, f"pick-gen-{write_generation or epoch}")
+        if not commit(ticket, commit_fn):
+            return False
     elapsed = time.monotonic() - started
     with _state_lock:
         _last_commit_seconds = elapsed

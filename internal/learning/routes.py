@@ -1180,7 +1180,18 @@ async def api_learning_rebalance_weights(
     from internal.council.weights import rebalance_council_weights
 
     try:
-        result = rebalance_council_weights(replay_share=replay_share, save=not dry_run)
+        from internal.store.domain_write_gate import mint_web_ticket
+        from internal.store.soul_map_io import (
+            reset_soul_map_write_ticket,
+            set_soul_map_write_ticket,
+        )
+
+        soul_ticket = mint_web_ticket("soul_map", purpose="rebalance-weights")
+        soul_ctx = set_soul_map_write_ticket(soul_ticket)
+        try:
+            result = rebalance_council_weights(replay_share=replay_share, save=not dry_run)
+        finally:
+            reset_soul_map_write_ticket(soul_ctx)
         _learning_snapshot_cache["at"] = 0.0
         return {"status": "success", "data": result}
     except Exception as exc:
@@ -1198,7 +1209,12 @@ async def api_backfill_expert_attribution(
     from internal.learning.expert_backfill import backfill_expert_attribution
 
     try:
-        result = await run_in_threadpool(backfill_expert_attribution, dry_run=bool(dry_run))
+        from internal.store.domain_write_gate import mint_web_ticket
+
+        ticket = mint_web_ticket("predictions", purpose="expert-backfill")
+        result = await run_in_threadpool(
+            backfill_expert_attribution, dry_run=bool(dry_run), ticket=ticket
+        )
         if not dry_run:
             _learning_snapshot_cache["at"] = 0.0
         return {"status": "success", "data": result}
@@ -1251,10 +1267,12 @@ async def api_predictions_resolved(resolve: bool = Query(default=False)):
     """Return resolved predictions. Read-only unless ``resolve=true``."""
     try:
         if resolve:
+            from internal.store.domain_write_gate import mint_web_ticket
             from internal.subnets.feed import load_pick_subnets
 
             subnets = load_pick_subnets()
-            result = resolver.resolve_due_predictions(subnets)
+            ticket = mint_web_ticket("predictions", purpose="api-predictions-resolved")
+            result = resolver.resolve_due_predictions(subnets, predictions_ticket=ticket)
         else:
             result = resolver.get_resolved_predictions()
         return {
@@ -1825,9 +1843,12 @@ async def api_weights():
 async def api_resolve_predictions():
     """Trigger prediction resolution for any due predictions."""
     try:
+        from internal.store.domain_write_gate import mint_web_ticket
+
         weights_before = load_weights()
         subnets = _subnets_for_tracker()
-        result = resolver.resolve_due_predictions(subnets)
+        ticket = mint_web_ticket("predictions", purpose="api-resolve-predictions")
+        result = resolver.resolve_due_predictions(subnets, predictions_ticket=ticket)
         return {
             "status": "success",
             "data": result,

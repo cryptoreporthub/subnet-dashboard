@@ -359,3 +359,11 @@
 - **Picks/holds:** web daily-pick paths read-only (no `get_or_create_today_pick` in `server.py` / learning routes).
 - **`commit_direct`:** absent in repo.
 - **Awaiting:** retire web mutators / tickets on resolve+hour-pick+feedback+rebalance, or Joshua waives gate.
+
+## 2026-11-05 — PR #1561 Round six cross-process Design A (Joshua GO revised)
+
+- **Implemented:** `internal/store/domain_write_gate.py` — per-domain epoch file + flock; `commit(ticket)` / `revoke(domain)`; separate domains (predictions, soul_map, cycle_summary, daily_pick, resolver).
+- **Wired writers:** predictions (`append_prediction`, `save_predictions`, resolver `_save_json` merge-by-id); soul_map (`write_soul_map` ticket); web routes 1257/1830/1191/1172; hour-pick batch tickets; resolver cycle tickets; mindmap feedback.
+- **Also:** reader v2 HOLD blocks same-day legacy; corrupt `daily_picks.json` raises `DailyPickFileCorrupt`; `ledger_heal` pick_day downgrade.
+- **Tests:** `test_domain_write_gate.py` (cross-process subprocess race), `test_v2_hold_on_disk_not_served_by_reader`, conftest epoch isolation + persist tickets.
+- **Gates:** resolver+morning+gate modules green locally; full bundle run with pick_scheduler may need CI confirmation.
