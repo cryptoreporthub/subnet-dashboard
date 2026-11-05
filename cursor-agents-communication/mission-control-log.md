@@ -351,3 +351,11 @@
 - **Blockers addressed:** PR title/body authoritative **19:05 UTC** (Joshua deploy catch-up); plan §1 slot table; resolver `_write_soul_map_guarded` passes captured **write_generation** + test; `write_scheduler_hold` requires explicit gen to persist.
 - **HEAD:** pushed after fixes (resolver_scheduler + engine + test + loop_health note).
 - **Gates:** morning **215×2**; **`comm-23`** post-push.
+
+## 2026-11-05 — PR #1561 Round six STOP GATE @ `dec6760f` (Joshua GO — Design A blocked)
+
+- **STOP GATE:** worker-only persist **not satisfied** — web/Uvicorn still mutates **predictions** + **soul map** (cycle summary when resolver allowed on web). **No Design A push.**
+- **Evidence:** PR #1561 comment (file:line table); Ditto memory `219f9f8d`.
+- **Picks/holds:** web daily-pick paths read-only (no `get_or_create_today_pick` in `server.py` / learning routes).
+- **`commit_direct`:** absent in repo.
+- **Awaiting:** retire web mutators / tickets on resolve+hour-pick+feedback+rebalance, or Joshua waives gate.
