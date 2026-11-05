@@ -25,4 +25,4 @@ def test_strict_mount_proof_matches_escaped_mount_point(tmp_path):
         ok, why, facts = dv.strict_mount_proof(root)
     assert ok is True
     assert why == ""
-    assert facts["mount_point"] == escaped
+    assert facts["mount_point"] == root

@@ -29,6 +29,8 @@ from internal.data_volume import (
 
 logger = logging.getLogger(__name__)
 
+VOLUME_PIN_MISSING_HINT = "volume_pin_missing: set DATA_VOLUME_ID (see DEPLOY.md)"
+
 WRITE_OWNER_LOCK_NAME = ".write_owner.lock"
 VOLUME_MARKER_NAME = ".data_volume_marker.json"
 _MARKER_VERSION = 2
@@ -168,13 +170,11 @@ def _read_marker_json(path: str) -> Tuple[str, Optional[Dict[str, Any]], str]:
         return "MISMATCH", payload, "pinned_volume_id"
     exclusive = payload.get("exclusive_machine_id")
     machine = _fly_machine_id()
-    if (
-        machine
-        and isinstance(exclusive, str)
-        and exclusive
-        and exclusive != machine
-    ):
-        return "MISMATCH", payload, "exclusive_machine_id"
+    if machine:
+        if not isinstance(exclusive, str) or not exclusive:
+            return "MISMATCH", payload, "exclusive_machine_id_missing"
+        if exclusive != machine:
+            return "MISMATCH", payload, "exclusive_machine_id"
     return "VALID", payload, ""
 
 
@@ -633,10 +633,16 @@ def try_acquire_write_owner_lock() -> tuple[bool, str]:
             _acquiring = False
 
 
+def _log_volume_pin_missing_hint(detail: str) -> None:
+    if detail == "volume_pin_missing":
+        logger.error(VOLUME_PIN_MISSING_HINT)
+
+
 def acquire_write_owner_at_worker_startup() -> tuple[bool, str]:
     ok, detail = try_acquire_write_owner_lock()
     if ok:
         return True, detail
+    _log_volume_pin_missing_hint(detail)
     logger.error(
         "owner_guard: worker startup blocked (%s) — background writers will not start",
         detail,
@@ -648,6 +654,7 @@ def acquire_or_refuse(context: str) -> bool:
     ok, detail = try_acquire_write_owner_lock()
     if ok:
         return True
+    _log_volume_pin_missing_hint(detail)
     logger.error("owner_guard: %s BLOCKED (%s)", context, detail)
     return False
 

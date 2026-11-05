@@ -161,9 +161,13 @@ build pass; seed the Fly volume or configure the external feed/secret instead.
 
 Runtime state lives on the Fly volume `data_volume` → `/app/data` (`soul_map.json`, predictions, SQLite). **Do not** create a second volume without human `flyctl` access.
 
-**Single-writer step 1 (owner lock):** Fly attaches a volume to **one machine at a time**. Do not scale a dedicated `worker` process group above **one** machine with the same volume role — the second VM cannot share the lock safely. On first bootstrap the volume marker records `exclusive_machine_id` from `FLY_MACHINE_ID` when present; a **cloned** volume or a second machine with the same pin but a different machine id **fail-closed** at acquire (`marker_mismatch:exclusive_machine_id`). Replacing the Fly machine requires operator care (clear or rewrite `.data_volume_marker.json` on the volume, or follow volume recovery runbooks).
+**Single-writer step 1 (owner lock):** Fly attaches a volume to **one machine at a time**. Do not scale a dedicated `worker` process group above **one** machine with the same volume role — the second VM cannot share the lock safely. When `FLY_MACHINE_ID` is set (Fly Machines), the volume marker **must** include matching `exclusive_machine_id`; legacy markers without that field are **not valid** (fail-closed with `marker_mismatch:exclusive_machine_id_missing`) — there is **no auto-migration** that would let a second machine claim the volume.
 
-**Before enabling owner-guard deploy:** set Fly secret `DATA_VOLUME_ID` to the `vol_…` id from `flyctl volumes list -a subnet-dashboard` (read-only). The app refuses prod-like bootstrap without it (`volume_pin_missing`). Do **not** commit the id in `fly.toml` unless Joshua explicitly approves a pinned env line — secret-only is merge-safe.
+**One-time operator step (legacy markers):** Before first owner-guard deploy on an existing volume, SSH to the machine that will own writes and stamp `.data_volume_marker.json` with `"exclusive_machine_id": "<FLY_MACHINE_ID>"` matching that machine (keep existing `volume_id`, `pinned_volume_id`, and `app_name`). New bootstraps stamp this field automatically when `FLY_MACHINE_ID` is present.
+
+**Known limit (deferred):** `DATA_VOLUME_ID` proves env ↔ marker pin agreement only; it does **not** prove two Fly machines are not each attached to different physical copies of a volume with the same pin. Cross-VM attach mistakes remain an operator/process constraint (single writer machine, one volume attachment). Stronger identity would need a Fly API or out-of-band proof — not in step 1.
+
+**Before enabling owner-guard deploy:** set Fly secret `DATA_VOLUME_ID` to the `vol_…` id from `flyctl volumes list -a subnet-dashboard` (read-only). The app refuses prod-like bootstrap without it (`volume_pin_missing`; worker logs `volume_pin_missing: set DATA_VOLUME_ID (see DEPLOY.md)` before exit code 3). Do **not** commit the id in `fly.toml` unless Joshua explicitly approves a pinned env line — secret-only is merge-safe.
 
 ---
 

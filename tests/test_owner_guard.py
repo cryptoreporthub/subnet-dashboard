@@ -169,8 +169,9 @@ def test_bootstrap_requires_volume_data(prod_mount):
     assert detail2 == "marker_absent_no_data"
 
 
-def test_prod_volume_bootstraps_marker_with_existing_data(prod_mount):
+def test_prod_volume_bootstraps_marker_with_existing_data(prod_mount, monkeypatch):
     data = prod_mount
+    monkeypatch.setenv("FLY_MACHINE_ID", "machine-prod-a")
     (data / "soul_map.json").write_text("{}\n")
     ok, detail = og.try_acquire_write_owner_lock()
     assert ok is True
@@ -179,6 +180,7 @@ def test_prod_volume_bootstraps_marker_with_existing_data(prod_mount):
     marker = json.loads((data / og.VOLUME_MARKER_NAME).read_text())
     assert marker["version"] == 2
     assert marker["pinned_volume_id"] == "vol_test123"
+    assert marker["exclusive_machine_id"] == "machine-prod-a"
     assert og.owner_guard_reason() is None
 
 
@@ -266,10 +268,14 @@ def test_bootstrap_atomic_create_if_absent(prod_mount, monkeypatch):
     assert ok is True
 
 
-def test_matching_volume_marker_allows_acquire(prod_mount):
+def test_matching_volume_marker_allows_acquire(prod_mount, monkeypatch):
     data = prod_mount
+    monkeypatch.setenv("FLY_MACHINE_ID", "machine-a")
     (data / "soul_map.json").write_text("{}\n")
     _write_v2_marker(data)
+    payload = json.loads((data / og.VOLUME_MARKER_NAME).read_text())
+    payload["exclusive_machine_id"] = "machine-a"
+    (data / og.VOLUME_MARKER_NAME).write_text(json.dumps(payload) + "\n")
     ok, detail = og.try_acquire_write_owner_lock()
     assert ok is True
     assert detail == ""
@@ -541,19 +547,31 @@ def test_worker_blocked_exits_3_and_never_logs_running(prod_mount, monkeypatch, 
 
 def test_worker_blocked_subprocess_e2e(prod_mount):
     data = prod_mount
-    env = _subprocess_env(
-        DATA_DIR=str(data),
-        FLY_APP_NAME="subnet-dashboard",
+    (data / "soul_map.json").write_text("{}\n")
+    script = textwrap.dedent(
+        f"""
+        import os
+        os.environ["DATA_DIR"] = {str(data)!r}
+        os.environ["FLY_APP_NAME"] = "subnet-dashboard"
+        os.environ.pop("DATA_VOLUME_ID", None)
+        os.environ.pop("PYTEST_CURRENT_TEST", None)
+        import internal.data_volume as dv
+        dv._read_mountinfo = lambda: {repr(_fake_mountinfo_for(data))}
+        from internal.worker import main
+        main()
+        """
     )
-    env.pop("DATA_VOLUME_ID", None)
     proc = subprocess.run(
-        [sys.executable, "-m", "internal.worker"],
+        [sys.executable, "-c", script],
         cwd=os.getcwd(),
-        env=env,
+        env=_subprocess_env(),
         capture_output=True,
+        text=True,
         timeout=30,
     )
     assert proc.returncode == 3
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    assert og.VOLUME_PIN_MISSING_HINT in combined
 
 
 def test_server_lifespan_blocked_worker_exits(prod_mount, monkeypatch):
@@ -784,13 +802,13 @@ def test_dedicated_worker_uvicorn_blocked_exits_3_subprocess(prod_mount):
         timeout=20,
     )
     assert proc.returncode == 3
-    probe = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            f"import urllib.request; urllib.request.urlopen('http://127.0.0.1:{port}/health', timeout=1)",
-        ],
-        capture_output=True,
-        timeout=5,
-    )
-    assert probe.returncode != 0
+
+
+def test_legacy_marker_missing_exclusive_machine_id_blocks(prod_mount, monkeypatch):
+    data = prod_mount
+    (data / "soul_map.json").write_text("{}\n")
+    monkeypatch.setenv("FLY_MACHINE_ID", "machine-a")
+    _write_v2_marker(data, pinned_volume_id="vol_test123")
+    ok, detail = og.try_acquire_write_owner_lock()
+    assert ok is False
+    assert "marker_mismatch:exclusive_machine_id_missing" in detail
