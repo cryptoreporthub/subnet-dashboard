@@ -275,7 +275,16 @@ async def _lifespan(app: FastAPI):
                     start_background_workers,
                     stop_background_workers,
                 )
+                from internal.owner_guard import acquire_or_refuse
                 from internal.worker_heartbeat import touch_heartbeat
+
+                if not acquire_or_refuse("server_worker_lifespan"):
+                    logger.error(
+                        "owner_guard: dedicated worker lifespan BLOCKED — exiting 3"
+                    )
+                    import sys
+
+                    sys.exit(3)
 
                 heavy = worker_heavy_feeds_enabled()
                 start_background_workers(heavy=heavy)
@@ -333,9 +342,12 @@ async def _lifespan(app: FastAPI):
                     logger.warning("resolver scheduler state unavailable at boot: %s", _rs_exc)
 
                 logger.info("dedicated worker lifespan boot (heavy=%s)", heavy)
+                _worker_lifespan_started = True
+            else:
+                _worker_lifespan_started = False
             log_heavy_job_rss("lifespan_ready", "milestone")
             yield
-            if background_boot_allowed():
+            if background_boot_allowed() and _worker_lifespan_started:
                 from internal.background_boot import stop_background_workers
 
                 stop_background_workers()
@@ -392,8 +404,13 @@ async def _lifespan(app: FastAPI):
 
         if background_on_web() and background_boot_allowed():
             from internal.background_boot import start_background_workers, stop_background_workers
+            from internal.owner_guard import acquire_or_refuse
 
-            start_background_workers()
+            _web_background_started = acquire_or_refuse("server_web_background")
+            if _web_background_started:
+                start_background_workers()
+        else:
+            _web_background_started = False
 
         # ponytail: cap default asyncio thread pool — timed-out pick/weighed work can't exhaust all slots
         pool_cap = int(os.environ.get("AIO_WORKER_POOL_SIZE", "4"))
@@ -404,7 +421,7 @@ async def _lifespan(app: FastAPI):
 
         log_heavy_job_rss("lifespan_ready", "milestone")
         yield
-        if background_on_web() and background_boot_allowed():
+        if background_on_web() and background_boot_allowed() and _web_background_started:
             from internal.background_boot import stop_background_workers
 
             stop_background_workers()

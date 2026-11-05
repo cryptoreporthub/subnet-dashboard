@@ -92,7 +92,13 @@ def main() -> None:
 
     from internal.owner_guard import acquire_write_owner_at_worker_startup
 
-    write_owner_ready = acquire_write_owner_at_worker_startup()
+    write_owner_ready, block_reason = acquire_write_owner_at_worker_startup()
+    if not write_owner_ready:
+        logger.error(
+            "owner_guard: worker BLOCKED (%s) — no background writers started; exiting 3",
+            block_reason,
+        )
+        sys.exit(3)
 
     from internal.background_boot import (
         schedule_summary_bot_worker_watchdog,
@@ -111,56 +117,51 @@ def main() -> None:
 
     heavy = worker_heavy_feeds_enabled()
 
-    if write_owner_ready:
-        start_background_workers(heavy=heavy)
-        schedule_summary_bot_worker_watchdog()
-        _start_job_inventory_http()
+    start_background_workers(heavy=heavy)
+    schedule_summary_bot_worker_watchdog()
+    _start_job_inventory_http()
 
-        # Loop stall guard (loop-stall-guard commit d03a3789): watch the score-snapshot
-        # producer (owner only); if it stays stale across consecutive checks, revive in place
-        # then exit so the supervisor restarts the worker fresh. Must stay wired in
-        # alongside the scheduler self-heal below.
-        try:
-            from internal.loop_stall_guard import start_loop_stall_guard
+    # Loop stall guard (loop-stall-guard commit d03a3789): watch the score-snapshot
+    # producer (owner only); if it stays stale across consecutive checks, revive in place
+    # then exit so the supervisor restarts the worker fresh. Must stay wired in
+    # alongside the scheduler self-heal below.
+    try:
+        from internal.loop_stall_guard import start_loop_stall_guard
 
-            start_loop_stall_guard()
-        except Exception as exc:
-            logger.warning("loop stall guard failed to start: %s", exc)
+        start_loop_stall_guard()
+    except Exception as exc:
+        logger.warning("loop stall guard failed to start: %s", exc)
 
-        touch_heartbeat()
+    touch_heartbeat()
 
-        def _beat() -> None:
-            # Zombie-loop guard: keep touching the heartbeat ONLY while the shared
-            # background scheduler is actually alive with jobs. If the scheduler is
-            # dead or empty (a one-shot tick died / no re-arm), stop touching so the
-            # inline-worker supervisor (fly_web_entrypoint.sh) sees a stale heartbeat
-            # and restarts this process — instead of serving a "healthy" heartbeat
-            # forever while the learning loop is frozen.
-            import logging as _logging
+    def _beat() -> None:
+        # Zombie-loop guard: keep touching the heartbeat ONLY while the shared
+        # background scheduler is actually alive with jobs. If the scheduler is
+        # dead or empty (a one-shot tick died / no re-arm), stop touching so the
+        # inline-worker supervisor (fly_web_entrypoint.sh) sees a stale heartbeat
+        # and restarts this process — instead of serving a "healthy" heartbeat
+        # forever while the learning loop is frozen.
+        import logging as _logging
 
-            _logger = _logging.getLogger("worker")
-            while not _shutdown.wait(30):
-                try:
-                    from internal.job_scheduler import state as _sched_state
+        _logger = _logging.getLogger("worker")
+        while not _shutdown.wait(30):
+            try:
+                from internal.job_scheduler import state as _sched_state
 
-                    _st = _sched_state()
-                    if not _st.get("running") or int(
-                        _st.get("job_count", 0) or 0
-                    ) <= 0:
-                        _logger.warning(
-                            "background scheduler unhealthy (%s); heartbeat paused",
-                            _st,
-                        )
-                        continue
-                    touch_heartbeat()
-                except Exception as exc:
-                    _logger.warning("worker heartbeat failed: %s", exc)
+                _st = _sched_state()
+                if not _st.get("running") or int(
+                    _st.get("job_count", 0) or 0
+                ) <= 0:
+                    _logger.warning(
+                        "background scheduler unhealthy (%s); heartbeat paused",
+                        _st,
+                    )
+                    continue
+                touch_heartbeat()
+            except Exception as exc:
+                _logger.warning("worker heartbeat failed: %s", exc)
 
-        threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
-    else:
-        logger.error(
-            "owner_guard: worker idle without background writers (fail closed)"
-        )
+    threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
     logger.info("background worker running (RUN_MODE=worker, heavy=%s)", heavy)
     _shutdown.wait()
     stop_background_workers()
