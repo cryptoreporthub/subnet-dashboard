@@ -1571,7 +1571,10 @@ _HIT_RATE_CACHE: Dict[str, Any] = {"key": None, "min_n": None, "value": None}
 
 
 def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
-    """Return historical resolver accuracy when enough graded outcomes exist.
+    """Return council-published resolver accuracy when enough graded outcomes exist.
+
+    Only ``council_published`` rows count: pump, shadow, counterfactual and legacy
+    rows measure other policies and must not move the council's own confidence prior.
 
     ponytail: cache by predictions file mtime+size — ``_compute_confidence`` runs
     once per subnet in a scoring pass (~30–40 JSON reads per pick without this).
@@ -1595,10 +1598,14 @@ def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
     except Exception:
         return None
 
+    from internal.learning.evidence import evidence_population
+
     resolved = data.get("resolved", [])
     graded = [
         p for p in resolved
-        if isinstance(p, dict) and p.get("correct") is not None
+        if isinstance(p, dict)
+        and p.get("correct") is not None
+        and evidence_population(p) == "council_published"
     ]
     if len(graded) < min_n:
         result: Optional[float] = None
