@@ -117,13 +117,26 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
                 "last_updated": engine_stats.get("last_updated"),
             }
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(_load_learning_metrics)
+        # No ThreadPoolExecutor context manager: on timeout its __exit__ joins
+        # the still-running worker and the shell hangs (same bug class as
+        # server._resolve_index_context / emergency prime). Abandon instead.
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        fut = pool.submit(_load_learning_metrics)
+        try:
             ctx["learning_metrics"] = fut.result(timeout=2.0)
+            _FAST_SHELL_CACHE["at"] = now
+            _FAST_SHELL_CACHE["data"] = ctx
+        except concurrent.futures.TimeoutError:
+            logger.warning("fast shell learning metrics timed out after 2.0s")
+            pool.shutdown(wait=False, cancel_futures=True)
+            ctx["learning_metrics_degraded"] = True
+        except Exception as exc:
+            logger.warning("fast shell learning metrics failed: %s", exc)
+            pool.shutdown(wait=False, cancel_futures=True)
+            ctx["learning_metrics_degraded"] = True
     except Exception as exc:
         logger.warning("fast shell learning metrics failed: %s", exc)
-    _FAST_SHELL_CACHE["at"] = now
-    _FAST_SHELL_CACHE["data"] = ctx
+        ctx["learning_metrics_degraded"] = True
     return ctx
 
 
@@ -163,6 +176,7 @@ def default_learning_dashboard_context() -> Dict[str, Any]:
         "impact_strength": 1.0,
         "council_weights": [],
         "weights_degraded": False,
+        "learning_metrics_degraded": False,
         "grading_headline_mode": "legacy",
         "predictions": [],
         "patterns": [],
@@ -360,14 +374,26 @@ def _predictions_panel() -> List[Dict[str, Any]]:
 def _pick_sections(
     subnets: List[Dict[str, Any]], market_context: Dict[str, Any]
 ) -> Dict[str, Any]:
+    """Read-only pick sections — SSR must never score or write (P3a).
+
+    Hour picks come from the ``/api/top-picks`` cache (the hydrate JS poll
+    warms it). Running ``_ordered_hour_picks`` here scored the universe and
+    recorded predictions on the degraded homepage shell (G0 landmine).
+    """
     hour_picks: List[Dict[str, Any]] = []
     day_picks: List[Dict[str, Any]] = []
     daily_pick: Dict[str, Any] = {}
     try:
-        from internal.council.daily_pick_engine import _find_today, _load
-        from server import _ordered_hour_picks
+        from server import _TOP_PICKS_CACHE
 
-        hour_picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        cached = _TOP_PICKS_CACHE.get("payload")
+        if isinstance(cached, dict) and isinstance(cached.get("hour_picks"), list):
+            hour_picks = list(cached["hour_picks"])[:3]
+    except Exception as exc:
+        logger.warning("hour picks cache read failed: %s", exc)
+    try:
+        from internal.council.daily_pick_engine import _find_today, _load
+
         existing = _find_today(_load())
         raw = existing if isinstance(existing, dict) else {}
         daily_pick = raw.get("pick") if isinstance(raw, dict) and raw.get("pick") else raw

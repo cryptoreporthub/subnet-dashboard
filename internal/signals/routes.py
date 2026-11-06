@@ -25,6 +25,9 @@ SIGNALS_HANDLER_TIMEOUT = float(os.environ.get("SIGNALS_HANDLER_TIMEOUT_SECONDS"
 SIGNALS_FRESHNESS_SECONDS = int(
     os.environ.get("SIGNALS_FRESHNESS_SECONDS", "900")
 )
+SIGNALS_NAME_REFRESH_TIMEOUT = float(
+    os.environ.get("SIGNALS_NAME_REFRESH_TIMEOUT_SECONDS", "1")
+)
 _refresh_lock = threading.Lock()
 
 
@@ -109,6 +112,46 @@ def _store_is_fresh(store: SignalStore) -> bool:
     return age <= SIGNALS_FRESHNESS_SECONDS
 
 
+def _regenerate_sync() -> tuple[Dict[str, Any], list, list, list]:
+    """Full pipeline regen + alert passes. Caller must hold ``_refresh_lock``."""
+    result = generate_signals(True)
+    engine = _get_alerts()
+    system = engine.check_system_alerts()
+    signal_alerts = engine.record_signal_changes(
+        result.get("changed_signals") or []
+    )
+    composites = engine.evaluate_correlation_alerts(
+        result.get("signals") or []
+    )
+    return result, system, signal_alerts, composites
+
+
+_bg_refresh_guard = threading.Lock()
+
+
+def _kick_background_refresh() -> None:
+    """One fire-and-forget regen so plain GETs never wait on the pipeline.
+
+    Single-flight: concurrent GETs during a hydrate burst each get the cached
+    (possibly empty) store; at most one background thread regenerates.
+    """
+    if not _bg_refresh_guard.acquire(blocking=False):
+        return
+
+    def _run():
+        try:
+            with _refresh_lock:
+                if _store_is_fresh(_get_store()):
+                    return
+                _regenerate_sync()
+        except Exception as exc:
+            logger.warning("background signals refresh failed: %s", exc)
+        finally:
+            _bg_refresh_guard.release()
+
+    threading.Thread(target=_run, daemon=True, name="signals-bg-refresh").start()
+
+
 async def _refresh_and_broadcast(
     *,
     only_if_stale: bool = False,
@@ -139,16 +182,7 @@ async def _refresh_and_broadcast(
                         [],
                     )
 
-            result = generate_signals(True)
-            engine = _get_alerts()
-            system = engine.check_system_alerts()
-            signal_alerts = engine.record_signal_changes(
-                result.get("changed_signals") or []
-            )
-            composites = engine.evaluate_correlation_alerts(
-                result.get("signals") or []
-            )
-            return result, system, signal_alerts, composites
+            return _regenerate_sync()
 
     try:
         result, system, signal_alerts, composites = await _to_thread_timeout(
@@ -191,29 +225,20 @@ async def api_signals(
         signals = store.query(subnet_id=subnet_id, since=since)
         meta = {"count": len(signals), "appended": 0, "cached": True}
         if subnet_id is None and since is None and not _store_is_fresh(store):
-            try:
-                result = await _refresh_and_broadcast(
-                    only_if_stale=True,
-                    fallback_signals=signals,
-                )
-                signals = result.get("signals") or []
-                meta = result.get("meta") or {}
-            except Exception as exc:
-                # Keep the endpoint useful during a transient feed failure.
-                # The caller still gets the stale cache (if any), with an
-                # explicit freshness failure instead of an HTTP 500.
-                logger.warning("automatic signals refresh failed: %s", exc)
-                meta.update(
-                    {
-                        "cached": True,
-                        "stale": True,
-                        "refresh_error": type(exc).__name__,
-                    }
-                )
+            # Hydrate safety: never wait on a live regeneration (G0/rev3 —
+            # this GET blocked for the whole pipeline and timed out at 30s
+            # under burst). Serve the cached store honestly (possibly empty)
+            # and warm it in the background instead.
+            meta["stale"] = True
+            _kick_background_refresh()
     try:
         from internal.subnet_names import refresh_stored_names
 
-        signals = refresh_stored_names(signals)
+        signals = await _to_thread_timeout(
+            lambda: refresh_stored_names(signals),
+            SIGNALS_NAME_REFRESH_TIMEOUT,
+            label="signals-names",
+        )
     except Exception:
         pass
     if refresh and subnet_id is not None:
