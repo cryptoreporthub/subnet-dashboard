@@ -162,8 +162,8 @@ def test_adapt_skips_until_n30():
     assert maybe_adapt_after_resolve(min_sample=30) is None
 
 
-def test_online_blend_weights_update_on_each_clean_grade():
-    row = _pump_row(
+def _online_row():
+    return _pump_row(
         id="online-1",
         correct=True,
         actual_pct=3.0,
@@ -175,13 +175,47 @@ def test_online_blend_weights_update_on_each_clean_grade():
             "chatter_intensity": 0.8,
         },
     )
+
+
+def test_online_blend_weights_do_not_move_without_evidence():
+    """Below n>=30 there is nothing to learn from: weights stay put."""
     before = load_calibration()
+    assert maybe_adapt_after_resolve(min_sample=30, prediction=_online_row()) is None
+    after = load_calibration()
+    assert after["blend_weights"] == before["blend_weights"]
+    assert not after.get("online_updates")
 
-    out = maybe_adapt_after_resolve(min_sample=30, prediction=row)
 
-    assert out is not None
+def test_online_blend_weights_held_when_adaptation_gate_fails(monkeypatch):
+    import internal.learning.pump_lead_train as pump_lead_train
+
+    rows = [_pump_row(id=f"e{i}", correct=False, actual_pct=0.5) for i in range(30)]
+    predictions_store.save_predictions({"predictions": [], "resolved": rows, "stats": {}})
+    monkeypatch.setattr(
+        pump_lead_train,
+        "build_pump_evaluation",
+        lambda: {"status": "insufficient", "adaptation_gate": {"passed": False}},
+    )
+    before = load_calibration()
+    assert maybe_adapt_after_resolve(min_sample=30, prediction=_online_row()) is None
+    assert load_calibration()["blend_weights"] == before["blend_weights"]
+
+
+def test_online_blend_weights_update_once_gate_passes(monkeypatch):
+    import internal.learning.pump_lead_train as pump_lead_train
+
+    rows = [_pump_row(id=f"e{i}", correct=True, actual_pct=3.0) for i in range(30)]
+    predictions_store.save_predictions({"predictions": [], "resolved": rows, "stats": {}})
+    monkeypatch.setattr(
+        pump_lead_train,
+        "build_pump_evaluation",
+        lambda: {"status": "qualified", "adaptation_gate": {"passed": True}},
+    )
+    before = load_calibration()
+    out = maybe_adapt_after_resolve(min_sample=30, prediction=_online_row())
     assert out["online_updates"] == 1
     assert out["blend_weights"] != before["blend_weights"]
+    assert load_calibration()["blend_weights"] == out["blend_weights"]
 
 
 def test_adapt_tightens_when_hit_rate_weak():
