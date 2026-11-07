@@ -1835,6 +1835,52 @@ def test_tick_when_inactive_is_stale_scheduler_run(fresh_scheduler):
     assert out.get("skipped") == "stale_scheduler_run"
 
 
+def test_stop_clears_tick_run_id_so_armed_callback_is_stale(fresh_scheduler):
+    """Cluster 4: stop invalidates scheduler_run_id, not only _active."""
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    sched.start(immediate=False)
+    armed = sched._tick_run_id
+    assert armed is not None
+    sched.stop()
+    assert sched._tick_run_id is None
+    out = sched._tick(armed)
+    assert out.get("skipped") == "stale_scheduler_run"
+
+
+def test_tick_without_run_id_when_inactive_is_stale_scheduler_run(fresh_scheduler):
+    """CR-04: request-triggered _tick() on a stopped scheduler is a no-op."""
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    sched.start(immediate=False)
+    sched.stop()
+    out = sched._tick()
+    assert out.get("skipped") == "stale_scheduler_run"
+
+
+def test_zero_budget_cycle_bumps_generation_before_owner_publish(
+    monkeypatch, fresh_scheduler
+):
+    """Revive/zero-budget path must open a generation it can publish as owner."""
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0)
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    gen_before = sched._cycle_generation
+
+    def _quick_cycle(self):
+        return {"ok": True, "resolved_now": 0, "expired_now": 0, "pending": 0}
+
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _quick_cycle,
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+    sched._revive_use_full_budget = False
+    out = sched._run_refresh_cycle_with_timeout()
+    assert out.get("ok") is True
+    assert sched._cycle_generation == gen_before + 1
+    assert out.get("cycle_generation") == gen_before + 1
+
+
 def test_immediate_start_captures_run_id_for_first_tick(monkeypatch, fresh_scheduler):
     """CR-01: immediate thread uses run id captured at start, not later mutation."""
     sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
@@ -1849,10 +1895,13 @@ def test_immediate_start_captures_run_id_for_first_tick(monkeypatch, fresh_sched
     )
     sched.start(immediate=True)
     assert seen.get("rid") is not None
+    captured = sched._tick_run_id
     time.sleep(0.15)
     sched.stop()
     time.sleep(0.15)
-    assert seen.get("rid") == sched._tick_run_id.value
+    assert captured is not None
+    assert seen.get("rid") == captured.value
+    assert sched._tick_run_id is None
 
 
 def test_gate_deadline_returns_pending(monkeypatch, tmp_path):
@@ -2034,10 +2083,10 @@ def test_singleton_detach_lifecycle_write_is_fenced(tmp_path, monkeypatch):
     old_run = old._tick_run_id.value if old._tick_run_id else None
     real_pls = old._persist_lifecycle_state
 
-    def _slow_pls() -> resolver_scheduler.PersistResult:
+    def _slow_pls(*_a, **_k) -> resolver_scheduler.PersistResult:
         hold.set()
         assert release.wait(timeout=5)
-        return real_pls()
+        return real_pls(*_a, **_k)
 
     old._persist_lifecycle_state = _slow_pls  # type: ignore[method-assign]
 

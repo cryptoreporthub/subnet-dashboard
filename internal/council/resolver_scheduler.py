@@ -667,7 +667,11 @@ class PredictionResolverScheduler:
             self._lifecycle = "stopped"
             self._first_tick_pending = False
             cancel_ids = (self._job_primary(), self._job_retry())
-        lifecycle = self._persist_lifecycle_state()
+            lifecycle_run_id = self._tick_run_id
+            # Armed APScheduler callbacks compare this; clear so stale ticks fail
+            # the run-id fence, not only the _active check (Ditto cluster 4).
+            self._tick_run_id = None
+        lifecycle = self._persist_lifecycle_state(for_run_id=lifecycle_run_id)
         cancel_results = _cancel_resolver_jobs(cancel_ids)
         out: Dict[str, Any] = {
             "stopped": True,
@@ -765,6 +769,16 @@ class PredictionResolverScheduler:
         if expected_run_id is not None:
             with self._lock:
                 if self._tick_run_id != expected_run_id or not self._active:
+                    return {
+                        "run_at": _now_iso(),
+                        "skipped": "stale_scheduler_run",
+                        "resolved_now": 0,
+                        "expired_now": 0,
+                        "pending": 0,
+                    }
+        else:
+            with self._lock:
+                if not self._active:
                     return {
                         "run_at": _now_iso(),
                         "skipped": "stale_scheduler_run",
@@ -931,8 +945,11 @@ class PredictionResolverScheduler:
         self._lifecycle_error = result.get("error")
         return True
 
-    def _persist_lifecycle_state(self) -> PersistResult:
-        run_token = self._tick_run_id.value if self._tick_run_id else None
+    def _persist_lifecycle_state(
+        self, *, for_run_id: Optional[SchedulerRunId] = None
+    ) -> PersistResult:
+        rid = for_run_id if for_run_id is not None else self._tick_run_id
+        run_token = rid.value if rid is not None else None
         state = {
             "lifecycle": self._lifecycle,
             "started_at": self._started_at,
@@ -1068,9 +1085,7 @@ class PredictionResolverScheduler:
                     if use_full
                     else RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
                 )
-                increment_gen = timeout > 0
-                if increment_gen:
-                    self._cycle_generation += 1
+                self._cycle_generation += 1
                 gen = self._cycle_generation
                 self._persist_owner_gen = gen
                 self._lock_owner_gen = gen
