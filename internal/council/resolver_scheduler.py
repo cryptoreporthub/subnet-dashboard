@@ -217,6 +217,25 @@ def _is_completed_success(row: Dict[str, Any]) -> bool:
     return gap.get("complete") is True
 
 
+def _completed_success_beats(existing: Dict[str, Any], incoming: Dict[str, Any]) -> bool:
+    """True when incoming completed success should win last_cycle over existing success."""
+    if not _is_completed_success(incoming) or not _is_completed_success(existing):
+        return False
+    in_gen = _incoming_generation_int(incoming)
+    ex_gen = _incoming_generation_int(existing)
+    if in_gen is None or ex_gen is None:
+        return False
+    if in_gen > ex_gen:
+        return True
+    if in_gen < ex_gen:
+        return False
+    new_i = _parse_run_at_utc(incoming.get("run_at"))
+    ex_i = _parse_run_at_utc(existing.get("run_at"))
+    if new_i is None or ex_i is None:
+        return False
+    return new_i > ex_i
+
+
 def _gap_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     gap = row.get("gap_timing_ms")
     return gap if isinstance(gap, dict) else {}
@@ -1454,8 +1473,9 @@ class PredictionResolverScheduler:
         }
         timing = _cycle_timing.get()
 
-        def _commit_write(sched: Dict[str, Any]) -> None:
-            sched["last_cycle"] = summary
+        def _append_terminal_row(sched: Dict[str, Any], *, touch_last_cycle: bool) -> None:
+            if touch_last_cycle:
+                sched["last_cycle"] = summary
             history = sched.get("cycle_history")
             if not isinstance(history, list):
                 history = []
@@ -1467,6 +1487,12 @@ class PredictionResolverScheduler:
                 sched["first_tick_at"] = self._first_tick_at
             if result.get("round_robin_cursor") is not None:
                 sched["round_robin_cursor"] = result["round_robin_cursor"]
+
+        def _commit_write(sched: Dict[str, Any]) -> None:
+            _append_terminal_row(sched, touch_last_cycle=True)
+
+        def _history_only_write(sched: Dict[str, Any]) -> None:
+            _append_terminal_row(sched, touch_last_cycle=False)
 
         def _mutator(data: Dict[str, Any]) -> None:
             global _malformed_existing_run_at_logged
@@ -1584,18 +1610,16 @@ class PredictionResolverScheduler:
                     _commit_write(sched)
                     return
 
-                # 6. Preserve completed success unless newer owned complete row wins
-                if _is_completed_success(existing):
-                    existing_gen_i = _incoming_generation_int(existing)
-                    newer_complete_owned = (
-                        owned_cycle
-                        and _is_completed_success(summary)
-                        and incoming_gen_i is not None
-                        and existing_gen_i is not None
-                        and incoming_gen_i > existing_gen_i
-                    )
-                    if not newer_complete_owned:
+                # 6. last_cycle holds completed successes only; failures never replace one.
+                if _is_completed_success(existing) and not _is_completed_success(summary):
+                    _history_only_write(sched)
+                    return
+                if _is_completed_success(existing) and _is_completed_success(summary):
+                    if owned_cycle and _completed_success_beats(existing, summary):
+                        _commit_write(sched)
                         return
+                    _history_only_write(sched)
+                    return
 
                 # 7.2 Same-cycle abnormal owned write (force timeout)
                 if (

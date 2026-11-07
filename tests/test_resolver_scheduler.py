@@ -2242,6 +2242,99 @@ def test_force_timeout_newer_generation_replaces_older_incomplete(
     assert last["error"] == "cycle_timeout_2s"
 
 
+def test_last_cycle_equal_gen_newer_run_at_completed_success_wins(tmp_path, monkeypatch):
+    """Policy falsifier A: same generation, later run_at — newer success wins last_cycle."""
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    gen = 5
+    run0 = "2026-08-01T00:00:00+00:00"
+    run1 = "2026-08-01T01:00:00+00:00"
+    rid_a = make_resolver_cycle_id(gen, run0)
+    rid_b = make_resolver_cycle_id(gen, run1)
+    first = {
+        "run_at": run0,
+        "ok": True,
+        "resolved_now": 1,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": gen,
+        "resolver_cycle_id": rid_a,
+        "gap_timing_ms": {"complete": True, "closing_drift_ms": 0.1},
+        "stage_timing_ms": {"total_cycle_ms": 1.0},
+    }
+    sched._persist_owner_gen = gen
+    sched._persist_cycle_summary(first, owner_gen=gen)
+    second = {
+        "run_at": run1,
+        "ok": True,
+        "resolved_now": 2,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": gen,
+        "resolver_cycle_id": rid_b,
+        "gap_timing_ms": {"complete": True, "closing_drift_ms": 0.2},
+        "stage_timing_ms": {"total_cycle_ms": 2.0},
+    }
+    sched._persist_cycle_summary(second, owner_gen=gen)
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    last = data["prediction_resolver_scheduler"]["last_cycle"]
+    assert last["resolver_cycle_id"] == rid_b
+    assert last["run_at"] == run1
+
+
+def test_last_cycle_failure_appends_history_not_replace_success(tmp_path, monkeypatch):
+    """Policy falsifier B: failure after completed success — history only on last_cycle."""
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    run_at = "2026-08-01T00:00:00+00:00"
+    rid_ok = make_resolver_cycle_id(4, run_at)
+    rid_fail = make_resolver_cycle_id(5, "2026-08-02T00:00:00+00:00")
+    success = {
+        "run_at": run_at,
+        "ok": True,
+        "resolved_now": 1,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": 4,
+        "resolver_cycle_id": rid_ok,
+        "gap_timing_ms": {"complete": True, "closing_drift_ms": 0.1},
+        "stage_timing_ms": {"total_cycle_ms": 10.0},
+    }
+    sched._persist_owner_gen = 4
+    sched._persist_cycle_summary(success, owner_gen=4)
+    sched._persist_owner_gen = 5
+    failure = {
+        "run_at": "2026-08-02T00:00:00+00:00",
+        "ok": False,
+        "resolved_now": 0,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": 5,
+        "resolver_cycle_id": rid_fail,
+        "gap_timing_ms": {"complete": False},
+        "stage_timing_ms": {"total_cycle_ms": 1.0},
+        "error": "cycle_timeout_1s",
+    }
+    sched._persist_cycle_summary(failure, owner_gen=5, force=True)
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    sched_blob = data["prediction_resolver_scheduler"]
+    last = sched_blob["last_cycle"]
+    history = sched_blob.get("cycle_history") or []
+    assert last["resolver_cycle_id"] == rid_ok
+    assert last["cycle_generation"] == 4
+    assert any(row.get("error") == "cycle_timeout_1s" for row in history)
+
+
 def test_force_timeout_preserves_completed_success_and_newer_generation(
     tmp_path, monkeypatch
 ):
