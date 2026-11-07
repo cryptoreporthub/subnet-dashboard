@@ -44,6 +44,14 @@ def isolate_data_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
 
 
+@pytest.fixture(autouse=True)
+def _reset_prediction_resolver_singleton():
+    """Drop module singleton between tests so lifecycle does not leak."""
+    resolver_scheduler.stop_prediction_resolver_scheduler()
+    yield
+    resolver_scheduler.stop_prediction_resolver_scheduler()
+
+
 @pytest.fixture
 def nudge_spy(monkeypatch):
     """Capture weight nudges without touching the filesystem."""

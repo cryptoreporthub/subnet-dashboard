@@ -527,15 +527,19 @@ def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypat
     sched = _fresh_scheduler()
     stop = threading.Event()
     violations: list[str] = []
+    watcher_errors: list[BaseException] = []
 
     def _watch():
-        while not stop.is_set():
-            with sched._release_guard:
-                if sched._cycle_lock.locked() and sched._lock_owner_gen is None:
-                    violations.append(
-                        "unowned locked cycle observed under release_guard"
-                    )
-            time.sleep(0.0005)
+        try:
+            while not stop.is_set():
+                with sched._release_guard:
+                    if sched._cycle_lock.locked() and sched._lock_owner_gen is None:
+                        violations.append(
+                            "unowned locked cycle observed under release_guard"
+                        )
+                time.sleep(0.0005)
+        except BaseException as exc:
+            watcher_errors.append(exc)
 
     watcher = threading.Thread(target=_watch, daemon=True)
     watcher.start()
@@ -550,6 +554,7 @@ def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypat
         probe.release.set()
         watcher.join(timeout=2)
         rs.stop_prediction_resolver_scheduler()
+    assert not watcher_errors, watcher_errors
     assert not violations, violations
 
 
@@ -625,13 +630,36 @@ def test_revive_full_budget_retained_after_failed_lock_acquire(tmp_path, monkeyp
 
 def test_revive_not_blocked_during_skip_summary_persist(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
+    seeded_last_cycle = {
+        "run_at": "2099-01-01T00:00:00Z",
+        "ok": True,
+        "cycle_generation": 3,
+    }
+    soul.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": dict(seeded_last_cycle),
+                    "lifecycle": "running",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
+
     rs.stop_prediction_resolver_scheduler()
     sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    monkeypatch.setattr(
+        sched,
+        "_run_refresh_cycle",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("stale scheduler must not enter real cycle")
+        ),
+    )
     sched._active = True
     gen = sched._cycle_generation
     sched._cycle_lock.acquire()
@@ -661,9 +689,14 @@ def test_revive_not_blocked_during_skip_summary_persist(tmp_path, monkeypatch):
         rt.start()
         rt.join(timeout=2)
         assert not rt.is_alive()
-        assert "out" in revived
+        assert revived["out"].get("revived") is True
+        assert rs._scheduler is not sched
         persist_release.set()
         skip_thread.join(timeout=2)
+        data = json.loads(soul.read_text(encoding="utf-8"))
+        terminal = data["prediction_resolver_scheduler"]["last_cycle"]
+        assert terminal["run_at"] == seeded_last_cycle["run_at"]
+        assert terminal["cycle_generation"] == seeded_last_cycle["cycle_generation"]
     finally:
         persist_release.set()
         rs.stop_prediction_resolver_scheduler()

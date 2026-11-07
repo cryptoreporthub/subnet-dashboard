@@ -11,6 +11,21 @@ import internal.council.resolver_scheduler as rs
 import internal.learning.loop_health as loop_health
 
 
+@pytest.fixture(autouse=True)
+def _reset_resolver_scheduler_globals():
+    """Prevent singleton / liveness cache leakage across reentry tests."""
+    lh_baseline = {"at": 0.0, "payload": None, "seq": -1}
+    loop_health._RESOLVER_LIVENESS_CACHE.clear()
+    loop_health._RESOLVER_LIVENESS_CACHE.update(lh_baseline)
+    loop_health._RESOLVER_LIVENESS_BUILDING = False
+    rs.stop_prediction_resolver_scheduler()
+    yield
+    loop_health._RESOLVER_LIVENESS_CACHE.clear()
+    loop_health._RESOLVER_LIVENESS_CACHE.update(lh_baseline)
+    loop_health._RESOLVER_LIVENESS_BUILDING = False
+    rs.stop_prediction_resolver_scheduler()
+
+
 def test_scheduler_lock_is_non_reentrant_reference():
     """Baseline: second acquire on same Lock blocks (not reentrant)."""
     lock = threading.Lock()

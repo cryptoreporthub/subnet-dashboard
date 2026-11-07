@@ -21,18 +21,20 @@ from server import app
 @pytest.fixture(autouse=True)
 def _reset_resolver_snapshot_caches():
     """Keep shared resolver snapshots isolated across health-contract tests."""
-    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
-    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    lh_baseline = {"at": 0.0, "payload": None, "seq": -1}
+    routes_baseline = {"at": 0.0, "payload": None}
+    loop_health._RESOLVER_LIVENESS_CACHE.clear()
+    loop_health._RESOLVER_LIVENESS_CACHE.update(lh_baseline)
     loop_health._RESOLVER_LIVENESS_BUILDING = False
-    routes._RESOLVER_STATE_CACHE["at"] = 0.0
-    routes._RESOLVER_STATE_CACHE["payload"] = None
+    routes._RESOLVER_STATE_CACHE.clear()
+    routes._RESOLVER_STATE_CACHE.update(routes_baseline)
     routes._RESOLVER_STATE_BUILDING = False
     yield
-    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
-    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    loop_health._RESOLVER_LIVENESS_CACHE.clear()
+    loop_health._RESOLVER_LIVENESS_CACHE.update(lh_baseline)
     loop_health._RESOLVER_LIVENESS_BUILDING = False
-    routes._RESOLVER_STATE_CACHE["at"] = 0.0
-    routes._RESOLVER_STATE_CACHE["payload"] = None
+    routes._RESOLVER_STATE_CACHE.clear()
+    routes._RESOLVER_STATE_CACHE.update(routes_baseline)
     routes._RESOLVER_STATE_BUILDING = False
 
 
@@ -466,6 +468,7 @@ def test_stale_web_tracker_yields_to_fresher_persisted(monkeypatch):
 
 def test_resolver_liveness_view_single_flight(monkeypatch):
     started = threading.Event()
+    may_query_second = threading.Event()
     release = threading.Event()
     calls = {"n": 0}
     view = {
@@ -484,6 +487,7 @@ def test_resolver_liveness_view_single_flight(monkeypatch):
     def _slow_build():
         calls["n"] += 1
         started.set()
+        assert may_query_second.wait(timeout=2)
         release.wait(timeout=2)
         return view
 
@@ -491,6 +495,7 @@ def test_resolver_liveness_view_single_flight(monkeypatch):
     thread = threading.Thread(target=loop_health._resolver_liveness_view)
     thread.start()
     assert started.wait(timeout=1)
+    may_query_second.set()
     second = loop_health._resolver_liveness_view()
     release.set()
     thread.join(timeout=2)
@@ -504,6 +509,7 @@ def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
     from internal import liveness
 
     started = threading.Event()
+    may_invalidate = threading.Event()
     release = threading.Event()
     view = {
         "at": "2026-09-01T12:00:00Z",
@@ -524,6 +530,7 @@ def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
 
     def _slow_build():
         started.set()
+        assert may_invalidate.wait(timeout=2)
         release.wait(timeout=2)
         return dict(view)
 
@@ -539,6 +546,7 @@ def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
     builder = threading.Thread(target=_run_builder)
     builder.start()
     assert started.wait(timeout=1)
+    may_invalidate.set()
     tracker.record_success({"noop": True})
     waiter = loop_health._resolver_liveness_view()
     release.set()
@@ -602,18 +610,21 @@ def test_build_after_seq_change_returns_unavailable(monkeypatch):
     view = {"status": "stale", "last_success_at": "2026-01-01T00:00:00Z", "lifecycle": "ticking"}
     started = threading.Event()
     release = threading.Event()
+    may_invalidate = threading.Event()
 
-    def _slow_build():
+    def _slow_build_with_handshake():
         started.set()
+        assert may_invalidate.wait(timeout=2)
         release.wait(timeout=2)
         return dict(view)
 
-    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _slow_build)
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _slow_build_with_handshake)
     monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
     tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
     builder = threading.Thread(target=loop_health._resolver_liveness_view)
     builder.start()
     assert started.wait(timeout=1)
+    may_invalidate.set()
     tracker.record_success({"noop": True})
     built = loop_health._resolver_liveness_view()
     release.set()
