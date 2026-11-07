@@ -284,15 +284,24 @@ def _build_resolver_liveness_view() -> Dict[str, Any]:
         if isinstance(merged, dict) and merged:
             cur_status = snap.get("status")
             merged_status = merged.get("status")
-            # Use _parse_iso (not _freshness — out of scope in this module).
-            # Blind spot fix: when web tracker is "stale", still prefer persisted
-            # truth IF its last_success_at is strictly newer. Do NOT yield on
-            # stale→ok alone when timestamps are equal (keeps stale-tick tests).
+            # Prefer persisted worker truth when it is strictly fresher, or when
+            # the in-process web snapshot degraded but worker liveness is still ok
+            # at an equal-or-newer success instant (DIT-02).
             cur_success = _parse_iso(snap.get("last_success_at"))
             merged_success = _parse_iso(merged.get("last_success_at"))
-            if merged_success is not None and (
+            use_merged = merged_success is not None and (
                 cur_success is None or merged_success > cur_success
+            )
+            if (
+                not use_merged
+                and merged_status == "ok"
+                and cur_status not in (None, "ok", "no_success_yet")
+                and merged_success is not None
+                and cur_success is not None
+                and merged_success >= cur_success
             ):
+                use_merged = True
+            if use_merged:
                 snap = merged
     except Exception:
         pass

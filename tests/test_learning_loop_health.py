@@ -377,6 +377,49 @@ def test_resolver_endpoint_normal_snapshot_marks_missing_persistence(monkeypatch
 
 
 
+def test_web_failure_yields_to_persisted_worker_ok(monkeypatch):
+    """DIT-02: web tracker failure must not hide persisted worker ok snapshot."""
+    import internal.learning.loop_health as lh
+
+    web_snap = {
+        "status": "starved",
+        "lifecycle": "running",
+        "last_success_at": "2026-09-08T03:00:00Z",
+        "last_event_at": "2026-09-08T03:05:00Z",
+        "success_age_seconds": 600,
+    }
+    persisted = {
+        "status": "ok",
+        "lifecycle": "running",
+        "last_success_at": "2026-09-08T03:00:00Z",
+        "last_event_at": "2026-09-08T03:00:00Z",
+        "success_age_seconds": 300,
+    }
+
+    class _FakeTracker:
+        def snapshot(self):
+            return dict(web_snap)
+
+    monkeypatch.setattr(
+        lh,
+        "_worker_peer",
+        lambda: {"alive": True, "expected": True, "peer": "inline_worker"},
+    )
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {"refresh_minutes": 15, "lifecycle": "running"},
+    )
+    monkeypatch.setattr("internal.liveness.get_tracker", lambda _name: _FakeTracker())
+    monkeypatch.setattr(
+        "internal.liveness.build_liveness_registry",
+        lambda probe_worker=False: {"trackers": {"prediction_resolver": dict(persisted)}},
+    )
+
+    view = lh._build_resolver_liveness_view()
+    assert view["status"] == "ok"
+    assert view["liveness"]["status"] == "ok"
+
+
 def test_stale_web_tracker_yields_to_fresher_persisted(monkeypatch):
     """Web tracker status=stale must yield to fresher persisted registry truth."""
     import internal.learning.loop_health as lh

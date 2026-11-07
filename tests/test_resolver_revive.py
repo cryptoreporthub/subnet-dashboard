@@ -526,12 +526,15 @@ def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypat
     rs.stop_prediction_resolver_scheduler()
     sched = _fresh_scheduler()
     stop = threading.Event()
+    violations: list[str] = []
 
     def _watch():
         while not stop.is_set():
             with sched._release_guard:
                 if sched._cycle_lock.locked() and sched._lock_owner_gen is None:
-                    raise AssertionError("unowned locked cycle observed under release_guard")
+                    violations.append(
+                        "unowned locked cycle observed under release_guard"
+                    )
             time.sleep(0.0005)
 
     watcher = threading.Thread(target=_watch, daemon=True)
@@ -547,6 +550,7 @@ def test_no_unowned_cycle_lock_while_held_during_cycle_start(tmp_path, monkeypat
         probe.release.set()
         watcher.join(timeout=2)
         rs.stop_prediction_resolver_scheduler()
+    assert not violations, violations
 
 
 def test_revive_at_owner_barrier_abandons_without_overlap(tmp_path, monkeypatch):

@@ -343,3 +343,13 @@
 - Pre-push: endpoint contract **149 passed**, scoped Bandit high **clean**.
 - PR evidence comment [#6700529886](https://github.com/cryptoreporthub/subnet-dashboard/pull/1571#issuecomment-6700529886); supersedes Replit FAIL `#6697454618`–`6327` (`a6c47645` snapshot). CI pending on push.
 - Store: `internal/pr1571-export-growth-trace-2026-11-06.md`, `internal/pr1571-gap-closure-ci-addendum-2026-11-07.md`.
+
+## 2026-11-07 — PR #1571 Wave 0 + Wave 1 (rebase + CodeRabbit)
+
+- **Wave 0:** Rebased onto `main` (`4cfee00a`); endpoint **149**, v5 **19/19** pre-W1; receipt `internal/pr1571-wave0-receipt-2026-11-07.md`.
+- **Wave 1 pushed:** tip `7eacac3e` — CR-01/04/05/06/07, mutator CR-02/03, CR-08/GAP-08 tests; scoped diff **83,633 B** `e142246e…`; v5 **22**, resolver+soul **92**, endpoint **149**. Plan doc **ready wave 1**. No merge/deploy.
+
+## 2026-11-07 — PR #1571 Wave 2 (DIT-02/DIT-03)
+
+- **Wave 2:** `loop_health.py` worker-ok over web failure; daemon watcher assert fix in `test_resolver_revive.py`; pytest proofs (endpoint **149**, loop+revive **48**, scheduler **76**). Store: `internal/pr1571-wave2-review-triage-2026-11-07.md`, `internal/pr1571-wave1-evidence-2026-11-07.md`.
+- **Replit handoff:** short PR comment supersedes [#6700529886](https://github.com/cryptoreporthub/subnet-dashboard/pull/1571#issuecomment-6700529886); suggest `@ditto review` on tip (no in-repo trigger found). CI pending post-push. No merge/deploy.
