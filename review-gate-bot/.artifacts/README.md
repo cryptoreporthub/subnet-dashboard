@@ -4,9 +4,9 @@ Evidence-only bundle for freeze replay on Replit `0be6701e`. **Not** a Replit PA
 
 | File | SHA-256 |
 |------|---------|
-| `fix4-replit-artifact-bundle-2026-11-07.tar.gz` | `fd397e4bf116ba178288e8c43d2502ebbc4a42ecea67c84a5668bac4ef7e56ec` |
+| `fix4-replit-artifact-bundle-2026-11-07.tar.gz` | `132761ec5697d8b660c99217be1f4c3f124a9e9791c737cd84827520150fbe2e` |
 
-**Pass 5:** inner `check-throw-grid.test.ts` `cad2023a…`; slice (iii)-b ledger **666/0** (Replit MODIFY closure rows A/B).
+**Pass 5 sync:** inner `sha256sum -c fix4-replit-bundle-2026-11-07.sha256` **pass**; Task 3 patch alone → **666/0**; throw-grid `cad2023a…`; export manifest `565f7544…`.
 
 **Verify after download:**
 

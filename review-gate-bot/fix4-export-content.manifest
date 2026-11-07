@@ -1,9 +1,9 @@
 # Fix-4 full export manifest vs freeze tarball 8eea815e
 # freeze_sha256=8eea815eb57fdaee87b4bb2c24ff5dad4b88484914d5e088a2ab46249bc8fa87
-# generated_utc=2026-11-07T18:07:25Z
+# generated_utc=2026-11-07T23:58:00Z
 
 M bot/lib/check.ts 413eb93479a13a548c11dc9d32badd99fa3d191d423063ff812cfbc5d8af02e4
 M bot/lib/advance.ts 17907c539a51230e3bcf7278c6947f3c264e9cf74e1d7f1370bbec30f65a48f9
 M tests/suite-record.test.ts 0ba62a30a2e16abf9f898e99f590a7f61b970a4a284977e69ac4c93c8fcc5b85
 A tests/check-throw-grid.test.ts cad2023a292de87a9ac55c74b47b44cf5afe9a320f5e3dbf2467e82765b8fa30
-A fix4-freeze-overlay.manifest 87529e2d13dba7918a96b32e2fecb0988bf66597af083bb566d6a82025b2d4b8
+A fix4-freeze-overlay.manifest 0ffcdb6ffef6bbd4816d914096127d5dfc29c22630beb8b7234b58259eb3126f
