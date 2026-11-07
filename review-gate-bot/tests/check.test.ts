@@ -2,14 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { CHECK_NAME, gateConclusion, postGateCheck } from "../bot/lib/check.js";
-import type { GateNext, GateState } from "../bot/lib/gate.js";
+import { CHECK_NAME, checkDedupeKey, gateConclusion, postGateCheck } from "../bot/lib/check.js";
+import { checkHoldFingerprint, type GateNext, type GateState } from "../bot/lib/gate.js";
 import { suiteKey } from "../bot/lib/gh.js";
+import { READER_EXPECTED_SCHEMA_VERSION, RECORD_VERSION_MISMATCH_DETAIL } from "../bot/lib/pair-record.js";
+import { resetDeliveryBudgetFactory, setDeliveryBudgetFactory, type ReadyPair } from "../bot/lib/pair-observation.js";
 
 const HEAD = "a".repeat(40);
 const MOVED = "b".repeat(40);
 const BASE = "c".repeat(40);
+const MERGE = "e".repeat(40);
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+
+function deliveryPair(): ReadyPair {
+  return { kind: "ready", prNumber: REF.number, headSha: HEAD, baseTipSha: BASE, mergeBaseSha: MERGE, draft: false, baseRef: "" };
+}
 
 function state(next: GateNext, overrides: Partial<GateState> = {}): GateState {
   return {
@@ -33,6 +40,7 @@ test("only a mergeable gate is green, a FAIL is red, and everything still waitin
     tag_replit: "action_required",
     await_replit: "action_required",
     needs_joshua: "action_required",
+    compare_blocked: "action_required",
     mergeable: "success",
     blocked: "failure",
   };
@@ -54,14 +62,30 @@ type Check = { name: string; sha: string; conclusion?: string; summary?: string;
 /** A delivery that reads the gate it was handed, then the same gate again under the lock. */
 const same = (s: GateState) => ({ state: s, read: async () => s });
 
-function seedClean(w: ReturnType<typeof world>) {
-  w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
+function seedClean(w: ReturnType<typeof world>, gate: GateState = state("mergeable")) {
+  w.store.set(suiteKey(REF, HEAD, BASE), {
+    state: "clean",
+    at: 1,
+    schemaVersion: READER_EXPECTED_SCHEMA_VERSION,
+    mergeBaseSha: MERGE,
+    checkHoldFingerprint: checkHoldFingerprint(gate),
+  });
 }
 
-function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases, mergeBases: (string | null)[] = bases) {
+type MergeBaseReply = string | null | "empty-sha";
+
+function world(
+  heads: string[],
+  bases: string[] = [MERGE],
+  tips: string[] = [BASE],
+  mergeBases: MergeBaseReply[] = [MERGE],
+  compareMergeBases?: MergeBaseReply[],
+  options: { compareThrowsOnce?: boolean } = {},
+) {
   const checks: Check[] = [];
   const store = new Map<string, unknown>();
   let reads = 0;
+  let compareReads = 0;
   const baseRepo = { owner: { login: REF.owner }, name: REF.repo };
   const octokit = {
     rest: {
@@ -88,10 +112,21 @@ function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases
           data: { commit: { sha: tips[Math.min(reads - 1, tips.length - 1)] ?? BASE } },
         }),
         compareCommitsWithBasehead: async () => {
-          const mb = mergeBases[0];
+          if (options.compareThrowsOnce === true && compareReads === 0) {
+            compareReads += 1;
+            throw new Error("compare 502");
+          }
+          const seq = compareMergeBases ?? mergeBases;
+          const idx = Math.min(compareReads++, seq.length - 1);
+          const mb = seq[idx];
           return {
             data: {
-              merge_base_commit: mb === null ? null : { sha: mb ?? bases[0] },
+              merge_base_commit:
+                mb === null
+                  ? null
+                  : mb === "empty-sha"
+                    ? { sha: "" }
+                    : { sha: mb },
               files: [],
             },
           };
@@ -124,29 +159,35 @@ function world(heads: string[], bases: string[] = [BASE], tips: string[] = bases
 
 test("a mergeable gate at the live head posts a green review-gate check on that head", async () => {
   const w = world([HEAD]);
-  w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
-  assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
+  seedClean(w, state("mergeable"));
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("mergeable")) }), "posted");
   assert.deepEqual(w.checks.map((c) => [c.name, c.sha, c.conclusion]), [[CHECK_NAME, HEAD, "success"]]);
 });
 
 test("a head that moved before the post gets no check, green or otherwise", async () => {
   const w = world([MOVED]);
-  assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "stale-head");
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("mergeable")) }), "stale-head");
   assert.deepEqual(w.checks, []);
 });
 
 test("a head that moves after the check opens is never concluded green", async () => {
   const w = world([HEAD, MOVED], [BASE, BASE]);
-  w.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
-  await postGateCheck({ ...w.deps, ...same(state("mergeable")) });
+  seedClean(w, state("mergeable"));
+  const workingCheck = await w.deps.createCheck({ name: CHECK_NAME, sha: HEAD });
+  await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    workingCheck,
+    ...same(state("mergeable")),
+  });
   assert.equal(w.checks.length, 1);
   assert.equal(w.checks[0]?.conclusion, "cancelled");
-  assert.match(w.checks[0]?.summary ?? "", /head or base moved/i);
+  assert.match(w.checks[0]?.summary ?? "", /Final-fence pair drift|head or base moved/i);
 });
 
 test("the summary names each reviewer's verdict and the next step, so a red or grey check explains itself", async () => {
   const w = world([HEAD]);
-  await postGateCheck({ ...w.deps, ...same(state("await_cursor_ditto", { ditto: "missing", replit: "missing", suite: "missing" })) });
+  await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("await_cursor_ditto", { ditto: "missing", replit: "missing", suite: "missing" })) });
   const summary = w.checks[0]?.summary ?? "";
   for (const needle of ["MC", "Cursor", "Ditto", "Replit", "suite", "await_cursor_ditto"]) {
     assert.ok(summary.includes(needle), `${needle} missing from: ${summary}`);
@@ -155,10 +196,10 @@ test("the summary names each reviewer's verdict and the next step, so a red or g
 
 test("an unchanged gate state at the same head does not open another check; a changed one does", async () => {
   const w = world([HEAD]);
-  assert.equal(await postGateCheck({ ...w.deps, ...same(state("await_cursor_ditto", { ditto: "missing" })) }), "posted");
-  assert.equal(await postGateCheck({ ...w.deps, ...same(state("await_cursor_ditto", { ditto: "missing" })) }), "unchanged");
-  seedClean(w);
-  assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("await_cursor_ditto", { ditto: "missing" })) }), "posted");
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("await_cursor_ditto", { ditto: "missing" })) }), "unchanged");
+  seedClean(w, state("mergeable"));
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("mergeable")) }), "posted");
   assert.deepEqual(w.checks.map((c) => c.conclusion), ["action_required", "success"]);
 });
 
@@ -174,11 +215,11 @@ test("a delivery that read the gate earlier cannot conclude over a newer deliver
     await held;
     return w.deps.createCheck(input);
   };
-  const first = postGateCheck({ ...w.deps, createCheck: stalled, read, state: gate });
+  const first = postGateCheck({ ...w.deps, expectedPair: deliveryPair(), createCheck: stalled, read, state: gate });
   await new Promise((resolve) => setImmediate(resolve));
   gate = state("mergeable");
-  seedClean(w);
-  const second = postGateCheck({ ...w.deps, read, state: gate });
+  seedClean(w, gate);
+  const second = postGateCheck({ ...w.deps, expectedPair: deliveryPair(), read, state: gate });
   // Give the newer delivery a chance to conclude first; a delivery that waits behind the stalled one
   // is still pending after this, and is released below.
   await Promise.race([second, new Promise((resolve) => setTimeout(resolve, 50))]);
@@ -190,36 +231,116 @@ test("a delivery that read the gate earlier cannot conclude over a newer deliver
 test("the check reports the gate as read under the lock, not the state the delivery was handed", async () => {
   // Another process posted a newer verdict after this delivery read the gate. The fresh read is the truth.
   const w = world([HEAD]);
-  seedClean(w);
   const stale = state("await_cursor_ditto", { ditto: "missing" });
   const fresh = state("mergeable");
-  await postGateCheck({ ...w.deps, state: stale, read: async () => fresh });
+  seedClean(w, fresh);
+  await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), state: stale, read: async () => fresh });
   assert.deepEqual(w.checks.map((c) => c.conclusion), ["success"]);
 });
 
 test("the same PR number and head in another repository is a different PR, so its check is posted", async () => {
   const w = world([HEAD]);
-  seedClean(w);
-  assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
-  seedClean(w);
-  assert.equal(await postGateCheck({ ...w.deps, ref: { ...REF, owner: "someone-else" }, ...same(state("mergeable")) }), "posted");
+  seedClean(w, state("mergeable"));
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("mergeable")) }), "posted");
+  seedClean(w, state("mergeable"));
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ref: { ...REF, owner: "someone-else" }, ...same(state("mergeable")) }), "posted");
   assert.equal(w.checks.length, 2);
 });
 
 test("a check that failed to open is retried by the next delivery", async () => {
   const w = world([HEAD]);
-  seedClean(w);
+  seedClean(w, state("mergeable"));
   const failing = { ...w.deps, createCheck: async () => { throw new Error("github 403"); } };
   await assert.rejects(postGateCheck({ ...failing, ...same(state("mergeable")) }), /403/);
-  assert.equal(await postGateCheck({ ...w.deps, ...same(state("mergeable")) }), "posted");
+  assert.equal(await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("mergeable")) }), "posted");
 });
 
 test("a NEEDS-JOSHUA gate says so in the check, with the reason and the files or test IDs behind it", async () => {
   const w = world([HEAD]);
-  await postGateCheck({ ...w.deps, ...same(state("needs_joshua", { suite: "needs-joshua", suiteDetail: "pytest.ini" })) });
+  await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(state("needs_joshua", { suite: "needs-joshua", suiteDetail: "pytest.ini" })) });
   const summary = w.checks[0]?.summary ?? "";
   assert.match(summary, /NEEDS-JOSHUA/);
   assert.match(summary, /pytest\.ini/);
   assert.equal(w.checks[0]?.conclusion, "action_required");
+});
+
+test("H2 TC-invalid-dedupe-no-handle: invalid pair record is not suppressed by check dedupe (posts action_required)", async () => {
+  const w = world([HEAD]);
+  const gate = state("mergeable");
+  const summary =
+    "MC PASS · Cursor PASS · Ditto PASS · suite clean · Replit PASS · base tip ccccccc · next: mergeable";
+  w.store.set(
+    suiteKey(REF, HEAD, BASE),
+    { state: "clean", at: 1, schemaVersion: 0, mergeBaseSha: MERGE },
+  );
+  w.store.set(checkDedupeKey(REF, HEAD, BASE, MERGE, checkHoldFingerprint(gate)), summary);
+  const outcome = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), state: gate, read: async () => gate });
+  assert.equal(outcome, "posted");
+  assert.equal(w.checks.length, 1);
+  assert.equal(w.checks[0]?.conclusion, "action_required");
+  assert.match(w.checks[0]?.summary ?? "", new RegExp(RECORD_VERSION_MISMATCH_DETAIL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("H1 TC-admission-retry: first compare fails, second observe recovers to ready pair", async () => {
+  const w = world([HEAD], [MERGE], [BASE], [MERGE], [MERGE, MERGE], { compareThrowsOnce: true });
+  const gate = state("mergeable");
+  seedClean(w, gate);
+  const outcome = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), state: gate, read: async () => gate });
+  assert.equal(outcome, "posted");
+});
+
+test("H1 TC-head-mismatch-no-handle: live pair head differs from gate read without workingCheck -> stale-head", async () => {
+  const w = world([HEAD]);
+  const gate = state("mergeable", { headSha: MOVED });
+  seedClean(w, gate);
+  const outcome = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), state: gate, read: async () => gate });
+  assert.equal(outcome, "stale-head");
+  assert.deepEqual(w.checks, []);
+});
+
+test("H1 TC-double-mut-fail: cancel needs GitHub mutation budget", async () => {
+  setDeliveryBudgetFactory(() => ({
+    admissionReads: 2,
+    finalFenceReads: 2,
+    revalidationReads: 2,
+    githubMutations: 0,
+    createCheckCount: 1,
+  }));
+  try {
+    const w = world([HEAD, MOVED], [MERGE, MERGE], [BASE, BASE]);
+    const gate = state("mergeable");
+    seedClean(w, gate);
+    const workingCheck = await w.deps.createCheck({ name: CHECK_NAME, sha: HEAD });
+    const outcome = await postGateCheck({
+      ...w.deps,
+      expectedPair: deliveryPair(),
+      workingCheck,
+      state: gate,
+      read: async () => gate,
+    });
+    assert.equal(outcome, "finalization-unresolved");
+  } finally {
+    resetDeliveryBudgetFactory();
+  }
+});
+
+test("H1 TC-admission-read-budget-exhausted: pair-unverifiable without workingCheck", async () => {
+  setDeliveryBudgetFactory(() => ({
+    admissionReads: 0,
+    finalFenceReads: 2,
+    revalidationReads: 2,
+    githubMutations: 2,
+    createCheckCount: 1,
+  }));
+  try {
+    const w = world([HEAD]);
+    const gate = state("mergeable");
+    seedClean(w, gate);
+    const outcome = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), state: gate, read: async () => gate });
+    assert.equal(outcome, "pair-unverifiable");
+    assert.deepEqual(w.checks, []);
+  } finally {
+    resetDeliveryBudgetFactory();
+  }
 });
 

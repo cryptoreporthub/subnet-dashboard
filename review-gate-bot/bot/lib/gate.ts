@@ -26,6 +26,7 @@ export type GateNext =
   | "tag_replit"
   | "await_replit"
   | "needs_joshua"
+  | "compare_blocked"
   | "mergeable"
   | "blocked";
 
@@ -40,6 +41,11 @@ export type GateInput = {
   replitTaggedForSha?: string;
   /** When that tag was posted (ISO time). A Replit PASS counts only if said at or after it. */
   replitTaggedAt?: string;
+  /**
+   * When true, the automated PR file compare path is blocked (R-D1 / compare_blocked).
+   * Distinct from `run_suite`: the gate does not ask the delivery to record a suite run.
+   */
+  compareBlocked?: boolean;
 };
 
 export type GateState = {
@@ -160,6 +166,10 @@ export function computeGate(input: GateInput): GateState {
     return { ...base, next: "await_cursor_ditto" };
   }
 
+  if (input.compareBlocked === true) {
+    return { ...base, next: "compare_blocked", suiteDetail: input.suiteDetail };
+  }
+
   if (input.suite === "needs-joshua") {
     // Final: a refused suite is not run again, and the check says why, until a person clears it or the head moves.
     return { ...base, next: "needs_joshua" };
@@ -276,4 +286,28 @@ export function replitAskKey(ref: { owner: string; repo: string; number: number 
  */
 export function reviewTurnKey(ref: { owner: string; repo: string; number: number }, headSha: string): string {
   return `review-turn:${prKey(ref)}:${headSha}`;
+}
+
+/**
+ * Fingerprint of human / compare holds that must stay tied to the deduped check (plan §4.1 FP-write).
+ * Omits normal gate progression (`next`, suite clean/carried) so suite records written at `run_suite`
+ * still match the fingerprint when the gate later reaches `mergeable`.
+ */
+export function checkHoldFingerprint(state: GateState): string {
+  const parts: string[] = ["v1"];
+  if (state.next === "compare_blocked") {
+    parts.push("compare_blocked");
+    const sd = state.suiteDetail ?? "";
+    if (sd !== "") {
+      parts.push(`sd=${sd}`);
+    }
+  }
+  if (state.suite === "needs-joshua") {
+    parts.push("needs_joshua");
+    const sd = state.suiteDetail ?? "";
+    if (sd !== "") {
+      parts.push(`sd=${sd}`);
+    }
+  }
+  return parts.join("|");
 }

@@ -4,17 +4,43 @@ import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { advanceGate, commentReviewTurn, commentTurn, failureReleasesLease, logAsk, pullRequestReviewTurn, pullRequestTurn, releaseReviewTurnIfHolder, reviewEventTurn, reviewLeaseFromState, type GateDeps } from "../bot/lib/advance.js";
 import { suiteKey } from "../bot/lib/gh.js";
-import { prKey, replitAskKey, replitTagKey, reviewTurnKey } from "../bot/lib/gate.js";
+import { checkHoldFingerprint, prKey, replitAskKey, replitTagKey, reviewTurnKey, type GateState } from "../bot/lib/gate.js";
 import { LEASE_MS, leaseToken, releaseLeaseIfHolder } from "../bot/lib/lock.js";
 import { marker } from "../bot/lib/verdicts.js";
 import { JUNIT_ARTIFACT, type RunnerReader } from "../bot/lib/runner.js";
 import { deflateRawSync } from "node:zlib";
+import { READER_EXPECTED_SCHEMA_VERSION } from "../bot/lib/pair-record.js";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
 const OTHER = "1234567890abcdef1234567890abcdef12345678";
 const NEW_HEAD = "d".repeat(40);
 const BASE = "e".repeat(40);
+/** Merge-base from `compareCommitsWithBasehead` in the fake Octokit (must match suite record trust). */
+const MERGE_BASE = BASE;
 const ME = "simi-revision[bot]";
+
+function pairTrust(mergeBaseSha: string, rest: Record<string, unknown>): Record<string, unknown> {
+  const { checkHoldFingerprint: fp, ...body } = rest;
+  return {
+    schemaVersion: READER_EXPECTED_SCHEMA_VERSION,
+    mergeBaseSha,
+    checkHoldFingerprint: (fp as string | undefined) ?? checkHoldFingerprint(mergeableGateState()),
+    ...body,
+  };
+}
+
+function mergeableGateState(): GateState {
+  return {
+    headSha: HEAD,
+    mc: "PASS",
+    cursor: "PASS",
+    ditto: "PASS",
+    replit: "PASS",
+    suite: "clean" as const,
+    replitTagged: true,
+    next: "mergeable" as const,
+  };
+}
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 
 type Raw = {
@@ -282,7 +308,7 @@ test("a regressed result from the same suite run is not downloaded again on the 
   const w = world({
     comments: [mcPass],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "regressed", newFailures: ["x"], runId: 77, at: 1 } },
+    seed: { [suiteKey(REF, HEAD, BASE)]: pairTrust(MERGE_BASE, { state: "regressed", newFailures: ["x"], runId: 77, at: 1 }) },
   });
   const { reader, downloads } = suiteReader({ runId: 77 });
   await reviewEventTurn({ ...w.deps, reader });
@@ -374,7 +400,7 @@ function readyForReplit(options: { createFails?: boolean; seed?: Record<string, 
   return world({
     comments: [mcPass, ...(options.comments ?? [])],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "clean" }, ...options.seed },
+    seed: { [suiteKey(REF, HEAD, BASE)]: pairTrust(MERGE_BASE, { state: "clean" }), ...options.seed },
     createFails: options.createFails,
   });
 }
@@ -475,7 +501,7 @@ test("a gate step whose error echoes a credential logs the error without the cre
     checkFails: true,
     comments: [mcPass],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "clean" } },
+    seed: { [suiteKey(REF, HEAD, BASE)]: pairTrust(MERGE_BASE, { state: "clean" }) },
   });
   w.deps.createCheck = async () => {
     throw new Error(`github 403 for token ${token}`);
@@ -499,7 +525,7 @@ test("a failed gate step is logged under the repository-qualified PR key", async
     checkFails: true,
     comments: [mcPass],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [suiteKey(REF, HEAD, BASE)]: { state: "clean" } },
+    seed: { [suiteKey(REF, HEAD, BASE)]: pairTrust(MERGE_BASE, { state: "clean" }) },
   });
   const lines: string[] = [];
   const original = console.error;

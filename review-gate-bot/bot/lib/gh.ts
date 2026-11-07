@@ -4,8 +4,13 @@ import type { GateState, PinnedVerdict, SuiteState } from "./gate.js";
 import { computeGate, prKey } from "./gate.js";
 import type { CommentLike, ReviewLike } from "./verdicts.js";
 import { collectPinnedVerdicts, hasOwnMarker, OWNER_LOGIN } from "./verdicts.js";
+import { observePair, observePairFromPull, type PairObservation } from "./pair-observation.js";
+import { readSuiteRecordTrusted, RECORD_VERSION_MISMATCH_DETAIL } from "./pair-record.js";
 
 export type PrRef = { owner: string; repo: string; number: number };
+
+/** `pulls.get` response body — shared with `observePairFromPull` for a single PR fetch per delivery (RD-08). */
+export type PullsGetData = Awaited<ReturnType<Octokit["rest"]["pulls"]["get"]>>["data"];
 
 export type PrSnapshot = {
   number: number;
@@ -18,6 +23,8 @@ export type PrSnapshot = {
   title: string;
   files: string[];
   url: string;
+  /** Network boundary classification for trust paths (plan §3). */
+  observation: PairObservation;
 };
 
 export type LivePair = {
@@ -103,31 +110,74 @@ export async function readLivePair(octokit: Octokit, ref: PrRef, options?: { ide
   }
 }
 
-export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> {
-  const pair = await readLivePair(octokit, ref);
-  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
-    owner: ref.owner,
-    repo: ref.repo,
-    pull_number: ref.number,
-    per_page: 100,
-  });
-  const { data: pr } = await octokit.rest.pulls.get({
-    owner: ref.owner,
-    repo: ref.repo,
-    pull_number: ref.number,
-  });
+/**
+ * Build a `PrSnapshot` from one `pulls.get` body plus file list — one `pulls.get` per call site (RD-08).
+ */
+export async function prSnapshotFromPullFiles(
+  octokit: Octokit,
+  ref: PrRef,
+  pr: PullsGetData,
+  rawFiles: readonly { filename: string; previous_filename?: string | null }[],
+): Promise<PrSnapshot> {
+  const fileList = [
+    ...new Set(
+      rawFiles
+        .flatMap((f) => (f.previous_filename === undefined || f.previous_filename === null ? [f.filename] : [f.filename, f.previous_filename]))
+        .filter((n): n is string => typeof n === "string"),
+    ),
+  ];
+  const observation = await observePairFromPull(octokit, ref, pr);
+  if (observation.kind === "ready") {
+    return {
+      number: pr.number,
+      headSha: observation.headSha,
+      baseSha: observation.mergeBaseSha,
+      baseTipSha: observation.baseTipSha,
+      draft: observation.draft,
+      title: pr.title,
+      files: fileList,
+      url: pr.html_url,
+      observation,
+    };
+  }
+  if (observation.kind === "base-unavailable") {
+    return {
+      number: pr.number,
+      headSha: observation.headSha,
+      baseTipSha: observation.baseTipSha,
+      draft: observation.draft,
+      title: pr.title,
+      files: fileList,
+      url: pr.html_url,
+      observation,
+    };
+  }
   return {
     number: pr.number,
-    headSha: pair.headSha,
-    ...(pair.baseSha !== "" ? { baseSha: pair.baseSha } : {}),
-    ...(pair.baseTipSha !== "" ? { baseTipSha: pair.baseTipSha } : {}),
-    draft: pair.draft,
+    headSha: pr.head?.sha ?? "",
+    draft: pr.draft ?? false,
     title: pr.title,
-    // A rename touches both paths. `x.py` renamed to `x.md` must not look like a
-    // prose-only change, so the old path is a changed file too.
-    files: [...new Set(files.flatMap((f) => (f.previous_filename === undefined ? [f.filename] : [f.filename, f.previous_filename])))],
+    files: fileList,
     url: pr.html_url,
+    observation,
   };
+}
+
+export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> {
+  const [{ data: pr }, files] = await Promise.all([
+    octokit.rest.pulls.get({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.number,
+    }),
+    octokit.paginate(octokit.rest.pulls.listFiles, {
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.number,
+      per_page: 100,
+    }),
+  ]);
+  return prSnapshotFromPullFiles(octokit, ref, pr, files);
 }
 
 /**
@@ -207,6 +257,15 @@ export const SUITE_HEAD_HOLDS = new Set(["needs-joshua"]);
 
 export type RecordedSuite = {
   state: SuiteState;
+  /** Required on pair-key automated records for trust (plan §3). Omitted on legacy operator holds only where H1 applies. */
+  schemaVersion?: number;
+  /** Merge-base SHA this record was computed against. Must match live merge-base for trust. */
+  mergeBaseSha?: string;
+  /**
+   * Gate hold fingerprint at write time (plan §4.1). Pair-key writers set this from `checkHoldFingerprint(readGateState)`.
+   * When present, `postGateCheck` refuses dedupe if the live gate fingerprint differs.
+   */
+  checkHoldFingerprint?: string;
   newFailures?: string[];
   carriedFrom?: string;
   /** The workflow run the JUnit came from. Absent for a carried result. */
@@ -322,6 +381,7 @@ export function gateStateFrom(input: {
   suiteDetail?: string;
   replitTaggedForSha?: string;
   replitTaggedAt?: string;
+  compareBlocked?: boolean;
 }): GateState {
   const known = new Set<string>([input.headSha]);
   const resolveSha = (claimed: string): string | undefined => {
@@ -352,6 +412,7 @@ export function gateStateFrom(input: {
     suiteDetail: input.suiteDetail,
     replitTaggedForSha: input.replitTaggedForSha,
     replitTaggedAt: input.replitTaggedAt,
+    compareBlocked: input.compareBlocked,
   });
 }
 
@@ -407,31 +468,70 @@ export async function readGateState(input: {
   kv: HostKvApi;
   ref: PrRef;
   headSha: string;
+  /** When already read (e.g. check_gate_state), avoids a second full readPr (+ duplicate pulls.get). */
+  prSnapshot?: PrSnapshot;
+  /**
+   * When the caller already issued `pulls.get` (e.g. advanceGate), pass it to pair-build `prSnapshot`
+   * without a second `pulls.get`. Still paginates `listFiles` (RD-08: one PR fetch).
+   */
+  prPull?: PullsGetData;
+  /** RD-01: mocked compare-blocked path — PR file compare hit cap or otherwise blocked before suite. */
+  compareBlocked?: boolean;
 }): Promise<GateState> {
-  const [comments, reviews, pr] = await Promise.all([
-    readComments(input.octokit, input.ref),
-    readReviews(input.octokit, input.ref),
-    readPr(input.octokit, input.ref),
-  ]);
+  const pr =
+    input.prSnapshot ??
+    (input.prPull !== undefined
+      ? await prSnapshotFromPullFiles(
+          input.octokit,
+          input.ref,
+          input.prPull,
+          await input.octokit.paginate(input.octokit.rest.pulls.listFiles, {
+            owner: input.ref.owner,
+            repo: input.ref.repo,
+            pull_number: input.ref.number,
+            per_page: 100,
+          }),
+        )
+      : await readPr(input.octokit, input.ref));
+  const [comments, reviews] = await Promise.all([readComments(input.octokit, input.ref), readReviews(input.octokit, input.ref)]);
 
-  const baseTipSha = pr.baseTipSha;
+  const obs = pr.observation;
+  const compareReady = obs.kind === "ready";
+  const baseTipSha = obs.kind === "ready" || obs.kind === "base-unavailable" ? obs.baseTipSha : pr.baseTipSha;
   const pairFields = {
     headSha: pr.headSha,
-    baseSha: pr.baseSha ?? "",
+    baseSha: obs.kind === "ready" ? obs.mergeBaseSha : "",
     baseTipSha: baseTipSha ?? "",
   };
-  const compareReady = pairCompareReady(pairFields);
-  const rawRecord =
-    baseTipSha !== undefined && baseTipSha !== ""
-      ? await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha)
-      : undefined;
+
+  let rawRecord: RecordedSuite | undefined;
+  let trustDetail: string | undefined;
+  if (obs.kind === "ready") {
+    const trusted = await readSuiteRecordTrusted(input.kv, input.ref, input.headSha, obs.baseTipSha, obs);
+    if (!trusted.ok) {
+      rawRecord = undefined;
+      trustDetail =
+        trusted.reason === "merge-base-mismatch"
+          ? `${RECORD_VERSION_MISMATCH_DETAIL} · merge-base-mismatch`
+          : trusted.detail;
+    } else {
+      rawRecord = trusted.record;
+    }
+  } else {
+    rawRecord =
+      baseTipSha !== undefined && baseTipSha !== ""
+        ? await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha)
+        : undefined;
+  }
+
   const record = gateSuiteRecord(rawRecord, compareReady);
   const suiteDetail =
-    !compareReady &&
+    trustDetail ??
+    (!compareReady &&
     rawRecord !== undefined &&
     (rawRecord.state === "clean" || rawRecord.state === "carried")
       ? GITHUB_PAIR_READ_DETAIL
-      : record?.detail;
+      : record?.detail);
   const state = gateStateFrom({
     headSha: input.headSha,
     comments,
@@ -440,6 +540,18 @@ export async function readGateState(input: {
     suiteDetail,
     replitTaggedForSha: replitTaggedIn(comments, input.headSha),
     replitTaggedAt: replitTagTimeIn(comments, input.headSha),
+    compareBlocked: input.compareBlocked,
   });
+
   return downgradeIfStaleGreen(state, pairFields);
+}
+
+/** KV view that returns `merged` for the pair-key suite record (FP at write time). */
+export function hostKvWithSuiteRecord(kv: HostKvApi, ref: PrRef, headSha: string, baseTipSha: string, merged: RecordedSuite): HostKvApi {
+  const key = suiteKey(ref, headSha, baseTipSha);
+  return {
+    get: async (k: string) => (k === key ? merged : await kv.get(k)),
+    put: kv.put.bind(kv),
+    delete: kv.delete.bind(kv),
+  };
 }

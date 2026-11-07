@@ -1,7 +1,18 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { prKey } from "./gate.js";
-import { readSuiteRecord, legacySuiteKey, suiteKey, readLivePair, pairCompareReady, type PrRef } from "./gh.js";
+import { checkHoldFingerprint, prKey } from "./gate.js";
+import {
+  hostKvWithSuiteRecord,
+  readGateState,
+  readSuiteRecord,
+  legacySuiteKey,
+  suiteKey,
+  readLivePair,
+  pairCompareReady,
+  type PrRef,
+} from "./gh.js";
+import { READER_EXPECTED_SCHEMA_VERSION } from "./pair-record.js";
+import { writePairResult } from "./pair-write.js";
 import { knownFlakes } from "./flakes.js";
 import { exclusive } from "./lock.js";
 import { fetchJunit, octokitRunner, pickRun, type RunnerReader } from "./runner.js";
@@ -174,25 +185,33 @@ async function recordComparison(input: ComparisonInput): Promise<SuiteComparison
   if (live.headSha !== headSha || live.baseTipSha !== baseTipSha || live.baseSha !== baseSha) {
     return { ok: false, step: "head", reason: "stale-pair", detail: "head, merge-base, or base tip moved before the suite record was written" };
   }
-  await input.kv.put(
-    suiteKey(input.ref, input.headSha, baseTipSha),
-    {
-      state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
-      newFailures: diff.newFailures,
-      runId: head.runId,
-      invalid: diff.invalid ?? null,
-      missing: diff.missing,
-      skipped: diff.skipped,
-      ...(detail === undefined ? {} : { detail }),
-      at: Date.now(),
-    },
+  const suiteState: "clean" | "regressed" = diff.clean && diff.invalid === undefined ? "clean" : "regressed";
+  const body = {
+    state: suiteState,
+    newFailures: diff.newFailures,
+    runId: head.runId,
+    invalid: diff.invalid ?? null,
+    missing: diff.missing,
+    skipped: diff.skipped,
+    ...(detail === undefined ? {} : { detail }),
+    at: Date.now(),
+  };
+  const provisional = {
+    schemaVersion: READER_EXPECTED_SCHEMA_VERSION,
+    mergeBaseSha: baseSha,
+    ...body,
+  };
+  const overlayKv = hostKvWithSuiteRecord(input.kv, input.ref, headSha, baseTipSha, provisional);
+  const fp = checkHoldFingerprint(
+    await readGateState({ octokit: input.octokit, kv: overlayKv, ref: input.ref, headSha }),
   );
+  await writePairResult(input.kv, input.ref, input.headSha, baseTipSha, baseSha, { ...body, checkHoldFingerprint: fp });
   return { ok: true, diff, headRunId: head.runId, baseRunId: base.runId, flakeList: flakes.source };
 }
 
-/** A head whose newest run's artifact could not be read, remembered so the next delivery does not download it again. */
-function refusalKey(ref: PrRef, headSha: string): string {
-  return `suite-refusal:${prKey(ref)}:${headSha}`;
+/** A head whose newest run's artifact could not be read, remembered so the next delivery does not download it again (RD-06). */
+function refusalKey(ref: PrRef, headSha: string, baseTipSha: string, mergeBaseSha: string): string {
+  return `suite-refusal:${prKey(ref)}:${headSha}:${baseTipSha}:${mergeBaseSha}`;
 }
 
 /**
@@ -245,7 +264,9 @@ export async function runSuiteIfDue(input: {
     if (recorded !== undefined && recorded.runId === latest.id && recorded.state !== "carried") {
       return "already-recorded";
     }
-    const refused = (await aligned.kv.get(refusalKey(aligned.ref, aligned.headSha))) as { runId?: number } | undefined;
+    const refused = (await aligned.kv.get(refusalKey(aligned.ref, aligned.headSha, aligned.baseTipSha, aligned.baseSha))) as
+      | { runId?: number }
+      | undefined;
     if (refused?.runId === latest.id) {
       return "already-refused";
     }
@@ -261,7 +282,10 @@ export async function runSuiteIfDue(input: {
     }
     // Only a permanent fact about this run is remembered. A lookup or a download that failed on GitHub is transient.
     if (outcome.step === "head" && (outcome.reason === "unreadable" || outcome.reason === "no-artifact")) {
-      await aligned.kv.put(refusalKey(aligned.ref, aligned.headSha), { runId: latest.id, reason: outcome.reason });
+      await aligned.kv.put(refusalKey(aligned.ref, aligned.headSha, aligned.baseTipSha, aligned.baseSha), {
+        runId: latest.id,
+        reason: outcome.reason,
+      });
     }
     return `refused:${outcome.step}-${outcome.reason}`;
   });

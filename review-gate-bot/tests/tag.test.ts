@@ -3,7 +3,8 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { readGateState, suiteKey } from "../bot/lib/gh.js";
-import { prKey } from "../bot/lib/gate.js";
+import { READER_EXPECTED_SCHEMA_VERSION } from "../bot/lib/pair-record.js";
+import { checkHoldFingerprint, prKey } from "../bot/lib/gate.js";
 import { alreadyPosted, postVerdictComment, tagCursorAndDitto, tagReplit } from "../bot/lib/tag.js";
 import { marker } from "../bot/lib/verdicts.js";
 
@@ -112,7 +113,22 @@ function fakeOctokit(
 function passesAtHead(): { comments: RawComment[]; reviews: RawReview[]; kv: HostKvApi & { store: Map<string, unknown> } } {
   const store = kv();
   // The suite result is part of the gate input; without it `next` is run_suite.
-  store.store.set(suiteKey(REF, HEAD, BASE), { state: "clean", at: 1 });
+  store.store.set(suiteKey(REF, HEAD, BASE), {
+    schemaVersion: READER_EXPECTED_SCHEMA_VERSION,
+    mergeBaseSha: BASE,
+    checkHoldFingerprint: checkHoldFingerprint({
+      headSha: HEAD,
+      mc: "PASS",
+      cursor: "PASS",
+      ditto: "PASS",
+      replit: "PASS",
+      suite: "clean",
+      replitTagged: true,
+      next: "tag_replit",
+    }),
+    state: "clean",
+    at: 1,
+  });
   return {
     kv: store,
     comments: [ownComment(1, `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``)],

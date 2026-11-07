@@ -12,21 +12,97 @@ const HEAD = "c".repeat(40);
 const BASE = "b".repeat(40);
 const CLEAN = '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="a"/></testsuite></testsuites>';
 
+type FileRow = { filename: string; status?: string; previous_filename?: string };
+
+/** Route tokens compared by reference in `octokit.paginate(route, …)`. */
+const ROUTE_LIST_FILES = (() => {}) as unknown as Octokit["rest"]["pulls"]["listFiles"];
+const ROUTE_LIST_COMMENTS = (() => {}) as unknown as Octokit["rest"]["issues"]["listComments"];
+const ROUTE_LIST_REVIEWS = (() => {}) as unknown as Octokit["rest"]["pulls"]["listReviews"];
+
+type PaginateFixtureTable = {
+  listFiles?: FileRow[][];
+  listComments?: unknown[][];
+  listReviews?: unknown[][];
+};
+
+type PaginateHarnessStats = { listFilesPagesWalked: number; listFilesItems: number };
+
+/**
+ * `paginate` compatible with `@octokit/plugin-paginate-rest`: walks `pages` in order,
+ * optional `mapFn` per row, concatenates.
+ */
+function installPaginate(
+  table: PaginateFixtureTable,
+  stats: PaginateHarnessStats,
+): Octokit["paginate"] {
+  return (async (route: unknown, _params: unknown, mapFn?: (row: unknown) => unknown) => {
+    let pages: unknown[][] | undefined;
+    if (route === ROUTE_LIST_FILES) {
+      pages = table.listFiles ?? [[]];
+      stats.listFilesPagesWalked = pages.length;
+      stats.listFilesItems = 0;
+    } else if (route === ROUTE_LIST_COMMENTS) {
+      pages = table.listComments ?? [[]];
+    } else if (route === ROUTE_LIST_REVIEWS) {
+      pages = table.listReviews ?? [[]];
+    } else {
+      return [];
+    }
+    const out: unknown[] = [];
+    for (const page of pages) {
+      for (const row of page) {
+        const mapped = mapFn === undefined ? row : mapFn(row);
+        out.push(mapped);
+        if (route === ROUTE_LIST_FILES) {
+          stats.listFilesItems += 1;
+        }
+      }
+    }
+    return out;
+  }) as Octokit["paginate"];
+}
+
+function pullGetData(mergeBase: string = BASE) {
+  return {
+    number: REF.number,
+    head: { sha: HEAD },
+    base: { sha: mergeBase, ref: "main", repo: { owner: { login: REF.owner }, name: REF.repo } },
+    draft: false,
+    title: "test",
+    html_url: "https://example.test/pr/1522",
+  };
+}
+
 function livePullMocks(mergeBase: string = BASE, tip: string = BASE) {
   return {
     pulls: {
-      get: async () => ({
-        data: {
-          head: { sha: HEAD },
-          base: { sha: mergeBase, ref: "main", repo: { owner: { login: REF.owner }, name: REF.repo } },
-          draft: false,
-        },
-      }),
+      get: async () => ({ data: pullGetData(mergeBase) }),
+      listFiles: ROUTE_LIST_FILES,
+      listReviews: ROUTE_LIST_REVIEWS,
+    },
+    issues: {
+      listComments: ROUTE_LIST_COMMENTS,
     },
     repos: {
       getBranch: async () => ({ data: { commit: { sha: tip } } }),
     },
   };
+}
+
+function asOctokit(
+  rest: ReturnType<typeof livePullMocks> & {
+    repos: ReturnType<typeof livePullMocks>["repos"] & {
+      compareCommitsWithBasehead?: () => Promise<unknown>;
+    };
+  },
+  paginateTable: PaginateFixtureTable = { listFiles: [[]] },
+): { octokit: Octokit; paginateStats: PaginateHarnessStats } {
+  const paginateStats: PaginateHarnessStats = { listFilesPagesWalked: 0, listFilesItems: 0 };
+  const octokit = {
+    rest,
+    paginate: installPaginate(paginateTable, paginateStats),
+  } as unknown as Octokit;
+  return { octokit, paginateStats };
 }
 
 /** A stored zip with one JUnit file, which is all the reader needs. */
@@ -52,7 +128,7 @@ function zipOf(text: string): Uint8Array {
   return new Uint8Array(Buffer.concat([local, name, data, central, name, end]));
 }
 
-function fixture(changedFiles: string[]) {
+function fixture(changedFiles: string[], paginateTable?: PaginateFixtureTable) {
   const downloads = { count: 0 };
   const reader: RunnerReader = {
     runsForSha: async () => [{ id: 77, conclusion: "success" }],
@@ -68,21 +144,20 @@ function fixture(changedFiles: string[]) {
     put: async (key: string, value: unknown) => void store.set(key, value),
     delete: async (key: string) => void store.delete(key),
   } as unknown as HostKvApi;
-  const octokit = {
-    rest: {
-      ...livePullMocks(),
-      repos: {
-        ...livePullMocks().repos,
-        compareCommitsWithBasehead: async () => ({
-          data: {
-            files: changedFiles.map((filename) => ({ filename, status: "modified" })),
-            merge_base_commit: { sha: BASE },
-          },
-        }),
-      },
+  const rest = {
+    ...livePullMocks(),
+    repos: {
+      ...livePullMocks().repos,
+      compareCommitsWithBasehead: async () => ({
+        data: {
+          files: changedFiles.map((filename) => ({ filename, status: "modified" })),
+          merge_base_commit: { sha: BASE },
+        },
+      }),
     },
-  } as unknown as Octokit;
-  return { reader, downloads, store, kv, octokit };
+  };
+  const { octokit, paginateStats } = asOctokit(rest, paginateTable);
+  return { reader, downloads, store, kv, octokit, paginateStats };
 }
 
 test("a PR that changes the suite's own definition is refused before any report is read", async () => {
@@ -113,20 +188,19 @@ test("a PR that changes no suite-definition file is recorded as before", async (
 
 test("renaming a suite-definition file away from its path is refused: the old path counts too", async () => {
   const f = fixture([]);
-  const renamed = {
-    rest: {
-      ...livePullMocks(),
-      repos: {
-        ...livePullMocks().repos,
-        compareCommitsWithBasehead: async () => ({
-          data: {
-            files: [{ filename: "tests/conftest_old.py", previous_filename: "tests/conftest.py", status: "renamed" }],
-            merge_base_commit: { sha: BASE },
-          },
-        }),
-      },
+  const rest = {
+    ...livePullMocks(),
+    repos: {
+      ...livePullMocks().repos,
+      compareCommitsWithBasehead: async () => ({
+        data: {
+          files: [{ filename: "tests/conftest_old.py", previous_filename: "tests/conftest.py", status: "renamed" }],
+          merge_base_commit: { sha: BASE },
+        },
+      }),
     },
-  } as unknown as Octokit;
+  };
+  const { octokit: renamed } = asOctokit(rest);
   const outcome = await recordSuiteComparison({ octokit: renamed, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0);
@@ -212,21 +286,23 @@ test("a long list of missing tests is summarised in the detail, and the full lis
 });
 
 /** A compare whose file list the test controls, and a count of how many times it was asked for. */
-function compareOf(data: { files?: Array<{ filename: string; previous_filename?: string; status?: string }> }) {
+function compareOf(
+  data: { files?: Array<{ filename: string; previous_filename?: string; status?: string }> },
+  paginateTable?: PaginateFixtureTable,
+) {
   const calls = { count: 0 };
-  const octokit = {
-    rest: {
-      ...livePullMocks(),
-      repos: {
-        ...livePullMocks().repos,
-        compareCommitsWithBasehead: async () => {
-          calls.count += 1;
-          return { data: { ...data, merge_base_commit: { sha: BASE } } };
-        },
+  const rest = {
+    ...livePullMocks(),
+    repos: {
+      ...livePullMocks().repos,
+      compareCommitsWithBasehead: async () => {
+        calls.count += 1;
+        return { data: { ...data, merge_base_commit: { sha: BASE } } };
       },
     },
-  } as unknown as Octokit;
-  return { octokit, calls };
+  };
+  const { octokit, paginateStats } = asOctokit(rest, paginateTable);
+  return { octokit, calls, paginateStats };
 }
 
 /** 300 changed files, the most GitHub's compare returns, none of them a suite-definition file. */
@@ -352,7 +428,7 @@ test("one comparison makes definition and stale-pair compare calls", async () =>
   const direct = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
   const outcome = await recordSuiteComparison({ octokit: direct.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome.ok, true);
-  assert.equal(direct.calls.count, 3, "live merge-base read, definition read, stale-pair re-read before put");
+  assert.equal(direct.calls.count, 4, "live merge-base read, definition read, stale-pair re-read, gate fingerprint read before put");
 });
 
 test("a delivery that goes on to record the comparison reuses the definition compare", async () => {
@@ -360,7 +436,7 @@ test("a delivery that goes on to record the comparison reuses the definition com
   const gate = compareOf({ files: [{ filename: "app/x.py", status: "modified" }] });
   const outcome = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(outcome, "recorded");
-  assert.equal(gate.calls.count, 3, "live merge-base read, definition compare, stale-pair re-read");
+  assert.equal(gate.calls.count, 4, "live merge-base read, definition compare, stale-pair re-read, gate fingerprint read");
   assert.equal((f.store.get(suiteKey(REF, HEAD, BASE)) as { state?: string }).state, "clean");
 });
 
@@ -370,7 +446,7 @@ test("a delivery that finds the run already recorded still compares once per del
   await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   const again = await runSuiteIfDue({ octokit: gate.octokit, kv: f.kv, ref: REF, headSha: HEAD, baseSha: BASE, baseTipSha: BASE, reader: f.reader });
   assert.equal(again, "already-recorded");
-  assert.equal(gate.calls.count, 5, "first delivery: live+definition+stale; second: live+definition only");
+  assert.equal(gate.calls.count, 6, "first delivery: live+definition+stale+fingerprint; second: live+definition+fingerprint");
 });
 
 test("the exported comparison reads its own compare: a forged empty definition passed in cannot record a changed suite definition as clean", async () => {
@@ -392,4 +468,25 @@ test("the exported comparison ignores a stale or incomplete definition passed in
   assert.equal(!outcome.ok && outcome.reason, "needs-joshua");
   assert.equal(f.downloads.count, 0);
   assert.equal(await readSuiteState(f.kv, REF, HEAD, BASE), "needs-joshua");
+});
+
+test("harness paginate walks two listFiles pages (falsifier: not a single-page stub)", async () => {
+  const pageA = Array.from({ length: 3 }, (_, i) => ({ filename: `decoy/a_${i}.py`, status: "modified" }));
+  const pageB = [{ filename: "review-gate-bot/bot/lib/suite.ts", status: "modified" }];
+  const f = fixture(
+    ["app/x.py"],
+    { listFiles: [pageA, pageB] },
+  );
+  const outcome = await recordSuiteComparison({
+    octokit: f.octokit,
+    kv: f.kv,
+    ref: REF,
+    headSha: HEAD,
+    baseSha: BASE,
+    baseTipSha: BASE,
+    reader: f.reader,
+  });
+  assert.equal(outcome.ok, true);
+  assert.equal(f.paginateStats.listFilesPagesWalked, 2, "both pages were walked");
+  assert.equal(f.paginateStats.listFilesItems, pageA.length + pageB.length, "items from both pages were concatenated");
 });

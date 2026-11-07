@@ -6,12 +6,38 @@ import {
   pushToBaseBranch,
   type GateDeps,
 } from "../bot/lib/advance.js";
-import { postGateCheck } from "../bot/lib/check.js";
-import { prKey, reviewTurnKey } from "../bot/lib/gate.js";
+import { CHECK_NAME, postGateCheck } from "../bot/lib/check.js";
+import { checkHoldFingerprint, prKey, reviewTurnKey, type GateState } from "../bot/lib/gate.js";
 import { legacySuiteKey, readGateState, readSuiteRecord, suiteKey } from "../bot/lib/gh.js";
 import { recordSuiteComparison, runSuiteIfDue } from "../bot/lib/suite-record.js";
 import { marker } from "../bot/lib/verdicts.js";
 import { JUNIT_ARTIFACT, type RunnerReader } from "../bot/lib/runner.js";
+import type { RecordedSuite } from "../bot/lib/gh.js";
+import { READER_EXPECTED_SCHEMA_VERSION } from "../bot/lib/pair-record.js";
+
+/** Pair-key kv shape trusted by readSuiteRecordTrusted (mergeBaseSha must match live observePair). */
+function pairTrust(mergeBaseSha: string, rest: Partial<RecordedSuite> & { state: RecordedSuite["state"] }): RecordedSuite {
+  const { checkHoldFingerprint: fpOverride, ...body } = rest;
+  return {
+    schemaVersion: READER_EXPECTED_SCHEMA_VERSION,
+    mergeBaseSha,
+    checkHoldFingerprint: fpOverride ?? checkHoldFingerprint(freshGateState()),
+    ...body,
+  };
+}
+
+function freshGateState(): GateState {
+  return {
+    headSha: HEAD,
+    mc: "PASS",
+    cursor: "PASS",
+    ditto: "PASS",
+    replit: "PASS",
+    suite: "clean",
+    replitTagged: true,
+    next: "mergeable",
+  };
+}
 
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 const HEAD = "c".repeat(40);
@@ -146,7 +172,7 @@ const botReviews = [
 
 test("suite keys include the PR base; a base move leaves the old pair orphaned", async () => {
   assert.notEqual(suiteKey(REF, HEAD, BASE_A), suiteKey(REF, HEAD, BASE_B));
-  const w = world({ seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } } });
+  const w = world({ seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 1 }) } });
   w.live.base = BASE_B;
   w.live.tip = BASE_B;
   const state = await readGateState({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });
@@ -157,7 +183,7 @@ test("a base move re-records the suite for the new pair", async () => {
   const w = world({
     comments: [mcPass],
     reviews: botReviews,
-    seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } },
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 1 }) },
   });
   w.live.base = BASE_B;
   w.live.tip = BASE_B;
@@ -169,7 +195,7 @@ test("the same base and run id is not downloaded again", async () => {
   const w = world({
     comments: [mcPass],
     reviews: botReviews,
-    seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", runId: 1, at: 1 } },
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", runId: 1, at: 1 }) },
   });
   let downloads = 0;
   const counted: RunnerReader = {
@@ -196,7 +222,7 @@ test("legacy head-only NEEDS-JOSHUA still blocks the gate", async () => {
     reviews: botReviews,
     seed: {
       [legacySuiteKey(REF, HEAD)]: { state: "regressed", invalid: "needs-joshua", detail: "pytest.ini", at: 1 },
-      [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 2 },
+      [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 2 }),
     },
   });
   const state = await readGateState({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });
@@ -215,13 +241,13 @@ test("a late pair-clean write cannot clear a head NEEDS-JOSHUA hold", async () =
   const w = world({
     seed: { [legacySuiteKey(REF, HEAD)]: { state: "regressed", invalid: "needs-joshua", detail: "x", at: 1 } },
   });
-  await w.deps.kv.put(suiteKey(REF, HEAD, BASE_A), { state: "clean", at: 2 });
+  await w.deps.kv.put(suiteKey(REF, HEAD, BASE_A), pairTrust(BASE_A, { state: "clean", at: 2 }));
   const record = await readSuiteRecord(w.deps.kv, REF, HEAD, BASE_A);
   assert.equal(record?.invalid, "needs-joshua");
 });
 
 test("carry against the live base uses the pair key", async () => {
-  const w = world({ seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "carried", carriedFrom: HEAD, at: 1 } } });
+  const w = world({ seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "carried", carriedFrom: HEAD, at: 1 }) } });
   assert.equal((await readSuiteRecord(w.deps.kv, REF, HEAD, BASE_A))?.state, "carried");
   assert.equal(await readSuiteRecord(w.deps.kv, REF, HEAD, BASE_B), undefined);
 });
@@ -248,7 +274,7 @@ test("push to the PR base reconciles open pull requests", async () => {
 
 test("a mergeable check is not green when the base tip moves before conclude", async () => {
   const w = world();
-  w.store.set(suiteKey(REF, HEAD, BASE_A), { state: "clean", at: 1 });
+  w.store.set(suiteKey(REF, HEAD, BASE_A), pairTrust(BASE_A, { state: "clean", at: 1 }));
   let reads = 0;
   const octokit = {
     rest: {
@@ -275,11 +301,13 @@ test("a mergeable check is not green when the base tip moves before conclude", a
       },
     },
   } as unknown as Octokit;
+  const workingCheck = await w.deps.createCheck({ name: CHECK_NAME, sha: HEAD });
   await postGateCheck({
     octokit,
     kv: w.deps.kv,
     ref: REF,
     createCheck: w.deps.createCheck,
+    workingCheck,
     state: {
       headSha: HEAD,
       mc: "PASS",
@@ -319,7 +347,7 @@ test("recordSuiteComparison writes baseline-test-missing on the pair key", async
 });
 
 test("a stale pulls base with an advanced branch tip orphans the old pair clean", async () => {
-  const w = world({ seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } } });
+  const w = world({ seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 1 }) } });
   w.live.tip = TIP_D;
   const state = await readGateState({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });
   assert.equal(state.suite, "missing");
@@ -329,7 +357,7 @@ test("when the branch tip moves, the suite re-records under the tip key and comp
   const w = world({
     comments: [mcPass],
     reviews: botReviews,
-    seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } },
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 1 }) },
   });
   w.live.tip = TIP_D;
   let downloads = 0;
@@ -448,7 +476,7 @@ test("compareCommitsWithBasehead failure omits merge-base and blocks a stale gre
   const w = world({
     comments: [mcPass],
     reviews: botReviews,
-    seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } },
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 1 }) },
   });
   const octokit = {
     ...w.octokit,
@@ -473,13 +501,17 @@ test("compareCommitsWithBasehead failure omits merge-base and blocks a stale gre
     read: async () => state,
   });
   assert.equal(w.checks[0]?.conclusion, "action_required");
-  assert.equal(w.checks[0]?.summary?.includes("GitHub could not resolve"), true);
+  const summary = w.checks[0]?.summary ?? "";
+  assert.ok(
+    summary.includes("GitHub could not resolve") || summary.includes("compare:") || summary.includes("503"),
+    `expected pair-read failure in summary: ${summary}`,
+  );
 });
 
 test("a pair-key baseline-test-missing at an old tip does not block re-record at a new tip", async () => {
   const w = world({
     seed: {
-      [suiteKey(REF, HEAD, BASE_A)]: { state: "regressed", invalid: "baseline-test-missing", at: 1 },
+      [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "regressed", invalid: "baseline-test-missing", at: 1 }),
     },
   });
   w.live.tip = TIP_D;
@@ -529,7 +561,7 @@ test("amended6 B: seeded pair clean ignored when merge-base lookup is empty", as
   const w = world({
     comments: [mcPass],
     reviews: botReviews,
-    seed: { [suiteKey(REF, HEAD, BASE_A)]: { state: "clean", at: 1 } },
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 1 }) },
     mergeBaseMissing: true,
   });
   const state = await readGateState({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });

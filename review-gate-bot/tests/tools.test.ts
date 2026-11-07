@@ -5,6 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import { readPr, suiteKey } from "../bot/lib/gh.js";
+import { checkHoldFingerprint } from "../bot/lib/gate.js";
+import { READER_EXPECTED_SCHEMA_VERSION } from "../bot/lib/pair-record.js";
 import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
@@ -17,11 +19,41 @@ const OLD = "b".repeat(40);
 const BASE = "c".repeat(40);
 const KEY = "cont:github-pr:cryptoreporthub/subnet-dashboard#1522";
 
+function pairTrust(mergeBaseSha: string, rest: Record<string, unknown>): Record<string, unknown> {
+  const { checkHoldFingerprint: fp, ...body } = rest;
+  return {
+    schemaVersion: READER_EXPECTED_SCHEMA_VERSION,
+    mergeBaseSha,
+    checkHoldFingerprint: fp ?? checkHoldFingerprint({
+      headSha: HEAD,
+      mc: "PASS",
+      cursor: "PASS",
+      ditto: "PASS",
+      replit: "PASS",
+      suite: "clean",
+      replitTagged: true,
+      next: "mergeable",
+    }),
+    ...body,
+  };
+}
+
 type Execute = (input: unknown, ctx: unknown) => Promise<unknown>;
 const run = (tool: unknown): Execute => (tool as { execute: Execute }).execute;
 
 function pr(
-  options: { head?: string; base?: string; tip?: string; files?: object[]; compare?: object[]; side?: object[]; compares?: string[]; noMergeBase?: boolean } = {},
+  options: {
+    head?: string;
+    base?: string;
+    tip?: string;
+    files?: object[];
+    compare?: object[];
+    side?: object[];
+    compares?: string[];
+    noMergeBase?: boolean;
+    emptyMergeBaseSha?: boolean;
+    pullsGetCalls?: { count: number };
+  } = {},
 ): Octokit {
   const listFiles = () => {};
   const mergeBase = options.base ?? BASE;
@@ -31,16 +63,19 @@ function pr(
     paginate: async (fn: unknown) => (fn === listFiles ? (options.files ?? []) : []),
     rest: {
       pulls: {
-        get: async () => ({
-          data: {
-            number: 1522,
-            head: { sha: options.head ?? HEAD },
-            base: { sha: mergeBase, ref: "main", repo: baseRepo },
-            draft: false,
-            title: "t",
-            html_url: "u",
-          },
-        }),
+        get: async () => {
+          options.pullsGetCalls && (options.pullsGetCalls.count += 1);
+          return {
+            data: {
+              number: 1522,
+              head: { sha: options.head ?? HEAD },
+              base: { sha: mergeBase, ref: "main", repo: baseRepo },
+              draft: false,
+              title: "t",
+              html_url: "u",
+            },
+          };
+        },
         listFiles,
         listReviews: () => {},
       },
@@ -53,7 +88,12 @@ function pr(
           return {
             data: {
               files,
-              merge_base_commit: options.noMergeBase ? null : { sha: mergeBase },
+              merge_base_commit:
+                options.noMergeBase === true
+                  ? null
+                  : options.emptyMergeBaseSha === true
+                    ? { sha: "" }
+                    : { sha: mergeBase },
             },
           };
         },
@@ -92,6 +132,14 @@ test("the verdict body carries no gate marker the model wrote", () => {
   assert.deepEqual(parseMarkers(body), [], "the only marker on a verdict comment is the one the poster adds");
 });
 
+test("M2 RD-08: readPr issues a single pulls.get (pair share)", async () => {
+  const calls = { count: 0 };
+  const octokit = pr({ head: HEAD, base: BASE, pullsGetCalls: calls });
+  const snapshot = await readPr(octokit, { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 });
+  assert.equal(calls.count, 1);
+  assert.equal(snapshot.headSha, HEAD);
+});
+
 test("check_gate_state reads the PR's live head, so the model never names one", async () => {
   const result = (await run(checkGateState)({}, toolContext(pr({ head: HEAD, base: BASE })))) as Record<string, unknown>;
   assert.equal(result.headSha, HEAD);
@@ -101,12 +149,22 @@ test("check_gate_state reads the PR's live head, so the model never names one", 
   assert.equal(result.source, "github");
 });
 
+test("M3 tools path: empty merge_base_commit.sha is pair-read-failed, not base-unavailable", async () => {
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE },
+    toolContext(pr({ head: HEAD, base: BASE, tip: BASE, emptyMergeBaseSha: true })),
+  )) as Record<string, unknown>;
+  assert.equal(result.recorded, false);
+  assert.equal(result.reason, "pair-read-failed");
+  assert.equal(result.detail, "compare: invalid-merge-base-sha");
+});
+
 test("check_gate_state reports base not available when merge-base is missing", async () => {
   const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
   const result = (await run(checkGateState)(
     {},
     toolContext(pr({ head: HEAD, base: BASE, tip: BASE, noMergeBase: true }), {
-      [suiteKey(REF, HEAD, BASE)]: { state: "clean", at: 1 },
+      [suiteKey(REF, HEAD, BASE)]: pairTrust(BASE, { state: "clean", at: 1 }),
     }),
   )) as Record<string, unknown>;
   assert.equal(result.baseAvailable, false);
@@ -135,7 +193,7 @@ test("a carry-over diffs the carried-from SHA against the head, so a code change
   });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: pairTrust(BASE, { state: "clean" }) }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, false);
   assert.equal(result.reason, "code-changed");
@@ -145,7 +203,7 @@ test("a carry-over whose carried-from SHA and head differ only in prose still ca
   const octokit = pr({ compare: [{ filename: "docs/notes.md", status: "modified" }] });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: pairTrust(BASE, { state: "clean" }) }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, true);
   assert.equal(result.clean, true);
@@ -157,11 +215,34 @@ test("a carry-over also reads the merge-base side, so a change only the carried-
   const octokit = pr({ side: [{ filename: "internal/x.py", status: "modified" }], compares });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: pairTrust(BASE, { state: "clean" }) }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, false);
   assert.equal(result.reason, "code-changed");
   assert.deepEqual(compares, [`${BASE}...${HEAD}`, `${OLD}...${HEAD}`, `${BASE}...${OLD}`]);
+});
+
+test("M1 carry returns record-version-mismatch when carried-from record schema is wrong", async () => {
+  const octokit = pr({ compare: [{ filename: "docs/notes.md", status: "modified" }] });
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean", at: 1, schemaVersion: 0, mergeBaseSha: BASE } }),
+  )) as Record<string, unknown>;
+  assert.equal(result.carried, false);
+  assert.equal(result.reason, "record-version-mismatch");
+  assert.equal(result.detail, "record-version-mismatch, recompute due");
+});
+
+test("M1 carry returns merge-base-mismatch when carried-from mergeBaseSha disagrees with live pair", async () => {
+  const octokit = pr({ compare: [{ filename: "docs/notes.md", status: "modified" }] });
+  const wrongMb = "f".repeat(40);
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: pairTrust(wrongMb, { state: "clean", at: 1 }) }),
+  )) as Record<string, unknown>;
+  assert.equal(result.carried, false);
+  assert.equal(result.reason, "merge-base-mismatch");
+  assert.equal(result.detail, "record-version-mismatch, recompute due");
 });
 
 test("a carry-over whose compare is at GitHub's 300-file cap is refused, not read as complete", async () => {
@@ -169,7 +250,7 @@ test("a carry-over whose compare is at GitHub's 300-file cap is refused, not rea
   const octokit = pr({ compare: capped });
   const result = (await run(compareSuiteRuns)(
     { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
-    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: { state: "clean" } }),
+    toolContext(octokit, { [suiteKey(PR_REF, OLD, BASE)]: pairTrust(BASE, { state: "clean" }) }),
   )) as Record<string, unknown>;
   assert.equal(result.carried, false);
   assert.equal(result.reason, "carry-diff-incomplete");

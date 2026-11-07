@@ -1,8 +1,20 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { openGateCheckWorking, postGateCheck, type CreateCheck, type GateCheckHandle } from "./check.js";
-import { readGateState, readLivePair, readSuiteRecord, suiteStateFromRecord, gateSuiteRecord, isValidHeadSha, pairCompareReady, type PrRef } from "./gh.js";
+import { openGateCheckWorking, postGateCheck, probeCheckDedupeSnapshot, type CreateCheck, type GateCheckHandle } from "./check.js";
+import {
+  readGateState,
+  readLivePair,
+  readSuiteRecord,
+  suiteStateFromRecord,
+  gateSuiteRecord,
+  isValidHeadSha,
+  pairCompareReady,
+  type PrRef,
+  type PullsGetData,
+} from "./gh.js";
+import { newDeliveryBudget, observePair, observePairFromPull, type ReadyPair } from "./pair-observation.js";
+import { readSuiteRecordTrusted } from "./pair-record.js";
 import { gateActions, prKey, reviewTurnKey } from "./gate.js";
 import { leaseToken, releaseLeaseIfHolder } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
@@ -42,17 +54,78 @@ export const REVIEW_ACTIONS = new Set(["opened", "synchronize", "reopened", "rea
  * can fire on a draft, and a draft must never be tagged or reviewed — the
  * reviewer round trip is for a PR that is actually asking for review.
  */
-async function readHead(
-  octokit: Octokit,
-  ref: PrRef,
-): Promise<{ headSha: string; baseSha?: string; baseTipSha?: string; draft: boolean }> {
-  const live = await readLivePair(octokit, ref);
-  return {
-    headSha: live.headSha,
-    baseSha: live.baseSha,
-    baseTipSha: live.baseTipSha,
-    draft: live.draft,
-  };
+async function readHead(octokit: Octokit, ref: PrRef): Promise<{
+  headSha: string;
+  baseSha?: string;
+  baseTipSha?: string;
+  draft: boolean;
+  observation: Awaited<ReturnType<typeof observePair>>;
+  /** When `pulls.get` succeeded — pass through `readGateState` to avoid a second PR fetch (RD-08). */
+  prPull?: PullsGetData;
+}> {
+  try {
+    const { data: prPull } = await octokit.rest.pulls.get({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.number,
+    });
+    const observation = await observePairFromPull(octokit, ref, prPull);
+    if (observation.kind === "ready") {
+      return {
+        headSha: observation.headSha,
+        baseSha: observation.mergeBaseSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+        prPull,
+      };
+    }
+    if (observation.kind === "base-unavailable") {
+      return {
+        headSha: observation.headSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+        prPull,
+      };
+    }
+    const live = await readLivePair(octokit, ref);
+    return {
+      headSha: live.headSha,
+      baseSha: live.baseSha === "" ? undefined : live.baseSha,
+      baseTipSha: live.baseTipSha === "" ? undefined : live.baseTipSha,
+      draft: live.draft,
+      observation,
+      prPull,
+    };
+  } catch {
+    const observation = await observePair(octokit, ref);
+    if (observation.kind === "ready") {
+      return {
+        headSha: observation.headSha,
+        baseSha: observation.mergeBaseSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+      };
+    }
+    if (observation.kind === "base-unavailable") {
+      return {
+        headSha: observation.headSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+      };
+    }
+    const live = await readLivePair(octokit, ref);
+    return {
+      headSha: live.headSha,
+      baseSha: live.baseSha === "" ? undefined : live.baseSha,
+      baseTipSha: live.baseTipSha === "" ? undefined : live.baseTipSha,
+      draft: live.draft,
+      observation,
+    };
+  }
 }
 
 /** The suite is green for this exact head and PR base, read live. */
@@ -62,18 +135,24 @@ async function pairSuiteReady(input: {
   ref: PrRef;
   headSha: string;
   baseTipSha: string | undefined;
+  /** When the delivery already observed a ReadyPair, reuse it to avoid extra reads and pair skew. */
+  alignedPair?: ReadyPair;
 }): Promise<boolean> {
-  const live = await readLivePair(input.octokit, input.ref);
-  if (!pairCompareReady(live)) {
+  const obs =
+    input.alignedPair !== undefined
+      ? input.alignedPair
+      : await observePair(input.octokit, input.ref);
+  if (obs.kind !== "ready") {
     return false;
   }
-  if (live.headSha !== input.headSha || live.baseTipSha !== input.baseTipSha) {
+  if (obs.headSha !== input.headSha || obs.baseTipSha !== input.baseTipSha) {
     return false;
   }
-  const record = gateSuiteRecord(
-    await readSuiteRecord(input.kv, input.ref, input.headSha, input.baseTipSha),
-    true,
-  );
+  const trusted = await readSuiteRecordTrusted(input.kv, input.ref, input.headSha, input.baseTipSha, obs);
+  if (!trusted.ok) {
+    return false;
+  }
+  const record = gateSuiteRecord(trusted.record, true);
   const suite = suiteStateFromRecord(record);
   return suite === "clean" || suite === "carried";
 }
@@ -140,7 +219,8 @@ function askLabel(outcome: ReplitAskOutcome): string {
  */
 export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   const { octokit, kv, mcp, ref, createCheck, now, reader } = deps;
-  const { headSha, baseSha, baseTipSha, draft } = await readHead(octokit, ref);
+  const { headSha, baseSha, baseTipSha, draft, observation, prPull } = await readHead(octokit, ref);
+  const expectedPair: ReadyPair | undefined = observation.kind === "ready" ? observation : undefined;
 
   if (!isValidHeadSha(headSha)) {
     return {
@@ -170,6 +250,8 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     };
   }
 
+  const deliveryBudget = newDeliveryBudget();
+
   // A failing post must not lose the review turn that follows it, and must not
   // stop the next step: each is logged and reported, then the gate moves on.
   const attempt = async (step: string, body: () => Promise<string>): Promise<string> => {
@@ -190,7 +272,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     }
   };
 
-  let state = await readGateState({ octokit, kv, ref, headSha });
+  let state = await readGateState({ octokit, kv, ref, headSha, prPull });
   let actions = gateActions(state, false);
 
   // The suite is the gate's own step. When it is due, record it now and read the gate again, so the
@@ -202,32 +284,42 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
       console.warn(JSON.stringify({ level: "warn", event: "suite_base_missing", pr: prKey(ref), head: headSha }));
       suite = "skipped:no-base";
     } else {
-      let opened: GateCheckHandle | undefined;
-      const openLabel = await attempt("check-working", async () => {
-        opened = await openGateCheckWorking({
-          octokit,
-          kv,
-          ref,
-          headSha,
-          baseSha: baseSha as string,
-          baseTipSha: baseTipSha as string,
-          createCheck,
-        });
-        return opened === undefined ? "skipped:stale-pair" : "opened";
-      });
-      workingCheck = opened;
-      if (openLabel === "opened") {
+      const checkAlreadyPosted =
+        expectedPair !== undefined &&
+        (await probeCheckDedupeSnapshot({ kv, ref, state, readyPair: expectedPair })).unchanged;
+      if (checkAlreadyPosted) {
         suite = await attempt("run-suite", () =>
           runSuiteIfDue({ octokit, kv, ref, headSha, baseSha: baseSha as string, baseTipSha: baseTipSha as string, reader }),
         );
       } else {
-        suite = openLabel;
+        let opened: GateCheckHandle | undefined;
+        const openLabel = await attempt("check-working", async () => {
+          opened = await openGateCheckWorking({
+            octokit,
+            kv,
+            ref,
+            headSha,
+            baseSha: baseSha as string,
+            baseTipSha: baseTipSha as string,
+            createCheck,
+            budget: deliveryBudget,
+          });
+          return opened === undefined ? "skipped:stale-pair" : "opened";
+        });
+        workingCheck = opened;
+        if (openLabel === "opened") {
+          suite = await attempt("run-suite", () =>
+            runSuiteIfDue({ octokit, kv, ref, headSha, baseSha: baseSha as string, baseTipSha: baseTipSha as string, reader }),
+          );
+        } else {
+          suite = openLabel;
+        }
       }
     }
     // A recorded result, or any refusal of the head (a changed suite definition, a compare cut off at the file cap),
     // changes what the gate says: read it again. Every head refusal label is `refused:head-*`.
     if (suite === "recorded" || suite.startsWith("refused:head-")) {
-      state = await readGateState({ octokit, kv, ref, headSha });
+      state = await readGateState({ octokit, kv, ref, headSha, prPull });
       actions = gateActions(state, false);
     }
   }
@@ -249,7 +341,16 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   const taggedReplit = actions.tagReplit
     ? await attempt("tag-replit", async () => {
         const live = await readLivePair(octokit, ref);
-        if (!(await pairSuiteReady({ octokit, kv, ref, headSha: live.headSha, baseTipSha: live.baseTipSha }))) {
+        if (
+          !(await pairSuiteReady({
+            octokit,
+            kv,
+            ref,
+            headSha: live.headSha,
+            baseTipSha: live.baseTipSha,
+            alignedPair: expectedPair,
+          }))
+        ) {
           return "skipped:stale-pair";
         }
         return (await tagReplit({ octokit, kv, ref, headSha, currentHeadSha: live.headSha })).reason;
@@ -265,7 +366,16 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     actions.askReplit && (!actions.tagReplit || tagConfirmed)
       ? await attempt("ask-replit", async () => {
           const live = await readLivePair(octokit, ref);
-          if (!(await pairSuiteReady({ octokit, kv, ref, headSha: live.headSha, baseTipSha: live.baseTipSha }))) {
+          if (
+            !(await pairSuiteReady({
+              octokit,
+              kv,
+              ref,
+              headSha: live.headSha,
+              baseTipSha: live.baseTipSha,
+              alignedPair: expectedPair,
+            }))
+          ) {
             return "skipped:stale-pair";
           }
           const ask = await askReplitOnce({ kv, mcp, ref, headSha: live.headSha });
@@ -284,7 +394,9 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
       state,
       createCheck,
       workingCheck,
-      read: () => readGateState({ octokit, kv, ref, headSha }),
+      expectedPair,
+      deliveryBudget,
+      read: () => readGateState({ octokit, kv, ref, headSha, prPull }),
     }),
   );
 

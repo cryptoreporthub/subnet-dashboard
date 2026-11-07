@@ -1,33 +1,51 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GitHubHandle } from "@grok/agent-sdk/channels/github";
-import { prKey, type GateState } from "./gate.js";
+import { checkHoldFingerprint, prKey, type GateState } from "./gate.js";
 import type { PrRef } from "./gh.js";
-import { readLivePair, readSuiteRecord, suiteStateFromRecord, gateSuiteRecord, pairCompareReady, GITHUB_PAIR_READ_DETAIL } from "./gh.js";
+import {
+  observePair,
+  pairsEqual,
+  newDeliveryBudget,
+  takeAdmissionRead,
+  takeFinalFenceRead,
+  takeGithubMutation,
+  takeCreateCheck,
+  takeRevalidationRead,
+  type DeliveryBudget,
+  type PairObservation,
+  type ReadyPair,
+} from "./pair-observation.js";
+import { readSuiteRecordTrusted, RECORD_VERSION_MISMATCH_DETAIL } from "./pair-record.js";
+import { suiteStateFromRecord, gateSuiteRecord, pairCompareReady, type LivePair } from "./gh.js";
 import { exclusive } from "./lock.js";
 
-/** The merge-box check this bot owns. A branch rule can require it by this name. */
 export const CHECK_NAME = "review-gate";
 
-/** `ctx.github.createCheck`, narrowed to what the gate calls. */
-export type CreateCheck = GitHubHandle["createCheck"];
+export const PAIR_UNVERIFIABLE_TITLE = "Pair unverifiable";
+export const SUPERSEDED_TITLE = "Superseded";
 
+export type CreateCheck = GitHubHandle["createCheck"];
 export type GateCheckHandle = Awaited<ReturnType<CreateCheck>>;
 
-function checkDedupeKey(ref: PrRef, headSha: string, baseTipSha: string, baseSha: string): string {
-  const merge = baseSha === "" ? "none" : baseSha.slice(0, 7);
-  const tip = baseTipSha === "" ? "none" : baseTipSha.slice(0, 7);
-  return `check:${prKey(ref)}:${headSha}:${tip}:${merge}`;
+export function checkDedupeKey(
+  ref: PrRef,
+  headSha: string,
+  baseTipSha: string,
+  mergeBaseSha: string,
+  holdFingerprint: string,
+): string {
+  return `check:${prKey(ref)}:${headSha}:${baseTipSha}:${mergeBaseSha}:${holdFingerprint}`;
 }
 
 export type GateConclusion = "success" | "failure" | "action_required";
+export type CheckPost =
+  | "posted"
+  | "unchanged"
+  | "stale-head"
+  | "pair-unverifiable"
+  | "finalization-unresolved";
 
-/**
- * Green only for a mergeable gate. A FAIL anywhere is red. Everything still
- * waiting on a reviewer, the suite or the tag is `action_required`. GitHub counts
- * neutral and skipped as passing for a required check, so a waiting head must
- * not use either.
- */
 export function gateConclusion(state: GateState): GateConclusion {
   switch (state.next) {
     case "mergeable":
@@ -40,6 +58,7 @@ export function gateConclusion(state: GateState): GateConclusion {
     case "tag_replit":
     case "await_replit":
     case "needs_joshua":
+    case "compare_blocked":
       return "action_required";
     default: {
       const _exhaustive: never = state.next;
@@ -48,11 +67,10 @@ export function gateConclusion(state: GateState): GateConclusion {
   }
 }
 
-/** Check title when live GitHub reads omit the PR base pair — not a Joshua decision. */
 export const GITHUB_READ_FAILURE_TITLE = "GitHub read failed";
+export const MERGE_BASE_UNAVAILABLE_TITLE = "Merge-base unavailable";
 
-/** One line of facts the check page and the dedupe key share. */
-function summaryOf(state: GateState, baseTipSha: string | undefined): string {
+export function summaryOf(state: GateState, baseTipSha: string | undefined): string {
   const baseLine =
     baseTipSha === undefined || baseTipSha === "" ? "base missing" : `base tip ${baseTipSha.slice(0, 7)}`;
   const suiteLine =
@@ -64,28 +82,214 @@ function summaryOf(state: GateState, baseTipSha: string | undefined): string {
   return [`MC ${state.mc}`, `Cursor ${state.cursor}`, `Ditto ${state.ditto}`, suiteLine, `Replit ${state.replit}`, baseLine, `next: ${state.next}`].join(" · ");
 }
 
-async function livePairIs(
-  octokit: Octokit,
-  ref: PrRef,
-  headSha: string,
+function terminalSummaryForDedupe(
+  state: GateState,
   baseTipSha: string | undefined,
-  baseSha: string | undefined,
-): Promise<boolean> {
-  const live = await readLivePair(octokit, ref);
-  return (
-    live.headSha === headSha &&
-    live.baseTipSha === baseTipSha &&
-    live.baseSha === (baseSha ?? "") &&
-    pairCompareReady(live)
-  );
+  conclusion: GateConclusion,
+): string {
+  const summary = summaryOf(state, baseTipSha);
+  if (conclusion === "action_required" && state.next === "mergeable") {
+    return `${summary} · ${RECORD_VERSION_MISMATCH_DETAIL}`;
+  }
+  return summary;
 }
 
-export type CheckPost = "posted" | "unchanged" | "stale-head";
+function requiresInvalidRecordRepost(state: GateState, conclusion: GateConclusion, recordInvalid: boolean): boolean {
+  return recordInvalid && conclusion === "action_required" && state.next === "mergeable";
+}
 
 /**
- * Open a non-terminal review-gate check while a slow suite compare runs.
- * The same handle must be passed to `postGateCheck` to conclude this run.
+ * Whether the terminal check body already on file matches the desired body (byte-identical summary).
+ * Used to skip redundant `createCheck` / conclude when coalescing duplicate webhooks.
  */
+export async function probeCheckDedupeSnapshot(input: {
+  kv: HostKvApi;
+  ref: PrRef;
+  state: GateState;
+  readyPair: ReadyPair;
+}): Promise<{ unchanged: boolean }> {
+  const { kv, ref, state, readyPair } = input;
+  const holdFp = checkHoldFingerprint(state);
+  const key = checkDedupeKey(ref, state.headSha, readyPair.baseTipSha, readyPair.mergeBaseSha, holdFp);
+  const trusted = await readSuiteRecordTrusted(kv, ref, state.headSha, readyPair.baseTipSha, readyPair);
+  const recordInvalid = !trusted.ok;
+  let conclusion = gateConclusion(state);
+  if (conclusion === "success") {
+    const gated = gateSuiteRecord(trusted.ok ? trusted.record : undefined, pairCompareReady(readyAsLive(readyPair)));
+    const suite = suiteStateFromRecord(gated);
+    if (!trusted.ok || (suite !== "clean" && suite !== "carried")) {
+      conclusion = "action_required";
+    }
+  }
+  const desired = terminalSummaryForDedupe(state, readyPair.baseTipSha, conclusion);
+  const stored = await kv.get(key);
+  if (requiresInvalidRecordRepost(state, conclusion, recordInvalid)) {
+    return { unchanged: false };
+  }
+  return { unchanged: typeof stored === "string" && stored === desired };
+}
+
+function readyAsLive(r: ReadyPair): Pick<LivePair, "headSha" | "baseSha" | "baseTipSha"> {
+  return { headSha: r.headSha, baseSha: r.mergeBaseSha, baseTipSha: r.baseTipSha };
+}
+
+function pairObsSummary(obs: PairObservation): string {
+  if (obs.kind === "pair-read-failed") {
+    return `${obs.stage}:${obs.code}`;
+  }
+  if (obs.kind === "base-unavailable") {
+    return "merge-base-absent";
+  }
+  return "ready";
+}
+
+/** Exported for RD-02 (distinct Compare blocked vs other waiting titles). */
+export function terminalTitle(state: GateState, conclusion: GateConclusion): string {
+  if (state.next === "needs_joshua") {
+    return "Needs Joshua";
+  }
+  if (state.next === "compare_blocked") {
+    return "Compare blocked";
+  }
+  return { success: "Gate passed", failure: "Gate blocked", action_required: "Gate waiting" }[conclusion];
+}
+
+function logGateCheckFailure(
+  phase: string,
+  ref: PrRef,
+  extra?: { expectedPair?: ReadyPair; budget?: DeliveryBudget },
+): void {
+  const payload: Record<string, unknown> = {
+    level: "error",
+    event: "gate_check_github_failure",
+    phase,
+    pr: prKey(ref),
+  };
+  if (extra?.expectedPair !== undefined) {
+    const e = extra.expectedPair;
+    payload.expectedPair = {
+      head: e.headSha.slice(0, 7),
+      baseTip: e.baseTipSha.slice(0, 7),
+      mergeBase: e.mergeBaseSha.slice(0, 7),
+    };
+  }
+  if (extra?.budget !== undefined) {
+    payload.counters = { ...extra.budget };
+  }
+  console.error(JSON.stringify(payload));
+}
+
+/** Up to two mutation attempts for the same cancel (§9 TC-double-mut-fail). */
+async function concludeCancelled(
+  handle: GateCheckHandle | undefined,
+  budget: DeliveryBudget,
+  ref: PrRef,
+  output: { title: string; summary: string },
+  expectedPair?: ReadyPair,
+): Promise<boolean> {
+  if (handle === undefined) {
+    return false;
+  }
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (!takeGithubMutation(budget)) {
+      logGateCheckFailure(`cancel-mut-${attempt}`, ref, { expectedPair, budget });
+      return false;
+    }
+    try {
+      await handle.conclude({ conclusion: "cancelled", output });
+      return true;
+    } catch {
+      logGateCheckFailure(`cancel-attempt-${attempt}`, ref, { expectedPair, budget });
+    }
+  }
+  return false;
+}
+
+type TerminalOutcome = "confirmed" | "finalization-unresolved" | "pair-unverifiable" | "stale-head";
+
+/**
+ * Non-cancel terminal with revalidation + one retry (§9). Does not write KV.
+ * Uses at most two mutation slots after optional revalidation read.
+ */
+async function concludeNonCancelTerminal(input: {
+  handle: GateCheckHandle;
+  budget: DeliveryBudget;
+  ref: PrRef;
+  octokit: Octokit;
+  obs: ReadyPair;
+  conclusion: GateConclusion;
+  output: { title: string; summary: string };
+  workingCheck: GateCheckHandle | undefined;
+}): Promise<TerminalOutcome> {
+  const { handle, budget, ref, octokit, obs, conclusion, output, workingCheck } = input;
+  const tryOnce = async (): Promise<boolean> => {
+    if (!takeGithubMutation(budget)) {
+      logGateCheckFailure("terminal-no-mut", ref, { expectedPair: obs, budget });
+      return false;
+    }
+    try {
+      await handle.conclude({ conclusion, output });
+      return true;
+    } catch {
+      logGateCheckFailure("conclude", ref, { expectedPair: obs, budget });
+      return false;
+    }
+  };
+  if (await tryOnce()) {
+    return "confirmed";
+  }
+  if (!takeRevalidationRead(budget)) {
+    logGateCheckFailure("reval-read-exhausted-after-conclude-fail", ref, { expectedPair: obs, budget });
+    return "finalization-unresolved";
+  }
+  const rev = await observePair(octokit, ref);
+  if (rev.kind === "ready" && !pairsEqual(rev, obs)) {
+    const h = workingCheck ?? handle;
+    const ok = await concludeCancelled(h, budget, ref, { title: SUPERSEDED_TITLE, summary: "Pair drift on revalidation." }, obs);
+    return ok ? "stale-head" : "finalization-unresolved";
+  }
+  if (rev.kind === "ready" && pairsEqual(rev, obs)) {
+    if (await tryOnce()) {
+      return "confirmed";
+    }
+    return "finalization-unresolved";
+  }
+  if (workingCheck !== undefined) {
+    const ok = await concludeCancelled(
+      workingCheck,
+      budget,
+      ref,
+      { title: PAIR_UNVERIFIABLE_TITLE, summary: `revalidation · ${pairObsSummary(rev)}` },
+      obs,
+    );
+    return ok ? "pair-unverifiable" : "finalization-unresolved";
+  }
+  return "finalization-unresolved";
+}
+
+async function concludeActionRequiredMergeBase(
+  check: GateCheckHandle | undefined,
+  budget: DeliveryBudget,
+  ref: PrRef,
+  output: { title: string; summary: string },
+  expectedPair?: ReadyPair,
+): Promise<TerminalOutcome> {
+  if (check === undefined) {
+    return "finalization-unresolved";
+  }
+  if (!takeGithubMutation(budget)) {
+    logGateCheckFailure("base-unavail-no-mut", ref, { expectedPair, budget });
+    return "finalization-unresolved";
+  }
+  try {
+    await check.conclude({ conclusion: "action_required", output });
+    return "confirmed";
+  } catch {
+    logGateCheckFailure("base-unavail-conclude", ref, { expectedPair, budget });
+    return "finalization-unresolved";
+  }
+}
+
 export async function openGateCheckWorking(input: {
   octokit: Octokit;
   kv: HostKvApi;
@@ -94,112 +298,358 @@ export async function openGateCheckWorking(input: {
   baseSha: string;
   baseTipSha: string;
   createCheck: CreateCheck;
+  budget: DeliveryBudget;
 }): Promise<GateCheckHandle | undefined> {
-  if (!pairCompareReady(input)) {
+  const budget = input.budget;
+  const expected: ReadyPair = {
+    kind: "ready",
+    prNumber: input.ref.number,
+    headSha: input.headSha,
+    baseTipSha: input.baseTipSha,
+    mergeBaseSha: input.baseSha,
+    draft: false,
+    baseRef: "",
+  };
+  const obs = await observePair(input.octokit, input.ref);
+  if (obs.kind !== "ready" || !pairsEqual(obs, expected)) {
     return undefined;
   }
-  const live = await readLivePair(input.octokit, input.ref);
-  if (live.headSha !== input.headSha || live.baseTipSha !== input.baseTipSha || live.baseSha !== input.baseSha) {
+  if (!takeCreateCheck(budget)) {
     return undefined;
   }
   const check = await input.createCheck({ name: CHECK_NAME, sha: input.headSha });
-  await check.update({
-    status: "in_progress",
-    output: {
-      title: "Gate working",
-      summary: `suite compare running · merge-base ${input.baseSha.slice(0, 7)} · base tip ${input.baseTipSha.slice(0, 7)}`,
-    },
-  });
+  try {
+    // `in_progress` is not a terminal conclude — do not charge terminal mutation budget (plan §5).
+    await check.update({
+      status: "in_progress",
+      output: {
+        title: "Gate working",
+        summary: `suite compare running · merge-base ${input.baseSha.slice(0, 7)} · base tip ${input.baseTipSha.slice(0, 7)}`,
+      },
+    });
+  } catch {
+    // Handle retained for postGateCheck.
+  }
   return check;
 }
 
-/**
- * Report the gate on the PR head as a `review-gate` check run.
- *
- * - **Stale head never green.** The head is re-read before the run opens, and a
- *   green run is re-checked once more before it concludes. A head that moved
- *   gets no check, or a `cancelled` "superseded" one, never `success`.
- * - **Once per state.** The last posted summary for a head sits in kv; an
- *   identical delivery posts nothing. kv is an optimisation: losing it costs
- *   one duplicate run, never a wrong one.
- * - **A failed post is retried.** The record is written only after the run has
- *   concluded, so the next delivery tries again.
- */
 export async function postGateCheck(input: {
   octokit: Octokit;
   kv: HostKvApi;
   ref: PrRef;
-  /** The gate this delivery was asked to report. Its head is the check's head. */
   state: GateState;
-  /** The gate as it is now, read by the caller. Read again under the lock, never trusted from above. */
   read: () => Promise<GateState>;
   createCheck: CreateCheck;
-  /** When set, conclude this in-progress run instead of opening a new check. */
   workingCheck?: GateCheckHandle;
+  expectedPair?: ReadyPair;
+  deliveryBudget?: DeliveryBudget;
 }): Promise<CheckPost> {
   const { octokit, kv, ref, createCheck, read, workingCheck } = input;
-  // One post at a time per head, and the gate is read inside that turn. Two deliveries that
-  // overlap would otherwise conclude in whatever order their slow reads finish, so an earlier
-  // read could land after a newer one and leave the required check showing a stale verdict.
-  // `exclusive` queues callers in this process only; across processes the summary dedupe in kv
-  // and the next delivery's post remain the backstop.
-  return exclusive(`check:${prKey(ref)}:${input.state.headSha}`, async () => {
-    const live = await readLivePair(octokit, ref);
-    const state = await read();
-    const baseTipSha = live.baseTipSha;
-    const key = checkDedupeKey(ref, state.headSha, baseTipSha, live.baseSha);
-    const summary = summaryOf(state, baseTipSha);
+  const budget = input.deliveryBudget ?? newDeliveryBudget();
+  const expected = input.expectedPair;
 
-    if ((await kv.get(key)) === summary) {
-      return "unchanged";
+  return exclusive(`check:${prKey(ref)}:${input.state.headSha}`, async () => {
+    let obs: ReadyPair;
+
+    if (expected !== undefined) {
+      if (!takeAdmissionRead(budget)) {
+        if (workingCheck !== undefined) {
+          const ok = await concludeCancelled(
+            workingCheck,
+            budget,
+            ref,
+            { title: PAIR_UNVERIFIABLE_TITLE, summary: "Admission read budget exhausted." },
+            expected,
+          );
+          return ok ? "pair-unverifiable" : "finalization-unresolved";
+        }
+        return "pair-unverifiable";
+      }
+
+      const a1: PairObservation = await observePair(octokit, ref);
+
+      if (a1.kind === "ready" && pairsEqual(a1, expected)) {
+        obs = a1;
+      } else if (a1.kind === "ready" && !pairsEqual(a1, expected)) {
+        if (workingCheck === undefined) {
+          return "stale-head";
+        }
+        const ok = await concludeCancelled(
+          workingCheck,
+          budget,
+          ref,
+          { title: SUPERSEDED_TITLE, summary: "Pair drift at admission." },
+          expected,
+        );
+        return ok ? "stale-head" : "finalization-unresolved";
+      } else if (a1.kind === "base-unavailable") {
+        const stateEarly = await read();
+        const check =
+          workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: stateEarly.headSha }) : undefined);
+        const out = await concludeActionRequiredMergeBase(
+          check,
+          budget,
+          ref,
+          {
+            title: MERGE_BASE_UNAVAILABLE_TITLE,
+            summary: `${summaryOf(stateEarly, a1.baseTipSha)} · merge-base-absent`,
+          },
+          expected,
+        );
+        return out === "confirmed" ? "posted" : "finalization-unresolved";
+      } else {
+        if (takeAdmissionRead(budget)) {
+          const a2 = await observePair(octokit, ref);
+          if (a2.kind === "ready" && pairsEqual(a2, expected)) {
+            obs = a2;
+          } else if (a2.kind === "ready" && !pairsEqual(a2, expected)) {
+            if (workingCheck === undefined) {
+              return "stale-head";
+            }
+            const ok = await concludeCancelled(
+              workingCheck,
+              budget,
+              ref,
+              { title: SUPERSEDED_TITLE, summary: "Pair drift at admission." },
+              expected,
+            );
+            return ok ? "stale-head" : "finalization-unresolved";
+          } else if (a2.kind === "base-unavailable") {
+            const stateEarly = await read();
+            const check =
+              workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: stateEarly.headSha }) : undefined);
+            const out = await concludeActionRequiredMergeBase(
+              check,
+              budget,
+              ref,
+              {
+                title: MERGE_BASE_UNAVAILABLE_TITLE,
+                summary: `${summaryOf(stateEarly, a2.baseTipSha)} · merge-base-absent`,
+              },
+              expected,
+            );
+            return out === "confirmed" ? "posted" : "finalization-unresolved";
+          } else {
+            if (workingCheck !== undefined) {
+              const ok = await concludeCancelled(
+                workingCheck,
+                budget,
+                ref,
+                {
+                  title: PAIR_UNVERIFIABLE_TITLE,
+                  summary: `pair-read-failed · ${pairObsSummary(a2)}`,
+                },
+                expected,
+              );
+              return ok ? "pair-unverifiable" : "finalization-unresolved";
+            }
+            return "pair-unverifiable";
+          }
+        } else {
+          if (workingCheck !== undefined) {
+            const ok = await concludeCancelled(
+              workingCheck,
+              budget,
+              ref,
+              {
+                title: PAIR_UNVERIFIABLE_TITLE,
+                summary: `pair-read-failed · ${pairObsSummary(a1)}`,
+              },
+              expected,
+            );
+            return ok ? "pair-unverifiable" : "finalization-unresolved";
+          }
+          return "pair-unverifiable";
+        }
+      }
+    } else {
+      if (!takeAdmissionRead(budget)) {
+        return workingCheck !== undefined ? "finalization-unresolved" : "pair-unverifiable";
+      }
+      const a0 = await observePair(octokit, ref);
+      if (a0.kind !== "ready") {
+        const stateEarly = await read();
+        const tip = a0.kind === "base-unavailable" ? a0.baseTipSha : undefined;
+        const title = a0.kind === "base-unavailable" ? MERGE_BASE_UNAVAILABLE_TITLE : GITHUB_READ_FAILURE_TITLE;
+        const check =
+          workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: stateEarly.headSha }) : undefined);
+        const out = await concludeActionRequiredMergeBase(
+          check,
+          budget,
+          ref,
+          {
+            title,
+            summary: `${summaryOf(stateEarly, tip)} · ${a0.kind === "pair-read-failed" ? pairObsSummary(a0) : "pair not ready"}`,
+          },
+        );
+        return out === "confirmed" ? "posted" : "finalization-unresolved";
+      }
+      obs = a0;
     }
-    if (live.headSha !== state.headSha) {
-      return "stale-head";
+
+    const state = await read();
+
+    if (obs.headSha !== state.headSha) {
+      if (workingCheck === undefined) {
+        return "stale-head";
+      }
+      const ok = await concludeCancelled(workingCheck, budget, ref, { title: SUPERSEDED_TITLE, summary: "Head mismatch." }, obs);
+      return ok ? "stale-head" : "finalization-unresolved";
     }
-    if (!pairCompareReady(live)) {
-      const check = workingCheck ?? (await createCheck({ name: CHECK_NAME, sha: state.headSha }));
-      await check.conclude({
-        conclusion: "action_required",
-        output: {
-          title: GITHUB_READ_FAILURE_TITLE,
-          summary: `${summary} · ${GITHUB_PAIR_READ_DETAIL}`,
-        },
-      });
-      await kv.put(key, summary);
-      return "posted";
-    }
+
+    const holdFp = checkHoldFingerprint(state);
+    const key = checkDedupeKey(ref, state.headSha, obs.baseTipSha, obs.mergeBaseSha, holdFp);
 
     let conclusion = gateConclusion(state);
+    const trusted = await readSuiteRecordTrusted(kv, ref, state.headSha, obs.baseTipSha, obs);
+    const recordInvalid = !trusted.ok;
+
     if (conclusion === "success") {
-      const suite = suiteStateFromRecord(
-        gateSuiteRecord(await readSuiteRecord(kv, ref, state.headSha, baseTipSha), pairCompareReady(live)),
-      );
-      if (suite !== "clean" && suite !== "carried") {
+      const gated = gateSuiteRecord(trusted.ok ? trusted.record : undefined, pairCompareReady(readyAsLive(obs)));
+      const suite = suiteStateFromRecord(gated);
+      if (!trusted.ok || (suite !== "clean" && suite !== "carried")) {
         conclusion = "action_required";
       }
     }
 
-    const check = workingCheck ?? (await createCheck({ name: CHECK_NAME, sha: state.headSha }));
-    const superseded =
-      conclusion === "success" &&
-      !(await livePairIs(octokit, ref, state.headSha, baseTipSha, live.baseSha));
-    if (superseded) {
-      await check.conclude({
-        conclusion: "cancelled",
-        output: {
-          title: "Superseded",
-          summary: `The PR head or base moved while this was posted, so it is not reported green. ${summary}`,
-        },
+    /** Final fence: up to two reads; PairReadFailed may retry once (plan §9). */
+    let finalObs: PairObservation | undefined;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!takeFinalFenceRead(budget)) {
+        if (workingCheck !== undefined) {
+          const ok = await concludeCancelled(
+            workingCheck,
+            budget,
+            ref,
+            {
+              title: PAIR_UNVERIFIABLE_TITLE,
+              summary: "Final-fence read budget exhausted.",
+            },
+            obs,
+          );
+          return ok ? "pair-unverifiable" : "finalization-unresolved";
+        }
+        return "pair-unverifiable";
+      }
+      const r = await observePair(octokit, ref);
+      finalObs = r;
+      if (r.kind === "ready") {
+        break;
+      }
+      if (attempt === 0 && r.kind === "pair-read-failed") {
+        continue;
+      }
+      if (workingCheck !== undefined) {
+        const ok = await concludeCancelled(
+          workingCheck,
+          budget,
+          ref,
+          {
+            title: PAIR_UNVERIFIABLE_TITLE,
+            summary: `final-fence · ${pairObsSummary(r)}`,
+          },
+          obs,
+        );
+        return ok ? "pair-unverifiable" : "finalization-unresolved";
+      }
+      return "pair-unverifiable";
+    }
+
+    if (finalObs === undefined || finalObs.kind !== "ready") {
+      if (workingCheck !== undefined) {
+        const ok = await concludeCancelled(
+          workingCheck,
+          budget,
+          ref,
+          { title: PAIR_UNVERIFIABLE_TITLE, summary: "Final-fence pair observation exhausted." },
+          obs,
+        );
+        return ok ? "pair-unverifiable" : "finalization-unresolved";
+      }
+      return "pair-unverifiable";
+    }
+
+    if (!pairsEqual(finalObs, obs)) {
+      if (workingCheck === undefined) {
+        return "stale-head";
+      }
+      const ok = await concludeCancelled(
+        workingCheck,
+        budget,
+        ref,
+        { title: SUPERSEDED_TITLE, summary: "Final-fence pair drift." },
+        obs,
+      );
+      return ok ? "stale-head" : "finalization-unresolved";
+    }
+
+    const storedSummary = await kv.get(key);
+    const buildOut = (): { title: string; summary: string } => ({
+      title: terminalTitle(state, conclusion),
+      summary: terminalSummaryForDedupe(state, obs.baseTipSha, conclusion),
+    });
+    const desiredSummary = buildOut().summary;
+    const bodiesMatch = typeof storedSummary === "string" && storedSummary === desiredSummary;
+
+    if (bodiesMatch && !requiresInvalidRecordRepost(state, conclusion, recordInvalid)) {
+      return "unchanged";
+    }
+
+    if (bodiesMatch && requiresInvalidRecordRepost(state, conclusion, recordInvalid)) {
+      const handle = workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: state.headSha }) : undefined);
+      if (handle === undefined) {
+        return "pair-unverifiable";
+      }
+      const mismatchOut = buildOut();
+      const outcome = await concludeNonCancelTerminal({
+        handle,
+        budget,
+        ref,
+        octokit,
+        obs: finalObs,
+        conclusion: "action_required",
+        output: mismatchOut,
+        workingCheck,
       });
+      if (outcome === "confirmed") {
+        await kv.put(key, mismatchOut.summary);
+        return "posted";
+      }
+      if (outcome === "stale-head") {
+        return "stale-head";
+      }
+      if (outcome === "pair-unverifiable") {
+        return "pair-unverifiable";
+      }
+      return "finalization-unresolved";
+    }
+
+    const check = workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: state.headSha }) : undefined);
+    if (check === undefined) {
+      return "pair-unverifiable";
+    }
+
+    const term = await concludeNonCancelTerminal({
+      handle: check,
+      budget,
+      ref,
+      octokit,
+      obs: finalObs,
+      conclusion,
+      output: buildOut(),
+      workingCheck,
+    });
+    if (term === "stale-head") {
       return "stale-head";
     }
-    const title = state.next === "needs_joshua" ? "Needs Joshua" : titleOf(conclusion);
-    await check.conclude({ conclusion, output: { title, summary } });
-    await kv.put(key, summary);
+    if (term === "pair-unverifiable") {
+      return "pair-unverifiable";
+    }
+    if (term !== "confirmed") {
+      return "finalization-unresolved";
+    }
+    const postedOut = buildOut();
+    await kv.put(key, postedOut.summary);
     return "posted";
   });
-}
-
-function titleOf(conclusion: GateConclusion): string {
-  return { success: "Gate passed", failure: "Gate blocked", action_required: "Gate waiting" }[conclusion];
 }

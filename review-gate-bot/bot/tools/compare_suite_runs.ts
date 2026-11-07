@@ -2,7 +2,11 @@ import type { Octokit } from "@octokit/rest";
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
-import { readPr, readSuiteRecord, suiteKey, type PrRef } from "../lib/gh.js";
+import { hostKvWithSuiteRecord, readGateState, readSuiteRecord, type PrRef, type RecordedSuite } from "../lib/gh.js";
+import { checkHoldFingerprint, type SuiteState } from "../lib/gate.js";
+import { observePairFromPull, type ReadyPair } from "../lib/pair-observation.js";
+import { readSuiteRecordTrusted, READER_EXPECTED_SCHEMA_VERSION } from "../lib/pair-record.js";
+import { writePairResult } from "../lib/pair-write.js";
 import { readPrFixture } from "../lib/fixtures.js";
 import { recordSuiteComparison } from "../lib/suite-record.js";
 import { carryDecision } from "../lib/suite.js";
@@ -88,6 +92,8 @@ export default defineTool({
     let currentBaseSha: string | undefined;
     let currentBaseTipSha: string | undefined;
     let prRef: { owner: string; repo: string; number: number } | undefined;
+    let sessionOctokit: Octokit | undefined;
+    let readyObs: ReadyPair | undefined;
 
     if (isEval) {
       if (fixture === undefined) {
@@ -100,12 +106,39 @@ export default defineTool({
       if (prRef === undefined) {
         throw new Error("compare_suite_runs needs a GitHub pull request session");
       }
-      const octokit = await ctx.host.github.getOctokit();
-      const pr = await readPr(octokit, prRef);
-      changedFiles = pr.files;
-      currentHeadSha = pr.headSha;
-      currentBaseSha = pr.baseSha;
-      currentBaseTipSha = pr.baseTipSha;
+      sessionOctokit = await ctx.host.github.getOctokit();
+      const [{ data: prBody }, files] = await Promise.all([
+        sessionOctokit.rest.pulls.get({
+          owner: prRef.owner,
+          repo: prRef.repo,
+          pull_number: prRef.number,
+        }),
+        sessionOctokit.paginate(sessionOctokit.rest.pulls.listFiles, {
+          owner: prRef.owner,
+          repo: prRef.repo,
+          pull_number: prRef.number,
+          per_page: 100,
+        }),
+      ]);
+      changedFiles = [
+        ...new Set(
+          files.flatMap((f) => (f.previous_filename === undefined ? [f.filename] : [f.filename, f.previous_filename])),
+        ),
+      ];
+      currentHeadSha = prBody.head?.sha ?? "";
+      const observation = await observePairFromPull(sessionOctokit, prRef, prBody);
+      if (observation.kind !== "ready") {
+        return {
+          recorded: false,
+          reason: observation.kind === "base-unavailable" ? "base-unavailable" : "pair-read-failed",
+          detail: observation.kind === "pair-read-failed" ? `${observation.stage}: ${observation.code}` : undefined,
+          carried: false,
+          clean: false,
+        };
+      }
+      readyObs = observation;
+      currentBaseSha = observation.mergeBaseSha;
+      currentBaseTipSha = observation.baseTipSha;
     }
 
     if (currentHeadSha !== input.headSha) {
@@ -131,19 +164,52 @@ export default defineTool({
       return { recorded: false, reason: "base-unavailable", carried: false, clean: false };
     }
 
+    if (!isEval && readyObs !== undefined) {
+      if (readyObs.headSha !== input.headSha || readyObs.mergeBaseSha !== input.baseSha || readyObs.baseTipSha !== currentBaseTipSha) {
+        return {
+          recorded: false,
+          reason: "merge-base-mismatch",
+          expected: { headSha: readyObs.headSha, mergeBaseSha: readyObs.mergeBaseSha, baseTipSha: readyObs.baseTipSha },
+          given: { headSha: input.headSha, baseSha: input.baseSha, baseTipSha: currentBaseTipSha },
+          carried: false,
+          clean: false,
+        };
+      }
+    }
+
     // Carry-over: the head must have changed nothing a suite can observe, and
     // the SHA being carried from must itself have a recorded *clean* run.
     if (input.carryFromSha !== undefined) {
-      const prior = isEval
-        ? "clean"
-        : ((await readSuiteRecord(ctx.host.kv, requirePr(prRef), input.carryFromSha, currentBaseTipSha))?.state ??
-          "missing");
+      let prior: SuiteState | "missing";
+      if (isEval) {
+        prior = "clean";
+      } else {
+        const obs = readyObs;
+        if (obs === undefined || obs.kind !== "ready") {
+          prior = "missing";
+        } else {
+          const trusted = await readSuiteRecordTrusted(ctx.host.kv, requirePr(prRef), input.carryFromSha, obs.baseTipSha, obs);
+          if (!trusted.ok) {
+            return {
+              recorded: false,
+              reason: trusted.reason,
+              detail: trusted.detail,
+              carried: false,
+              clean: false,
+            };
+          } else if (trusted.record.invalid === "needs-joshua") {
+            prior = "needs-joshua";
+          } else {
+            prior = trusted.record.state;
+          }
+        }
+      }
       // What a suite can observe is what differs between the carried-from SHA and the head.
       // The PR's diff against base is not that: a force-push can leave it prose-only while
       // the code still differs from the SHA whose clean result is being carried.
       const between = isEval
         ? changedFiles
-        : await changedBetween(await ctx.host.github.getOctokit(), requirePr(prRef), input.carryFromSha, input.headSha);
+        : await changedBetween(sessionOctokit ?? (await ctx.host.github.getOctokit()), requirePr(prRef), input.carryFromSha, input.headSha);
       if (between === undefined) {
         return {
           recorded: false,
@@ -180,11 +246,24 @@ export default defineTool({
         };
       }
 
-      if (!isEval) {
-        await ctx.host.kv.put(suiteKey(requirePr(prRef), input.headSha, currentBaseTipSha as string), {
-          state: "carried",
+      if (!isEval && readyObs !== undefined && readyObs.kind === "ready") {
+        const octokit = sessionOctokit ?? (await ctx.host.github.getOctokit());
+        const repoRef = requirePr(prRef);
+        const carriedBody = {
+          state: "carried" as const,
           carriedFrom: input.carryFromSha,
           at: Date.now(),
+        };
+        const provisional: RecordedSuite = {
+          schemaVersion: READER_EXPECTED_SCHEMA_VERSION,
+          mergeBaseSha: readyObs.mergeBaseSha,
+          ...carriedBody,
+        };
+        const overlayKv = hostKvWithSuiteRecord(ctx.host.kv, repoRef, input.headSha, currentBaseTipSha as string, provisional);
+        const fp = checkHoldFingerprint(await readGateState({ octokit, kv: overlayKv, ref: repoRef, headSha: input.headSha }));
+        await writePairResult(ctx.host.kv, repoRef, input.headSha, currentBaseTipSha as string, readyObs.mergeBaseSha, {
+          ...carriedBody,
+          checkHoldFingerprint: fp,
         });
       }
 
@@ -206,7 +285,7 @@ export default defineTool({
       return { recorded: false, reason: "eval-no-runner", carried: false, clean: false };
     }
 
-    const octokit = await ctx.host.github.getOctokit();
+    const octokit = sessionOctokit ?? (await ctx.host.github.getOctokit());
     const repoRef = requirePr(prRef);
     const outcome = await recordSuiteComparison({
       octokit,

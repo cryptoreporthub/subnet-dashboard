@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { terminalTitle } from "../bot/lib/check.js";
 import { suiteKey } from "../bot/lib/gh.js";
 import { collectPinnedVerdicts, type CommentLike, type ReviewLike } from "../bot/lib/verdicts.js";
 import {
@@ -60,6 +61,31 @@ test("three passes with no suite result must run the suite", () => {
     input({ verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")] }),
   );
   assert.equal(gate.next, "run_suite");
+});
+
+test("RD-01: compare_blocked stops before run_suite and gateActions does not run the suite", () => {
+  const gate = computeGate(
+    input({
+      verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")],
+      suite: "missing",
+      compareBlocked: true,
+    }),
+  );
+  assert.equal(gate.next, "compare_blocked");
+  const actions = gateActions(gate, false);
+  assert.equal(actions.runSuite, false);
+});
+
+test("RD-02: compare_blocked uses a distinct terminal title via gateConclusion + terminal pipeline", () => {
+  const gate = computeGate(
+    input({
+      verdicts: [v("mc", "PASS"), v("cursor", "PASS"), v("ditto", "PASS")],
+      suite: "missing",
+      compareBlocked: true,
+    }),
+  );
+  assert.equal(gate.next, "compare_blocked");
+  assert.equal(terminalTitle(gate, "action_required"), "Compare blocked");
 });
 
 test("three passes and a regressed suite does not tag Replit", () => {
