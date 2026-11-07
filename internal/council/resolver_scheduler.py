@@ -618,8 +618,10 @@ class PredictionResolverScheduler:
         if immediate:
             # Run the first tick in a background thread so callers are not
             # blocked while prices are fetched and predictions are graded.
+            with self._lock:
+                captured_run_id = self._tick_run_id
             threading.Thread(
-                target=lambda: self._tick(self._tick_run_id), daemon=True
+                target=lambda rid=captured_run_id: self._tick(rid), daemon=True
             ).start()
         else:
             # First tick happens soon after boot so a backlog of pending
@@ -693,8 +695,8 @@ class PredictionResolverScheduler:
         with self._lock:
             if self._tick_run_id is None:
                 self._tick_run_id = SchedulerRunId(str(uuid.uuid4()))
-            run_id = self._tick_run_id
-        return self._tick(run_id)
+        # Synchronous path: do not apply scheduled-callback stale/active guards (CR-04).
+        return self._tick(None)
 
     def _liveness_ok(self) -> bool:
         """True iff the age-derived tracker status is currently ok."""
@@ -743,7 +745,7 @@ class PredictionResolverScheduler:
                 self._tick_run_id = SchedulerRunId(str(uuid.uuid4()))
         if expected_run_id is not None:
             with self._lock:
-                if self._tick_run_id != expected_run_id:
+                if self._tick_run_id != expected_run_id or not self._active:
                     return {
                         "run_at": _now_iso(),
                         "skipped": "stale_scheduler_run",
@@ -1397,6 +1399,8 @@ class PredictionResolverScheduler:
             return PersistResult(committed=False)
         try:
             if not force and owner_gen is not None:
+                if self._persist_owner_gen is None:
+                    return PersistResult(committed=False)
                 if self._persist_owner_gen != owner_gen:
                     return PersistResult(committed=False)
             pub_gen = result.get("cycle_generation")
@@ -1487,7 +1491,16 @@ class PredictionResolverScheduler:
                     )
                     return
 
+                new_instant = _parse_run_at_utc(summary.get("run_at"))
+                existing_instant = _parse_run_at_utc(existing.get("run_at"))
+
                 if not owned_cycle:
+                    if (
+                        new_instant is not None
+                        and existing_instant is not None
+                        and new_instant < existing_instant
+                    ):
+                        return
                     _commit_write(sched)
                     return
 
@@ -1506,11 +1519,9 @@ class PredictionResolverScheduler:
                 if owned_cycle and incoming_gen_i is None:
                     return
 
-                # 3. Parse run_at instants
-                new_instant = _parse_run_at_utc(summary.get("run_at"))
+                # 3. Parse run_at instants (owned path)
                 if new_instant is None:
                     return
-                existing_instant = _parse_run_at_utc(existing.get("run_at"))
                 if existing.get("run_at") and existing_instant is None:
                     if not _malformed_existing_run_at_logged:
                         logger.warning(
@@ -1573,9 +1584,18 @@ class PredictionResolverScheduler:
                     _commit_write(sched)
                     return
 
-                # 6. Preserve completed success
+                # 6. Preserve completed success unless newer owned complete row wins
                 if _is_completed_success(existing):
-                    return
+                    existing_gen_i = _incoming_generation_int(existing)
+                    newer_complete_owned = (
+                        owned_cycle
+                        and _is_completed_success(summary)
+                        and incoming_gen_i is not None
+                        and existing_gen_i is not None
+                        and incoming_gen_i > existing_gen_i
+                    )
+                    if not newer_complete_owned:
+                        return
 
                 # 7.2 Same-cycle abnormal owned write (force timeout)
                 if (
@@ -1882,7 +1902,9 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
                                 "age_before": age_before,
                                 "age_after": age_before,
                             }
-                        sched._abandon_inflight_cycle()
+                        sched._abandon_inflight_cycle(
+                            submitted_gen=sched._lock_owner_gen
+                        )
                         stale_lock_recycled = True
                         logger.warning(
                             "resolver revive: recycled stale cycle_lock age_before=%s force=%s",

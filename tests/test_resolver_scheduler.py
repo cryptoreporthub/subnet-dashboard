@@ -1788,6 +1788,65 @@ def test_revoke_wins_orphan_aborts(tmp_path, monkeypatch):
     assert "last_cycle" not in data.get("prediction_resolver_scheduler", {})
 
 
+def test_persist_rejects_owned_write_when_owner_revoked(tmp_path, monkeypatch):
+    """CR-05: non-force owned persist fails when _persist_owner_gen was revoked."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    rid = make_resolver_cycle_id(2, "2026-06-01T12:00:00+00:00")
+    sched._persist_owner_gen = None
+    out = sched._persist_cycle_summary(
+        {
+            "run_at": "2026-06-01T12:00:00+00:00",
+            "ok": True,
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+            "cycle_generation": 2,
+            "resolver_cycle_id": rid,
+            "gap_timing_ms": {"complete": True},
+            "stage_timing_ms": {"total_cycle_ms": 1.0},
+        },
+        owner_gen=2,
+    )
+    assert out.committed is False
+
+
+def test_tick_when_inactive_is_stale_scheduler_run(fresh_scheduler):
+    """CR-04: stopped scheduler ignores scheduled tick callbacks with expected run id."""
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    rid = resolver_scheduler.SchedulerRunId("run-a")
+    sched._tick_run_id = rid
+    sched._active = True
+    sched.stop()
+    out = sched._tick(rid)
+    assert out.get("skipped") == "stale_scheduler_run"
+
+
+def test_immediate_start_captures_run_id_for_first_tick(monkeypatch, fresh_scheduler):
+    """CR-01: immediate thread uses run id captured at start, not later mutation."""
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    seen: Dict[str, Any] = {}
+
+    def _fake_tick(self, expected_run_id=None, **_k):
+        seen["rid"] = expected_run_id.value if expected_run_id else None
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler, "_tick", _fake_tick
+    )
+    sched.start(immediate=True)
+    assert seen.get("rid") is not None
+    time.sleep(0.15)
+    sched.stop()
+    time.sleep(0.15)
+    assert seen.get("rid") == sched._tick_run_id.value
+
+
 def test_gate_deadline_returns_pending(monkeypatch, tmp_path):
     """M2: flock deadline exhaustion yields non-commit from write_soul_map."""
     from internal.store import soul_map_io
@@ -1829,13 +1888,17 @@ def test_revive_does_not_block_state_read(monkeypatch, fresh_scheduler):
     def _read() -> None:
         resolver_scheduler.get_prediction_resolver_scheduler_state()
 
-    t = threading.Thread(target=_read)
-    t.start()
+    t1 = threading.Thread(target=_read)
+    t2 = threading.Thread(target=_read)
+    t1.start()
     assert hold.wait(timeout=5)
+    t2.start()
     time.sleep(0.05)
-    assert t.is_alive()
+    assert t1.is_alive()
+    assert t2.is_alive()
     release.set()
-    t.join(timeout=5)
+    t1.join(timeout=5)
+    t2.join(timeout=5)
     resolver_scheduler.stop_prediction_resolver_scheduler()
 
 
@@ -2023,6 +2086,38 @@ def test_cycle_ab_overlap_valid_b_persists_b_identity(monkeypatch, fresh_schedul
     fut.result(timeout=5)
     assert seen["ctx"].resolver_cycle_id == rid_b
     pool.shutdown(wait=False)
+
+
+def test_cycle_ab_overlap_persists_b_identity_on_disk(tmp_path, monkeypatch):
+    """GAP-08: durable last_cycle carries resolver_cycle_id for owned persist."""
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    run_at = "2026-01-02T00:00:00+00:00"
+    rid_b = make_resolver_cycle_id(2, run_at)
+    sched._persist_owner_gen = 2
+    sched._persist_cycle_summary(
+        {
+            "run_at": run_at,
+            "ok": True,
+            "resolved_now": 1,
+            "expired_now": 0,
+            "pending": 0,
+            "cycle_generation": 2,
+            "resolver_cycle_id": rid_b,
+            "gap_timing_ms": {"complete": True, "closing_drift_ms": 0.0},
+            "stage_timing_ms": {"total_cycle_ms": 1.0},
+        },
+        owner_gen=2,
+    )
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    last = data["prediction_resolver_scheduler"]["last_cycle"]
+    assert last["resolver_cycle_id"] == rid_b
+    assert last["cycle_generation"] == 2
 
 
 def test_cycle_context_rejected_when_lease_revoked(monkeypatch, fresh_scheduler):

@@ -32,6 +32,19 @@ def test_replace_oserror_returns_disk_state_and_leaves_cache(tmp_path, monkeypat
     assert "OSError" in caplog.text
 
 
+def test_mutator_timeout_propagates_with_status(tmp_path):
+    """CR-07: mutator TimeoutError is not confused with flock lock-wait timeout."""
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"kept": 1}), encoding="utf-8")
+
+    def _slow_mutator(_blob):
+        raise TimeoutError("mutator stall")
+
+    with pytest.raises(TimeoutError, match="mutator"):
+        write_soul_map(_slow_mutator, path=str(soul_path), with_status=True)
+    assert json.loads(soul_path.read_text(encoding="utf-8")) == {"kept": 1}
+
+
 def test_successful_write_updates_disk_and_cache(tmp_path):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"kept": 1}), encoding="utf-8")

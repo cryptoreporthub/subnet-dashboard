@@ -188,16 +188,21 @@ def write_soul_map(
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved + ".writers"):
+        locks_held = False
         try:
             with _file_and_reader_locks(
                 resolved, retry_file_lock_timeouts=not with_status
             ):
+                locks_held = True
                 now = time.monotonic()
                 cached = _cache_get_fresh(resolved, now)
                 # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
                 blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
                 prior = copy.deepcopy(blob)
-                mutator(blob)
+                try:
+                    mutator(blob)
+                except TimeoutError:
+                    raise
                 temp_path = ""
                 committed = False
                 try:
@@ -239,6 +244,8 @@ def write_soul_map(
                     return blob, committed
                 return blob
         except TimeoutError as exc:
+            if locks_held:
+                raise
             logger.warning(
                 "soul_map lock wait timed out path=%s error=%s",
                 resolved,
