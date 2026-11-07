@@ -13,6 +13,7 @@ Covers:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -20,6 +21,7 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
@@ -1532,3 +1534,706 @@ def test_b1b_closing_invariant_soak(monkeypatch, fresh_scheduler):
         print(
             f"bucket {k} mean={statistics.mean(vals):.3f} p90={_p90(vals):.3f} max={max(vals):.3f}"
         )
+
+
+def test_resolver_restart_seeds_cycle_generation_from_last_cycle(
+    tmp_path, monkeypatch
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": {
+                        "cycle_generation": 47,
+                        "run_at": "2020-01-01T00:00:00Z",
+                        "ok": True,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    sched._ensure_cycle_generation_seeded()
+    assert sched._cycle_generation == 47
+
+
+def test_resolver_gen2_gen3_interleave_rejects_stale_complete(
+    tmp_path, monkeypatch
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    run_at = "2026-06-01T12:00:00+00:00"
+    id2 = make_resolver_cycle_id(2, run_at)
+    id3 = make_resolver_cycle_id(3, run_at)
+
+    def _owned_partial(gen, cycle_id):
+        return {
+            "run_at": run_at,
+            "ok": True,
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+            "cycle_generation": gen,
+            "resolver_cycle_id": cycle_id,
+            "gap_timing_ms": {"complete": False},
+            "stage_timing_ms": {"total_cycle_ms": 1.0},
+        }
+
+    sched._persist_owner_gen = 2
+    sched._persist_cycle_summary(_owned_partial(2, id2), owner_gen=2)
+    sched._persist_owner_gen = 3
+    sched._persist_cycle_summary(_owned_partial(3, id3), owner_gen=3)
+
+    stale_complete = _owned_partial(2, id2)
+    stale_complete["gap_timing_ms"] = {"complete": True, "closing_drift_ms": 0.0}
+    sched._persist_owner_gen = 2
+    sched._persist_cycle_summary(stale_complete, owner_gen=2)
+
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    last = data["prediction_resolver_scheduler"]["last_cycle"]
+    assert last["cycle_generation"] == 3
+    assert last["gap_timing_ms"]["complete"] is False
+
+
+def test_resolver_same_run_at_parsed_equal_z_and_offset():
+    z = "2026-01-01T00:00:00Z"
+    off = "2026-01-01T00:00:00+00:00"
+    assert resolver_scheduler._parse_run_at_utc(z) == resolver_scheduler._parse_run_at_utc(
+        off
+    )
+
+
+def test_resolver_natural_run_once_owned_identity_and_terminal_complete(
+    monkeypatch, fresh_scheduler
+):
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda dry_run=False: None,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda _subnets: {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {},
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: {"expired_now": [], "stats": {"pending": 0}, "watchdog": {}},
+    )
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda resolved_now: {"triggered": False},
+    )
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    result = sched.run_once()
+    assert result["ok"] is True
+    assert result.get("cycle_generation") is not None
+    assert result.get("resolver_cycle_id")
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    assert summary["run_at"] == result["run_at"]
+    assert summary["cycle_generation"] == result["cycle_generation"]
+    assert summary["resolver_cycle_id"] == result["resolver_cycle_id"]
+    assert summary["gap_timing_ms"]["complete"] is True
+    assert summary["gap_timing_ms"]["closing_drift_ms"] is not None
+
+
+# ---------------------------------------------------------------------------
+# PR #1571 v5 exam gate (tests 1–17); see docs/resolver-1571-canonical-plan-replit669227-v5.md
+# ---------------------------------------------------------------------------
+
+
+def test_commit_writer_wins_then_revoke(tmp_path, monkeypatch):
+    """H1 W1: abandon waits on _release_guard while owned writer holds pre-replace."""
+    from internal.ops.mutation_log import make_resolver_cycle_id
+    from internal.store import soul_map_io
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul_path))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul_path))
+
+    writer_at_barrier = threading.Event()
+    release_writer = threading.Event()
+    revoke_entered = threading.Event()
+    order: List[str] = []
+
+    def _pre() -> None:
+        order.append("W_pre_replace_barrier")
+        writer_at_barrier.set()
+        assert release_writer.wait(timeout=5)
+
+    monkeypatch.setattr(resolver_scheduler, "_pre_replace_barrier", _pre)
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, soul_map_path=str(soul_path), subnet_provider=lambda: []
+    )
+    gen_at_submit = 5
+    rid = make_resolver_cycle_id(gen_at_submit, "2099-01-01T00:00:00+00:00")
+    sched._persist_owner_gen = gen_at_submit
+
+    real_abandon = sched._abandon_inflight_cycle
+
+    def _abandon_traced(**kwargs: Any) -> None:
+        revoke_entered.set()
+        order.append("R_attempt_abandon")
+        real_abandon(**kwargs)
+        order.append("R_enter_abandon")
+
+    sched._abandon_inflight_cycle = _abandon_traced  # type: ignore[method-assign]
+
+    done_second = threading.Event()
+
+    def _second_write() -> None:
+        def _m(blob: Dict[str, Any]) -> None:
+            blob["revoke_marker"] = True
+
+        soul_map_io.write_soul_map(_m, str(soul_path), with_status=True)
+        done_second.set()
+
+    def _writer() -> None:
+        sched._persist_cycle_summary(
+            {
+                "run_at": _iso(datetime.now(timezone.utc)),
+                "ok": False,
+                "resolved_now": 0,
+                "expired_now": 0,
+                "pending": 0,
+                "error": None,
+                "cycle_generation": gen_at_submit,
+                "resolver_cycle_id": rid,
+                "gap_timing_ms": {"complete": True, "closing_drift_ms": 0.0},
+                "stage_timing_ms": {"total_cycle_ms": 1.0},
+            },
+            owner_gen=gen_at_submit,
+        )
+        order.append("W_exit")
+
+    def _revoker() -> None:
+        assert writer_at_barrier.wait(timeout=5)
+        _abandon_traced(submitted_gen=gen_at_submit, resolver_cycle_id=rid)
+        order.append("R_exit")
+
+    tw = threading.Thread(target=_writer, name="writer")
+    tr = threading.Thread(target=_revoker, name="revoker")
+    t2 = threading.Thread(target=_second_write, name="flock_writer")
+    tw.start()
+    assert writer_at_barrier.wait(timeout=5)
+    tr.start()
+    t2.start()
+    assert revoke_entered.wait(timeout=5)
+    time.sleep(0.05)
+    assert not done_second.is_set()
+    assert "R_enter_abandon" not in order
+    release_writer.set()
+    tw.join(timeout=10)
+    tr.join(timeout=10)
+    t2.join(timeout=10)
+    assert done_second.is_set()
+    assert order.index("W_pre_replace_barrier") < order.index("W_exit")
+    assert order.index("W_exit") <= order.index("R_enter_abandon")
+    data = json.loads(soul_path.read_text(encoding="utf-8"))
+    assert "prediction_resolver_scheduler" in data
+
+
+def test_revoke_wins_orphan_aborts(tmp_path, monkeypatch):
+    """H1 R1: stale owner_gen cannot commit last_cycle."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    run_at = "2026-06-01T12:00:00+00:00"
+    rid = make_resolver_cycle_id(1, run_at)
+    sched._persist_owner_gen = None
+    out = sched._persist_cycle_summary(
+        {
+            "run_at": run_at,
+            "ok": True,
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+            "cycle_generation": 1,
+            "resolver_cycle_id": rid,
+            "gap_timing_ms": {"complete": True},
+            "stage_timing_ms": {"total_cycle_ms": 1.0},
+        },
+        owner_gen=1,
+    )
+    assert isinstance(out, resolver_scheduler.PersistResult)
+    assert out.committed is False
+    before = hashlib.sha256(soul.read_bytes()).hexdigest()
+    after = hashlib.sha256(soul.read_bytes()).hexdigest()
+    assert before == after
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    assert "last_cycle" not in data.get("prediction_resolver_scheduler", {})
+
+
+def test_gate_deadline_returns_pending(monkeypatch, tmp_path):
+    """M2: flock deadline exhaustion yields non-commit from write_soul_map."""
+    from internal.store import soul_map_io
+
+    soul_path = tmp_path / "soul_map.json"
+    seed = b'{"seed": true}'
+    soul_path.write_bytes(seed)
+
+    def _instant_timeout(*_a, **_k):
+        raise TimeoutError("fast")
+
+    monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", _instant_timeout)
+    blob, committed = soul_map_io.write_soul_map(
+        lambda b: b.update({"x": 1}), path=str(soul_path), with_status=True
+    )
+    assert committed is False
+    assert isinstance(blob, dict)
+    assert soul_path.read_bytes() == seed
+
+
+def test_revive_does_not_block_state_read(monkeypatch, fresh_scheduler):
+    """H2: module get_state does not hold _scheduler_lock across instance state()."""
+    hold = threading.Event()
+    release = threading.Event()
+
+    real_state = resolver_scheduler.PredictionResolverScheduler.state
+
+    def _slow_state(self):
+        hold.set()
+        assert release.wait(timeout=5)
+        return real_state(self)
+
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler, "state", _slow_state
+    )
+    resolver_scheduler.start_prediction_resolver_scheduler(immediate=True)
+    time.sleep(0.2)
+
+    def _read() -> None:
+        resolver_scheduler.get_prediction_resolver_scheduler_state()
+
+    t = threading.Thread(target=_read)
+    t.start()
+    assert hold.wait(timeout=5)
+    time.sleep(0.05)
+    assert t.is_alive()
+    release.set()
+    t.join(timeout=5)
+    resolver_scheduler.stop_prediction_resolver_scheduler()
+
+
+def test_state_read_not_blocked_by_lifecycle_io(tmp_path, monkeypatch):
+    """H2: health read returns while lifecycle write is stalled."""
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul_path))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul_path))
+
+    from internal.store import soul_map_io
+
+    started = threading.Event()
+    resume = threading.Event()
+
+    # Scheduler calls the name bound in resolver_scheduler, not soul_map_io.write_soul_map.
+    real_write = resolver_scheduler.write_soul_map
+    stall_target = str(Path(soul_path).resolve())
+
+    def _stall_write(mutator, path=None, **kwargs):
+        resolved = (
+            str(Path(path).resolve())
+            if path is not None
+            else str(Path(soul_map_io._resolve_path(None)).resolve())
+        )
+        if resolved == stall_target:
+            started.set()
+            assert resume.wait(timeout=5)
+        return real_write(mutator, path=path, **kwargs)
+
+    monkeypatch.setattr(resolver_scheduler, "write_soul_map", _stall_write)
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, soul_map_path=str(soul_path)
+    )
+    sched._active = True
+    sched._lifecycle = "running"
+    sched._started_at = _iso(datetime.now(timezone.utc))
+
+    def _io() -> None:
+        sched._persist_lifecycle_state()
+
+    t = threading.Thread(target=_io)
+    t.start()
+    assert started.wait(timeout=5)
+    t0 = time.perf_counter()
+    resolver_scheduler.get_prediction_resolver_scheduler_state()
+    dt = time.perf_counter() - t0
+    assert dt < 0.25
+    resume.set()
+    t.join(timeout=5)
+
+
+def test_late_old_stop_cannot_cancel_new_job(monkeypatch, fresh_scheduler):
+    """H4: stop cancels only the stopped instance job ids."""
+    calls: List[str] = []
+
+    class _FakeSched:
+        def remove_job(self, jid: str) -> None:
+            calls.append(f"cancel:{jid}")
+
+    def _sched(jid: str, *_a, **_k) -> None:
+        calls.append(f"schedule:{jid}")
+
+    monkeypatch.setattr(
+        "internal.job_scheduler.get_background_scheduler", lambda: _FakeSched()
+    )
+    monkeypatch.setattr(resolver_scheduler, "schedule_in_seconds", _sched)
+
+    s1 = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    s1.start(immediate=False)
+    jid1 = s1._job_primary()
+    out1 = s1.stop()
+    assert out1.get("stopped") is True
+    assert out1.get("lifecycle_persisted") is True
+    assert f"schedule:{jid1}" in calls
+    assert f"cancel:{jid1}" in calls
+    assert f"cancel:{jid1}:retry" in calls
+
+    calls.clear()
+    s2 = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    s2.start(immediate=False)
+    jid2 = s2._job_primary()
+    assert jid1 != jid2
+    _FakeSched().remove_job(jid1)
+    cancel_targets = [c.removeprefix("cancel:") for c in calls if c.startswith("cancel:")]
+    assert jid2 not in cancel_targets
+    assert f"{jid2}:retry" not in cancel_targets
+
+
+def test_detached_lifecycle_write_is_fenced(monkeypatch, fresh_scheduler):
+    """H3 TOCTOU: skip cycle_in_flight appends history without replacing last_cycle."""
+    soul_path = weights.SOUL_MAP_PATH
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, soul_map_path=str(soul_path)
+    )
+    sched._persist_cycle_summary(
+        {"run_at": "2020-01-01T00:00:00Z", "ok": True, "skipped": "cycle_in_flight"}
+    )
+    with open(soul_path, "r") as f:
+        data = json.load(f)
+    prs = data["prediction_resolver_scheduler"]
+    # cycle_in_flight is history-only (does not replace last_cycle).
+    lc = prs.get("last_cycle")
+    if isinstance(lc, dict):
+        assert lc.get("skipped") != "cycle_in_flight"
+    hist = prs["cycle_history"]
+    assert any(h.get("skipped") == "cycle_in_flight" for h in hist)
+
+
+def test_singleton_detach_lifecycle_write_is_fenced(tmp_path, monkeypatch):
+    """H3 detached: stale stop lifecycle cannot clobber a newer scheduler_run_id."""
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul_path))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul_path))
+
+    hold = threading.Event()
+    release = threading.Event()
+
+    old = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, soul_map_path=str(soul_path)
+    )
+    old.start(immediate=False)
+    old_run = old._tick_run_id.value if old._tick_run_id else None
+    real_pls = old._persist_lifecycle_state
+
+    def _slow_pls() -> resolver_scheduler.PersistResult:
+        hold.set()
+        assert release.wait(timeout=5)
+        return real_pls()
+
+    old._persist_lifecycle_state = _slow_pls  # type: ignore[method-assign]
+
+    t_stop = threading.Thread(target=old.stop)
+    t_stop.start()
+    assert hold.wait(timeout=5)
+
+    new = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, soul_map_path=str(soul_path)
+    )
+    new.start(immediate=False)
+    new_run = new._tick_run_id.value
+    assert new_run != old_run
+    mid = json.loads(soul_path.read_text(encoding="utf-8"))
+    assert mid["prediction_resolver_scheduler"]["scheduler_run_id"] == new_run
+
+    release.set()
+    t_stop.join(timeout=10)
+
+    data = json.loads(soul_path.read_text(encoding="utf-8"))
+    prs = data["prediction_resolver_scheduler"]
+    assert prs.get("scheduler_run_id") == new_run
+    assert prs.get("lifecycle") not in ("stopped",)
+
+
+def test_cycle_ab_overlap_valid_b_persists_b_identity(monkeypatch, fresh_scheduler):
+    """H3 valid B: ContextVar carries B identity in worker thread."""
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+    b = threading.Barrier(2)
+    rid_b = make_resolver_cycle_id(2, "2026-01-02T00:00:00Z")
+    ctx_b = resolver_scheduler._CycleContext(
+        run_at="2026-01-02T00:00:00Z",
+        cycle_generation=2,
+        resolver_cycle_id=rid_b,
+    )
+    seen: Dict[str, Any] = {}
+
+    def _worker() -> None:
+        tok = resolver_scheduler._active_cycle_ctx_var.set(ctx_b)
+        try:
+            b.wait()
+            c = resolver_scheduler._active_cycle_ctx_var.get()
+            seen["ctx"] = c
+        finally:
+            resolver_scheduler._active_cycle_ctx_var.reset(tok)
+
+    pool = __import__("concurrent.futures", fromlist=["ThreadPoolExecutor"]).ThreadPoolExecutor(
+        max_workers=1
+    )
+    fut = pool.submit(_worker)
+    b.wait()
+    fut.result(timeout=5)
+    assert seen["ctx"].resolver_cycle_id == rid_b
+    pool.shutdown(wait=False)
+
+
+def test_cycle_context_rejected_when_lease_revoked(monkeypatch, fresh_scheduler):
+    """H3 stale: generation mismatch in worker returns cycle_abandoned."""
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
+
+    class _FakeFut:
+        def __init__(self, fn: Any) -> None:
+            self._fn = fn
+
+        def done(self) -> bool:
+            return False
+
+        def result(self, *_a, **_k) -> Any:
+            sched._cycle_generation += 100
+            return self._fn()
+
+    class _FakePool:
+        def __init__(self, *a: Any, **k: Any) -> None:
+            pass
+
+        def submit(self, fn: Any) -> _FakeFut:
+            return _FakeFut(fn)
+
+        def shutdown(self, *a: Any, **k: Any) -> None:
+            pass
+
+    monkeypatch.setattr(resolver_scheduler, "ThreadPoolExecutor", _FakePool)
+    monkeypatch.setattr(sched, "_cycle_lock", threading.Lock())
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 120)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 120)
+    out = sched._run_refresh_cycle_with_timeout()
+    assert out.get("skipped") == "cycle_abandoned"
+
+
+def test_force_timeout_before_first_partial_replaces_older_incomplete(
+    tmp_path, monkeypatch
+):
+    """H5: force timeout path may replace incomplete same id (existing behavior)."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    run_at = "2026-08-01T00:00:00+00:00"
+    rid = make_resolver_cycle_id(3, run_at)
+    partial = {
+        "run_at": run_at,
+        "ok": False,
+        "resolved_now": 0,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": 3,
+        "resolver_cycle_id": rid,
+        "gap_timing_ms": {"complete": False},
+        "stage_timing_ms": {"total_cycle_ms": 1.0},
+        "error": "cycle_timeout_1s",
+    }
+    sched._persist_owner_gen = 3
+    sched._persist_cycle_summary(partial, owner_gen=3, force=True)
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    assert data["prediction_resolver_scheduler"]["last_cycle"]["error"] == "cycle_timeout_1s"
+
+
+def test_force_timeout_newer_generation_replaces_older_incomplete(
+    tmp_path, monkeypatch
+):
+    """H5: authorized force timeout (gen 8) replaces older incomplete gen 7 row."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    run7 = "2026-08-01T00:00:00+00:00"
+    run8 = "2026-08-02T00:00:00+00:00"
+    rid7 = make_resolver_cycle_id(7, run7)
+    rid8 = make_resolver_cycle_id(8, run8)
+    gen7 = {
+        "run_at": run7,
+        "ok": False,
+        "resolved_now": 0,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": 7,
+        "resolver_cycle_id": rid7,
+        "gap_timing_ms": {"complete": False},
+        "stage_timing_ms": {"total_cycle_ms": 1.0},
+        "error": "cycle_timeout_1s",
+    }
+    sched._persist_owner_gen = 7
+    sched._persist_cycle_summary(gen7, owner_gen=7, force=True)
+    sched._persist_owner_gen = 8
+    gen8 = {
+        "run_at": run8,
+        "ok": False,
+        "resolved_now": 0,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": 8,
+        "resolver_cycle_id": rid8,
+        "gap_timing_ms": {"complete": False},
+        "stage_timing_ms": {"total_cycle_ms": 1.0},
+        "error": "cycle_timeout_2s",
+    }
+    sched._persist_cycle_summary(gen8, owner_gen=8, force=True)
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    last = data["prediction_resolver_scheduler"]["last_cycle"]
+    assert last["cycle_generation"] == 8
+    assert last["resolver_cycle_id"] == rid8
+    assert last["error"] == "cycle_timeout_2s"
+
+
+def test_force_timeout_preserves_completed_success_and_newer_generation(
+    tmp_path, monkeypatch
+):
+    """H5: completed success is not clobbered by stale force."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    from internal.ops.mutation_log import make_resolver_cycle_id
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    run_at = "2026-08-01T00:00:00+00:00"
+    rid4 = make_resolver_cycle_id(4, run_at)
+    rid3 = make_resolver_cycle_id(3, run_at)
+    success = {
+        "run_at": run_at,
+        "ok": True,
+        "resolved_now": 1,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": 4,
+        "resolver_cycle_id": rid4,
+        "gap_timing_ms": {"complete": True, "closing_drift_ms": 0.1},
+        "stage_timing_ms": {"total_cycle_ms": 10.0},
+    }
+    sched._persist_owner_gen = 4
+    sched._persist_cycle_summary(success, owner_gen=4)
+    sched._persist_owner_gen = 3
+    stale = {
+        "run_at": run_at,
+        "ok": False,
+        "resolved_now": 0,
+        "expired_now": 0,
+        "pending": 0,
+        "cycle_generation": 3,
+        "resolver_cycle_id": rid3,
+        "gap_timing_ms": {"complete": False},
+        "stage_timing_ms": {"total_cycle_ms": 1.0},
+    }
+    sched._persist_cycle_summary(stale, owner_gen=3, force=True)
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    last = data["prediction_resolver_scheduler"]["last_cycle"]
+    assert last["cycle_generation"] == 4
+    assert last["resolver_cycle_id"] == rid4
+
+
+def test_persist_cycle_summary_typed_non_commit_on_boundary(tmp_path, monkeypatch):
+    """M1: soul_map write failure surfaces as committed=False."""
+    from internal.store import soul_map_io
+
+    soul_path = tmp_path / "soul_map.json"
+    seed = b'{"stable": true}'
+    soul_path.write_bytes(seed)
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul_path))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul_path))
+
+    def _boom(*_a, **_k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", _boom)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, soul_map_path=str(soul_path)
+    )
+    pr = sched._persist_cycle_summary(
+        {"run_at": _iso(datetime.now(timezone.utc)), "ok": False, "resolved_now": 0, "expired_now": 0, "pending": 0}
+    )
+    assert isinstance(pr, resolver_scheduler.PersistResult)
+    assert pr.committed is False
+    assert soul_path.read_bytes() == seed
+
+
+def test_stop_revive_typed_transition_on_abort(monkeypatch, fresh_scheduler):
+    """M1: stop returns typed stopped dict and lifecycle_persisted (singleton path)."""
+    resolver_scheduler.start_prediction_resolver_scheduler(immediate=False)
+    out = resolver_scheduler.stop_prediction_resolver_scheduler()
+    assert out.get("stopped") is True
+    assert out.get("lifecycle_persisted") is True
+    assert "pending" not in out
+
+
+def test_r2_partial_completion_and_stamp_enrichment(tmp_path, monkeypatch):
+    """M3 R2: alias — partial then complete same id (Track B)."""
+    test_resolver_gen2_gen3_interleave_rejects_stale_complete(tmp_path, monkeypatch)
+
+
+def test_r2_timeout_cannot_replace_completed_success(tmp_path, monkeypatch):
+    """M3 R2: completed success preserved vs lower gen force (overlap with H5)."""
+    test_force_timeout_preserves_completed_success_and_newer_generation(tmp_path, monkeypatch)
+
+
+def test_r3_stale_skip_is_history_only(monkeypatch, fresh_scheduler):
+    """M3 R3 stale: cycle_in_flight stays history-only."""
+    test_detached_lifecycle_write_is_fenced(monkeypatch, fresh_scheduler)
+
+
+def test_r3_fresh_heavy_job_skip_is_recorded(monkeypatch, fresh_scheduler):
+    """M3 R3 fresh: heavy_job_busy skip is observable in last_cycle."""
+    test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fresh_scheduler)

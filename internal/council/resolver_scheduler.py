@@ -24,11 +24,13 @@ import os
 import tempfile
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
@@ -110,8 +112,15 @@ RESOLVER_FIRST_TICK_TIMEOUT_SECONDS = max(
         )
     ),
 )
+_PERSIST_LOCK_WAIT_SECONDS = float(
+    os.environ.get("RESOLVER_PERSIST_LOCK_WAIT_SECONDS", "5.0")
+)
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
-JOB_ID = "prediction-resolver-scheduler"
+JOB_ID_BASE = "prediction-resolver-scheduler"
+# Legacy module constant; runtime scheduling uses per-start run-scoped ids.
+JOB_ID = JOB_ID_BASE
+
+resolver_control_lock = threading.RLock()
 
 
 def _round_robin_batch(
@@ -144,6 +153,109 @@ def _round_robin_batch(
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass(frozen=True)
+class _CycleContext:
+    """Immutable identity for one admitted owned resolver cycle."""
+
+    run_at: str
+    cycle_generation: int
+    resolver_cycle_id: str
+
+
+@dataclass(frozen=True)
+class SchedulerRunId:
+    """Opaque identity for one scheduler start / arm generation (H4)."""
+
+    value: str
+
+
+class PersistResult:
+    """Typed outcome for soul_map writes (M1)."""
+
+    __slots__ = ("committed",)
+
+    def __init__(self, *, committed: bool) -> None:
+        self.committed = committed
+
+    def __repr__(self) -> str:  # pragma: no cover - debug only
+        return f"PersistResult(committed={self.committed!r})"
+
+
+_active_cycle_ctx_var: ContextVar[Optional[_CycleContext]] = ContextVar(
+    "prediction_resolver_active_cycle_ctx", default=None
+)
+
+
+_malformed_existing_run_at_logged = False
+
+
+def _parse_run_at_utc(value: Any) -> Optional[datetime]:
+    if value is None or not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _is_completed_success(row: Dict[str, Any]) -> bool:
+    if row.get("ok") is not True:
+        return False
+    gap = row.get("gap_timing_ms")
+    if not isinstance(gap, dict):
+        return False
+    return gap.get("complete") is True
+
+
+def _gap_dict(row: Dict[str, Any]) -> Dict[str, Any]:
+    gap = row.get("gap_timing_ms")
+    return gap if isinstance(gap, dict) else {}
+
+
+def _incoming_generation_int(summary: Dict[str, Any]) -> Optional[int]:
+    gen = summary.get("cycle_generation")
+    if gen is None:
+        return None
+    try:
+        return int(gen)
+    except (TypeError, ValueError):
+        return None
+
+
+def _cancel_resolver_jobs(job_ids: Tuple[str, ...]) -> Dict[str, bool]:
+    """Remove scheduled tick jobs; typed per-id outcome for stop (H4)."""
+    results: Dict[str, bool] = {}
+    try:
+        from internal.job_scheduler import get_background_scheduler
+
+        sched = get_background_scheduler()
+    except Exception:
+        for jid in job_ids:
+            results[jid] = False
+        return results
+    for jid in job_ids:
+        removed = False
+        try:
+            sched.remove_job(jid)
+            removed = True
+        except Exception:
+            pass
+        try:
+            cancel_job(jid)
+        except Exception:
+            pass
+        results[jid] = removed
+    return results
 
 
 def _load_json(path: str) -> Dict[str, Any]:
@@ -432,6 +544,7 @@ class PredictionResolverScheduler:
         self._cycle_lock = threading.Lock()
         self._persist_lock = threading.Lock()
         self._cycle_generation = 0
+        self._cycle_generation_seeded = False
         self._inflight_future: Optional[Any] = None
         self._persist_owner_gen: Optional[int] = None
         # Generation of the cycle that holds ``_cycle_lock``. Only that
@@ -466,12 +579,22 @@ class PredictionResolverScheduler:
         self._first_tick_ok: Optional[bool] = None
         self._lifecycle_error: Optional[str] = None
         self._first_tick_pending = False
+        self._tick_run_id: Optional[SchedulerRunId] = None
+
+    def _job_primary(self) -> str:
+        rid = self._tick_run_id
+        base = rid.value if rid is not None else JOB_ID_BASE
+        return f"{base}"
+
+    def _job_retry(self) -> str:
+        return f"{self._job_primary()}:retry"
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         """Start the scheduler. Idempotent."""
         with self._lock:
             if self._active:
                 return {"started": False, "reason": "already running"}
+            self._tick_run_id = SchedulerRunId(str(uuid.uuid4()))
             self._active = True
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
@@ -485,17 +608,19 @@ class PredictionResolverScheduler:
             self._first_tick_scheduled_at = _now_iso() if delay == 0 else datetime.fromtimestamp(
                 time.time() + delay, timezone.utc
             ).isoformat()
-            self._persist_lifecycle_state()
-            logger.info(
-                "resolver lifecycle event=start immediate=%s first_tick_at=%s",
-                immediate,
-                self._first_tick_scheduled_at,
-            )
+        self._persist_lifecycle_state()
+        logger.info(
+            "resolver lifecycle event=start immediate=%s first_tick_at=%s",
+            immediate,
+            self._first_tick_scheduled_at,
+        )
 
         if immediate:
             # Run the first tick in a background thread so callers are not
             # blocked while prices are fetched and predictions are graded.
-            threading.Thread(target=self._tick, daemon=True).start()
+            threading.Thread(
+                target=lambda: self._tick(self._tick_run_id), daemon=True
+            ).start()
         else:
             # First tick happens soon after boot so a backlog of pending
             # predictions is cleared quickly; normal cadence resumes after.
@@ -510,6 +635,7 @@ class PredictionResolverScheduler:
             "refresh_minutes": self.refresh_minutes,
             "next_run_at": self._next_run_at,
             "lifecycle": self._lifecycle,
+            "scheduler_run_id": self._tick_run_id.value if self._tick_run_id else None,
         }
 
     def stop(self) -> Dict[str, Any]:
@@ -519,9 +645,19 @@ class PredictionResolverScheduler:
             self._next_run_at = None
             self._lifecycle = "stopped"
             self._first_tick_pending = False
-            self._persist_lifecycle_state()
-        cancel_job(JOB_ID)
-        return {"stopped": True}
+            cancel_ids = (self._job_primary(), self._job_retry())
+        lifecycle = self._persist_lifecycle_state()
+        cancel_results = _cancel_resolver_jobs(cancel_ids)
+        out: Dict[str, Any] = {
+            "stopped": True,
+            "lifecycle_persisted": lifecycle.committed,
+        }
+        if not lifecycle.committed:
+            out["pending"] = True
+        if not all(cancel_results.values()):
+            out["cancel_pending"] = True
+            out["job_cancel"] = cancel_results
+        return out
 
     @property
     def soul_map_path(self) -> str:
@@ -554,7 +690,11 @@ class PredictionResolverScheduler:
 
     def run_once(self) -> Dict[str, Any]:
         """Execute a single resolution cycle synchronously."""
-        return self._tick()
+        with self._lock:
+            if self._tick_run_id is None:
+                self._tick_run_id = SchedulerRunId(str(uuid.uuid4()))
+            run_id = self._tick_run_id
+        return self._tick(run_id)
 
     def _liveness_ok(self) -> bool:
         """True iff the age-derived tracker status is currently ok."""
@@ -586,10 +726,31 @@ class PredictionResolverScheduler:
             self._next_run_at = time.time() + seconds
             if self._first_tick_pending:
                 self._lifecycle = "scheduled"
-        schedule_in_seconds(JOB_ID, self._tick, seconds)
+            run_id = self._tick_run_id
+            job_id = self._job_primary()
+        if run_id is None:
+            return
 
-    def _tick(self) -> Dict[str, Any]:
+        def _run() -> None:
+            self._tick(run_id)
+
+        schedule_in_seconds(job_id, _run, seconds)
+
+    def _tick(self, expected_run_id: Optional[SchedulerRunId] = None) -> Dict[str, Any]:
         """Run one resolution cycle and reschedule."""
+        with self._lock:
+            if self._active and self._tick_run_id is None:
+                self._tick_run_id = SchedulerRunId(str(uuid.uuid4()))
+        if expected_run_id is not None:
+            with self._lock:
+                if self._tick_run_id != expected_run_id:
+                    return {
+                        "run_at": _now_iso(),
+                        "skipped": "stale_scheduler_run",
+                        "resolved_now": 0,
+                        "expired_now": 0,
+                        "pending": 0,
+                    }
         from internal.heavy_job_gate import heavy_job_slot
 
         tick_started = time.perf_counter()
@@ -614,7 +775,9 @@ class PredictionResolverScheduler:
                 self.liveness.record_skip(reason="heavy_job_busy")
                 with self._lock:
                     self._last_run_error = None
-                    self._mark_first_tick(skipped)
+                    first_tick_marked_busy = self._mark_first_tick(skipped)
+                if first_tick_marked_busy:
+                    self._persist_lifecycle_state()
                 logger.info(
                     "resolver lifecycle event=skip first=%s duration_ms=%.1f reason=heavy_job_busy",
                     first_tick,
@@ -675,7 +838,10 @@ class PredictionResolverScheduler:
             if "cycle_timeout" in str(result.get("error") or ""):
                 # ponytail: hung cycle abandoned — retry soon while last success still fresh
                 next_interval = min(2, max(1, self.refresh_minutes))
-            self._mark_first_tick(result)
+            first_tick_marked = self._mark_first_tick(result)
+
+        if first_tick_marked:
+            self._persist_lifecycle_state()
 
         duration_ms = (time.perf_counter() - tick_started) * 1000
         if result.get("error") and "timeout" in str(result.get("error")).lower():
@@ -734,17 +900,18 @@ class PredictionResolverScheduler:
             self._schedule_next(next_interval)
         return result
 
-    def _mark_first_tick(self, result: Dict[str, Any]) -> None:
+    def _mark_first_tick(self, result: Dict[str, Any]) -> bool:
         if self._first_tick_at is not None:
-            return
+            return False
         self._first_tick_pending = False
         self._first_tick_at = result.get("run_at") or _now_iso()
         self._first_tick_ok = bool(result.get("ok"))
         self._lifecycle = "running" if result.get("ok") else "degraded"
         self._lifecycle_error = result.get("error")
-        self._persist_lifecycle_state()
+        return True
 
-    def _persist_lifecycle_state(self) -> None:
+    def _persist_lifecycle_state(self) -> PersistResult:
+        run_token = self._tick_run_id.value if self._tick_run_id else None
         state = {
             "lifecycle": self._lifecycle,
             "started_at": self._started_at,
@@ -752,13 +919,31 @@ class PredictionResolverScheduler:
             "first_tick_at": self._first_tick_at,
             "first_tick_ok": self._first_tick_ok,
             "lifecycle_error": self._lifecycle_error,
+            "scheduler_run_id": run_token,
         }
+
         def _mutator(data: Dict[str, Any]) -> None:
-            data.setdefault("prediction_resolver_scheduler", {}).update(state)
+            block = data.setdefault("prediction_resolver_scheduler", {})
+            existing_run = block.get("scheduler_run_id")
+            incoming_lc = state.get("lifecycle")
+            if (
+                run_token
+                and existing_run
+                and existing_run != run_token
+                and incoming_lc == "stopped"
+            ):
+                return
+            block.update(state)
+
         try:
-            write_soul_map(_mutator, self.soul_map_path)
+            _blob, committed = write_soul_map(  # type: ignore[misc]
+                _mutator,
+                self.soul_map_path,
+                with_status=True,
+            )
+            return PersistResult(committed=bool(committed))
         except Exception:
-            pass
+            return PersistResult(committed=False)
 
     def _release_cycle_lock_if_owner(self, gen: int) -> bool:
         """Release ``_cycle_lock`` only if generation ``gen`` still owns it.
@@ -803,7 +988,29 @@ class PredictionResolverScheduler:
         with self._lock:
             return self._abandoned_live
 
+    def _ensure_cycle_generation_seeded(self) -> None:
+        if self._cycle_generation_seeded:
+            return
+        data = _load_json(self.soul_map_path)
+        sched = data.get("prediction_resolver_scheduler", {})
+        last = sched.get("last_cycle") if isinstance(sched.get("last_cycle"), dict) else {}
+        persisted = last.get("cycle_generation")
+        if persisted is not None:
+            try:
+                self._cycle_generation = max(self._cycle_generation, int(persisted))
+            except (TypeError, ValueError):
+                pass
+        self._cycle_generation_seeded = True
+
+    def _stamp_owned_cycle_context(
+        self, result: Dict[str, Any], cycle_ctx: _CycleContext
+    ) -> None:
+        result["run_at"] = cycle_ctx.run_at
+        result["cycle_generation"] = cycle_ctx.cycle_generation
+        result["resolver_cycle_id"] = cycle_ctx.resolver_cycle_id
+
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
+        self._ensure_cycle_generation_seeded()
         with self._submit_lock:
             inflight = self._inflight_future
             if inflight is not None and not inflight.done():
@@ -855,6 +1062,9 @@ class PredictionResolverScheduler:
         if timeout <= 0:
             run_at = _now_iso()
             cycle_id = make_resolver_cycle_id(gen, run_at)
+            cycle_ctx = _CycleContext(
+                run_at=run_at, cycle_generation=gen, resolver_cycle_id=cycle_id
+            )
             timing = _CycleTiming(abandoned_live)
             timing.set_owner_gen(gen)
             token = _cycle_timing.set(timing)
@@ -863,19 +1073,23 @@ class PredictionResolverScheduler:
                 resolver_cycle_id=cycle_id,
                 trigger="resolver_cycle",
             )
+            cycle_token = _active_cycle_ctx_var.set(cycle_ctx)
             try:
                 result = self._run_refresh_cycle()
                 if isinstance(result, dict):
-                    result["cycle_generation"] = gen
-                    result["resolver_cycle_id"] = cycle_id
+                    self._stamp_owned_cycle_context(result, cycle_ctx)
                 return result
             finally:
+                _active_cycle_ctx_var.reset(cycle_token)
                 reset_patchd_context(ctx_token)
                 _cycle_timing.reset(token)
                 self._release_cycle_lock_if_owner(gen)
 
         run_at = _now_iso()
         cycle_id = make_resolver_cycle_id(gen, run_at)
+        cycle_ctx = _CycleContext(
+            run_at=run_at, cycle_generation=gen, resolver_cycle_id=cycle_id
+        )
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
         timing = _CycleTiming(abandoned_live)
         timing.set_owner_gen(gen)
@@ -887,13 +1101,14 @@ class PredictionResolverScheduler:
                 trigger="resolver_cycle",
             )
             token = _cycle_timing.set(timing)
+            cycle_token = _active_cycle_ctx_var.set(cycle_ctx)
             _rss_t0 = time.perf_counter()
             log_heavy_job_rss("prediction_resolver_worker", "start", started_at=_rss_t0)
             try:
                 if gen != self._cycle_generation:
                     return {
                         "ok": False,
-                        "run_at": _now_iso(),
+                        "run_at": cycle_ctx.run_at,
                         "resolved_now": 0,
                         "expired_now": 0,
                         "pending": 0,
@@ -903,11 +1118,11 @@ class PredictionResolverScheduler:
                     }
                 result = self._run_refresh_cycle()
                 if isinstance(result, dict):
-                    result["cycle_generation"] = gen
-                    result["resolver_cycle_id"] = cycle_id
+                    self._stamp_owned_cycle_context(result, cycle_ctx)
                 return result
             finally:
                 log_heavy_job_rss("prediction_resolver_worker", "end", started_at=_rss_t0)
+                _active_cycle_ctx_var.reset(cycle_token)
                 _cycle_timing.reset(token)
                 reset_patchd_context(ctx_token)
                 self._release_cycle_lock_if_owner(gen)
@@ -931,7 +1146,7 @@ class PredictionResolverScheduler:
                 timing.mark_abandoned()
                 result = {
                     "ok": False,
-                    "run_at": _now_iso(),
+                    "run_at": cycle_ctx.run_at,
                     "resolved_now": 0,
                     "expired_now": 0,
                     "pending": 0,
@@ -944,6 +1159,7 @@ class PredictionResolverScheduler:
                     "resolver_cycle_id": cycle_id,
                 }
                 self._apply_cycle_timing(result, timing)
+                self._stamp_owned_cycle_context(result, cycle_ctx)
                 # force=True: timeout path owns the summary write after orphan
                 # ownership was revoked in _abandon_inflight_cycle.
                 self._persist_cycle_summary(result, owner_gen=gen, force=True)
@@ -1002,7 +1218,8 @@ class PredictionResolverScheduler:
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:
         """Grade due predictions, expire stale ones, persist a cycle summary."""
-        run_at = _now_iso()
+        cycle_ctx = _active_cycle_ctx_var.get()
+        run_at = cycle_ctx.run_at if cycle_ctx is not None else _now_iso()
         result: Dict[str, Any] = {
             "ok": False,
             "run_at": run_at,
@@ -1011,6 +1228,8 @@ class PredictionResolverScheduler:
             "pending": 0,
             "error": None,
         }
+        if cycle_ctx is not None:
+            self._stamp_owned_cycle_context(result, cycle_ctx)
         timing = _cycle_timing.get() or _CycleTiming()
         # B1b t0: first line after timing acquisition, before soul-map size-stamp.
         timing.mark_checkpoint("t0")
@@ -1029,6 +1248,8 @@ class PredictionResolverScheduler:
                 return
             t_apply = time.perf_counter()
             self._apply_cycle_timing(result, timing)
+            if cycle_ctx is not None:
+                self._stamp_owned_cycle_context(result, cycle_ctx)
             timing.record_persist_subtimer(
                 "apply_cycle_timing", (time.perf_counter() - t_apply) * 1000
             )
@@ -1149,6 +1370,8 @@ class PredictionResolverScheduler:
                 # B1b closing stamp after end size + mark_complete.
                 timing.mark_closing_stamp()
                 self._apply_cycle_timing(result, timing)
+                if cycle_ctx is not None:
+                    self._stamp_owned_cycle_context(result, cycle_ctx)
                 self._persist_cycle_summary(result, owner_gen=owner)
         return result
 
@@ -1158,26 +1381,41 @@ class PredictionResolverScheduler:
         *,
         owner_gen: Optional[int] = None,
         force: bool = False,
-    ) -> None:
+    ) -> PersistResult:
         """Persist last_cycle with single-writer ownership (Phase 3).
 
         Abandoned orphans pass ``owner_gen`` that no longer matches
         ``_persist_owner_gen`` and skip the 24MB soul_map RMW. Timeout /
         control-plane writers use ``force=True``.
         """
-        with self._persist_lock:
+        timing_ctx = _cycle_timing.get()
+        owned_cycle = force or owner_gen is not None
+        if timing_ctx is not None and timing_ctx.owner_gen() is not None:
+            owned_cycle = True
+        acquired = self._persist_lock.acquire(timeout=_PERSIST_LOCK_WAIT_SECONDS)
+        if not acquired:
+            return PersistResult(committed=False)
+        try:
             if not force and owner_gen is not None:
                 if self._persist_owner_gen != owner_gen:
-                    return
+                    return PersistResult(committed=False)
             pub_gen = result.get("cycle_generation")
             if force and pub_gen is not None and self._persist_owner_gen is not None:
                 if int(pub_gen) != int(self._persist_owner_gen):
-                    return
-            self._persist_cycle_summary_locked(result, force=force)
+                    return PersistResult(committed=False)
+            return self._persist_cycle_summary_locked(
+                result, force=force, owned_cycle=owned_cycle
+            )
+        finally:
+            self._persist_lock.release()
 
     def _persist_cycle_summary_locked(
-        self, result: Dict[str, Any], *, force: bool = False
-    ) -> None:
+        self,
+        result: Dict[str, Any],
+        *,
+        force: bool = False,
+        owned_cycle: bool = False,
+    ) -> PersistResult:
         stage_timing_ms = dict(result.get("stage_timing_ms") or {})
         # Prefer explicit rollups on the result; else derive from stage_timing_ms.
         if "stages_sum_ms" in result and "nonstage_ms" in result:
@@ -1208,47 +1446,183 @@ class PredictionResolverScheduler:
             "abandoned_live": result.get("abandoned_live", 0),
             "lifecycle": self._lifecycle,
             "cycle_generation": result.get("cycle_generation"),
+            "resolver_cycle_id": result.get("resolver_cycle_id"),
         }
         timing = _cycle_timing.get()
 
+        def _commit_write(sched: Dict[str, Any]) -> None:
+            sched["last_cycle"] = summary
+            history = sched.get("cycle_history")
+            if not isinstance(history, list):
+                history = []
+            history.append(summary)
+            sched["cycle_history"] = bound_cycle_history(history, CYCLE_HISTORY_MAX)
+            sched["lifecycle"] = self._lifecycle
+            sched["lifecycle_error"] = self._lifecycle_error
+            if self._first_tick_at is not None:
+                sched["first_tick_at"] = self._first_tick_at
+            if result.get("round_robin_cursor") is not None:
+                sched["round_robin_cursor"] = result["round_robin_cursor"]
+
         def _mutator(data: Dict[str, Any]) -> None:
+            global _malformed_existing_run_at_logged
             # Phase 3 fix-up: time mutator body alone (persist_summary_mutator_ms).
             t_mut = time.perf_counter()
             try:
                 sched = data.setdefault("prediction_resolver_scheduler", {})
-                existing = sched.get("last_cycle") if isinstance(sched.get("last_cycle"), dict) else {}
-                existing_at = existing.get("run_at")
-                new_at = summary.get("run_at")
-                if existing_at and new_at and str(new_at) <= str(existing_at):
-                    if not summary.get("ok") or existing.get("ok"):
-                        return
-                incoming_gen = summary.get("cycle_generation")
-                existing_gen = existing.get("cycle_generation")
-                if incoming_gen is not None and existing_gen is not None:
-                    if int(incoming_gen) < int(existing_gen):
-                        return
-                if not force and incoming_gen is not None and self._persist_owner_gen is not None:
-                    if int(incoming_gen) != int(self._persist_owner_gen):
-                        return
+                existing = (
+                    sched.get("last_cycle")
+                    if isinstance(sched.get("last_cycle"), dict)
+                    else {}
+                )
+
+                # 1. cycle_in_flight → history only
                 if summary.get("skipped") == "cycle_in_flight":
                     history = sched.get("cycle_history")
                     if not isinstance(history, list):
                         history = []
                     history.append(summary)
-                    sched["cycle_history"] = bound_cycle_history(history, CYCLE_HISTORY_MAX)
+                    sched["cycle_history"] = bound_cycle_history(
+                        history, CYCLE_HISTORY_MAX
+                    )
                     return
-                sched["last_cycle"] = summary
-                history = sched.get("cycle_history")
-                if not isinstance(history, list):
-                    history = []
-                history.append(summary)
-                sched["cycle_history"] = bound_cycle_history(history, CYCLE_HISTORY_MAX)
-                sched["lifecycle"] = self._lifecycle
-                sched["lifecycle_error"] = self._lifecycle_error
-                if self._first_tick_at is not None:
-                    sched["first_tick_at"] = self._first_tick_at
-                if result.get("round_robin_cursor") is not None:
-                    sched["round_robin_cursor"] = result["round_robin_cursor"]
+
+                if not owned_cycle:
+                    _commit_write(sched)
+                    return
+
+                # 2. Owned-cycle payload validation (§3.1 scope)
+                if owned_cycle:
+                    if not summary.get("run_at") or _parse_run_at_utc(
+                        summary.get("run_at")
+                    ) is None:
+                        return
+                    if _incoming_generation_int(summary) is None:
+                        return
+                    if not summary.get("resolver_cycle_id"):
+                        return
+
+                incoming_gen_i = _incoming_generation_int(summary)
+                if owned_cycle and incoming_gen_i is None:
+                    return
+
+                # 3. Parse run_at instants
+                new_instant = _parse_run_at_utc(summary.get("run_at"))
+                if new_instant is None:
+                    return
+                existing_instant = _parse_run_at_utc(existing.get("run_at"))
+                if existing.get("run_at") and existing_instant is None:
+                    if not _malformed_existing_run_at_logged:
+                        logger.warning(
+                            "resolver last_cycle run_at malformed; treating as unknown"
+                        )
+                        _malformed_existing_run_at_logged = True
+
+                incoming_id = str(summary.get("resolver_cycle_id") or "")
+                existing_id = str(existing.get("resolver_cycle_id") or "")
+                incoming_gap = _gap_dict(summary)
+                existing_gap = _gap_dict(existing)
+                same_instant = (
+                    existing_instant is not None and new_instant == existing_instant
+                )
+                same_id = bool(
+                    incoming_id and existing_id and incoming_id == existing_id
+                )
+
+                # 4. Non-staleness (generation)
+                if incoming_gen_i is None and owned_cycle:
+                    return
+                existing_gen = existing.get("cycle_generation")
+                if incoming_gen_i is not None and existing_gen is not None:
+                    try:
+                        if incoming_gen_i < int(existing_gen):
+                            return
+                    except (TypeError, ValueError):
+                        pass
+
+                # 5. Owner match (non-force only)
+                if (
+                    not force
+                    and incoming_gen_i is not None
+                    and self._persist_owner_gen is not None
+                ):
+                    if incoming_gen_i != int(self._persist_owner_gen):
+                        return
+
+                def _track_b_allows_write() -> bool:
+                    if force or summary.get("skipped"):
+                        return False
+                    if not (same_instant and same_id):
+                        return False
+                    if (
+                        existing_gap.get("complete") is not True
+                        and incoming_gap.get("complete") is True
+                    ):
+                        return True
+                    if (
+                        existing_gap.get("complete") is True
+                        and incoming_gap.get("complete") is True
+                        and incoming_gap.get("closing_stamp_ms") is not None
+                        and existing_gap.get("closing_stamp_ms") is None
+                    ):
+                        return True
+                    return False
+
+                # 7.1 Same-cycle completion (Track B)
+                if _track_b_allows_write():
+                    _commit_write(sched)
+                    return
+
+                # 6. Preserve completed success
+                if _is_completed_success(existing):
+                    return
+
+                # 7.2 Same-cycle abnormal owned write (force timeout)
+                if (
+                    force
+                    and same_instant
+                    and same_id
+                    and incoming_gap.get("complete") is False
+                ):
+                    _commit_write(sched)
+                    return
+
+                # 7.2b Authorized force timeout may replace an older incomplete row
+                # (newer generation / cycle id) before the first partial for that cycle.
+                if force and incoming_gap.get("complete") is False:
+                    if not _is_completed_success(existing):
+                        in_gen = incoming_gen_i
+                        ex_gen = _incoming_generation_int(existing) if existing else None
+                        if in_gen is not None and (
+                            ex_gen is None or in_gen > ex_gen
+                        ):
+                            _commit_write(sched)
+                            return
+
+                # 7.3 New-cycle replacement
+                if not existing:
+                    _commit_write(sched)
+                    return
+
+                if incoming_id and existing_id and incoming_id != existing_id:
+                    if existing_instant is None or new_instant >= existing_instant:
+                        if not force:
+                            _commit_write(sched)
+                            return
+
+                if existing_instant is not None and new_instant > existing_instant:
+                    if not force:
+                        _commit_write(sched)
+                        return
+
+                if (
+                    same_instant
+                    and not same_id
+                    and incoming_id
+                    and existing_id
+                    and incoming_id != existing_id
+                ):
+                    return
             finally:
                 if timing is not None:
                     timing.record_persist_subtimer(
@@ -1257,14 +1631,34 @@ class PredictionResolverScheduler:
 
         # Full RMW wall (read+mutator+disk); invariant: rmw >= mutator.
         t_rmw = time.perf_counter()
+        pre = _pre_replace_barrier
         try:
-            write_soul_map(_mutator, self.soul_map_path)
+            if owned_cycle:
+
+                def _write_owned() -> Tuple[Any, bool]:
+                    return write_soul_map(  # type: ignore[misc]
+                        _mutator,
+                        self.soul_map_path,
+                        with_status=True,
+                        pre_replace=pre,
+                    )
+
+                with self._release_guard:
+                    _blob, committed = _write_owned()
+            else:
+                _blob, committed = write_soul_map(  # type: ignore[misc]
+                    _mutator,
+                    self.soul_map_path,
+                    with_status=True,
+                    pre_replace=pre,
+                )
             if timing is not None:
                 timing.record_persist_subtimer(
                     "summary_rmw", (time.perf_counter() - t_rmw) * 1000
                 )
+            return PersistResult(committed=bool(committed))
         except Exception:
-            pass
+            return PersistResult(committed=False)
 
 
 def _default_subnets() -> Any:
@@ -1303,6 +1697,9 @@ _revive_budget_acquire_barrier: Optional[
     Callable[["PredictionResolverScheduler"], None]
 ] = None
 
+# Test-only: invoked immediately before os.replace inside write_soul_map (H1 W1 barrier).
+_pre_replace_barrier: Optional[Callable[[], None]] = None
+
 
 def start_prediction_resolver_scheduler(
     refresh_minutes: int = RESOLVER_REFRESH_MINUTES,
@@ -1311,49 +1708,54 @@ def start_prediction_resolver_scheduler(
 ) -> Dict[str, Any]:
     """Start the module-level prediction resolver scheduler singleton."""
     global _scheduler
-    with _scheduler_lock:
-        if _scheduler is None:
-            _scheduler = PredictionResolverScheduler(
-                refresh_minutes=refresh_minutes, **kwargs
-            )
-    result = _scheduler.start(immediate=immediate)
-    try:
-        from internal.council.selector_scheduler import start_selector_scheduler
+    with resolver_control_lock:
+        with _scheduler_lock:
+            if _scheduler is None:
+                _scheduler = PredictionResolverScheduler(
+                    refresh_minutes=refresh_minutes, **kwargs
+                )
+        result = _scheduler.start(immediate=immediate)
+        try:
+            from internal.council.selector_scheduler import start_selector_scheduler
 
-        start_selector_scheduler(immediate=False)
-    except Exception:
-        pass
-    try:
-        from internal.pump.scheduler import start_pump_ladder_scheduler
+            start_selector_scheduler(immediate=False)
+        except Exception:
+            pass
+        try:
+            from internal.pump.scheduler import start_pump_ladder_scheduler
 
-        start_pump_ladder_scheduler(immediate=False)
-    except Exception:
-        pass
-    return result
+            start_pump_ladder_scheduler(immediate=False)
+        except Exception:
+            pass
+        return result
 
 
 def stop_prediction_resolver_scheduler() -> Dict[str, Any]:
     """Stop the module-level prediction resolver scheduler singleton."""
-    try:
-        from internal.council.selector_scheduler import stop_selector_scheduler
+    with resolver_control_lock:
+        try:
+            from internal.council.selector_scheduler import stop_selector_scheduler
 
-        stop_selector_scheduler()
-    except Exception:
-        pass
-    try:
-        from internal.pump.scheduler import stop_pump_ladder_scheduler
+            stop_selector_scheduler()
+        except Exception:
+            pass
+        try:
+            from internal.pump.scheduler import stop_pump_ladder_scheduler
 
-        stop_pump_ladder_scheduler()
-    except Exception:
-        pass
-    global _scheduler
-    sched: Optional[PredictionResolverScheduler] = None
-    with _scheduler_lock:
-        sched = _scheduler
-        _scheduler = None
-    if sched is None:
-        return {"stopped": False, "reason": "not running"}
-    return sched.stop()
+            stop_pump_ladder_scheduler()
+        except Exception:
+            pass
+        global _scheduler
+        sched: Optional[PredictionResolverScheduler] = None
+        with _scheduler_lock:
+            sched = _scheduler
+        if sched is None:
+            return {"stopped": False, "reason": "not running"}
+        out = sched.stop()
+        with _scheduler_lock:
+            if _scheduler is sched:
+                _scheduler = None
+        return out
 
 
 def _stopped_liveness_ok() -> Optional[bool]:
@@ -1372,27 +1774,28 @@ def _stopped_liveness_ok() -> Optional[bool]:
 def get_prediction_resolver_scheduler_state() -> Dict[str, Any]:
     """Return the state of the module-level prediction resolver scheduler."""
     with _scheduler_lock:
-        if _scheduler is None:
-            return {
-                "running": False,
-                "refresh_minutes": RESOLVER_REFRESH_MINUTES,
-                "backoff_minutes": RESOLVER_REFRESH_MINUTES,
-                "consecutive_failures": 0,
-                "last_run_at": None,
-                "last_run_ok": _stopped_liveness_ok(),
-                "last_run_error": None,
-                "next_run_at": None,
-                "last_resolved": 0,
-                "last_expired": 0,
-                "last_pending": 0,
-                "lifecycle": "stopped",
-                "started_at": None,
-                "first_tick_scheduled_at": None,
-                "first_tick_at": None,
-                "first_tick_ok": None,
-                "lifecycle_error": None,
-            }
-        return _scheduler.state()
+        sched = _scheduler
+    if sched is None:
+        return {
+            "running": False,
+            "refresh_minutes": RESOLVER_REFRESH_MINUTES,
+            "backoff_minutes": RESOLVER_REFRESH_MINUTES,
+            "consecutive_failures": 0,
+            "last_run_at": None,
+            "last_run_ok": _stopped_liveness_ok(),
+            "last_run_error": None,
+            "next_run_at": None,
+            "last_resolved": 0,
+            "last_expired": 0,
+            "last_pending": 0,
+            "lifecycle": "stopped",
+            "started_at": None,
+            "first_tick_scheduled_at": None,
+            "first_tick_at": None,
+            "first_tick_ok": None,
+            "lifecycle_error": None,
+        }
+    return sched.state()
 
 
 def get_prediction_resolver_scheduler() -> Optional[PredictionResolverScheduler]:
@@ -1460,56 +1863,58 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
     recycled = False
     global _scheduler
     stale_lock_recycled = False
-    with _scheduler_lock:
-        sched = _scheduler
-        if sched is not None:
-            # Inspect only; never acquire or release here. A probe-acquire could
-            # take a lock a new cycle is entitled to, and an unconditional
-            # release could free it. Ownership changes go through the guard.
-            with sched._release_guard:
-                if sched._cycle_lock.locked():
-                    if not _resolver_cycle_lock_stale(sched, age_before, force=force):
-                        return {
-                            "revived": False,
-                            "reason": "tick_in_progress",
-                            "recycled": False,
-                            "age_before": age_before,
-                            "age_after": age_before,
-                        }
-                    sched._abandon_inflight_cycle()
-                    stale_lock_recycled = True
-                    logger.warning(
-                        "resolver revive: recycled stale cycle_lock age_before=%s force=%s",
-                        age_before,
-                        force,
-                    )
-            if stale_lock_recycled:
-                with sched._submit_lock:
-                    inflight = sched._inflight_future
-                    if inflight is not None and inflight.done():
-                        sched._inflight_future = None
-        if sched is not None and sched._active:
-            sched.stop()
-            _scheduler = None
-            recycled = True
-
-    start_out = start_prediction_resolver_scheduler(immediate=False)
+    start_out: Dict[str, Any] = {}
     tick_out: Dict[str, Any] = {"ok": False, "error": "no_scheduler"}
-    with _scheduler_lock:
-        sched = _scheduler
-    if sched is not None:
-        # Phase 3 revive budget + skip-burst reset.
-        try:
-            sched.liveness.clear_burst_counters()
-        except Exception:
-            pass
-        with sched._release_guard:
-            sched._revive_use_full_budget = True
-        tick_out = sched.run_once()
-        # Even if the revive tick timed out, ensure next_run_at is armed.
-        state_after = sched.state()
-        if state_after.get("next_run_at") is None and sched._active:
-            sched._schedule_next(min(2, max(1, sched.refresh_minutes)))
+    with resolver_control_lock:
+        with _scheduler_lock:
+            sched = _scheduler
+            if sched is not None:
+                # Inspect only; never acquire or release here. A probe-acquire could
+                # take a lock a new cycle is entitled to, and an unconditional
+                # release could free it. Ownership changes go through the guard.
+                with sched._release_guard:
+                    if sched._cycle_lock.locked():
+                        if not _resolver_cycle_lock_stale(sched, age_before, force=force):
+                            return {
+                                "revived": False,
+                                "reason": "tick_in_progress",
+                                "recycled": False,
+                                "age_before": age_before,
+                                "age_after": age_before,
+                            }
+                        sched._abandon_inflight_cycle()
+                        stale_lock_recycled = True
+                        logger.warning(
+                            "resolver revive: recycled stale cycle_lock age_before=%s force=%s",
+                            age_before,
+                            force,
+                        )
+                if stale_lock_recycled:
+                    with sched._submit_lock:
+                        inflight = sched._inflight_future
+                        if inflight is not None and inflight.done():
+                            sched._inflight_future = None
+            if sched is not None and sched._active:
+                sched.stop()
+                _scheduler = None
+                recycled = True
+
+        start_out = start_prediction_resolver_scheduler(immediate=False)
+        with _scheduler_lock:
+            sched = _scheduler
+        if sched is not None:
+            # Phase 3 revive budget + skip-burst reset.
+            try:
+                sched.liveness.clear_burst_counters()
+            except Exception:
+                pass
+            with sched._release_guard:
+                sched._revive_use_full_budget = True
+            tick_out = sched.run_once()
+            # Even if the revive tick timed out, ensure next_run_at is armed.
+            state_after = sched.state()
+            if state_after.get("next_run_at") is None and sched._active:
+                sched._schedule_next(min(2, max(1, sched.refresh_minutes)))
 
     age_after = _resolver_tick_age_seconds()
     revived = bool(tick_out.get("ok") and not tick_out.get("skipped"))

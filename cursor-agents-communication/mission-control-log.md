@@ -330,3 +330,9 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-11-06 — PR #1571 SD-119 gap-closure (local only, no push)
+
+- Frozen base `f356b9ac`; three-file export **78,559 B** / `c79118ec…` (was `6b336c21…` / 69,393 B). Replit FAIL threads #6697454618–6327 still cite 24 768 B `a6c47645` snapshot — **SNAPSHOT_MISMATCH** until re-run on new export.
+- Product: W1 `_release_guard` through owned RMW; M2 persist-lock timeout; H5 gen8-replace; lifecycle `scheduler_run_id` fence + singleton stop ordering; H4 typed cancel map; typed `lifecycle_persisted` on stop. Evidence: Project store `internal/pr1571-gap-closure-evidence-2026-11-06.md`.
+- Mechanical: v5 exam **19 passed** (incl. gap fixtures), isolated harness **19 passed**, `test_resolver_scheduler` + `test_soul_map_io` **88 passed**. **Joshua GO** still required for GitHub/Replit packet attach.
