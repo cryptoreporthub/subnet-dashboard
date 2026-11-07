@@ -21,18 +21,20 @@ from server import app
 @pytest.fixture(autouse=True)
 def _reset_resolver_snapshot_caches():
     """Keep shared resolver snapshots isolated across health-contract tests."""
-    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
-    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    lh_baseline = {"at": 0.0, "payload": None, "seq": -1}
+    routes_baseline = {"at": 0.0, "payload": None}
+    loop_health._RESOLVER_LIVENESS_CACHE.clear()
+    loop_health._RESOLVER_LIVENESS_CACHE.update(lh_baseline)
     loop_health._RESOLVER_LIVENESS_BUILDING = False
-    routes._RESOLVER_STATE_CACHE["at"] = 0.0
-    routes._RESOLVER_STATE_CACHE["payload"] = None
+    routes._RESOLVER_STATE_CACHE.clear()
+    routes._RESOLVER_STATE_CACHE.update(routes_baseline)
     routes._RESOLVER_STATE_BUILDING = False
     yield
-    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
-    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    loop_health._RESOLVER_LIVENESS_CACHE.clear()
+    loop_health._RESOLVER_LIVENESS_CACHE.update(lh_baseline)
     loop_health._RESOLVER_LIVENESS_BUILDING = False
-    routes._RESOLVER_STATE_CACHE["at"] = 0.0
-    routes._RESOLVER_STATE_CACHE["payload"] = None
+    routes._RESOLVER_STATE_CACHE.clear()
+    routes._RESOLVER_STATE_CACHE.update(routes_baseline)
     routes._RESOLVER_STATE_BUILDING = False
 
 
@@ -377,6 +379,49 @@ def test_resolver_endpoint_normal_snapshot_marks_missing_persistence(monkeypatch
 
 
 
+def test_web_failure_yields_to_persisted_worker_ok(monkeypatch):
+    """DIT-02: web tracker failure must not hide persisted worker ok snapshot."""
+    import internal.learning.loop_health as lh
+
+    web_snap = {
+        "status": "starved",
+        "lifecycle": "running",
+        "last_success_at": "2026-09-08T03:00:00Z",
+        "last_event_at": "2026-09-08T03:05:00Z",
+        "success_age_seconds": 600,
+    }
+    persisted = {
+        "status": "ok",
+        "lifecycle": "running",
+        "last_success_at": "2026-09-08T03:00:00Z",
+        "last_event_at": "2026-09-08T03:00:00Z",
+        "success_age_seconds": 300,
+    }
+
+    class _FakeTracker:
+        def snapshot(self):
+            return dict(web_snap)
+
+    monkeypatch.setattr(
+        lh,
+        "_worker_peer",
+        lambda: {"alive": True, "expected": True, "peer": "inline_worker"},
+    )
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {"refresh_minutes": 15, "lifecycle": "running"},
+    )
+    monkeypatch.setattr("internal.liveness.get_tracker", lambda _name: _FakeTracker())
+    monkeypatch.setattr(
+        "internal.liveness.build_liveness_registry",
+        lambda probe_worker=False: {"trackers": {"prediction_resolver": dict(persisted)}},
+    )
+
+    view = lh._build_resolver_liveness_view()
+    assert view["status"] == "ok"
+    assert view["liveness"]["status"] == "ok"
+
+
 def test_stale_web_tracker_yields_to_fresher_persisted(monkeypatch):
     """Web tracker status=stale must yield to fresher persisted registry truth."""
     import internal.learning.loop_health as lh
@@ -423,6 +468,7 @@ def test_stale_web_tracker_yields_to_fresher_persisted(monkeypatch):
 
 def test_resolver_liveness_view_single_flight(monkeypatch):
     started = threading.Event()
+    may_query_second = threading.Event()
     release = threading.Event()
     calls = {"n": 0}
     view = {
@@ -441,6 +487,7 @@ def test_resolver_liveness_view_single_flight(monkeypatch):
     def _slow_build():
         calls["n"] += 1
         started.set()
+        assert may_query_second.wait(timeout=2)
         release.wait(timeout=2)
         return view
 
@@ -448,12 +495,169 @@ def test_resolver_liveness_view_single_flight(monkeypatch):
     thread = threading.Thread(target=loop_health._resolver_liveness_view)
     thread.start()
     assert started.wait(timeout=1)
+    may_query_second.set()
     second = loop_health._resolver_liveness_view()
     release.set()
     thread.join(timeout=2)
 
     assert calls["n"] == 1
     assert second["status"] == "unavailable"
+
+
+def test_resolver_single_flight_waiter_not_invalidated_cache(monkeypatch):
+    """Waiter during build must not return seq-invalidated snapshot."""
+    from internal import liveness
+
+    started = threading.Event()
+    may_invalidate = threading.Event()
+    release = threading.Event()
+    view = {
+        "at": "2026-09-01T12:00:00Z",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {},
+        "liveness": {"status": "stale"},
+        "status": "stale",
+        "last_success_at": "2026-09-01T12:00:00Z",
+        "success_age_seconds": 9999,
+        "stage_timing_ms": {},
+    }
+    seq = liveness.write_seq("prediction_resolver")
+    loop_health._RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
+    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
+    loop_health._RESOLVER_LIVENESS_CACHE["seq"] = seq - 1
+
+    def _slow_build():
+        started.set()
+        assert may_invalidate.wait(timeout=2)
+        release.wait(timeout=2)
+        return dict(view)
+
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _slow_build)
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+
+    builder_out: list = []
+
+    def _run_builder():
+        builder_out.append(loop_health._resolver_liveness_view())
+
+    builder = threading.Thread(target=_run_builder)
+    builder.start()
+    assert started.wait(timeout=1)
+    may_invalidate.set()
+    tracker.record_success({"noop": True})
+    waiter = loop_health._resolver_liveness_view()
+    release.set()
+    builder.join(timeout=2)
+
+    assert waiter["status"] == "unavailable"
+    assert builder_out[0]["status"] == "unavailable"
+
+
+def test_failed_persist_still_advances_write_seq(monkeypatch, tmp_path):
+    import internal.store.soul_map_io as smio
+    from internal import liveness
+
+    target = tmp_path / "soul_map.json"
+    monkeypatch.setattr(smio, "_resolve_path", lambda path=None: str(target))
+
+    def _boom(*_a, **_k):
+        raise OSError("persist failed")
+
+    monkeypatch.setattr("internal.liveness.write_soul_map", _boom)
+    t = liveness.LivenessTracker("persist-fail-test", 60, persist=True)
+    t.record_failure("disk")
+    assert liveness.write_seq("persist-fail-test") == 1
+
+
+def test_failed_persist_invalidates_cached_ok_view(monkeypatch, tmp_path):
+    import internal.store.soul_map_io as smio
+    from internal import liveness
+
+    target = tmp_path / "soul_map.json"
+    monkeypatch.setattr(smio, "_resolve_path", lambda path=None: str(target))
+    ok_view = {
+        "status": "ok",
+        "last_success_at": "2099-01-01T00:00:00Z",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {},
+        "liveness": {"status": "ok"},
+        "success_age_seconds": 0,
+        "stage_timing_ms": {},
+    }
+    seq = liveness.write_seq("prediction_resolver")
+    loop_health._RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
+    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = dict(ok_view)
+    loop_health._RESOLVER_LIVENESS_CACHE["seq"] = seq
+
+    def _boom(*_a, **_k):
+        raise OSError("persist failed")
+
+    monkeypatch.setattr("internal.liveness.write_soul_map", _boom)
+    t = liveness.LivenessTracker("prediction_resolver", 60, persist=True)
+    t.record_failure("disk")
+    cached = loop_health._cached_resolver_liveness_view()
+    assert cached is None
+
+
+def test_build_after_seq_change_returns_unavailable(monkeypatch):
+    from internal import liveness
+
+    view = {"status": "stale", "last_success_at": "2026-01-01T00:00:00Z", "lifecycle": "ticking"}
+    started = threading.Event()
+    release = threading.Event()
+    may_invalidate = threading.Event()
+
+    def _slow_build_with_handshake():
+        started.set()
+        assert may_invalidate.wait(timeout=2)
+        release.wait(timeout=2)
+        return dict(view)
+
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _slow_build_with_handshake)
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+    builder = threading.Thread(target=loop_health._resolver_liveness_view)
+    builder.start()
+    assert started.wait(timeout=1)
+    may_invalidate.set()
+    tracker.record_success({"noop": True})
+    built = loop_health._resolver_liveness_view()
+    release.set()
+    builder.join(timeout=2)
+    assert built["status"] == "unavailable"
+
+
+def test_resolver_cache_drops_after_in_process_tick_write(monkeypatch):
+    from internal import liveness
+
+    views = iter([{"status": "unavailable"}, {"status": "ok"}])
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", lambda: next(views))
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    tracker = liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+
+    assert loop_health._resolver_liveness_view()["status"] == "unavailable"
+    tracker.record_success({"noop": True})
+    assert loop_health._resolver_liveness_view()["status"] == "ok"
+
+
+def test_resolver_cache_kept_after_write_to_other_tracker(monkeypatch):
+    from internal import liveness
+
+    views = iter([{"status": "unavailable"}, {"status": "ok"}])
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", lambda: next(views))
+    monkeypatch.setitem(liveness._REGISTRY, "prediction_resolver", None)
+    monkeypatch.setitem(liveness._REGISTRY, "unrelated_control_tracker", None)
+    liveness.LivenessTracker("prediction_resolver", 60, persist=False)
+    other = liveness.LivenessTracker("unrelated_control_tracker", 60, persist=False)
+
+    assert loop_health._resolver_liveness_view()["status"] == "unavailable"
+    other.record_success({"noop": True})
+    assert loop_health._resolver_liveness_view()["status"] == "unavailable"
 
 
 def test_published_long_without_ledger_is_stalled(tmp_path, monkeypatch):

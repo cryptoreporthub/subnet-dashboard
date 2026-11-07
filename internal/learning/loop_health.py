@@ -32,7 +32,8 @@ _SNAPSHOT_STALE_S = int(os.environ.get("LEARNING_SNAPSHOT_STALE_SECONDS", "2700"
 _RESOLVER_LIVENESS_CACHE_TTL_S = float(
     os.environ.get("RESOLVER_LIVENESS_CACHE_SECONDS", "5")
 )
-_RESOLVER_LIVENESS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_RESOLVER_LIVENESS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None, "seq": -1}
+_RESOLVER_TRACKER_NAME = "prediction_resolver"
 _RESOLVER_LIVENESS_CACHE_LOCK = threading.Lock()
 _RESOLVER_LIVENESS_BUILDING = False
 
@@ -283,17 +284,24 @@ def _build_resolver_liveness_view() -> Dict[str, Any]:
         if isinstance(merged, dict) and merged:
             cur_status = snap.get("status")
             merged_status = merged.get("status")
-            # Use _parse_iso (not _freshness — out of scope in this module).
-            # Blind spot fix: when web tracker is "stale", still prefer persisted
-            # truth IF its last_success_at is strictly newer. Do NOT yield on
-            # stale→ok alone when timestamps are equal (keeps stale-tick tests).
+            # Prefer persisted worker truth when it is strictly fresher, or when
+            # the in-process web snapshot degraded but worker liveness is still ok
+            # at an equal-or-newer success instant (DIT-02).
             cur_success = _parse_iso(snap.get("last_success_at"))
             merged_success = _parse_iso(merged.get("last_success_at"))
-            if cur_status in ("no_success_yet", "failing") and merged_status == "ok":
-                snap = merged
-            elif merged_success is not None and (
+            use_merged = merged_success is not None and (
                 cur_success is None or merged_success > cur_success
+            )
+            if (
+                not use_merged
+                and merged_status == "ok"
+                and cur_status not in (None, "ok", "no_success_yet")
+                and merged_success is not None
+                and cur_success is not None
+                and merged_success >= cur_success
             ):
+                use_merged = True
+            if use_merged:
                 snap = merged
     except Exception:
         pass
@@ -338,16 +346,29 @@ def _build_resolver_liveness_view() -> Dict[str, Any]:
     }
 
 
+def _resolver_tracker_seq() -> int:
+    from internal.liveness import write_seq
+
+    return write_seq(_RESOLVER_TRACKER_NAME)
+
+
 def _cached_resolver_liveness_view(*, allow_stale: bool = False) -> Optional[Dict[str, Any]]:
-    """Return the last shared resolver view without performing I/O."""
+    """Return the last shared resolver view without performing I/O.
+
+    A view is dropped as soon as the resolver tracker has been written in this
+    process, so a fresh tick shows up on the next read rather than after the TTL.
+    ``allow_stale`` ignores both the TTL and the write counter.
+    """
     now = time.monotonic()
     ttl = _RESOLVER_LIVENESS_CACHE_TTL_S if not allow_stale else float("inf")
     with _RESOLVER_LIVENESS_CACHE_LOCK:
         payload = _RESOLVER_LIVENESS_CACHE.get("payload")
         captured = float(_RESOLVER_LIVENESS_CACHE.get("at") or 0.0)
-        if isinstance(payload, dict) and now - captured <= ttl:
-            return dict(payload)
-    return None
+        if not isinstance(payload, dict) or now - captured > ttl:
+            return None
+        if not allow_stale and _RESOLVER_LIVENESS_CACHE.get("seq") != _resolver_tracker_seq():
+            return None
+        return dict(payload)
 
 
 def cached_resolver_liveness_view(*, allow_stale: bool = False) -> Optional[Dict[str, Any]]:
@@ -367,7 +388,8 @@ def _resolver_liveness_view() -> Dict[str, Any]:
         if _RESOLVER_LIVENESS_BUILDING:
             stale = _RESOLVER_LIVENESS_CACHE.get("payload")
             if isinstance(stale, dict):
-                return dict(stale)
+                if _RESOLVER_LIVENESS_CACHE.get("seq") == _resolver_tracker_seq():
+                    return dict(stale)
             return {
                 "at": None,
                 "lifecycle": "stopped",
@@ -383,11 +405,27 @@ def _resolver_liveness_view() -> Dict[str, Any]:
         _RESOLVER_LIVENESS_BUILDING = True
 
     try:
+        seq_before = _resolver_tracker_seq()
         view = _build_resolver_liveness_view()
-        if isinstance(view, dict):
+        if _resolver_tracker_seq() != seq_before:
+            view = {
+                "at": None,
+                "lifecycle": "stopped",
+                "warming": False,
+                "refresh_minutes": RESOLVER_REFRESH_MINUTES,
+                "worker_peer": {},
+                "liveness": {},
+                "status": "unavailable",
+                "last_success_at": None,
+                "success_age_seconds": None,
+                "stage_timing_ms": {},
+            }
+        elif isinstance(view, dict):
             with _RESOLVER_LIVENESS_CACHE_LOCK:
-                _RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
-                _RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
+                if _resolver_tracker_seq() == seq_before:
+                    _RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
+                    _RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
+                    _RESOLVER_LIVENESS_CACHE["seq"] = seq_before
         return view
     finally:
         with _RESOLVER_LIVENESS_CACHE_LOCK:
