@@ -221,8 +221,8 @@ def _completed_success_beats(existing: Dict[str, Any], incoming: Dict[str, Any])
     """True when incoming completed success should win last_cycle over existing success."""
     if not _is_completed_success(incoming) or not _is_completed_success(existing):
         return False
-    in_gen = _incoming_generation_int(incoming)
-    ex_gen = _incoming_generation_int(existing)
+    in_gen = _cycle_generation_int(incoming)
+    ex_gen = _cycle_generation_int(existing)
     if in_gen is None or ex_gen is None:
         return False
     if in_gen > ex_gen:
@@ -241,14 +241,19 @@ def _gap_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     return gap if isinstance(gap, dict) else {}
 
 
-def _incoming_generation_int(summary: Dict[str, Any]) -> Optional[int]:
-    gen = summary.get("cycle_generation")
+def _cycle_generation_int(row: Dict[str, Any]) -> Optional[int]:
+    """Parse ``cycle_generation`` from a cycle summary or persisted ``last_cycle`` row."""
+    gen = row.get("cycle_generation")
     if gen is None:
         return None
     try:
         return int(gen)
     except (TypeError, ValueError):
         return None
+
+
+def _incoming_generation_int(summary: Dict[str, Any]) -> Optional[int]:
+    return _cycle_generation_int(summary)
 
 
 def _cancel_resolver_jobs(job_ids: Tuple[str, ...]) -> Dict[str, bool]:
@@ -1651,7 +1656,7 @@ class PredictionResolverScheduler:
                 if force and incoming_gap.get("complete") is False:
                     if not _is_completed_success(existing):
                         in_gen = incoming_gen_i
-                        ex_gen = _incoming_generation_int(existing) if existing else None
+                        ex_gen = _cycle_generation_int(existing) if existing else None
                         if in_gen is not None and (
                             ex_gen is None or in_gen > ex_gen
                         ):

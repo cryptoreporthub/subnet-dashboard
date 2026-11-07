@@ -2291,6 +2291,24 @@ def test_force_timeout_newer_generation_replaces_older_incomplete(
     assert last["error"] == "cycle_timeout_2s"
 
 
+def test_completed_success_beats_parses_persisted_existing_generation():
+    """Ditto P2: persisted existing row (string gen) must compare, not mis-read as None."""
+    existing = {
+        "run_at": "2026-08-01T00:00:00+00:00",
+        "ok": True,
+        "cycle_generation": "5",
+        "gap_timing_ms": {"complete": True},
+    }
+    incoming = {
+        "run_at": "2026-08-01T01:00:00+00:00",
+        "ok": True,
+        "cycle_generation": 6,
+        "gap_timing_ms": {"complete": True},
+    }
+    assert resolver_scheduler._completed_success_beats(existing, incoming) is True
+    assert resolver_scheduler._completed_success_beats(incoming, existing) is False
+
+
 def test_last_cycle_equal_gen_newer_run_at_completed_success_wins(tmp_path, monkeypatch):
     """Policy falsifier A: same generation, later run_at — newer success wins last_cycle."""
     from internal.ops.mutation_log import make_resolver_cycle_id
