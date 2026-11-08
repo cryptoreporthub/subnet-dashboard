@@ -196,3 +196,47 @@ def test_abandon_cannot_revoke_between_impact_check_and_write(harness, monkeypat
 
     assert seen == {"abandon_blocked": True, "owner_gen": 1}
     assert sched._persist_owner_gen is None
+
+
+def test_revoked_cycle_skips_pump_calibration_write(harness, monkeypatch, tmp_path):
+    """Revoked cycles must not persist pump calibration via maybe_adapt_after_resolve."""
+    import internal.learning.pump_calibration as pump_calibration
+
+    cal_path = tmp_path / "pump_calibration.json"
+    cal_path.write_text(
+        json.dumps({"blend_weights": {"volume_intensity": 0.1}, "online_updates": 0}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(pump_calibration, "CALIBRATION_PATH", str(cal_path))
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *_a, **_k: True)
+    monkeypatch.setattr(
+        resolver,
+        "atomic_finalize_resolution",
+        lambda prediction, **_kwargs: prediction,
+    )
+
+    pred = json.loads(harness.read_text(encoding="utf-8"))["predictions"][0]
+    sched = resolver_scheduler.PredictionResolverScheduler()
+    sched._persist_owner_gen = 1
+    timing = resolver_scheduler._CycleTiming()
+    timing.set_owner_gen(1, sched)
+    token = resolver_scheduler._cycle_timing.set(timing)
+    before = json.loads(cal_path.read_text(encoding="utf-8"))
+    sched._abandon_inflight_cycle()
+    try:
+        resolver.resolve_prediction_at_horizon(pred)
+    finally:
+        resolver_scheduler._cycle_timing.reset(token)
+    after_revoke = json.loads(cal_path.read_text(encoding="utf-8"))
+    assert after_revoke == before
+
+    sched._persist_owner_gen = 2
+    timing.set_owner_gen(2, sched)
+    token2 = resolver_scheduler._cycle_timing.set(timing)
+    pred_live = json.loads(harness.read_text(encoding="utf-8"))["predictions"][1]
+    try:
+        resolver.resolve_prediction_at_horizon(pred_live)
+    finally:
+        resolver_scheduler._cycle_timing.reset(token2)
+    after_live = json.loads(cal_path.read_text(encoding="utf-8"))
+    assert int(after_live.get("online_updates") or 0) >= int(before.get("online_updates") or 0)
