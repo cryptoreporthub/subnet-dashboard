@@ -1159,7 +1159,7 @@ def test_patchd_abandoned_worker_keeps_submitted_gen(
             p
             for p in _patchd_payloads(caplog)
             if p.get("writer_function") == "resolver._save_json"
-            and p.get("operation") == "completed"
+            and p.get("operation") == "skipped_abandoned"
             and p.get("resolver_cycle_id") == cycle_id
         ]
         if writes:
@@ -1169,6 +1169,7 @@ def test_patchd_abandoned_worker_keeps_submitted_gen(
     assert writes[-1]["cycle_generation"] == submitted_gen
     assert writes[-1]["resolver_cycle_id"] == cycle_id
     assert writes[-1]["thread_id"] != threading.get_ident()
+    assert not pred_path.exists()
 
 
 def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):
