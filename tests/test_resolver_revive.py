@@ -517,6 +517,53 @@ def test_stale_lock_revive_stops_live_orphan_from_expiring(tmp_path, monkeypatch
         rs.stop_prediction_resolver_scheduler()
 
 
+def test_zero_budget_cycle_then_revive_submitted_gen_matches_owner(
+    tmp_path, monkeypatch
+):
+    """Ditto P3-R4: after zero-budget bump, revive abandon uses current _lock_owner_gen."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(rs, "_resolver_tick_age_seconds", lambda: 10000.0)
+    monkeypatch.setattr(rs, "_resolver_cycle_lock_stale", lambda *a, **k: True)
+
+    def _quick_cycle(self):
+        return {"ok": True, "resolved_now": 0, "expired_now": 0, "pending": 0}
+
+    monkeypatch.setattr(
+        rs.PredictionResolverScheduler, "_run_refresh_cycle", _quick_cycle
+    )
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = True
+    sched._first_tick_pending = True
+    sched._revive_use_full_budget = False
+    out = sched._run_refresh_cycle_with_timeout()
+    assert out.get("ok") is True
+    owner_gen = sched._cycle_generation
+    assert owner_gen >= 1
+    sched._cycle_lock.acquire()
+    sched._lock_owner_gen = owner_gen
+    rs._scheduler = sched
+    seen: dict[str, object] = {}
+    real_abandon = sched._abandon_inflight_cycle
+
+    def _trace(**kwargs):
+        seen.update(kwargs)
+        return real_abandon(**kwargs)
+
+    monkeypatch.setattr(sched, "_abandon_inflight_cycle", _trace)
+    try:
+        revived = rs.revive_prediction_resolver_scheduler(force=True)
+        assert revived.get("stale_lock_recycled") is True
+        assert seen.get("submitted_gen") == owner_gen
+    finally:
+        rs.stop_prediction_resolver_scheduler()
+
+
 def test_revive_stale_lock_recycle_passes_lock_owner_gen_to_abandon(
     tmp_path, monkeypatch
 ):

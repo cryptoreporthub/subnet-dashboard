@@ -673,10 +673,11 @@ class PredictionResolverScheduler:
             self._first_tick_pending = False
             cancel_ids = (self._job_primary(), self._job_retry())
             lifecycle_run_id = self._tick_run_id
-            # Armed APScheduler callbacks compare this; clear so stale ticks fail
-            # the run-id fence, not only the _active check (Ditto cluster 4).
-            self._tick_run_id = None
         lifecycle = self._persist_lifecycle_state(for_run_id=lifecycle_run_id)
+        with self._lock:
+            # Compare-and-clear: persist may yield; revive/start may replace run id.
+            if lifecycle_run_id is not None and self._tick_run_id == lifecycle_run_id:
+                self._tick_run_id = None
         cancel_results = _cancel_resolver_jobs(cancel_ids)
         out: Dict[str, Any] = {
             "stopped": True,
@@ -767,7 +768,13 @@ class PredictionResolverScheduler:
         schedule_in_seconds(job_id, _run, seconds)
 
     def _tick(self, expected_run_id: Optional[SchedulerRunId] = None) -> Dict[str, Any]:
-        """Run one resolution cycle and reschedule."""
+        """Run one resolution cycle and reschedule.
+
+        Armed APScheduler callbacks pass ``expected_run_id``; they must match
+        ``_tick_run_id`` and ``_active``. ``run_once()`` (revive) passes ``None``
+        and is trusted only while the scheduler is ``_active`` — owner generation
+        is published under ``_release_guard`` on acquire, not re-checked here.
+        """
         with self._lock:
             if self._active and self._tick_run_id is None:
                 self._tick_run_id = SchedulerRunId(str(uuid.uuid4()))

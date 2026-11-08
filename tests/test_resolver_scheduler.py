@@ -1835,6 +1835,34 @@ def test_tick_when_inactive_is_stale_scheduler_run(fresh_scheduler):
     assert out.get("skipped") == "stale_scheduler_run"
 
 
+def test_stop_compare_clear_preserves_replaced_tick_run_id(tmp_path, monkeypatch):
+    """Ditto P3-R1: persist yield must not clear a newer _tick_run_id."""
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul_path))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul_path))
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, soul_map_path=str(soul_path)
+    )
+    sched.start(immediate=False)
+    armed = sched._tick_run_id
+    assert armed is not None
+    replacement = resolver_scheduler.SchedulerRunId("replaced-during-persist")
+    real_pls = sched._persist_lifecycle_state
+
+    def _persist_then_replace(**kwargs):
+        sched._tick_run_id = replacement
+        return real_pls(**kwargs)
+
+    monkeypatch.setattr(
+        sched, "_persist_lifecycle_state", _persist_then_replace
+    )
+    sched.stop()
+    assert sched._tick_run_id is replacement
+    out = sched._tick(armed)
+    assert out.get("skipped") == "stale_scheduler_run"
+
+
 def test_stop_clears_tick_run_id_so_armed_callback_is_stale(fresh_scheduler):
     """Cluster 4: stop invalidates scheduler_run_id, not only _active."""
     sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=1)
