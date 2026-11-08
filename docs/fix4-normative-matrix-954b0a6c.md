@@ -10,7 +10,7 @@
 | Tracking issue | [#1573](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573) |
 | Implementation PR | [#1522](https://github.com/cryptoreporthub/subnet-dashboard/pull/1522) |
 
-**Still gated:** Ditto + Replit + Claude **PASS** on issue #1573 **v5** body; Joshua per-task GO before any Fix-4 task execution.
+**Still gated:** Ditto + Replit + Claude **PASS** on issue #1573 **v7** body; Joshua per-task GO before any Fix-4 task execution.
 
 **Doc-only PR [#1574](https://github.com/cryptoreporthub/subnet-dashboard/pull/1574):** no `fly-deploy` / no production deploy. Committed file byte `sha256` vs accepted plan `954b0a6c…` stated on PR comment when updated.
 
@@ -90,16 +90,16 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 
 **Variants:** **V1** = omit `mergeBaseSha`; **V2** = wrong merge base; **V3** = stale `schemaVersion`. **Expected/Forbidden** — **§8** tables above (15 rows: 5 readers × 3 variants).
 
-**VR-psr reachability (@ `c1298fdc`):** Invalid V1–V3 record **before** the first **`readGateState`** yields **`run_suite`** — tag/ask never run. Normative fixture = **two-read race:** valid **clean** record on gate read → **`tag_replit` / `await_replit` planned**; **`readSuiteRecordTrusted`** inside **`pairSuiteReady`** sees the invalid variant. Production passes **`alignedPair: expectedPair`** (`advance.ts:341–380`).
+**VR-psr reachability (@ `c1298fdc`):** Invalid V1–V3 record **before** the first **`readGateState`** yields **`run_suite`** — tag/ask never run. Normative fixture = **two-read race:** first **`readGateState`** returns **clean** record → **`tag_replit` / `await_replit` planned**, **`runSuiteIfDue` not reached**, **`advance.ts:319–324` re-read not exercised**; **second** read = **`readSuiteRecordTrusted`** inside **`pairSuiteReady`** sees the invalid variant. **`await_replit`** = existing tag + non-PASS verdict (`gate.ts:178–188`), distinct from tag-first ask after **`tag_replit`**. Production passes **`alignedPair: expectedPair`** (`advance.ts:341–380`).
 
 | Row | Variant | Reader | Expected | Prohibited |
 |-----|---------|--------|----------|------------|
 | **VR-pgc-01** | V1 | `postGateCheck` | **`action_required`**; title **Gate waiting**; summary has **record-version-mismatch, recompute due**; **posted** | **success**; **unchanged**; dedupe put while invalid |
 | **VR-pgc-02** | V2 | `postGateCheck` | same pattern as §8 V0 row | same |
 | **VR-pgc-03** | V3 | `postGateCheck` | same pattern as §8 V0 row | clean/carry success |
-| **VR-psr-01** | V1 | `pairSuiteReady` (**delivery**) | Two-read race; **`alignedPair: expectedPair` supplied**; **tag case:** `skipped:stale-pair`, no tag; **ask case:** tag confirmed → `skipped:stale-pair`, no ask; header documents read-by-read sequence | Invalid record only on first gate read; **`true`**; tag/ask posted |
-| **VR-psr-02** | V2 | `pairSuiteReady` (**delivery**) | Same two-read pattern; wrong `mergeBaseSha` variant; tag vs ask split | same |
-| **VR-psr-03** | V3 | `pairSuiteReady` (**delivery**) | Same two-read pattern; stale `schemaVersion` variant; tag vs ask split | same |
+| **VR-psr-01** | V1 | `pairSuiteReady` (**delivery**) | Two-read race (clean first read; second trusted read stale); **`alignedPair: expectedPair` supplied**; **`tag_replit`** tag case; **`await_replit`** (existing tag + non-PASS); tag-first ask (`tag_replit` + tag confirmed); header documents read-by-read sequence | Invalid record only on first gate read; **`runSuiteIfDue` / `advance.ts:319–324` exercised**; **`true`**; tag/ask posted |
+| **VR-psr-02** | V2 | `pairSuiteReady` (**delivery**) | Same precondition + fixture split; wrong `mergeBaseSha` variant | same |
+| **VR-psr-03** | V3 | `pairSuiteReady` (**delivery**) | Same precondition + fixture split; stale `schemaVersion` variant | same |
 | **VR-psr-obs** | — | `pairSuiteReady` (**delivery**, optional **UNRUN**) | **`alignedPair` absent** recovery-race only — not ordinary ReadyPair path | Claimed as Task 1 default without Joshua GO |
 | **VR-rgs-01** | V1 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due · merge-base-mismatch`**; omit `mergeBaseSha` in record (**no** `baseAvailable` assert) | **`mergeable`**; wrong detail; `baseAvailable` on tool row only |
 | **VR-rgs-02** | V2 | `readGateState` (**gate-state**) | **`run_suite`**; same **`suiteDetail`**; wrong `mergeBaseSha` | same |
