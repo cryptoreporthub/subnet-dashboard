@@ -1611,13 +1611,13 @@ class PredictionResolverScheduler:
                     except (TypeError, ValueError):
                         pass
 
-                # 5. Owner match (non-force only)
-                if (
-                    not force
-                    and incoming_gen_i is not None
-                    and self._persist_owner_gen is not None
-                ):
-                    if incoming_gen_i != int(self._persist_owner_gen):
+                # 5. Owner match (non-force only); None gen = not-owner (TOCTOU after abandon).
+                if not force and owned_cycle:
+                    if self._persist_owner_gen is None:
+                        return
+                    if incoming_gen_i is not None and incoming_gen_i != int(
+                        self._persist_owner_gen
+                    ):
                         return
 
                 def _track_b_allows_write() -> bool:
