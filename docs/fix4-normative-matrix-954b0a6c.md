@@ -5,7 +5,7 @@
 | Field | Value |
 |-------|-------|
 | Accepted plan SHA-256 | `954b0a6c2ee0a42783d1b84c8e49398750c8dc84b3ad8a01312157b6815759ad` |
-| Excerpt source | `plan-1522-fix4-replit6691536655-contracts-integrated.md` (store; §10–§13 below) |
+| Excerpt source | Integrated plan §8–§13 (self-contained below; authority SHA above) |
 | PR #1522 head baseline | `c1298fdc870bdb5cc1b7ab8261ec27f532afab62` |
 | Tracking issue | [#1573](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573) |
 | Implementation PR | [#1522](https://github.com/cryptoreporthub/subnet-dashboard/pull/1522) |
@@ -19,6 +19,46 @@
 Same as integrated plan v2 §11: **compare_blocked → runSuite false**; distinct Compare-blocked titles; dedupe after admission; **Superseded** on verified drift; **BaseUnavailable ≠ PairReadFailed**; refusal key + **runId**; **`writePairResult`** sole `suite:` writer; **`check_gate_state`** read discipline; **`compareReady`** on record; **R-D10** strings **`record-version-mismatch, recompute due`** / **`recomputed`**.
 
 Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decision **R-D5** = **RD-05a** + **RD-05b**.
+
+---
+
+## 8. Trust-reader outputs by variant (V1 / V2 / V3)
+
+**Shared setup:** Live **`ReadyPair`** with valid 40-hex triple; KV suite record **clean-equivalent** with invalid pair metadata; gate verdicts + Replit tag **seeded passing**.
+
+| Variant | Invalid record cause | Notes |
+|---------|----------------------|-------|
+| **V1** | `mergeBaseSha` omitted from stored record | Same assert/forbidden **pattern** as V0 row below; `compare_suite_runs` carry **`reason: "merge-base-mismatch"`** |
+| **V2** | `merge-base-mismatch` — stored **`mergeBaseSha` ≠ live** | Identical reader pattern as V0 |
+| **V3** | `record-version-mismatch` — stored **`schemaVersion` ≠ READER_EXPECTED** | Identical reader pattern as V0; carry **`reason: "record-version-mismatch"`** only for V3 |
+
+**V0 reference pattern** (apply per variant with the invalid cause above):
+
+| Reader | Exact assert | Forbidden |
+|--------|--------------|-----------|
+| **`postGateCheck`** (dedupe hit + open **`workingCheck`**) | `conclude` **`action_required`**; output.title **`Gate waiting`**; output.summary **includes** **`record-version-mismatch, recompute due`** (R-D10); **`CheckPost` === `posted`** | **`success`**, **`unchanged`**, dedupe **`kv.put`** while record invalid |
+| **`pairSuiteReady`** | return **`false`** (`boolean`) | **`true`** |
+| **`readGateState`** | suite path **not** `clean`/`carried`; **`next === "run_suite"`** for seeded verdicts | **`next === "mergeable"`** with suite presented as clean/carried |
+| **`compare_suite_runs`** carry | **`recorded: false`**, **`carried: false`**, **`clean: false`**; **`reason`** per variant row above | **`recorded: true`**, **`carried: true`**, **`clean: true`** |
+| **`check_gate_state` tool** | Fields present: **`headSha`**, **`next`**, **`suite`**, **`baseAvailable`**; **`baseAvailable === true`** when observation is **`ReadyPair`**; **`next === "run_suite"`**; **`suite`** not `clean`/`carried` | `next === "mergeable"` as green; invented **`ok`** field |
+
+---
+
+## 9. Deterministic finalizer cases
+
+**Split rule:** Where design requires GitHub confirmation vs log/unresolved, use **two** bounded fixtures (mutation confirm vs fail) — **one** typed outcome each (**no** `or` in the assertion).
+
+| Fixture (sequence) | Expected check/result/KV/log | Forbidden effects |
+|--------------------|------------------------------|---------------------|
+| Admission recovery: `expectedPair` ReadyPair A; admission read 1 `PairReadFailed(compare)`, read 2 ReadyPair A; non-green gate; final fence A; `workingCheck` open | Same-handle **`action_required`** conclude; return **posted**; one dedupe put **after** confirmed conclude | BaseUnavailable, new handle, reads beyond admission 2 + final fence 2, pre-conclude dedupe put |
+| Admission exhaustion: both admission reads `PairReadFailed`; `workingCheck` open | Same-handle **cancelled**, title **Pair unverifiable**; **`pair-unverifiable`** only if GitHub confirms; no dedupe | Superseded claim, non-cancel conclude, dedupe before admission, new handle |
+| Admission exhaustion, no handle | **`pair-unverifiable`**; no check mutation; no dedupe | `createCheck` or `conclude` |
+| Final-fence recovery: admission A; success intent from valid clean record; fence read 1 fails, read 2 ReadyPair A; handle exists | Same-handle **success** conclude; **posted**; one dedupe after confirmed conclude | PairReadFailed as BaseUnavailable, success before second read, extra handle |
+| Final-fence exhaustion: admission A; both fence reads fail; handle exists | Same-handle **cancelled**, title **Pair unverifiable**; **`pair-unverifiable`** only if GitHub confirms; no dedupe | success/failure/action_required conclude, Superseded without mismatch evidence, new handle |
+| Final-fence exhaustion, no handle | **`pair-unverifiable`**; no mutation; no KV write | createCheck to cancel, conclude, dedupe write |
+| Retry revalidation finds drift: conclude fails; revalidation returns ReadyPair B ≠ A | Remaining mutation: same-handle **cancelled** **Superseded**; **`stale-head`** only if cancel confirmed; no dedupe | Retry old non-cancel conclusion, new handle, **posted** |
+| Retry revalidation fails: conclude fails; both revalidation reads `PairReadFailed` | Same-handle cancel **Pair unverifiable** within budget; **`pair-unverifiable`** if confirmed else **`finalization-unresolved`** + log; no dedupe | Retry without matching pair, BaseUnavailable, new handle, false **posted** |
+| Required terminal mutation fails twice; handle unconfirmed | **`finalization-unresolved`** + `gate_check_github_failure` (phase, counters) | Dedupe write, new handle, **posted** |
 
 ---
 
@@ -42,13 +82,13 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 
 ## 11. Acceptance matrix B — validated readers (**VR-pgc-01..03**, etc.) — **no proxy “equivalent”**
 
-**Variants:** **V1** = omit `mergeBaseSha`; **V2** = wrong merge base; **V3** = stale `schemaVersion`. **Expected/Forbidden** — same as integrated plan **§8** for each reader × variant (15 rows: 5 readers × 3 variants).
+**Variants:** **V1** = omit `mergeBaseSha`; **V2** = wrong merge base; **V3** = stale `schemaVersion`. **Expected/Forbidden** — **§8** tables above (15 rows: 5 readers × 3 variants).
 
 | Row | Variant | Reader | Expected | Prohibited |
 |-----|---------|--------|----------|------------|
-| **VR-pgc-01** | V1 | `postGateCheck` | not success path; invalid handling per §8 | `unchanged`; dedupe put while invalid |
-| **VR-pgc-02** | V2 | `postGateCheck` | same | same |
-| **VR-pgc-03** | V3 | `postGateCheck` | same | clean/carry success |
+| **VR-pgc-01** | V1 | `postGateCheck` | **`action_required`**; title **Gate waiting**; summary has **record-version-mismatch, recompute due**; **posted** | **success**; **unchanged**; dedupe put while invalid |
+| **VR-pgc-02** | V2 | `postGateCheck` | same pattern as §8 V0 row | same |
+| **VR-pgc-03** | V3 | `postGateCheck` | same pattern as §8 V0 row | clean/carry success |
 | **VR-psr-01** | V1 | `pairSuiteReady` | **`false`** | **`true`** |
 | **VR-psr-02** | V2 | `pairSuiteReady` | **`false`** | **`true`** |
 | **VR-psr-03** | V3 | `pairSuiteReady` | **`false`** | **`true`** |
@@ -58,7 +98,7 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | **VR-csr-01** | V1 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
 | **VR-csr-02** | V2 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
 | **VR-csr-03** | V3 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "record-version-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
-| **VR-tool-01** | V1 | `check_gate_state` | **`baseAvailable`**, **`next`**, **`suite`** as §8 | `mergeable` green; field **`ok`** |
+| **VR-tool-01** | V1 | `check_gate_state` | **`headSha`**, **`next`**, **`suite`**, **`baseAvailable`** present; **`baseAvailable === true`** (ReadyPair); **`next === "run_suite"`**; suite not clean/carried | **`next === "mergeable"`**; field **`ok`** |
 | **VR-tool-02** | V2 | `check_gate_state` | same | same |
 | **VR-tool-03** | V3 | `check_gate_state` | same | same |
 
