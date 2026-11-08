@@ -1052,6 +1052,7 @@ def resolve_prediction(
             _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
             _nudge_signal_weights(prediction, bool(correct), capture=capture)
         else:
+            # ponytail: calibration I/O under guard delays abandon (same trade-off as _save_json).
             with _cycle_persist_guard_safe():
                 if not _cycle_writes_revoked_safe():
                     try:
@@ -1206,6 +1207,7 @@ def resolve_prediction_at_horizon(
             return prediction
         _nudge_signal_weights(prediction, bool(correct), capture=capture)
     else:
+        # ponytail: calibration I/O under guard delays abandon (same trade-off as _save_json).
         with _cycle_persist_guard_safe():
             if not _cycle_writes_revoked_safe():
                 try:

@@ -208,6 +208,14 @@ def test_revoked_cycle_skips_pump_calibration_write(harness, monkeypatch, tmp_pa
         encoding="utf-8",
     )
     monkeypatch.setattr(pump_calibration, "CALIBRATION_PATH", str(cal_path))
+    adapt_calls: List[Dict[str, Any]] = []
+    real_adapt = pump_calibration.maybe_adapt_after_resolve
+
+    def _adapt_spy(**kwargs):
+        adapt_calls.append(kwargs)
+        return real_adapt(**kwargs)
+
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", _adapt_spy)
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *_a, **_k: True)
     monkeypatch.setattr(
         resolver,
@@ -229,6 +237,7 @@ def test_revoked_cycle_skips_pump_calibration_write(harness, monkeypatch, tmp_pa
         resolver_scheduler._cycle_timing.reset(token)
     after_revoke = json.loads(cal_path.read_text(encoding="utf-8"))
     assert after_revoke == before
+    assert adapt_calls == []
 
     sched._persist_owner_gen = 2
     timing.set_owner_gen(2, sched)
@@ -238,5 +247,5 @@ def test_revoked_cycle_skips_pump_calibration_write(harness, monkeypatch, tmp_pa
         resolver.resolve_prediction_at_horizon(pred_live)
     finally:
         resolver_scheduler._cycle_timing.reset(token2)
-    after_live = json.loads(cal_path.read_text(encoding="utf-8"))
-    assert int(after_live.get("online_updates") or 0) >= int(before.get("online_updates") or 0)
+    assert len(adapt_calls) == 1
+    assert adapt_calls[0].get("prediction", {}).get("id") == pred_live.get("id")
