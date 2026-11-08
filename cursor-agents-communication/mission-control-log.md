@@ -344,3 +344,7 @@
 ## 2026-11-08 — #1574 CodeRabbit `baseAvailable` doc boundary
 
 - Matrix + #1573 v5: `baseAvailable` asserts limited to `check_gate_state` tool only (`readGateState` has no such field @ `c1298fdc`); VR-psr header `alignedPair` supplied/absent clarified.
+
+## 2026-11-08 — #1574 CodeRabbit VR-rgs `suiteDetail` strings
+
+- Matrix §8/§11 + #1573 v5 VR-rgs-01/02: V1/V2 `suiteDetail` = `record-version-mismatch, recompute due · merge-base-mismatch` (`gh.ts:513–516` @ `c1298fdc`); V3 unchanged short string. `alignedPair` footnote: production passes `expectedPair` @ `advance.ts:351/376`; VR-psr tranche-2 headers intentionally absent. Doc-only #1574; no Fix-4 on #1522.

@@ -42,7 +42,7 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 |--------|--------------|-----------|
 | **`postGateCheck`** (dedupe hit + open **`workingCheck`**) | `conclude` **`action_required`**; output.title **`Gate waiting`**; output.summary **includes** **`record-version-mismatch, recompute due`** (R-D10); **`CheckPost` === `posted`** | **`success`**, **`unchanged`**, dedupe **`kv.put`** while record invalid |
 | **`pairSuiteReady`** | return **`false`**; **`tag-replit`** + **`ask-replit`** → **`skipped:stale-pair`**; **no** tag/ask side effects; test header states **`alignedPair` supplied or absent** per fixture (§11 V1–V3 delivery: **absent**, `observePair`; `advance.ts:131–157`) | **`true`**; tag/ask posted |
-| **`readGateState`** | **`next === "run_suite"`**; **`suiteDetail` === `record-version-mismatch, recompute due`** (per V1–V3); suite not `clean`/`carried` (**no** `baseAvailable` on return — fixture uses **`mergeBaseSha`**, not `baseSha`) | **`next === "mergeable"`**; detail omitted; assert `baseAvailable` only via **`check_gate_state`** row |
+| **`readGateState`** | **`next === "run_suite"`**; **`suiteDetail`**: V1/V2 → **`record-version-mismatch, recompute due · merge-base-mismatch`** (`gh.ts` `trustDetail` when `trusted.reason === "merge-base-mismatch"`); V3 → **`record-version-mismatch, recompute due`** (`trusted.detail`); suite not `clean`/`carried` (**no** `baseAvailable` on return — fixture uses **`mergeBaseSha`**, not `baseSha`) | **`next === "mergeable"`**; wrong detail; assert `baseAvailable` only via **`check_gate_state`** row |
 | **`compare_suite_runs`** carry | **`recorded: false`**, **`carried: false`**, **`clean: false`**; **`reason`** per variant row above | **`recorded: true`**, **`carried: true`**, **`clean: true`** |
 | **`check_gate_state` tool** | Fields present: **`headSha`**, **`next`**, **`suite`**, **`baseAvailable`**; **`baseAvailable === true`** when observation is **`ReadyPair`**; **`next === "run_suite"`**; **`suite`** not `clean`/`carried` | `next === "mergeable"` as green; invented **`ok`** field |
 
@@ -98,8 +98,8 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | **VR-psr-01** | V1 | `pairSuiteReady` (**delivery**) | **`false`** (trusted-record branch); **`skipped:stale-pair`** tag+ask; no side effects; **`alignedPair` absent** in header | **`true`**; tag/ask |
 | **VR-psr-02** | V2 | `pairSuiteReady` (**delivery**) | same pattern; wrong `mergeBaseSha` variant | same |
 | **VR-psr-03** | V3 | `pairSuiteReady` (**delivery**) | same pattern; stale `schemaVersion` variant | same |
-| **VR-rgs-01** | V1 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due`**; record absent (**no** `baseAvailable` assert) | **`mergeable`**; wrong detail; `baseAvailable` on tool row only |
-| **VR-rgs-02** | V2 | `readGateState` (**gate-state**) | same **`suiteDetail`**; wrong `mergeBaseSha` | same |
+| **VR-rgs-01** | V1 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due · merge-base-mismatch`**; omit `mergeBaseSha` in record (**no** `baseAvailable` assert) | **`mergeable`**; wrong detail; `baseAvailable` on tool row only |
+| **VR-rgs-02** | V2 | `readGateState` (**gate-state**) | **`run_suite`**; same **`suiteDetail`**; wrong `mergeBaseSha` | same |
 | **VR-rgs-03** | V3 | `readGateState` (**gate-state**) | same **`suiteDetail`**; stale `schemaVersion` | same |
 | **VR-csr-01** | V1 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
 | **VR-csr-02** | V2 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
@@ -109,6 +109,8 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | **VR-tool-03** | V3 | `check_gate_state` | same | same |
 
 **`compare_suite_runs` carry `reason` (normative):** **`merge-base-mismatch`** for **VR-csr-01** (omit merge base) and **VR-csr-02** (wrong merge base); **`record-version-mismatch`** for **VR-csr-03** only.
+
+**`alignedPair` (normative):** `advance.ts` passes **`alignedPair: expectedPair`** when initial delivery observation is **`ReadyPair`** (`advance.ts:351`, `376` @ `c1298fdc`). **VR-psr-01..03** headers intentionally **`alignedPair` absent** to exercise **`observePair`** — not a product omission.
 
 ---
 
