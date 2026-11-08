@@ -4,7 +4,7 @@ Evidence-only bundle for freeze replay on Replit `0be6701e`. **Not** a Replit PA
 
 | File | SHA-256 |
 |------|---------|
-| `fix4-replit-artifact-bundle-2026-11-07.tar.gz` | **1ec3c4aa…* |
+| `fix4-replit-artifact-bundle-2026-11-07.tar.gz` | `1ec3c4aa9edbb5980d3e01897d6bfa4d74c387a5843d62438b20f33894b48f2b` |
 
 **Pass 6:** Task 3 patch `5f70caca…` applies export manifest `565f7544…` + overlay `0ffcdb6f…`; apply-only **666/0**. Inner `sha256sum -c` **17/17**.
 
