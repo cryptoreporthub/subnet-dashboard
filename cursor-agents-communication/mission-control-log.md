@@ -330,3 +330,8 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-11-08 — #1573 Fix-4 plan v4 (Ditto + Replit + Claude REVISE folded)
+
+- Issue #1573 body v4: junit artifact bar, 19cd8e00 Ditto review, VR-rgs dual strategy, GO line, docs/ matrix BLOCKED until Joshua GO.
+- Store plan `plan-1522-fix4-three-task-gated-2026-11-07.md` v4 synced. Await Ditto+Replit+Claude PASS. No Fix-4 execution.
