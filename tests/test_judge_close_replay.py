@@ -54,6 +54,18 @@ def test_replayed_resolution_closes_once_and_nudges_once(portfolio_path, monkeyp
     assert len(nudges) == len(tracker.all_judges())
 
 
+def test_replay_close_clears_stale_open_position(portfolio_path):
+    """A second close with the same id must not leave a ghost open row."""
+    prediction = _prediction()
+    portfolios.open_position("oracle", prediction, size=1.0)
+    assert portfolios.close_position("oracle", prediction, actual_pct=10.0, outcome="hit")
+    portfolios.open_position("oracle", prediction, size=1.0)
+    assert portfolios.close_position("oracle", prediction, actual_pct=10.0, outcome="hit") is None
+    oracle = json.loads(portfolio_path.read_text(encoding="utf-8"))["oracle"]
+    assert len(oracle["closed_positions"]) == 1
+    assert not any(p.get("id") == prediction["id"] for p in oracle["open_positions"])
+
+
 def test_close_position_returns_none_on_replay(portfolio_path):
     prediction = _prediction()
     portfolios.open_position("oracle", prediction, size=1.0)
