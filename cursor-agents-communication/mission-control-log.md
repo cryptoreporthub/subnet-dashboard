@@ -330,3 +330,26 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-11-06 — PR #1571 SD-119 gap-closure (local only, no push)
+
+- Frozen base `f356b9ac`; three-file export **78,559 B** / `c79118ec…` (was `6b336c21…` / 69,393 B). Replit FAIL threads #6697454618–6327 still cite 24 768 B `a6c47645` snapshot — **SNAPSHOT_MISMATCH** until re-run on new export.
+- Product: W1 `_release_guard` through owned RMW; M2 persist-lock timeout; H5 gen8-replace; lifecycle `scheduler_run_id` fence + singleton stop ordering; H4 typed cancel map; typed `lifecycle_persisted` on stop. Evidence: Project store `internal/pr1571-gap-closure-evidence-2026-11-06.md`.
+- Mechanical: v5 exam **19 passed** (incl. gap fixtures), isolated harness **19 passed**, `test_resolver_scheduler` + `test_soul_map_io` **88 passed**. **Joshua GO** still required for GitHub/Replit packet attach.
+
+## 2026-11-07 — PR #1571 gap-closure pushed (no merge/deploy)
+
+- **Pushed** `ae03db4a4ef1a743be898356ee2bd92735cd8832` on `fix/resolver-revive-abandon-stale-lock`; scoped diff **78,559 B** / `c79118ec…` vs base `f356b9ac`.
+- Pre-push: endpoint contract **149 passed**, scoped Bandit high **clean**.
+- PR evidence comment [#6700529886](https://github.com/cryptoreporthub/subnet-dashboard/pull/1571#issuecomment-6700529886); supersedes Replit FAIL `#6697454618`–`6327` (`a6c47645` snapshot). CI pending on push.
+- Store: `internal/pr1571-export-growth-trace-2026-11-06.md`, `internal/pr1571-gap-closure-ci-addendum-2026-11-07.md`.
+
+## 2026-11-07 — PR #1571 Wave 0 + Wave 1 (rebase + CodeRabbit)
+
+- **Wave 0:** Rebased onto `main` (`4cfee00a`); endpoint **149**, v5 **19/19** pre-W1; receipt `internal/pr1571-wave0-receipt-2026-11-07.md`.
+- **Wave 1 pushed:** tip `7eacac3e` — CR-01/04/05/06/07, mutator CR-02/03, CR-08/GAP-08 tests; scoped diff **83,633 B** `e142246e…`; v5 **22**, resolver+soul **92**, endpoint **149**. Plan doc **ready wave 1**. No merge/deploy.
+
+## 2026-11-07 — PR #1571 Wave 2 (DIT-02/DIT-03)
+
+- **Wave 2:** `loop_health.py` worker-ok over web failure; daemon watcher assert fix in `test_resolver_revive.py`; pytest proofs (endpoint **149**, loop+revive **48**, scheduler **76**). Store: `internal/pr1571-wave2-review-triage-2026-11-07.md`, `internal/pr1571-wave1-evidence-2026-11-07.md`.
+- **Replit handoff:** short PR comment supersedes [#6700529886](https://github.com/cryptoreporthub/subnet-dashboard/pull/1571#issuecomment-6700529886); suggest `@ditto review` on tip (no in-repo trigger found). CI pending post-push. No merge/deploy.
