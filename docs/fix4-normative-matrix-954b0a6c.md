@@ -37,7 +37,7 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | Reader | Exact assert | Forbidden |
 |--------|--------------|-----------|
 | **`postGateCheck`** (dedupe hit + open **`workingCheck`**) | `conclude` **`action_required`**; output.title **`Gate waiting`**; output.summary **includes** **`record-version-mismatch, recompute due`** (R-D10); **`CheckPost` === `posted`** | **`success`**, **`unchanged`**, dedupe **`kv.put`** while record invalid |
-| **`pairSuiteReady`** | return **`false`** (`boolean`) | **`true`** |
+| **`pairSuiteReady`** | return **`false`** (`boolean`); on delivery (`advance` tag/ask): **`skipped:stale-pair`**; **no** tag/ask | **`true`**; tag/ask posted |
 | **`readGateState`** | suite path **not** `clean`/`carried`; **`next === "run_suite"`** for seeded verdicts | **`next === "mergeable"`** with suite presented as clean/carried |
 | **`compare_suite_runs`** carry | **`recorded: false`**, **`carried: false`**, **`clean: false`**; **`reason`** per variant row above | **`recorded: true`**, **`carried: true`**, **`clean: true`** |
 | **`check_gate_state` tool** | Fields present: **`headSha`**, **`next`**, **`suite`**, **`baseAvailable`**; **`baseAvailable === true`** when observation is **`ReadyPair`**; **`next === "run_suite"`**; **`suite`** not `clean`/`carried` | `next === "mergeable"` as green; invented **`ok`** field |
@@ -78,6 +78,8 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | **RD-09** | Compare inputs | `advanceGate` persistence | `gateSuiteRecord` includes **`compareReady`** | Omitted |
 | **RD-10** | Schema / recompute | record path | **`record-version-mismatch, recompute due`** then **`recomputed`** after repair | Silent carry |
 
+**RD-03 vs §9 dedupe:** **RD-03** is the **skip-only / dedupe-hit** path (reuse terminal, no redundant dedupe write). **§9** recovery rows (e.g. admission recovery) assume a **confirmed non-cancel conclude** and **posted** terminal — plan allows **one** `kv.put(dedupeKey)` **only after** that confirmed conclude, not on skip-only (see accepted plan §5–§6).
+
 ---
 
 ## 11. Acceptance matrix B — validated readers (**VR-pgc-01..03**, etc.) — **no proxy “equivalent”**
@@ -89,9 +91,9 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | **VR-pgc-01** | V1 | `postGateCheck` | **`action_required`**; title **Gate waiting**; summary has **record-version-mismatch, recompute due**; **posted** | **success**; **unchanged**; dedupe put while invalid |
 | **VR-pgc-02** | V2 | `postGateCheck` | same pattern as §8 V0 row | same |
 | **VR-pgc-03** | V3 | `postGateCheck` | same pattern as §8 V0 row | clean/carry success |
-| **VR-psr-01** | V1 | `pairSuiteReady` | **`false`** | **`true`** |
-| **VR-psr-02** | V2 | `pairSuiteReady` | **`false`** | **`true`** |
-| **VR-psr-03** | V3 | `pairSuiteReady` | **`false`** | **`true`** |
+| **VR-psr-01** | V1 | `pairSuiteReady` | **`false`**; delivery **`skipped:stale-pair`**, no tag/ask | **`true`**; tag/ask |
+| **VR-psr-02** | V2 | `pairSuiteReady` | same | same |
+| **VR-psr-03** | V3 | `pairSuiteReady` | same | same |
 | **VR-rgs-01** | V1 | `readGateState` | **`next === "run_suite"`**; suite not clean/carried | **`next === "mergeable"`** |
 | **VR-rgs-02** | V2 | `readGateState` | same | same |
 | **VR-rgs-03** | V3 | `readGateState` | same | same |
