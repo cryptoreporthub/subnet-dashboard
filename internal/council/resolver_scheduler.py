@@ -724,8 +724,8 @@ class PredictionResolverScheduler:
         with self._lock:
             if self._tick_run_id is None:
                 self._tick_run_id = SchedulerRunId(str(uuid.uuid4()))
-        # Synchronous path: do not apply scheduled-callback stale/active guards (CR-04).
-        return self._tick(None)
+        # Synchronous path: bypass scheduled-callback stale/active guards (CR-04).
+        return self._tick(None, sync_manual=True)
 
     def _liveness_ok(self) -> bool:
         """True iff the age-derived tracker status is currently ok."""
@@ -767,13 +767,20 @@ class PredictionResolverScheduler:
 
         schedule_in_seconds(job_id, _run, seconds)
 
-    def _tick(self, expected_run_id: Optional[SchedulerRunId] = None) -> Dict[str, Any]:
+    def _tick(
+        self,
+        expected_run_id: Optional[SchedulerRunId] = None,
+        *,
+        sync_manual: bool = False,
+    ) -> Dict[str, Any]:
         """Run one resolution cycle and reschedule.
 
         Armed APScheduler callbacks pass ``expected_run_id``; they must match
-        ``_tick_run_id`` and ``_active``. ``run_once()`` (revive) passes ``None``
-        and is trusted only while the scheduler is ``_active`` — owner generation
-        is published under ``_release_guard`` on acquire, not re-checked here.
+        ``_tick_run_id`` and ``_active``. ``run_once()`` passes ``None`` with
+        ``sync_manual=True`` and may run a cycle without ``start()``. A direct
+        ``_tick()`` / ``_tick(None)`` after ``stop()`` stays stale when
+        ``not _active`` and ``sync_manual`` is false. Owner generation is
+        published under ``_release_guard`` on acquire, not re-checked here.
         """
         with self._lock:
             if self._active and self._tick_run_id is None:
@@ -790,7 +797,7 @@ class PredictionResolverScheduler:
                     }
         else:
             with self._lock:
-                if not self._active:
+                if not self._active and not sync_manual:
                     return {
                         "run_at": _now_iso(),
                         "skipped": "stale_scheduler_run",
