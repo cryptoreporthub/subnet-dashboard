@@ -6,6 +6,7 @@ import { advanceGate, commentReviewTurn, commentTurn, failureReleasesLease, logA
 import { suiteKey } from "../bot/lib/gh.js";
 import { checkHoldFingerprint, prKey, replitAskKey, replitTagKey, reviewTurnKey, type GateState } from "../bot/lib/gate.js";
 import { LEASE_MS, leaseToken, releaseLeaseIfHolder } from "../bot/lib/lock.js";
+import { replitQuestion } from "../bot/lib/replit.js";
 import { marker } from "../bot/lib/verdicts.js";
 import { JUNIT_ARTIFACT, type RunnerReader } from "../bot/lib/runner.js";
 import { deflateRawSync } from "node:zlib";
@@ -410,6 +411,37 @@ test("a tag that was posted is followed by the Replit ask", async () => {
   await reviewEventTurn(w.deps);
   assert.ok(w.posted.some((body) => body.includes("@replit review")));
   assert.equal(w.asks(), 1);
+});
+
+test("ditto r4478441041: Replit ask binds to delivery headSha, not a later live read", async () => {
+  const w = readyForReplit();
+  let question = "";
+  const askMcp = w.deps.mcp;
+  w.deps.mcp = {
+    names: () => askMcp.names(),
+    listTools: () => askMcp.listTools("replit"),
+    callTool: async (_conn: string, _tool: string, args: { question?: string }) => {
+      question = String(args.question ?? "");
+      return { isError: false, content: [{ type: "text", text: "ok" }] };
+    },
+  } as unknown as HostMcpRegistry;
+  let pullGets = 0;
+  const baseGet = w.deps.octokit.rest.pulls.get.bind(w.deps.octokit.rest.pulls);
+  const getPatched = async (
+    params?: Parameters<typeof baseGet>[0],
+  ): Promise<Awaited<ReturnType<typeof baseGet>>> => {
+    pullGets += 1;
+    const reply = await baseGet(params);
+    if (pullGets >= 12) {
+      return { ...reply, data: { ...reply.data, head: { ...reply.data.head, sha: NEW_HEAD } } };
+    }
+    return reply;
+  };
+  w.deps.octokit.rest.pulls.get = Object.assign(getPatched, baseGet) as typeof baseGet;
+  await reviewEventTurn(w.deps);
+  assert.equal(question, replitQuestion(REF.number, HEAD));
+  assert.ok(w.store.has(replitAskKey(REF, HEAD)));
+  assert.equal(w.store.has(replitAskKey(REF, NEW_HEAD)), false);
 });
 
 test("a tag that failed to post is not followed by the Replit ask", async () => {

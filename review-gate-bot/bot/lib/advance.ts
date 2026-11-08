@@ -371,15 +371,15 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
               octokit,
               kv,
               ref,
-              headSha: live.headSha,
+              headSha,
               baseTipSha: live.baseTipSha,
               alignedPair: expectedPair,
             }))
           ) {
             return "skipped:stale-pair";
           }
-          const ask = await askReplitOnce({ kv, mcp, ref, headSha: live.headSha });
-          logAsk(ask, prKey(ref), live.headSha);
+          const ask = await askReplitOnce({ kv, mcp, ref, headSha });
+          logAsk(ask, prKey(ref), headSha);
           return askLabel(ask);
         })
       : "skipped";
