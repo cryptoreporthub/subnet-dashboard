@@ -10,7 +10,11 @@
 | Tracking issue | [#1573](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573) |
 | Implementation PR | [#1522](https://github.com/cryptoreporthub/subnet-dashboard/pull/1522) |
 
-**Still gated:** Ditto + Replit + Claude **PASS** on issue #1573 v4 body; Joshua per-task GO before any Fix-4 task execution.
+**Still gated:** Ditto + Replit + Claude **PASS** on issue #1573 **v5** body; Joshua per-task GO before any Fix-4 task execution.
+
+**Doc-only PR [#1574](https://github.com/cryptoreporthub/subnet-dashboard/pull/1574):** no `fly-deploy` / no production deploy. Committed file byte `sha256` vs accepted plan `954b0a6c…` stated on PR comment when updated.
+
+**Full-suite admissibility (Tasks 1 & 3c):** `pytest-junit` for exact head **and** workflow **Run full suite** step **success**. Cancelled suite step with artifact (e.g. `c1298fdc` run `42430270854`) is **not** a tranche baseline.
 
 ---
 
@@ -37,8 +41,8 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | Reader | Exact assert | Forbidden |
 |--------|--------------|-----------|
 | **`postGateCheck`** (dedupe hit + open **`workingCheck`**) | `conclude` **`action_required`**; output.title **`Gate waiting`**; output.summary **includes** **`record-version-mismatch, recompute due`** (R-D10); **`CheckPost` === `posted`** | **`success`**, **`unchanged`**, dedupe **`kv.put`** while record invalid |
-| **`pairSuiteReady`** | return **`false`** (`boolean`); on delivery (`advance` tag/ask): **`skipped:stale-pair`**; **no** tag/ask | **`true`**; tag/ask posted |
-| **`readGateState`** | suite path **not** `clean`/`carried`; **`next === "run_suite"`** for seeded verdicts | **`next === "mergeable"`** with suite presented as clean/carried |
+| **`pairSuiteReady`** | return **`false`**; **`tag-replit`** + **`ask-replit`** → **`skipped:stale-pair`**; **no** tag/ask side effects; header names **`alignedPair`** + false branch (`advance.ts:131–157`) | **`true`**; tag/ask posted |
+| **`readGateState`** | **`next === "run_suite"`**; **`suiteDetail` === `record-version-mismatch, recompute due`** (per V1–V3); suite not `clean`/`carried`; **`baseAvailable === true`** on `ReadyPair` (`mergeBaseSha`, not `baseSha`) | **`next === "mergeable"`**; detail omitted |
 | **`compare_suite_runs`** carry | **`recorded: false`**, **`carried: false`**, **`clean: false`**; **`reason`** per variant row above | **`recorded: true`**, **`carried: true`**, **`clean: true`** |
 | **`check_gate_state` tool** | Fields present: **`headSha`**, **`next`**, **`suite`**, **`baseAvailable`**; **`baseAvailable === true`** when observation is **`ReadyPair`**; **`next === "run_suite"`**; **`suite`** not `clean`/`carried` | `next === "mergeable"` as green; invented **`ok`** field |
 
@@ -91,12 +95,12 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | **VR-pgc-01** | V1 | `postGateCheck` | **`action_required`**; title **Gate waiting**; summary has **record-version-mismatch, recompute due**; **posted** | **success**; **unchanged**; dedupe put while invalid |
 | **VR-pgc-02** | V2 | `postGateCheck` | same pattern as §8 V0 row | same |
 | **VR-pgc-03** | V3 | `postGateCheck` | same pattern as §8 V0 row | clean/carry success |
-| **VR-psr-01** | V1 | `pairSuiteReady` | **`false`**; delivery **`skipped:stale-pair`**, no tag/ask | **`true`**; tag/ask |
-| **VR-psr-02** | V2 | `pairSuiteReady` | same | same |
-| **VR-psr-03** | V3 | `pairSuiteReady` | same | same |
-| **VR-rgs-01** | V1 | `readGateState` | **`next === "run_suite"`**; suite not clean/carried | **`next === "mergeable"`** |
-| **VR-rgs-02** | V2 | `readGateState` | same | same |
-| **VR-rgs-03** | V3 | `readGateState` | same | same |
+| **VR-psr-01** | V1 | `pairSuiteReady` (**delivery**) | **`false`** (trusted-record branch); **`skipped:stale-pair`** tag+ask; no side effects; **`alignedPair` absent** in header | **`true`**; tag/ask |
+| **VR-psr-02** | V2 | `pairSuiteReady` (**delivery**) | same pattern; wrong `mergeBaseSha` variant | same |
+| **VR-psr-03** | V3 | `pairSuiteReady` (**delivery**) | same pattern; stale `schemaVersion` variant | same |
+| **VR-rgs-01** | V1 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due`**; record absent | **`mergeable`**; wrong detail |
+| **VR-rgs-02** | V2 | `readGateState` (**gate-state**) | same **`suiteDetail`**; wrong `mergeBaseSha` | same |
+| **VR-rgs-03** | V3 | `readGateState` (**gate-state**) | same **`suiteDetail`**; stale `schemaVersion` | same |
 | **VR-csr-01** | V1 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
 | **VR-csr-02** | V2 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
 | **VR-csr-03** | V3 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "record-version-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |

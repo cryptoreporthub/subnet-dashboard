@@ -335,3 +335,8 @@
 
 - Issue #1573 body v4: junit artifact bar, 19cd8e00 Ditto review, VR-rgs dual strategy, GO line, docs/ matrix BLOCKED until Joshua GO.
 - Store plan `plan-1522-fix4-three-task-gated-2026-11-07.md` v4 synced. Await Ditto+Replit+Claude PASS. No Fix-4 execution.
+
+## 2026-11-07 — #1573 Fix-4 plan v5 (Ditto body-v4 REVISE folded)
+
+- Issue #1573 body v5: VR-rgs per-row `suiteDetail`, fixture level/`mergeBaseSha`, VR-psr tag+ask+branches, `19cd8e00` ledger fix, full-suite requires successful test step (`c1298fdc` cancelled artifact ≠ baseline).
+- Store plan v5 + `docs/fix4-normative-matrix-954b0a6c.md` on PR #1574 (doc-only). Await Ditto+Replit+Claude PASS. No Fix-4 execution.
