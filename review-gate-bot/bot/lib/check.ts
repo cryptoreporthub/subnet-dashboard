@@ -12,6 +12,7 @@ import {
   takeGithubMutation,
   takeCreateCheck,
   takeRevalidationRead,
+  type BaseUnavailable,
   type DeliveryBudget,
   type PairObservation,
   type ReadyPair,
@@ -143,6 +144,128 @@ function pairObsSummary(obs: PairObservation): string {
   return "ready";
 }
 
+function baseUnavailableMatchesExpected(obs: BaseUnavailable, expected: ReadyPair): boolean {
+  return (
+    obs.prNumber === expected.prNumber &&
+    obs.headSha === expected.headSha &&
+    obs.baseTipSha === expected.baseTipSha
+  );
+}
+
+type BaseUnavailableAdmission =
+  | { tag: "ready"; obs: ReadyPair }
+  | { tag: "post"; baseTipSha: string }
+  | { tag: "return"; outcome: CheckPost };
+
+async function resolveBaseUnavailableAdmission(input: {
+  admission: BaseUnavailable;
+  expected: ReadyPair;
+  workingCheck: GateCheckHandle | undefined;
+  budget: DeliveryBudget;
+  ref: PrRef;
+  octokit: Octokit;
+}): Promise<BaseUnavailableAdmission> {
+  const { admission, expected, workingCheck, budget, ref, octokit } = input;
+
+  const driftOutcome = async (summary: string): Promise<BaseUnavailableAdmission> => {
+    if (workingCheck === undefined) {
+      return { tag: "return", outcome: "stale-head" };
+    }
+    const ok = await concludeCancelled(
+      workingCheck,
+      budget,
+      ref,
+      { title: SUPERSEDED_TITLE, summary },
+      expected,
+    );
+    return { tag: "return", outcome: ok ? "stale-head" : "finalization-unresolved" };
+  };
+
+  if (!baseUnavailableMatchesExpected(admission, expected)) {
+    return driftOutcome("Pair drift at admission (base-unavailable).");
+  }
+
+  if (!takeAdmissionRead(budget)) {
+    if (workingCheck !== undefined) {
+      const ok = await concludeCancelled(
+        workingCheck,
+        budget,
+        ref,
+        { title: PAIR_UNVERIFIABLE_TITLE, summary: "Revalidation read budget exhausted (base-unavailable)." },
+        expected,
+      );
+      return { tag: "return", outcome: ok ? "pair-unverifiable" : "finalization-unresolved" };
+    }
+    return { tag: "return", outcome: "pair-unverifiable" };
+  }
+
+  const rev = await observePair(octokit, ref);
+  if (rev.kind === "ready") {
+    if (pairsEqual(rev, expected)) {
+      return { tag: "ready", obs: rev };
+    }
+    return driftOutcome("Pair drift on revalidation (base-unavailable).");
+  }
+  if (rev.kind === "base-unavailable") {
+    if (!baseUnavailableMatchesExpected(rev, expected)) {
+      return driftOutcome("Pair drift on revalidation (base-unavailable).");
+    }
+    return { tag: "post", baseTipSha: rev.baseTipSha };
+  }
+  if (workingCheck !== undefined) {
+    const ok = await concludeCancelled(
+      workingCheck,
+      budget,
+      ref,
+      { title: PAIR_UNVERIFIABLE_TITLE, summary: `revalidation · ${pairObsSummary(rev)}` },
+      expected,
+    );
+    return { tag: "return", outcome: ok ? "pair-unverifiable" : "finalization-unresolved" };
+  }
+  return { tag: "return", outcome: "pair-unverifiable" };
+}
+
+async function postMergeBaseUnavailable(input: {
+  expected: ReadyPair;
+  baseTipSha: string;
+  workingCheck: GateCheckHandle | undefined;
+  budget: DeliveryBudget;
+  ref: PrRef;
+  read: () => Promise<GateState>;
+  createCheck: CreateCheck;
+}): Promise<CheckPost> {
+  const stateEarly = await input.read();
+  if (stateEarly.headSha !== input.expected.headSha) {
+    if (input.workingCheck === undefined) {
+      return "stale-head";
+    }
+    const ok = await concludeCancelled(
+      input.workingCheck,
+      input.budget,
+      input.ref,
+      { title: SUPERSEDED_TITLE, summary: "Gate state head drift (base-unavailable)." },
+      input.expected,
+    );
+    return ok ? "stale-head" : "finalization-unresolved";
+  }
+  const check =
+    input.workingCheck ??
+    (takeCreateCheck(input.budget)
+      ? await input.createCheck({ name: CHECK_NAME, sha: input.expected.headSha })
+      : undefined);
+  const out = await concludeActionRequiredMergeBase(
+    check,
+    input.budget,
+    input.ref,
+    {
+      title: MERGE_BASE_UNAVAILABLE_TITLE,
+      summary: `${summaryOf(stateEarly, input.baseTipSha)} · merge-base-absent`,
+    },
+    input.expected,
+  );
+  return out === "confirmed" ? "posted" : "finalization-unresolved";
+}
+
 /** Exported for RD-02 (distinct Compare blocked vs other waiting titles). */
 export function terminalTitle(state: GateState, conclusion: GateConclusion): string {
   if (state.next === "needs_joshua") {
@@ -254,17 +377,14 @@ async function concludeNonCancelTerminal(input: {
     }
     return "finalization-unresolved";
   }
-  if (workingCheck !== undefined) {
-    const ok = await concludeCancelled(
-      workingCheck,
-      budget,
-      ref,
-      { title: PAIR_UNVERIFIABLE_TITLE, summary: `revalidation · ${pairObsSummary(rev)}` },
-      obs,
-    );
-    return ok ? "pair-unverifiable" : "finalization-unresolved";
-  }
-  return "finalization-unresolved";
+  const ok = await concludeCancelled(
+    handle,
+    budget,
+    ref,
+    { title: PAIR_UNVERIFIABLE_TITLE, summary: `revalidation · ${pairObsSummary(rev)}` },
+    obs,
+  );
+  return ok ? "pair-unverifiable" : "finalization-unresolved";
 }
 
 async function concludeActionRequiredMergeBase(
@@ -383,20 +503,29 @@ export async function postGateCheck(input: {
         );
         return ok ? "stale-head" : "finalization-unresolved";
       } else if (a1.kind === "base-unavailable") {
-        const stateEarly = await read();
-        const check =
-          workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: stateEarly.headSha }) : undefined);
-        const out = await concludeActionRequiredMergeBase(
-          check,
+        const resolved = await resolveBaseUnavailableAdmission({
+          admission: a1,
+          expected,
+          workingCheck,
           budget,
           ref,
-          {
-            title: MERGE_BASE_UNAVAILABLE_TITLE,
-            summary: `${summaryOf(stateEarly, a1.baseTipSha)} · merge-base-absent`,
-          },
-          expected,
-        );
-        return out === "confirmed" ? "posted" : "finalization-unresolved";
+          octokit,
+        });
+        if (resolved.tag === "ready") {
+          obs = resolved.obs;
+        } else if (resolved.tag === "return") {
+          return resolved.outcome;
+        } else {
+          return postMergeBaseUnavailable({
+            expected,
+            baseTipSha: resolved.baseTipSha,
+            workingCheck,
+            budget,
+            ref,
+            read,
+            createCheck,
+          });
+        }
       } else {
         if (takeAdmissionRead(budget)) {
           const a2 = await observePair(octokit, ref);
@@ -415,20 +544,29 @@ export async function postGateCheck(input: {
             );
             return ok ? "stale-head" : "finalization-unresolved";
           } else if (a2.kind === "base-unavailable") {
-            const stateEarly = await read();
-            const check =
-              workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: stateEarly.headSha }) : undefined);
-            const out = await concludeActionRequiredMergeBase(
-              check,
+            const resolved = await resolveBaseUnavailableAdmission({
+              admission: a2,
+              expected,
+              workingCheck,
               budget,
               ref,
-              {
-                title: MERGE_BASE_UNAVAILABLE_TITLE,
-                summary: `${summaryOf(stateEarly, a2.baseTipSha)} · merge-base-absent`,
-              },
-              expected,
-            );
-            return out === "confirmed" ? "posted" : "finalization-unresolved";
+              octokit,
+            });
+            if (resolved.tag === "ready") {
+              obs = resolved.obs;
+            } else if (resolved.tag === "return") {
+              return resolved.outcome;
+            } else {
+              return postMergeBaseUnavailable({
+                expected,
+                baseTipSha: resolved.baseTipSha,
+                workingCheck,
+                budget,
+                ref,
+                read,
+                createCheck,
+              });
+            }
           } else {
             if (workingCheck !== undefined) {
               const ok = await concludeCancelled(

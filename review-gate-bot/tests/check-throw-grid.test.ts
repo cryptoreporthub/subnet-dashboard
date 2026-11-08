@@ -421,6 +421,107 @@ test("RD-03: dedupe unchanged with open workingCheck does not leave extra conclu
   assert.equal(w.checks.filter((c) => c.conclusion === "action_required").length, 1);
 });
 
+test("Ditto TC-base-unavail-admit-mismatch-no-handle: stale-head, no merge-base blocker", async () => {
+  const w = world([MOVED], [MERGE], [BASE], [null]);
+  const outcome = await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "stale-head");
+  assert.equal(w.checks.length, 0);
+});
+
+test("Ditto TC-base-unavail-admit-mismatch: mismatched base-unavailable cancels workingCheck", async () => {
+  const w = world([MOVED], [MERGE], [BASE], [null]);
+  const workingCheck = await w.deps.createCheck({ name: CHECK_NAME, sha: HEAD });
+  const outcome = await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    workingCheck,
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "stale-head");
+  assert.equal(w.checks.length, 1);
+  assert.equal(w.checks[0]?.conclusion, "cancelled");
+});
+
+test("Ditto TC-base-unavail-admit-post: merge-base-absent posts on expectedPair head sha", async () => {
+  const w = world([HEAD], [MERGE], [BASE], [null, null]);
+  const outcome = await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "posted");
+  assert.equal(w.checks.length, 1);
+  assert.equal(w.checks[0]?.sha, HEAD);
+  assert.equal(w.checks[0]?.conclusion, "action_required");
+});
+
+test("Ditto TC-base-unavail-reval-drift: revalidation drift stale-head, no blocker", async () => {
+  const w = world([HEAD, MOVED], [MERGE, MERGE], [BASE, BASE], [null, null]);
+  const outcome = await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "stale-head");
+  assert.equal(w.checks.length, 0);
+});
+
+test("Ditto TC-base-unavail-admit2-post: second-admission base-unavailable branch fenced", async () => {
+  setDeliveryBudgetFactory(() => ({
+    admissionReads: 3,
+    finalFenceReads: 2,
+    revalidationReads: 1,
+    githubMutations: 2,
+    createCheckCount: 1,
+  }));
+  try {
+    const w = world([HEAD, HEAD, HEAD], [MERGE, MERGE, MERGE], [BASE, BASE, BASE], [null, null, null], {
+      compareThrowOnCall: [0],
+    });
+    const outcome = await postGateCheck({
+      ...w.deps,
+      expectedPair: deliveryPair(),
+      ...same(state("await_cursor_ditto")),
+    });
+    assert.equal(outcome, "posted");
+    assert.equal(w.checks.length, 1);
+    assert.equal(w.checks[0]?.sha, HEAD);
+    assert.equal(w.checks[0]?.conclusion, "action_required");
+  } finally {
+    resetDeliveryBudgetFactory();
+  }
+});
+
+test("Ditto TC-reval-readfail-no-working: unreadable revalidation cancels created handle", async () => {
+  setDeliveryBudgetFactory(() => ({
+    admissionReads: 2,
+    finalFenceReads: 2,
+    revalidationReads: 1,
+    githubMutations: 2,
+    createCheckCount: 1,
+  }));
+  try {
+    const w = world([HEAD], [MERGE], [BASE], [MERGE, MERGE], { compareThrowOnCall: [2] });
+    seedClean(w, state("mergeable"));
+    const createCheck = createCheckFlakyConclude(w.deps.createCheck, 1);
+    const outcome = await postGateCheck({
+      ...w.deps,
+      createCheck,
+      expectedPair: deliveryPair(),
+      ...same(state("mergeable")),
+    });
+    assert.equal(outcome, "pair-unverifiable");
+    assert.equal(w.checks.length, 1);
+    assert.equal(w.checks[0]?.conclusion, "cancelled");
+  } finally {
+    resetDeliveryBudgetFactory();
+  }
+});
+
 test("TC-open-update-fail: in_progress update throw still returns working handle for postGateCheck", async () => {
   const budget = newDeliveryBudget();
   const w = world([HEAD]);
