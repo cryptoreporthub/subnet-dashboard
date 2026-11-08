@@ -185,7 +185,7 @@ async function resolveBaseUnavailableAdmission(input: {
     return driftOutcome("Pair drift at admission (base-unavailable).");
   }
 
-  if (!takeAdmissionRead(budget)) {
+  if (!takeRevalidationRead(budget)) {
     if (workingCheck !== undefined) {
       const ok = await concludeCancelled(
         workingCheck,
@@ -231,6 +231,7 @@ async function postMergeBaseUnavailable(input: {
   workingCheck: GateCheckHandle | undefined;
   budget: DeliveryBudget;
   ref: PrRef;
+  octokit: Octokit;
   read: () => Promise<GateState>;
   createCheck: CreateCheck;
 }): Promise<CheckPost> {
@@ -248,6 +249,69 @@ async function postMergeBaseUnavailable(input: {
     );
     return ok ? "stale-head" : "finalization-unresolved";
   }
+
+  if (!takeRevalidationRead(input.budget)) {
+    if (input.workingCheck !== undefined) {
+      const ok = await concludeCancelled(
+        input.workingCheck,
+        input.budget,
+        input.ref,
+        { title: PAIR_UNVERIFIABLE_TITLE, summary: "Revalidation read budget exhausted before merge-base post." },
+        input.expected,
+      );
+      return ok ? "pair-unverifiable" : "finalization-unresolved";
+    }
+    return "pair-unverifiable";
+  }
+
+  const live = await observePair(input.octokit, input.ref);
+  if (live.kind === "ready") {
+    if (input.workingCheck === undefined) {
+      return "stale-head";
+    }
+    const ok = await concludeCancelled(
+      input.workingCheck,
+      input.budget,
+      input.ref,
+      {
+        title: SUPERSEDED_TITLE,
+        summary: pairsEqual(live, input.expected)
+          ? "Merge base available before post."
+          : "Pair drift before merge-base post.",
+      },
+      input.expected,
+    );
+    return ok ? "stale-head" : "finalization-unresolved";
+  }
+  if (live.kind === "base-unavailable") {
+    if (!baseUnavailableMatchesExpected(live, input.expected)) {
+      if (input.workingCheck === undefined) {
+        return "stale-head";
+      }
+      const ok = await concludeCancelled(
+        input.workingCheck,
+        input.budget,
+        input.ref,
+        { title: SUPERSEDED_TITLE, summary: "Base tip drift before merge-base post." },
+        input.expected,
+      );
+      return ok ? "stale-head" : "finalization-unresolved";
+    }
+  } else {
+    if (input.workingCheck !== undefined) {
+      const ok = await concludeCancelled(
+        input.workingCheck,
+        input.budget,
+        input.ref,
+        { title: PAIR_UNVERIFIABLE_TITLE, summary: `revalidation · ${pairObsSummary(live)}` },
+        input.expected,
+      );
+      return ok ? "pair-unverifiable" : "finalization-unresolved";
+    }
+    return "pair-unverifiable";
+  }
+
+  const postBaseTipSha = live.kind === "base-unavailable" ? live.baseTipSha : input.baseTipSha;
   const check =
     input.workingCheck ??
     (takeCreateCheck(input.budget)
@@ -259,7 +323,7 @@ async function postMergeBaseUnavailable(input: {
     input.ref,
     {
       title: MERGE_BASE_UNAVAILABLE_TITLE,
-      summary: `${summaryOf(stateEarly, input.baseTipSha)} · merge-base-absent`,
+      summary: `${summaryOf(stateEarly, postBaseTipSha)} · merge-base-absent`,
     },
     input.expected,
   );
@@ -522,6 +586,7 @@ export async function postGateCheck(input: {
             workingCheck,
             budget,
             ref,
+            octokit,
             read,
             createCheck,
           });
@@ -563,6 +628,7 @@ export async function postGateCheck(input: {
                 workingCheck,
                 budget,
                 ref,
+                octokit,
                 read,
                 createCheck,
               });

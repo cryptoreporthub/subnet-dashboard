@@ -18,6 +18,7 @@ const MOVED = "b".repeat(40);
 const BASE = "c".repeat(40);
 const MERGE = "e".repeat(40);
 const OTHER_MERGE = "d".repeat(40);
+const OTHER_TIP = "f".repeat(40);
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 
 function deliveryPair(): ReadyPair {
@@ -447,7 +448,7 @@ test("Ditto TC-base-unavail-admit-mismatch: mismatched base-unavailable cancels 
 });
 
 test("Ditto TC-base-unavail-admit-post: merge-base-absent posts on expectedPair head sha", async () => {
-  const w = world([HEAD], [MERGE], [BASE], [null, null]);
+  const w = world([HEAD, HEAD, HEAD], [MERGE, MERGE, MERGE], [BASE, BASE, BASE], [null, null, null]);
   const outcome = await postGateCheck({
     ...w.deps,
     expectedPair: deliveryPair(),
@@ -457,6 +458,28 @@ test("Ditto TC-base-unavail-admit-post: merge-base-absent posts on expectedPair 
   assert.equal(w.checks.length, 1);
   assert.equal(w.checks[0]?.sha, HEAD);
   assert.equal(w.checks[0]?.conclusion, "action_required");
+});
+
+test("Ditto TC-base-unavail-post-tip-drift: base tip moves after admission revalidation → stale-head", async () => {
+  const w = world([HEAD, HEAD, HEAD], [MERGE, MERGE, MERGE], [BASE, BASE, OTHER_TIP], [null, null, null]);
+  const outcome = await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "stale-head");
+  assert.equal(w.checks.length, 0);
+});
+
+test("Ditto TC-base-unavail-post-merge-ready: merge base appears before post → stale-head, no blocker", async () => {
+  const w = world([HEAD, HEAD, HEAD], [MERGE, MERGE, MERGE], [BASE, BASE, BASE], [null, null, MERGE]);
+  const outcome = await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "stale-head");
+  assert.equal(w.checks.length, 0);
 });
 
 test("Ditto TC-base-unavail-reval-drift: revalidation drift stale-head, no blocker", async () => {
@@ -472,14 +495,19 @@ test("Ditto TC-base-unavail-reval-drift: revalidation drift stale-head, no block
 
 test("Ditto TC-base-unavail-admit2-post: second-admission base-unavailable branch fenced", async () => {
   setDeliveryBudgetFactory(() => ({
-    admissionReads: 3,
+    admissionReads: 2,
     finalFenceReads: 2,
-    revalidationReads: 1,
+    revalidationReads: 2,
     githubMutations: 2,
     createCheckCount: 1,
   }));
   try {
-    const w = world([HEAD, HEAD, HEAD], [MERGE, MERGE, MERGE], [BASE, BASE, BASE], [null, null, null], {
+    const w = world([HEAD, HEAD, HEAD, HEAD], [MERGE, MERGE, MERGE, MERGE], [BASE, BASE, BASE, BASE], [
+      null,
+      null,
+      null,
+      null,
+    ], {
       compareThrowOnCall: [0],
     });
     const outcome = await postGateCheck({
