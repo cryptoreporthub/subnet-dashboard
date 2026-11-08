@@ -330,3 +330,35 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-11-08 — Issue #1573 Fix-4 plan body v7 (`await_replit` + clean-first-read fold)
+
+- **Issue [#1573](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573):** body **v7** — folded Replit [#6720506132](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573#issuecomment-6720506132) + Claude [#6720486204](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573#issuecomment-6720486204) on v6: name **`await_replit`** fixture (existing tag + non-PASS); tag-first ask on **`tag_replit`** separate; clean first **`readGateState`** so **`runSuiteIfDue` not reached** and **`advance.ts:319–324` not exercised**; second stale read only in **`pairSuiteReady`**. **No Fix-4 implementation.**
+- **Store:** `/cursor/stores/self/docs/plan-1522-fix4-three-task-gated-2026-11-07.md` **v7**; fold note `/cursor/stores/self/internal/ditto-1573-v7-fold-2026-11-08.md`.
+- **Normative doc:** PR [#1574](https://github.com/cryptoreporthub/subnet-dashboard/pull/1574) branch `cursor/fix4-normative-matrix-doc-bf03` — §11 psr rows synced (doc-only, **no `fly-deploy`**).
+- **Next:** Replit + Claude **PASS** on body v7; Joshua per-task GO still required before Task 1.
+
+## 2026-11-08 — Issue #1573 Fix-4 plan body v6 (VR-psr reachability fold)
+
+- **Issue [#1573](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573):** body **v6** — folded Replit [#6719674358](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573#issuecomment-6719674358) + Claude [#6720298505](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573#issuecomment-6720298505) on v5: **two-read race** for **VR-psr-01..03**; **tag** vs **ask** cases; **`alignedPair: expectedPair` supplied**; optional **VR-psr-obs** UNRUN. Ditto **PASS** on v5 unchanged. **No Fix-4 implementation.**
+- **Store:** `/cursor/stores/self/docs/plan-1522-fix4-three-task-gated-2026-11-07.md` **v6**; fold note `/cursor/stores/self/internal/ditto-1573-v6-fold-2026-11-08.md`.
+- **Normative doc:** PR [#1574](https://github.com/cryptoreporthub/subnet-dashboard/pull/1574) branch `cursor/fix4-normative-matrix-doc-bf03` — §11 psr rows synced (doc-only, **no `fly-deploy`**).
+- **Next:** Replit + Claude **PASS** on body v6; Joshua per-task GO still required before Task 1.
+
+## 2026-11-08 — #1573 Fix-4 plan v4 (Ditto + Replit + Claude REVISE folded)
+
+- Issue #1573 body v4: junit artifact bar, 19cd8e00 Ditto review, VR-rgs dual strategy, GO line, docs/ matrix BLOCKED until Joshua GO.
+- Store plan `plan-1522-fix4-three-task-gated-2026-11-07.md` v4 synced. Await Ditto+Replit+Claude PASS. No Fix-4 execution.
+
+## 2026-11-07 — #1573 Fix-4 plan v5 (Ditto body-v4 REVISE folded)
+
+- Issue #1573 body v5: VR-rgs per-row `suiteDetail`, fixture level/`mergeBaseSha`, VR-psr tag+ask+branches, `19cd8e00` ledger fix, full-suite requires successful test step (`c1298fdc` cancelled artifact ≠ baseline).
+- Store plan v5 + `docs/fix4-normative-matrix-954b0a6c.md` on PR #1574 (doc-only). Await Ditto+Replit+Claude PASS. No Fix-4 execution.
+
+## 2026-11-08 — #1574 CodeRabbit `baseAvailable` doc boundary
+
+- Matrix + #1573 v5: `baseAvailable` asserts limited to `check_gate_state` tool only (`readGateState` has no such field @ `c1298fdc`); VR-psr header `alignedPair` supplied/absent clarified.
+
+## 2026-11-08 — #1574 CodeRabbit VR-rgs `suiteDetail` strings
+
+- Matrix §8/§11 + #1573 v5 VR-rgs-01/02: V1/V2 `suiteDetail` = `record-version-mismatch, recompute due · merge-base-mismatch` (`gh.ts:513–516` @ `c1298fdc`); V3 unchanged short string. `alignedPair` footnote: production passes `expectedPair` @ `advance.ts:351/376`; VR-psr tranche-2 headers intentionally absent. Doc-only #1574; no Fix-4 on #1522.
