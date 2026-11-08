@@ -1796,6 +1796,49 @@ def test_revoke_wins_orphan_aborts(tmp_path, monkeypatch):
     assert "last_cycle" not in data.get("prediction_resolver_scheduler", {})
 
 
+def test_persist_rejects_owned_write_after_abandon_between_entry_and_mutator(
+    tmp_path, monkeypatch
+):
+    """persist-1724: entry passed with valid gen; abandon clears gen before mutator."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+    from internal.ops.mutation_log import make_resolver_cycle_id
+    from internal.store import soul_map_io
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    rid = make_resolver_cycle_id(3, "2026-06-01T13:00:00+00:00")
+    sched._persist_owner_gen = 3
+    real_write = soul_map_io.write_soul_map
+
+    def _write_clear_gen_then_mutate(mutator, path, **kwargs):
+        sched._persist_owner_gen = None
+        return real_write(mutator, path, **kwargs)
+
+    monkeypatch.setattr(
+        resolver_scheduler, "write_soul_map", _write_clear_gen_then_mutate
+    )
+    out = sched._persist_cycle_summary(
+        {
+            "run_at": "2026-06-01T13:00:00+00:00",
+            "ok": True,
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+            "cycle_generation": 3,
+            "resolver_cycle_id": rid,
+            "gap_timing_ms": {"complete": True},
+            "stage_timing_ms": {"total_cycle_ms": 1.0},
+        },
+        owner_gen=3,
+    )
+    assert isinstance(out, resolver_scheduler.PersistResult)
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    prs = data.get("prediction_resolver_scheduler", {})
+    assert "last_cycle" not in prs
+
+
 def test_persist_rejects_owned_write_when_owner_revoked(tmp_path, monkeypatch):
     """CR-05: non-force owned persist fails when _persist_owner_gen was revoked."""
     soul = tmp_path / "soul_map.json"
