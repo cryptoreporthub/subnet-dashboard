@@ -340,3 +340,7 @@
 
 - Issue #1573 body v5: VR-rgs per-row `suiteDetail`, fixture level/`mergeBaseSha`, VR-psr tag+ask+branches, `19cd8e00` ledger fix, full-suite requires successful test step (`c1298fdc` cancelled artifact ≠ baseline).
 - Store plan v5 + `docs/fix4-normative-matrix-954b0a6c.md` on PR #1574 (doc-only). Await Ditto+Replit+Claude PASS. No Fix-4 execution.
+
+## 2026-11-08 — #1574 CodeRabbit `baseAvailable` doc boundary
+
+- Matrix + #1573 v5: `baseAvailable` asserts limited to `check_gate_state` tool only (`readGateState` has no such field @ `c1298fdc`); VR-psr header `alignedPair` supplied/absent clarified.
