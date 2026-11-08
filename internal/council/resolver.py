@@ -1052,13 +1052,16 @@ def resolve_prediction(
             _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
             _nudge_signal_weights(prediction, bool(correct), capture=capture)
         else:
-            if not _cycle_writes_revoked_safe():
-                try:
-                    from internal.learning.pump_calibration import maybe_adapt_after_resolve
+            with _cycle_persist_guard_safe():
+                if not _cycle_writes_revoked_safe():
+                    try:
+                        from internal.learning.pump_calibration import (
+                            maybe_adapt_after_resolve,
+                        )
 
-                    maybe_adapt_after_resolve(prediction=prediction)
-                except Exception:
-                    pass
+                        maybe_adapt_after_resolve(prediction=prediction)
+                    except Exception:
+                        pass
         return prediction
     return resolve_prediction_at_horizon(prediction, now=now)
 
@@ -1203,13 +1206,16 @@ def resolve_prediction_at_horizon(
             return prediction
         _nudge_signal_weights(prediction, bool(correct), capture=capture)
     else:
-        if not _cycle_writes_revoked_safe():
-            try:
-                from internal.learning.pump_calibration import maybe_adapt_after_resolve
+        with _cycle_persist_guard_safe():
+            if not _cycle_writes_revoked_safe():
+                try:
+                    from internal.learning.pump_calibration import (
+                        maybe_adapt_after_resolve,
+                    )
 
-                maybe_adapt_after_resolve(prediction=prediction)
-            except Exception:
-                pass
+                    maybe_adapt_after_resolve(prediction=prediction)
+                except Exception:
+                    pass
     return prediction
 
 
