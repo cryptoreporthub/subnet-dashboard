@@ -100,7 +100,7 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 | **VR-psr-03** | V3 | `pairSuiteReady` (**delivery**) | same pattern; stale `schemaVersion` variant | same |
 | **VR-rgs-01** | V1 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due · merge-base-mismatch`**; omit `mergeBaseSha` in record (**no** `baseAvailable` assert) | **`mergeable`**; wrong detail; `baseAvailable` on tool row only |
 | **VR-rgs-02** | V2 | `readGateState` (**gate-state**) | **`run_suite`**; same **`suiteDetail`**; wrong `mergeBaseSha` | same |
-| **VR-rgs-03** | V3 | `readGateState` (**gate-state**) | same **`suiteDetail`**; stale `schemaVersion` | same |
+| **VR-rgs-03** | V3 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due`**; stale `schemaVersion` | **`mergeable`**; wrong detail; `baseAvailable` on tool row only |
 | **VR-csr-01** | V1 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
 | **VR-csr-02** | V2 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "merge-base-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
 | **VR-csr-03** | V3 | `compare_suite_runs` carry | **`recorded: false`**, **`reason: "record-version-mismatch"`**, **`carried: false`**, **`clean: false`** | carry success |
