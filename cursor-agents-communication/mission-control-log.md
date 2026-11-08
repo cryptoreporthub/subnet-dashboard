@@ -331,6 +331,13 @@
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
 
+## 2026-11-08 — Issue #1573 Fix-4 plan body v6 (VR-psr reachability fold)
+
+- **Issue [#1573](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573):** body **v6** — folded Replit [#6719674358](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573#issuecomment-6719674358) + Claude [#6720298505](https://github.com/cryptoreporthub/subnet-dashboard/issues/1573#issuecomment-6720298505) on v5: **two-read race** for **VR-psr-01..03**; **tag** vs **ask** cases; **`alignedPair: expectedPair` supplied**; optional **VR-psr-obs** UNRUN. Ditto **PASS** on v5 unchanged. **No Fix-4 implementation.**
+- **Store:** `/cursor/stores/self/docs/plan-1522-fix4-three-task-gated-2026-11-07.md` **v6**; fold note `/cursor/stores/self/internal/ditto-1573-v6-fold-2026-11-08.md`.
+- **Normative doc:** PR [#1574](https://github.com/cryptoreporthub/subnet-dashboard/pull/1574) branch `cursor/fix4-normative-matrix-doc-bf03` — §11 psr rows synced (doc-only, **no `fly-deploy`**).
+- **Next:** Replit + Claude **PASS** on body v6; Joshua per-task GO still required before Task 1.
+
 ## 2026-11-08 — #1573 Fix-4 plan v4 (Ditto + Replit + Claude REVISE folded)
 
 - Issue #1573 body v4: junit artifact bar, 19cd8e00 Ditto review, VR-rgs dual strategy, GO line, docs/ matrix BLOCKED until Joshua GO.

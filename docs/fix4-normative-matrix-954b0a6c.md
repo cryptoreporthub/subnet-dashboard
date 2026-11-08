@@ -90,14 +90,17 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 
 **Variants:** **V1** = omit `mergeBaseSha`; **V2** = wrong merge base; **V3** = stale `schemaVersion`. **Expected/Forbidden** — **§8** tables above (15 rows: 5 readers × 3 variants).
 
+**VR-psr reachability (@ `c1298fdc`):** Invalid V1–V3 record **before** the first **`readGateState`** yields **`run_suite`** — tag/ask never run. Normative fixture = **two-read race:** valid **clean** record on gate read → **`tag_replit` / `await_replit` planned**; **`readSuiteRecordTrusted`** inside **`pairSuiteReady`** sees the invalid variant. Production passes **`alignedPair: expectedPair`** (`advance.ts:341–380`).
+
 | Row | Variant | Reader | Expected | Prohibited |
 |-----|---------|--------|----------|------------|
 | **VR-pgc-01** | V1 | `postGateCheck` | **`action_required`**; title **Gate waiting**; summary has **record-version-mismatch, recompute due**; **posted** | **success**; **unchanged**; dedupe put while invalid |
 | **VR-pgc-02** | V2 | `postGateCheck` | same pattern as §8 V0 row | same |
 | **VR-pgc-03** | V3 | `postGateCheck` | same pattern as §8 V0 row | clean/carry success |
-| **VR-psr-01** | V1 | `pairSuiteReady` (**delivery**) | **`false`** (trusted-record branch); **`skipped:stale-pair`** tag+ask; no side effects; **`alignedPair` absent** in header | **`true`**; tag/ask |
-| **VR-psr-02** | V2 | `pairSuiteReady` (**delivery**) | same pattern; wrong `mergeBaseSha` variant | same |
-| **VR-psr-03** | V3 | `pairSuiteReady` (**delivery**) | same pattern; stale `schemaVersion` variant | same |
+| **VR-psr-01** | V1 | `pairSuiteReady` (**delivery**) | Two-read race; **`alignedPair: expectedPair` supplied**; **tag case:** `skipped:stale-pair`, no tag; **ask case:** tag confirmed → `skipped:stale-pair`, no ask; header documents read-by-read sequence | Invalid record only on first gate read; **`true`**; tag/ask posted |
+| **VR-psr-02** | V2 | `pairSuiteReady` (**delivery**) | Same two-read pattern; wrong `mergeBaseSha` variant; tag vs ask split | same |
+| **VR-psr-03** | V3 | `pairSuiteReady` (**delivery**) | Same two-read pattern; stale `schemaVersion` variant; tag vs ask split | same |
+| **VR-psr-obs** | — | `pairSuiteReady` (**delivery**, optional **UNRUN**) | **`alignedPair` absent** recovery-race only — not ordinary ReadyPair path | Claimed as Task 1 default without Joshua GO |
 | **VR-rgs-01** | V1 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due · merge-base-mismatch`**; omit `mergeBaseSha` in record (**no** `baseAvailable` assert) | **`mergeable`**; wrong detail; `baseAvailable` on tool row only |
 | **VR-rgs-02** | V2 | `readGateState` (**gate-state**) | **`run_suite`**; same **`suiteDetail`**; wrong `mergeBaseSha` | same |
 | **VR-rgs-03** | V3 | `readGateState` (**gate-state**) | **`run_suite`**; **`suiteDetail`=`record-version-mismatch, recompute due`**; stale `schemaVersion` | **`mergeable`**; wrong detail; `baseAvailable` on tool row only |
@@ -110,7 +113,7 @@ Notation below: **SHA-A** / **SHA-B** = distinct **40-hex** placeholders. Decisi
 
 **`compare_suite_runs` carry `reason` (normative):** **`merge-base-mismatch`** for **VR-csr-01** (omit merge base) and **VR-csr-02** (wrong merge base); **`record-version-mismatch`** for **VR-csr-03** only.
 
-**`alignedPair` (normative):** `advance.ts` passes **`alignedPair: expectedPair`** when initial delivery observation is **`ReadyPair`** (`advance.ts:351`, `376` @ `c1298fdc`). **VR-psr-01..03** headers intentionally **`alignedPair` absent** to exercise **`observePair`** — not a product omission.
+**`alignedPair` (normative):** `advance.ts` passes **`alignedPair: expectedPair`** when initial delivery observation is **`ReadyPair`** (`advance.ts:341–380` @ `c1298fdc`). **VR-psr-01..03** require **`alignedPair` supplied** (production). **`VR-psr-obs`** is the optional **`alignedPair` absent** / recovery-race row — **UNRUN** unless Joshua orders.
 
 ---
 
