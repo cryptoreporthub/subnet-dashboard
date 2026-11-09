@@ -479,7 +479,10 @@ export async function pullRequestReviewTurn(
   pr: { action: string; draft: boolean; changes?: { base?: unknown } },
 ): Promise<ReviewTurnLease | undefined> {
   if (pr.action === "edited" && pr.changes?.base !== undefined) {
-    await advanceGate(deps);
+    const result = await advanceGate(deps);
+    if (result.reviewLease !== undefined) {
+      await releaseReviewTurnIfHolder(deps.kv, deps.ref, result.reviewLease);
+    }
     return undefined;
   }
   if (pr.draft || !REVIEW_ACTIONS.has(pr.action)) {

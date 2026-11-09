@@ -176,6 +176,18 @@ test("a reopened PR whose head already has an MC verdict starts no second review
   assert.equal(await pullRequestTurn(w.deps, { action: "reopened", draft: false }), false);
 });
 
+test("ditto r4508315974: a base edit releases the review lease when no turn starts", async () => {
+  const w = world();
+  const lease = await pullRequestReviewTurn(w.deps, {
+    action: "edited",
+    draft: false,
+    changes: { base: { sha: BASE } },
+  });
+  assert.equal(lease, undefined);
+  assert.equal(w.store.has(reviewTurnKey(REF, HEAD)), false, "the lease must not strand on the head");
+  assert.equal(await commentTurn(w.deps, "some-reviewer"), true, "a later delivery can acquire a turn");
+});
+
 test("a PR with no MC verdict yet starts a review turn and tags Cursor and Ditto once", async () => {
   const w = world();
   assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
