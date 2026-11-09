@@ -109,6 +109,30 @@ export function __testOnly_setRenewInFlightDuringCall(enabled: boolean): void {
   testRenewInFlightDuringCall = enabled;
 }
 
+/** Cross-process tests: attempt an owner failure write without a live ask. */
+export async function __testOnly_ownerFailureWrite(
+  kv: HostKvApi,
+  ref: PrRef,
+  headSha: string,
+  ownerClaimNonce: string,
+  failedAttempts: number,
+): Promise<boolean> {
+  const key = replitAskKey(ref, headSha);
+  const now = Date.now();
+  return putRecordUnlessSuperseded(
+    kv,
+    key,
+    ownerClaimNonce,
+    {
+      at: now,
+      failedAttempts,
+      lastFailure: "error: stale",
+      claimNonce: ownerClaimNonce,
+    } satisfies AskRecord,
+    "owner",
+  );
+}
+
 function inFlightLeaseMs(): number {
   return testInFlightLeaseMs ?? IN_FLIGHT_LEASE_MS;
 }
@@ -189,13 +213,25 @@ function blocksNewClaim(record: AskRecord, claimNonce: string, now = Date.now())
 }
 
 /** Whether an in-flight owner write is stale relative to the stored record. */
-function blocksOwnerWrite(record: AskRecord, ownerClaimNonce: string): boolean {
-  return record.claimNonce !== undefined && record.claimNonce !== ownerClaimNonce;
+function blocksOwnerWrite(record: AskRecord, ownerClaimNonce: string, next: AskRecord): boolean {
+  if (record.claimNonce !== undefined && record.claimNonce !== ownerClaimNonce) {
+    return true;
+  }
+  if (terminalAskRecorded(record) && !terminalAskRecorded(next)) {
+    return true;
+  }
+  return false;
 }
 
-function blocksWrite(record: AskRecord, claimNonce: string, mode: PutRecordMode, now = Date.now()): boolean {
+function blocksWrite(
+  record: AskRecord,
+  claimNonce: string,
+  mode: PutRecordMode,
+  next: AskRecord,
+  now = Date.now(),
+): boolean {
   if (mode === "owner") {
-    return blocksOwnerWrite(record, claimNonce);
+    return blocksOwnerWrite(record, claimNonce, next);
   }
   return blocksNewClaim(record, claimNonce, now);
 }
@@ -208,14 +244,14 @@ async function putRecordUnlessSuperseded(
   mode: PutRecordMode,
 ): Promise<boolean> {
   const read = asAskRecord(await kv.get(key));
-  if (read !== undefined && blocksWrite(read, claimNonce, mode)) {
+  if (read !== undefined && blocksWrite(read, claimNonce, mode, next)) {
     return false;
   }
 
   if (supportsKvCas(kv) && typeof kv.getWithVersion === "function" && typeof kv.putIfVersion === "function") {
     const current = await kv.getWithVersion(key);
     const live = asAskRecord(current?.value);
-    if (live !== undefined && blocksWrite(live, claimNonce, mode)) {
+    if (live !== undefined && blocksWrite(live, claimNonce, mode, next)) {
       return false;
     }
     if (current === undefined) {

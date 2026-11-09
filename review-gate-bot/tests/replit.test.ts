@@ -8,6 +8,7 @@ import {
   __testOnly_askReplit,
   __testOnly_setInFlightLeaseMs,
   __testOnly_setRenewInFlightDuringCall,
+  __testOnly_ownerFailureWrite,
   IN_FLIGHT_LEASE_MS,
   REPLIT_TOOL,
   replitQuestion,
@@ -338,6 +339,19 @@ test("ditto r4511110608: in-flight renewal blocks a second process during a slow
     __testOnly_setInFlightLeaseMs(undefined);
     __testOnly_setRenewInFlightDuringCall(true);
   }
+});
+
+test("ditto r4511316326: owner failure write cannot erase recorded success", async () => {
+  const store = kv();
+  const key = replitAskKey(REF, HEAD);
+  const nonce = "same-owner";
+  const now = Date.now();
+  await store.put(key, { at: now, askedAt: now, claimNonce: nonce });
+  const wrote = await __testOnly_ownerFailureWrite(store, REF, HEAD, nonce, 1);
+  assert.equal(wrote, false);
+  const record = store.store.get(key) as { askedAt?: number; failedAttempts?: number };
+  assert.ok(record.askedAt !== undefined);
+  assert.equal(record.failedAttempts, undefined);
 });
 
 test("ditto r4511267518: a stale failure cannot roll back a newer attempt count", async () => {
