@@ -61,11 +61,14 @@ const REDACTED = "<redacted>";
 
 const JWT_MIN_SEGMENT = 8;
 const JWT_MIN_HEADER = 11;
-const JWT_MAX_SEGMENT = 65_536;
-/** Probe bound for JWT headers; long x5c chains extend up to {@link JWT_MAX_SEGMENT}. */
+/** Finer bound for header dot search; long x5c chains may use the full length. */
+const JWT_MAX_HEADER_NO_DOT = 65_536;
+/** Do not truncate JWT header/payload dot scans (Ditto r4508598811). */
+const JWT_SEGMENT_SCAN_LIMIT = Number.POSITIVE_INFINITY;
+/** Max run length when skipping past a failed `eyJ` decoy. */
+const JWT_MAX_SKIP_RUN = 65_536;
+/** Probe bound for JWT headers; long x5c chains extend up to {@link JWT_MAX_HEADER_NO_DOT}. */
 const JWT_HEADER_DOT_PROBE = 128;
-/** Header dot scan bound; real x5c-chain headers can exceed 128 base64url chars. */
-const JWT_MAX_HEADER_NO_DOT = JWT_MAX_SEGMENT;
 
 type JwtDotScan = { dot: number | null; scanned: number; hitBound: boolean };
 
@@ -105,7 +108,7 @@ function jwtDotAfterSegment(
   start: number,
   minLength: number,
   allowNestedEyJ: boolean,
-  maxWithoutDot: number = JWT_MAX_SEGMENT,
+  maxWithoutDot: number = JWT_SEGMENT_SCAN_LIMIT,
 ): number | null {
   return jwtDotAfterSegmentScan(input, start, minLength, allowNestedEyJ, maxWithoutDot).dot;
 }
@@ -161,7 +164,7 @@ function jwtSignatureEnd(input: string, start: number): number | null {
 /** After a miss at `at`, skip past the base64url run so decoy `eyJ` blobs stay linear. */
 function skipAfterFailedJwtCandidate(input: string, at: number): number {
   let scan = at + 3;
-  const limit = Math.min(input.length, at + JWT_MAX_SEGMENT);
+  const limit = Math.min(input.length, at + JWT_MAX_SKIP_RUN);
   while (
     scan < limit &&
     !input.startsWith("eyJ", scan) &&
