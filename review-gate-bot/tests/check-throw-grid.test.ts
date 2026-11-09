@@ -481,6 +481,23 @@ test("M2: pair-read-failed without expectedPair cancels workingCheck", async () 
   assert.equal(w.checks[0]?.conclusion, "cancelled");
 });
 
+test("M2 M1-parity: pair-read-failed cancel throw → finalization-unresolved", async () => {
+  const w = world([HEAD], [MERGE], [BASE], ["empty-sha"]);
+  const trace: ConcludeTraceEntry[] = [];
+  const createCheck = instrumentCreateCheck(w.deps.createCheck, trace, { throwCancel: true });
+  const workingCheck = await createCheck({ name: CHECK_NAME, sha: HEAD });
+  const outcome = await postGateCheck({
+    ...w.deps,
+    createCheck,
+    workingCheck,
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "finalization-unresolved");
+  assert.equal(w.checks.length, 1);
+  assert.ok(trace.length >= 1);
+  assert.ok(trace.every((e) => e.kind === "cancel" && e.threw));
+});
+
 test("M2: pair-read-failed without expectedPair and no handle still posts merge-base blocker", async () => {
   const w = world([HEAD], [MERGE], [BASE], ["empty-sha"]);
   const outcome = await postGateCheck({
