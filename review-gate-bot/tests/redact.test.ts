@@ -280,6 +280,14 @@ test("ditto r4508757228: jwtHeaderDotScan does not rescan a long prefix for ever
   assert.equal(redactSecrets(input).text, input);
 });
 
+test("ditto r4508840989: nested eyJ decoys do not indexOf past the header window", () => {
+  const decoys = `eyJ${"A".repeat(40)}`;
+  const body = decoys.repeat(120);
+  const input = `${body}${"B".repeat(400_000)}`;
+  const { ms } = timed(input);
+  assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
+});
+
 test("ditto r4508694445: a JWT with a header segment longer than 128 characters is redacted", () => {
   const x5c = ["A".repeat(100), "B".repeat(100)];
   const header = Buffer.from(JSON.stringify({ alg: "RS256", x5c })).toString("base64url");

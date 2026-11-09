@@ -130,8 +130,14 @@ function jwtHeaderDotScan(input: string, start: number): JwtDotScan {
   let search = start + JWT_HEADER_DOT_PROBE;
   let validatedThrough = search;
   while (search < windowEnd) {
-    const dotIdx = input.indexOf(".", search);
-    if (dotIdx === -1 || dotIdx >= windowEnd) {
+    let dotIdx = -1;
+    for (let i = search; i < windowEnd; i += 1) {
+      if (input[i] === ".") {
+        dotIdx = i;
+        break;
+      }
+    }
+    if (dotIdx === -1) {
       break;
     }
     for (let i = validatedThrough; i < dotIdx; i += 1) {
