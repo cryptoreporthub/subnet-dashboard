@@ -72,9 +72,6 @@ function jwtDotAfterSegment(input: string, start: number, minLength: number): nu
   let index = start;
   const limit = Math.min(input.length, start + JWT_MAX_SEGMENT);
   while (index < limit) {
-    if (input.startsWith("eyJ", index) && index > start) {
-      return null;
-    }
     const char = input[index];
     if (char === ".") {
       return index - start >= minLength ? index : null;
@@ -98,6 +95,16 @@ function jwtSignatureEnd(input: string, start: number): number | null {
     return null;
   }
   return index;
+}
+
+/** After a miss at `at`, skip past the base64url run so decoy `eyJ` blobs stay linear. */
+function skipAfterFailedJwtCandidate(input: string, at: number): number {
+  let scan = at + 3;
+  const limit = Math.min(input.length, at + JWT_MAX_SEGMENT);
+  while (scan < limit && isJwtSegmentChar(input[scan]) && input[scan] !== ".") {
+    scan += 1;
+  }
+  return Math.max(at + 3, scan);
 }
 
 /** Linear scan for `eyJ…`.`…`.`…` triples (no lookbehind; long segments allowed). */
@@ -127,7 +134,7 @@ function scrubJwtCredentials(input: string, redactedNames: string[]): string {
       index = end;
       continue;
     }
-    index += 3;
+    index = skipAfterFailedJwtCandidate(input, index);
   }
   return out + input.slice(mark);
 }

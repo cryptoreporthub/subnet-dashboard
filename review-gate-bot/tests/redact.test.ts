@@ -234,6 +234,15 @@ test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
 });
 
+test("ditto r4508598457: a JWT with eyJ inside the payload segment is redacted whole", () => {
+  const jwt =
+    "eyJhbGciOiJIUzI1NiJ9.eyJ4IjowLCJ5IjogeyJ6IjoxfX0.AAAAAAAAAAAAAAAA";
+  const { text, redactedNames } = redactSecrets(`prefix ${jwt} suffix`);
+  assert.equal(text.includes(jwt), false);
+  assert.equal(text.includes("eyJ4Ijow"), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
 test("ditto r4508315371: a JWT with a segment longer than 2048 characters is redacted", () => {
   const jwt = "eyJhbGciOiJIUzI1NiJ9." + "a".repeat(3000) + "." + "b".repeat(43);
   const { text, redactedNames } = redactSecrets(`session=${jwt}`);
