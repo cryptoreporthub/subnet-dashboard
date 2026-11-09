@@ -187,9 +187,7 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
   }
 }
 
-type DiscoveryOutcome =
-  | { kind: "ready"; available: boolean }
-  | { kind: "timeout"; pending: Promise<boolean> };
+type DiscoveryOutcome = { kind: "ready"; available: boolean } | { kind: "timeout" };
 
 async function awaitDiscovery(
   mcp: HostMcpRegistry,
@@ -209,7 +207,9 @@ async function awaitDiscovery(
       deadline,
     ]);
     if (raced.kind === "timeout") {
-      return { kind: "timeout", pending: discovery };
+      // Plain KV cannot cancel MCP; abandon the pending call and release the lease.
+      void discovery.catch(() => undefined);
+      return { kind: "timeout" };
     }
     return raced;
   } finally {
@@ -419,22 +419,12 @@ async function askReplitOnceWithLease(input: {
     }, renewMs);
   }
   const discoveryBudget = supportsKvCas(input.kv) ? undefined : askDiscoveryBudgetMs();
-  let discoveryDrain: Promise<unknown> | undefined;
   try {
-    return await askReplit({
-      ...input,
-      maxDiscoveryMs: discoveryBudget,
-      onDiscoveryTimeout(pending) {
-        discoveryDrain = pending.catch(() => undefined);
-      },
-    });
+    return await askReplit({ ...input, maxDiscoveryMs: discoveryBudget });
   } finally {
     if (renewTimer !== undefined) {
       clearInterval(renewTimer);
       renewTimer = undefined;
-    }
-    if (discoveryDrain !== undefined) {
-      await discoveryDrain;
     }
     await releaseLeaseIfHolder(input.kv, leaseKey, token).catch(() => undefined);
   }
@@ -477,8 +467,6 @@ async function askReplit(input: {
   headSha: string;
   /** When set, bound MCP discovery so plain-KV leases are not outlived. */
   maxDiscoveryMs?: number;
-  /** Called when discovery hits the budget; caller must await before releasing a plain-KV lease. */
-  onDiscoveryTimeout?: (pending: Promise<boolean>) => void;
 }): Promise<ReplitAskOutcome> {
   const key = replitAskKey(input.ref, input.headSha);
   const previous = asAskRecord(await input.kv.get(key));
@@ -539,7 +527,6 @@ async function askReplit(input: {
 
   const discovery = await awaitDiscovery(input.mcp, input.maxDiscoveryMs);
   if (discovery.kind === "timeout") {
-    input.onDiscoveryTimeout?.(discovery.pending);
     return recordFailure("unavailable", `replit discovery timed out after ${input.maxDiscoveryMs}ms`, undefined);
   }
   if (!discovery.available) {

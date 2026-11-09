@@ -339,7 +339,7 @@ test("ditto r4511210612: a rejecting KV renewal does not cause unhandled rejecti
   assert.equal(outcome.asked, true);
 });
 
-test("ditto r4513514628: discovery timeout keeps the lease until listTools finishes", async () => {
+test("ditto r4513514628 / r4513568040: discovery timeout returns without wedging; later caller recovers", async () => {
   __testOnly_setLeaseMs(1_400);
   try {
     const store = plainKvOnly();
@@ -364,16 +364,22 @@ test("ditto r4513514628: discovery timeout keeps the lease until listTools finis
       },
       callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
     } as unknown as HostMcpRegistry;
-    const first = __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha: HEAD });
-    await sleep(1_100);
-    const blocked = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
-    assert.equal(fastListTools, 0, "must not start a second discovery while the first listTools is still active");
-    assert.equal(blocked.asked, false);
-    if (!blocked.asked) {
-      assert.equal(blocked.reason, "already-asked");
+    const head = "d".repeat(40);
+    const first = __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha: head });
+    const firstDone = await Promise.race([
+      first,
+      sleep(3_000).then(() => {
+        throw new Error("first ask wedged on a stuck listTools");
+      }),
+    ]);
+    assert.equal(firstDone.asked, false);
+    if (!firstDone.asked) {
+      assert.equal(firstDone.reason, "unavailable");
     }
+    const second = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: head });
+    assert.equal(fastListTools, 1, "later caller may discover after timeout released the lease");
+    assert.equal(second.asked, true);
     releaseListTools();
-    await first;
   } finally {
     __testOnly_setLeaseMs(undefined);
   }
