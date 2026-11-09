@@ -179,7 +179,10 @@ function blocksOtherClaim(record: AskRecord, claimNonce: string, now = Date.now(
   if (record.claimNonce === undefined || record.claimNonce === claimNonce) {
     return false;
   }
-  return now - (record.inFlightAt ?? record.at) < inFlightLeaseMs();
+  if (record.inFlightAt === undefined) {
+    return false;
+  }
+  return now - record.inFlightAt < inFlightLeaseMs();
 }
 
 async function putRecordUnlessSuperseded(kv: HostKvApi, key: string, claimNonce: string, next: AskRecord): Promise<boolean> {
@@ -218,15 +221,22 @@ async function putRecordUnlessSuperseded(kv: HostKvApi, key: string, claimNonce:
 }
 
 async function renewInFlightLease(kv: HostKvApi, key: string, claimNonce: string): Promise<void> {
-  const current = asAskRecord(await kv.get(key));
-  if (current === undefined || current.claimNonce !== claimNonce) {
-    return;
+  try {
+    const current = asAskRecord(await kv.get(key));
+    if (current === undefined || current.claimNonce !== claimNonce) {
+      return;
+    }
+    if (terminalAskRecorded(current)) {
+      return;
+    }
+    if (current.inFlightAt === undefined) {
+      return;
+    }
+    const now = Date.now();
+    await putRecordUnlessSuperseded(kv, key, claimNonce, { ...current, at: now, inFlightAt: now, claimNonce });
+  } catch {
+    // Best-effort: a transient KV error must not escape the timer callback.
   }
-  if (terminalAskRecorded(current)) {
-    return;
-  }
-  const now = Date.now();
-  await putRecordUnlessSuperseded(kv, key, claimNonce, { ...current, at: now, inFlightAt: now });
 }
 
 /**
@@ -300,6 +310,7 @@ async function askReplit(input: {
       at: now,
       failedAttempts: attempts,
       lastFailure: `${reason}: ${detail}`.slice(0, 300),
+      ...(ownerNonce === undefined ? {} : { claimNonce: ownerNonce }),
     } satisfies AskRecord;
     const wrote =
       ownerNonce === undefined
@@ -341,7 +352,7 @@ async function askReplit(input: {
   let renewTimer: ReturnType<typeof setInterval> | undefined;
   if (testRenewInFlightDuringCall) {
     renewTimer = setInterval(() => {
-      void renewInFlightLease(input.kv, key, claimNonce);
+      void renewInFlightLease(input.kv, key, claimNonce).catch(() => {});
     }, renewMs);
   }
 

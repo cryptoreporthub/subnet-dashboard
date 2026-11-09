@@ -270,6 +270,44 @@ test("ditto r4511038925: a stale in-flight claim after crash permits retry", asy
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+test("ditto r4511210612: a rejecting KV renewal does not cause unhandled rejection", async () => {
+  const base = kv();
+  let rejectRenewal = false;
+  const store: HostKvApi & { store: Map<string, unknown> } = {
+    store: base.store,
+    get: base.get.bind(base),
+    delete: base.delete.bind(base),
+    async put(key, value) {
+      const record = value as { inFlightAt?: number; askedAt?: number };
+      if (rejectRenewal && record.inFlightAt !== undefined && record.askedAt === undefined) {
+        const existing = base.store.get(key) as { claimNonce?: string } | undefined;
+        if (existing?.claimNonce !== undefined && record.inFlightAt !== (existing as { inFlightAt?: number }).inFlightAt) {
+          throw new Error("kv renew transient");
+        }
+      }
+      return base.put(key, value);
+    },
+  };
+  let release: () => void = () => {};
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const slow = {
+    names: () => ["replit"],
+    listTools: async () => [{ name: REPLIT_TOOL }],
+    callTool: async () => {
+      rejectRenewal = true;
+      await pending;
+      return { isError: false, content: [{ type: "text", text: "ok" }] };
+    },
+  } as unknown as HostMcpRegistry;
+  const ask = __testOnly_askReplit({ kv: store, mcp: slow, ref: REF, headSha: HEAD });
+  await sleep(60);
+  release();
+  const outcome = await ask;
+  assert.equal(outcome.asked, true);
+});
+
 test("ditto r4511110608: in-flight renewal blocks a second process during a slow call", async () => {
   __testOnly_setInFlightLeaseMs(120);
   __testOnly_setRenewInFlightDuringCall(true);
@@ -307,11 +345,15 @@ test("ditto r4511110136: a stale attempt cannot erase a newer successful ask", a
   __testOnly_setRenewInFlightDuringCall(false);
   try {
     const store = kv();
+    let releaseSlowFail: () => void = () => {};
+    const slowFailure = new Promise<void>((_, reject) => {
+      releaseSlowFail = () => reject(new Error("late fail"));
+    });
     const slowFail = {
       names: () => ["replit"],
       listTools: async () => [{ name: REPLIT_TOOL }],
       callTool: async () => {
-        await sleep(150);
+        await slowFailure;
         throw new Error("late fail");
       },
     } as unknown as HostMcpRegistry;
@@ -319,6 +361,7 @@ test("ditto r4511110136: a stale attempt cannot erase a newer successful ask", a
     const late = __testOnly_askReplit({ kv: store, mcp: slowFail, ref: REF, headSha: HEAD });
     await sleep(90);
     const reclaim = await __testOnly_askReplit({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
+    releaseSlowFail();
     await late;
     const record = store.store.get(replitAskKey(REF, HEAD)) as { askedAt?: number; deliveredAt?: number };
     assert.equal(reclaim.asked, true);
