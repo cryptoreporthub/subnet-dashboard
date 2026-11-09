@@ -139,9 +139,8 @@ def has_decision_row(decision_type: str, prediction_id: Any, path: Optional[str]
             for row in get_trail_rows(limit=MAX_RECORDS):
                 if _row_matches_prediction(row, decision_type, prediction_id):
                     return True
-            return False
         except Exception as exc:
-            logger.warning("SQLite has_decision_row fallback to JSON: %s", exc)
+            logger.warning("SQLite has_decision_row before JSON mirror: %s", exc)
 
     store_path = _resolve_path(path)
     for row in _load_json_store(store_path).get("records") or []:
