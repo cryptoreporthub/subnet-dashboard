@@ -75,6 +75,8 @@ export type ReplitAskOutcome =
 type AskRecord = {
   /** Successful asks. Present means: do not ask again for this head. */
   askedAt?: number;
+  /** Ask reached Replit; block duplicate MCP if the success write never landed. */
+  inFlightAt?: number;
   /** Failed attempts, so a retry is bounded and a persistent failure is visible. */
   failedAttempts?: number;
   lastFailure?: string;
@@ -139,8 +141,12 @@ async function askReplit(input: {
   const key = replitAskKey(input.ref, input.headSha);
   const previous = asAskRecord(await input.kv.get(key));
 
-  if (previous?.askedAt !== undefined) {
-    return { asked: false, reason: "already-asked", detail: "recorded for this head" };
+  if (previous?.askedAt !== undefined || previous?.inFlightAt !== undefined) {
+    return {
+      asked: false,
+      reason: "already-asked",
+      detail: previous?.askedAt !== undefined ? "recorded for this head" : "ask already sent for this head",
+    };
   }
 
   const failedAttempts = previous?.failedAttempts ?? 0;
@@ -172,6 +178,8 @@ async function askReplit(input: {
   }
 
   try {
+    await input.kv.put(key, { at: Date.now(), inFlightAt: Date.now() } satisfies AskRecord);
+
     const result = await input.mcp.callTool(REPLIT_CONNECTION, REPLIT_TOOL, {
       replId: REPL_ID,
       question: replitQuestion(input.ref.number, input.headSha),
@@ -185,12 +193,17 @@ async function askReplit(input: {
       return fail("error", detail);
     }
 
-    await input.kv.put(key, { at: Date.now(), askedAt: Date.now() } satisfies AskRecord);
-
     const text = result.content
       .map((part) => (part.type === "text" ? part.text : `<${part.type}>`))
       .join(" ")
       .slice(0, 500);
+
+    try {
+      await input.kv.put(key, { at: Date.now(), askedAt: Date.now() } satisfies AskRecord);
+    } catch {
+      return { asked: true, text, attempts: failedAttempts + 1 };
+    }
+
     return { asked: true, text, attempts: failedAttempts + 1 };
   } catch (error) {
     return fail("error", error instanceof Error ? error.message : String(error));

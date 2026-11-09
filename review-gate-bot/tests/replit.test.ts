@@ -204,6 +204,35 @@ test("a late failure can never overwrite a recorded success", async () => {
   assert.ok((store.store.get(replitAskKey(REF, HEAD)) as { askedAt?: number }).askedAt !== undefined);
 });
 
+test("ditto r4508316408: a failed success-record write does not permit a duplicate ask", async () => {
+  const base = kv();
+  const store: HostKvApi & { store: Map<string, unknown>; calls: number } = {
+    store: base.store,
+    calls: 0,
+    get: base.get.bind(base),
+    delete: base.delete.bind(base),
+    async put(key, value) {
+      const record = value as { askedAt?: number; inFlightAt?: number };
+      if (record.askedAt !== undefined) {
+        throw new Error("kv transient");
+      }
+      return base.put(key, value);
+    },
+  };
+  const registry = mcp();
+  const first = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(first.asked, true);
+  assert.equal(registry.calls, 1);
+
+  const second = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(second.asked, false);
+  assert.equal(second.reason, "already-asked");
+  assert.equal(registry.calls, 1, "must not ask Replit again");
+  const record = store.store.get(replitAskKey(REF, HEAD)) as { inFlightAt?: number; askedAt?: number };
+  assert.ok(record.inFlightAt !== undefined);
+  assert.equal(record.askedAt, undefined);
+});
+
 test("an MCP error that echoes a credential is scrubbed before it is stored or returned", async () => {
   const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
   const store = kv();
