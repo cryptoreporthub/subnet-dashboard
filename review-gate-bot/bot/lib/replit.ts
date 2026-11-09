@@ -181,6 +181,37 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
 }
 
 async function putFailureUnlessTerminal(kv: HostKvApi, key: string, next: AskRecord): Promise<boolean> {
+  if (supportsKvCas(kv) && typeof kv.getWithVersion === "function" && typeof kv.putIfVersion === "function") {
+    try {
+      const current = await kv.getWithVersion(key);
+      const live = asAskRecord(current?.value);
+      if (live !== undefined && (terminalAskRecorded(live) || askAlreadySent(live))) {
+        return false;
+      }
+      if (current === undefined) {
+        if (typeof kv.putIfAbsent === "function") {
+          const created = await kv.putIfAbsent(key, next);
+          if (created.ok) {
+            return true;
+          }
+          const raced = asAskRecord(created.current?.value);
+          if (raced !== undefined && (terminalAskRecorded(raced) || askAlreadySent(raced))) {
+            return false;
+          }
+          if (created.current !== undefined) {
+            return (await kv.putIfVersion(key, next, created.current.version)).ok;
+          }
+          return false;
+        }
+        await kv.put(key, next);
+        return true;
+      }
+      return (await kv.putIfVersion(key, next, current.version)).ok;
+    } catch {
+      return false;
+    }
+  }
+
   const read = asAskRecord(await kv.get(key));
   if (read !== undefined && terminalAskRecorded(read)) {
     return false;

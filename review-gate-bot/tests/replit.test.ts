@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
+import { createMemoryKv } from "@grok/agent-sdk/kv";
 import {
   ASK_ATTEMPTS,
   askReplitOnce,
@@ -339,6 +340,38 @@ test("ditto r4511110608: in-flight renewal blocks a second process during a slow
     __testOnly_setInFlightLeaseMs(undefined);
     __testOnly_setRenewInFlightDuringCall(true);
   }
+});
+
+test("ditto r4511211560: failure bookkeeping cannot overwrite concurrent success", async () => {
+  const head = "e".repeat(40);
+  const memory = createMemoryKv();
+  const key = replitAskKey(REF, head);
+  let interpose = false;
+  const origGetWithVersion = memory.getWithVersion.bind(memory);
+  memory.getWithVersion = async (k) => {
+    const entry = await origGetWithVersion(k);
+    if (interpose && k === key) {
+      interpose = false;
+      const now = Date.now();
+      await memory.put(key, { at: now, askedAt: now, claimNonce: "winner" });
+    }
+    return entry;
+  };
+
+  interpose = true;
+  const outcome = await askReplitOnce({
+    kv: memory as HostKvApi,
+    mcp: mcp({ available: false }),
+    ref: REF,
+    headSha: head,
+  });
+  assert.equal(outcome.asked, false);
+  const record = (await memory.get(key)) as { askedAt?: number; failedAttempts?: number };
+  assert.ok(record.askedAt !== undefined);
+  assert.equal(record.failedAttempts, undefined);
+  const again = await askReplitOnce({ kv: memory as HostKvApi, mcp: mcp(), ref: REF, headSha: head });
+  assert.equal(again.asked, false);
+  assert.equal(again.reason, "already-asked");
 });
 
 test("ditto r4511316326: owner failure write cannot erase recorded success", async () => {
