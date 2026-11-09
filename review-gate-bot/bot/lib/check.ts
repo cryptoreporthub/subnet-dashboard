@@ -674,7 +674,28 @@ export async function postGateCheck(input: {
       if (a0.kind !== "ready") {
         const stateEarly = await read();
         if (a0.kind === "base-unavailable" && a0.headSha !== stateEarly.headSha) {
-          return "stale-head";
+          if (workingCheck === undefined) {
+            return "stale-head";
+          }
+          const ok = await concludeCancelled(
+            workingCheck,
+            budget,
+            ref,
+            { title: SUPERSEDED_TITLE, summary: "Head mismatch." },
+          );
+          return ok ? "stale-head" : "finalization-unresolved";
+        }
+        if (a0.kind === "pair-read-failed" && workingCheck !== undefined) {
+          const ok = await concludeCancelled(
+            workingCheck,
+            budget,
+            ref,
+            {
+              title: PAIR_UNVERIFIABLE_TITLE,
+              summary: `pair-read-failed · ${pairObsSummary(a0)}`,
+            },
+          );
+          return ok ? "pair-unverifiable" : "finalization-unresolved";
         }
         const tip = a0.kind === "base-unavailable" ? a0.baseTipSha : undefined;
         const title = a0.kind === "base-unavailable" ? MERGE_BASE_UNAVAILABLE_TITLE : GITHUB_READ_FAILURE_TITLE;

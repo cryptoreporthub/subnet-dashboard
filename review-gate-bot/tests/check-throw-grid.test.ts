@@ -434,6 +434,64 @@ test("ditto r4508316655: base-unavail without expectedPair rejects stale head be
   assert.equal(w.checks.length, 0);
 });
 
+test("ditto r4511880194: base-unavail stale head without expectedPair cancels workingCheck", async () => {
+  const gateMoved = state("await_cursor_ditto", { headSha: MOVED });
+  const w = world([HEAD], [MERGE], [BASE], [null]);
+  const workingCheck = await w.deps.createCheck({ name: CHECK_NAME, sha: MOVED });
+  const outcome = await postGateCheck({
+    ...w.deps,
+    state: gateMoved,
+    read: async () => gateMoved,
+    workingCheck,
+  });
+  assert.equal(outcome, "stale-head");
+  assert.equal(w.checks.length, 1);
+  assert.equal(w.checks[0]?.conclusion, "cancelled");
+});
+
+test("ditto r4511880194 M1: base-unavail stale head cancel throw → finalization-unresolved", async () => {
+  const gateMoved = state("await_cursor_ditto", { headSha: MOVED });
+  const w = world([HEAD], [MERGE], [BASE], [null]);
+  const trace: ConcludeTraceEntry[] = [];
+  const createCheck = instrumentCreateCheck(w.deps.createCheck, trace, { throwCancel: true });
+  const workingCheck = await createCheck({ name: CHECK_NAME, sha: MOVED });
+  const outcome = await postGateCheck({
+    ...w.deps,
+    createCheck,
+    state: gateMoved,
+    read: async () => gateMoved,
+    workingCheck,
+  });
+  assert.equal(outcome, "finalization-unresolved");
+  assert.equal(w.checks.length, 1);
+  assert.ok(trace.length >= 1);
+  assert.ok(trace.every((e) => e.kind === "cancel" && e.threw));
+});
+
+test("M2: pair-read-failed without expectedPair cancels workingCheck", async () => {
+  const w = world([HEAD], [MERGE], [BASE], ["empty-sha"]);
+  const workingCheck = await w.deps.createCheck({ name: CHECK_NAME, sha: HEAD });
+  const outcome = await postGateCheck({
+    ...w.deps,
+    workingCheck,
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "pair-unverifiable");
+  assert.equal(w.checks.length, 1);
+  assert.equal(w.checks[0]?.conclusion, "cancelled");
+});
+
+test("M2: pair-read-failed without expectedPair and no handle still posts merge-base blocker", async () => {
+  const w = world([HEAD], [MERGE], [BASE], ["empty-sha"]);
+  const outcome = await postGateCheck({
+    ...w.deps,
+    ...same(state("await_cursor_ditto")),
+  });
+  assert.equal(outcome, "posted");
+  assert.equal(w.checks.length, 1);
+  assert.equal(w.checks[0]?.conclusion, "action_required");
+});
+
 test("Ditto TC-base-unavail-admit-mismatch-no-handle: stale-head, no merge-base blocker", async () => {
   const w = world([MOVED], [MERGE], [BASE], [null]);
   const outcome = await postGateCheck({
