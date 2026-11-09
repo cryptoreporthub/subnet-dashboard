@@ -3,7 +3,7 @@ import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { supportsKvCas } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { replitAskKey, replitAskLeaseKey } from "./gate.js";
-import { exclusive, leaseToken, releaseLeaseIfHolder } from "./lock.js";
+import { exclusive, leaseRenewIntervalMs, leaseToken, releaseLeaseIfHolder, renewLeaseIfHolder } from "./lock.js";
 import type { PrRef } from "./gh.js";
 import { redactSecrets } from "./redact.js";
 
@@ -372,9 +372,17 @@ async function askReplitOnceWithLease(input: {
       detail: "another handler holds the replit ask lease",
     };
   }
+  const renewMs = leaseRenewIntervalMs();
+  let renewTimer: ReturnType<typeof setInterval> | undefined = setInterval(() => {
+    void renewLeaseIfHolder(input.kv, leaseKey, token).catch(() => undefined);
+  }, renewMs);
   try {
     return await askReplit(input);
   } finally {
+    if (renewTimer !== undefined) {
+      clearInterval(renewTimer);
+      renewTimer = undefined;
+    }
     await releaseLeaseIfHolder(input.kv, leaseKey, token).catch(() => undefined);
   }
 }

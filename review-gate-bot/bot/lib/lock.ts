@@ -30,6 +30,17 @@ import { supportsKvCas } from "@grok/agent-sdk";
 /** How long a claim is believed. Past this, its owner is presumed dead. */
 export const LEASE_MS = 10 * 60_000;
 
+let testLeaseMs: number | undefined;
+
+/** Tests pin a shorter lease without changing production defaults. */
+export function __testOnly_setLeaseMs(ms: number | undefined): void {
+  testLeaseMs = ms;
+}
+
+function effectiveLeaseMs(): number {
+  return testLeaseMs ?? LEASE_MS;
+}
+
 export type RanOnceReason = "ran" | "already-done" | "claim-lost" | "failed";
 
 export type RanOnceResult = {
@@ -76,7 +87,7 @@ function asClaim(value: unknown): ClaimRecord | undefined {
 
 /** Is this a claim held by an owner presumed alive? */
 function isLive(record: ClaimRecord | undefined, now: number): boolean {
-  return record?.state === "claimed" && now - record.at < LEASE_MS;
+  return record?.state === "claimed" && now - record.at < effectiveLeaseMs();
 }
 
 /**
@@ -186,6 +197,40 @@ export function releaseLeaseIfHolder(kv: HostKvApi, key: string, token: string):
     await kv.delete(key);
     return true;
   });
+}
+
+/**
+ * Bump a held lease's `at` so discovery or MCP work cannot outlive `LEASE_MS`.
+ * Returns false when this token no longer owns the key.
+ */
+export function renewLeaseIfHolder(
+  kv: HostKvApi,
+  key: string,
+  token: string,
+  now: number = Date.now(),
+): Promise<boolean> {
+  return exclusive(key, async () => {
+    const refreshed: ClaimRecord = { state: "claimed", nonce: token, at: now };
+    if (supportsKvCas(kv)) {
+      const current = await kv.getWithVersion(key);
+      const claim = asClaim(current?.value);
+      if (current === undefined || claim?.state !== "claimed" || claim.nonce !== token) {
+        return false;
+      }
+      return (await kv.putIfVersion(key, refreshed, current.version)).ok;
+    }
+    const claim = asClaim(await kv.get(key));
+    if (claim?.state !== "claimed" || claim.nonce !== token) {
+      return false;
+    }
+    await kv.put(key, refreshed);
+    return asClaim(await kv.get(key))?.nonce === token;
+  });
+}
+
+/** How often long-running work should refresh a cross-process lease. */
+export function leaseRenewIntervalMs(): number {
+  return Math.max(50, Math.floor(effectiveLeaseMs() / 3));
 }
 
 export function ranOnce(input: RanOnceInput): Promise<RanOnceResult> {

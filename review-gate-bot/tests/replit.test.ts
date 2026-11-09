@@ -16,6 +16,7 @@ import {
   replitQuestion,
 } from "../bot/lib/replit.js";
 import { replitAskKey } from "../bot/lib/gate.js";
+import { __testOnly_setLeaseMs } from "../bot/lib/lock.js";
 
 const HEAD = "c".repeat(40);
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1 };
@@ -319,6 +320,36 @@ test("ditto r4511210612: a rejecting KV renewal does not cause unhandled rejecti
   release();
   const outcome = await ask;
   assert.equal(outcome.asked, true);
+});
+
+test("ditto r4513373769: ask lease renews during slow listTools so a second process cannot take over", async () => {
+  __testOnly_setLeaseMs(300);
+  try {
+    const store = createMemoryKv();
+    let releaseListTools: () => void = () => {};
+    const listToolsBlocked = new Promise<void>((resolve) => {
+      releaseListTools = resolve;
+    });
+    const slowDiscovery = {
+      names: () => ["replit"],
+      listTools: async () => {
+        await listToolsBlocked;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const fast = mcp();
+    const slowAsk = __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slowDiscovery, ref: REF, headSha: HEAD });
+    await sleep(400);
+    const blocked = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
+    releaseListTools();
+    await slowAsk;
+    assert.equal(blocked.asked, false);
+    assert.equal(blocked.reason, "already-asked");
+    assert.equal(fast.calls, 0, "must not reach MCP while discovery holds the ask lease");
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+  }
 });
 
 test("ditto r4508317090: cross-process lease blocks a second handler before MCP", async () => {
