@@ -24,6 +24,7 @@ def emit_trail_event(
     prediction: Optional[str] = None,
     judge: Optional[str] = None,
     extra: Optional[Dict[str, Any]] = None,
+    resolved_prediction_id: Any = None,
 ) -> None:
     """Append a learning-trail row via MindmapBridge (merged soul_map save)."""
     entry: Dict[str, Any] = {
@@ -43,19 +44,30 @@ def emit_trail_event(
         from internal.council.mindmap_bridge import MindmapBridge
         from internal.council.weights import SOUL_MAP_PATH
 
-        MindmapBridge(persistence_path=SOUL_MAP_PATH).append_learning_trail(entry)
+        MindmapBridge(persistence_path=SOUL_MAP_PATH).append_learning_trail(
+            entry, resolved_prediction_id=resolved_prediction_id
+        )
     except Exception as exc:
         logger.warning("Trail event %s failed: %s", event_type, exc)
 
 
-def _trail_has_prediction_resolved(prediction_id: Any) -> bool:
-    """True when the learning trail already holds a prediction_resolved row for this id."""
-    from internal.council.mindmap_bridge import MindmapBridge
+def _prediction_resolved_recorded(prediction_id: Any) -> bool:
+    """True when this prediction's resolution is already on record.
+
+    The resolved-id ledger never truncates, so it outlives the trail window. The trail scan
+    covers rows written before the ledger existed.
+    """
+    from internal.council.mindmap_bridge import MindmapBridge, pending_resolved_ids
     from internal.council.weights import SOUL_MAP_PATH
 
-    trail = MindmapBridge(persistence_path=SOUL_MAP_PATH).soul_map_state.get("learning_trail")
-    if not isinstance(trail, list):
-        trail = []
+    # A row whose disk write failed is buffered until a write carries it. Check the buffer first.
+    if prediction_id in pending_resolved_ids(SOUL_MAP_PATH):
+        return True
+    state = MindmapBridge(persistence_path=SOUL_MAP_PATH).soul_map_state
+    ledger = state.get("resolved_prediction_ids")
+    if isinstance(ledger, list) and prediction_id in ledger:
+        return True
+    trail = state.get("learning_trail") or []
     for e in trail:
         if not isinstance(e, dict) or e.get("event_type") != "prediction_resolved":
             continue
@@ -69,8 +81,8 @@ def _trail_has_prediction_resolved(prediction_id: Any) -> bool:
 def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) -> None:
     """Trail event when a prediction resolves and nudges expert weights."""
     prediction_id = prediction.get("id")
-    if prediction_id is not None and _trail_has_prediction_resolved(prediction_id):
-        # Replayed resolution: the row is already on the trail, so emit nothing.
+    if prediction_id is not None and _prediction_resolved_recorded(prediction_id):
+        # Replayed resolution: already on record, so emit nothing.
         return
     correct = prediction.get("correct")
     outcome = prediction.get("outcome")
@@ -95,6 +107,7 @@ def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) 
         decision="weight_nudge_up" if correct else "weight_nudge_down",
         prediction=prediction.get("statement"),
         judge=expert,
+        resolved_prediction_id=prediction_id,
     )
 
 
