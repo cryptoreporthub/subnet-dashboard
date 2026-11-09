@@ -46,13 +46,6 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   // Private key blocks, whole. A block with no END line (cut off, or the END
   // line trimmed from a log) is removed to the end of the text.
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
-  // JWT-ish triples.
-  // Segments are bounded: unbounded, every `eyJ` in a long run without dots rescans the rest of
-  // the run, which is quadratic. 2048 characters a segment is well past any real JWT.
-  // The lookbehind excludes a dash and an underscore before `eyJ`, as well as word characters, so
-  // a JWT glued to the word before it by either is not matched here. That is deliberate: the
-  // alternative is a quadratic scan of `eyJ-` runs. A JWT after a space, `=` or `:` is matched.
-  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,2048}\.[A-Za-z0-9_-]{8,2048}\.[A-Za-z0-9_-]{8,2048}\b/g,
   // A bearer credential with no header name in front of it. Sixteen characters
   // is the floor for an opaque token, so prose such as "bearer authentication"
   // stays readable.
@@ -63,6 +56,81 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   // integrity value, which ends in `==`) is not scrubbed as a fragment of its own.
   /(?<![A-Za-z0-9_+/.-])(?=[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_+/-]))(?=[A-Za-z0-9_-]*[a-z])(?=[A-Za-z0-9_-]*[A-Z])(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_+/=-])/g,
 ];
+
+const REDACTED = "<redacted>";
+
+const JWT_MIN_SEGMENT = 8;
+const JWT_MIN_HEADER = 11;
+const JWT_MAX_SEGMENT = 65_536;
+
+function isJwtSegmentChar(char: string | undefined): boolean {
+  return char !== undefined && /[A-Za-z0-9_-]/.test(char);
+}
+
+/** Index of `.` ending a segment, or null when the run is not JWT-shaped. */
+function jwtDotAfterSegment(input: string, start: number, minLength: number): number | null {
+  let index = start;
+  const limit = Math.min(input.length, start + JWT_MAX_SEGMENT);
+  while (index < limit) {
+    if (input.startsWith("eyJ", index) && index > start) {
+      return null;
+    }
+    const char = input[index];
+    if (char === ".") {
+      return index - start >= minLength ? index : null;
+    }
+    if (!isJwtSegmentChar(char)) {
+      return null;
+    }
+    index += 1;
+  }
+  return null;
+}
+
+/** End index (exclusive) of a terminal base64url signature segment. */
+function jwtSignatureEnd(input: string, start: number): number | null {
+  let index = start;
+  const limit = Math.min(input.length, start + JWT_MAX_SEGMENT);
+  while (index < limit && isJwtSegmentChar(input[index])) {
+    index += 1;
+  }
+  if (index - start < JWT_MIN_SEGMENT) {
+    return null;
+  }
+  return index;
+}
+
+/** Linear scan for `eyJ…`.`…`.`…` triples (no lookbehind; long segments allowed). */
+function scrubJwtCredentials(input: string, redactedNames: string[]): string {
+  let out = "";
+  let mark = 0;
+  for (let index = 0; index < input.length; ) {
+    if (!input.startsWith("eyJ", index)) {
+      index += 1;
+      continue;
+    }
+    const headerDot = jwtDotAfterSegment(input, index, JWT_MIN_HEADER);
+    let end: number | null = null;
+    if (headerDot !== null) {
+      const payloadDot = jwtDotAfterSegment(input, headerDot + 1, JWT_MIN_SEGMENT);
+      if (payloadDot !== null) {
+        const sigEnd = jwtSignatureEnd(input, payloadDot + 1);
+        if (sigEnd !== null) {
+          end = sigEnd;
+        }
+      }
+    }
+    if (end !== null) {
+      out += input.slice(mark, index) + REDACTED;
+      mark = end;
+      redactedNames.push("unlabelled-credential");
+      index = end;
+      continue;
+    }
+    index += 3;
+  }
+  return out + input.slice(mark);
+}
 
 /** Words that make a name a credential name. */
 const CREDENTIAL_WORD =
@@ -81,8 +149,6 @@ const ASSIGNED_VALUE =
 
 /** `scheme://user:password@host`: the userinfo goes, the host stays readable. */
 const URL_USERINFO = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi;
-
-const REDACTED = "<redacted>";
 
 export type RedactResult = {
   text: string;
@@ -166,6 +232,8 @@ export function redactSecrets(input: string): RedactResult {
     return `${scheme}${REDACTED}@`;
   });
 
+  text = scrubJwtCredentials(text, redactedNames);
+
   for (const pattern of VALUE_PATTERNS) {
     text = text.replace(pattern, () => {
       redactedNames.push("unlabelled-credential");
@@ -180,3 +248,4 @@ export function redactSecrets(input: string): RedactResult {
 export function redacted(input: string): string {
   return redactSecrets(input).text;
 }
+

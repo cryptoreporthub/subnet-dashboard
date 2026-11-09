@@ -227,14 +227,18 @@ test("a 1 MB run of JWT-shaped segments joined by dashes scrubs in under half a 
   assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
 });
 
-// A deliberate choice, pinned: a JWT glued to the word before it by a dash or an underscore is
-// not matched by the JWT rule (the lookbehind excludes both, which keeps the scan linear). A JWT
-// after a space, `=` or `:` is matched.
-test("a JWT glued by a dash or underscore is not matched by the JWT rule, and a spaced one is", () => {
+test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   const jwt = "eyJhbGciOiJIUzI1NiJ9." + "a".repeat(80) + "." + "b".repeat(43);
-  assert.equal(redactSecrets(`x-${jwt}`).text.includes(jwt), true, "dash-glued: the JWT rule does not match");
-  assert.equal(redactSecrets(`x_${jwt}`).text.includes(jwt), true, "underscore-glued: the JWT rule does not match");
-  assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false, "space-separated: matched");
+  assert.equal(redactSecrets(`x-${jwt}`).text.includes(jwt), false);
+  assert.equal(redactSecrets(`x_${jwt}`).text.includes(jwt), false);
+  assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
+});
+
+test("ditto r4508315371: a JWT with a segment longer than 2048 characters is redacted", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9." + "a".repeat(3000) + "." + "b".repeat(43);
+  const { text, redactedNames } = redactSecrets(`session=${jwt}`);
+  assert.equal(text.includes(jwt), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
 });
 
 test("an angle-bracketed credential is redacted; only generic placeholder words are passed over", () => {
