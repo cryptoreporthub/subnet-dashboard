@@ -132,3 +132,76 @@ def test_legacy_trail_row_with_non_dict_evidence_does_not_block_trail(isolated):
     _finalize_once()
 
     assert len(_trail_rows(soul_path)) == 1
+
+
+def test_truthy_non_list_learning_trail_does_not_block_trail(isolated):
+    _trace_path, soul_path = isolated
+    soul_path.write_text(
+        json.dumps({"soul_map_state": {"learning_trail": 1}}),
+        encoding="utf-8",
+    )
+
+    _finalize_once()
+
+    assert len(_trail_rows(soul_path)) == 1
+
+
+@pytest.fixture
+def canonical_sqlite_env(tmp_path, monkeypatch):
+    """Canonical trace path backed by SQLite (JSON mirror may be empty or stale)."""
+    db_path = str(tmp_path / "store.db")
+    trace_path = str(tmp_path / "decision_trace.json")
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {"learning_trail": []}}), encoding="utf-8")
+    trace_path_obj = tmp_path / "decision_trace.json"
+    trace_path_obj.write_text(json.dumps(trace_store._empty_store()), encoding="utf-8")
+
+    monkeypatch.setenv("STORE_DB_PATH", db_path)
+    monkeypatch.setenv("TRACE_STORE_PATH", trace_path)
+    monkeypatch.setattr(trace_store, "TRACE_STORE_PATH", trace_path)
+    monkeypatch.setattr(trace_store, "_CANONICAL_TRACE_PATH", trace_path)
+    monkeypatch.setattr("internal.store.db.STORE_DB_PATH", db_path)
+    monkeypatch.setattr("internal.store.query.STORE_DB_PATH", db_path)
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul_path))
+    monkeypatch.setattr(resolver, "on_prediction_resolved", lambda *_a, **_k: None)
+    monkeypatch.setattr(pick_history, "finalize_from_prediction", lambda *_a, **_k: None)
+
+    import internal.store as store_mod
+
+    store_mod._sqlite_ready = False
+    store_mod._bootstrap()
+    assert store_mod.sqlite_available()
+
+    from internal.store.query import record_trace_row
+
+    record_trace_row(
+        {
+            "id": "tr_sqlite_existing",
+            "created_at": "2026-07-01T00:30:00Z",
+            "decision_type": "prediction_resolve",
+            "decision": {"prediction_id": PREDICTION_ID, "outcome": "hit"},
+            "signals": [],
+            "subnet": "Replay Finalize",
+            "netuid": 7,
+        },
+        db_path=db_path,
+    )
+    return trace_path_obj, soul_path, db_path
+
+
+def test_has_decision_row_sees_sqlite_when_json_empty(canonical_sqlite_env):
+    trace_path, _soul_path, _db_path = canonical_sqlite_env
+    trace_path.write_text(json.dumps(trace_store._empty_store()), encoding="utf-8")
+
+    assert trace_store.has_decision_row("prediction_resolve", PREDICTION_ID) is True
+
+
+def test_replayed_finalize_skips_sqlite_lineage_when_json_empty(canonical_sqlite_env):
+    trace_path, _soul_path, _db_path = canonical_sqlite_env
+    trace_path.write_text(json.dumps(trace_store._empty_store()), encoding="utf-8")
+
+    assert trace_store.has_decision_row("prediction_resolve", PREDICTION_ID)
+    _finalize_once()
+    _finalize_once()
+    assert len(_lineage_rows(trace_path)) == 0
+    assert trace_store.has_decision_row("prediction_resolve", PREDICTION_ID)

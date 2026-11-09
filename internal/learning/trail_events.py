@@ -53,7 +53,9 @@ def _trail_has_prediction_resolved(prediction_id: Any) -> bool:
     from internal.council.mindmap_bridge import MindmapBridge
     from internal.council.weights import SOUL_MAP_PATH
 
-    trail = MindmapBridge(persistence_path=SOUL_MAP_PATH).soul_map_state.get("learning_trail") or []
+    trail = MindmapBridge(persistence_path=SOUL_MAP_PATH).soul_map_state.get("learning_trail")
+    if not isinstance(trail, list):
+        trail = []
     for e in trail:
         if not isinstance(e, dict) or e.get("event_type") != "prediction_resolved":
             continue
