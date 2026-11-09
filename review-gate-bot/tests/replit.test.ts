@@ -10,6 +10,7 @@ import {
   __testOnly_askReplitOnceCrossProcess,
   __testOnly_setInFlightLeaseMs,
   __testOnly_setRenewInFlightDuringCall,
+  __testOnly_resetDiscoveryQueue,
   __testOnly_ownerFailureWrite,
   IN_FLIGHT_LEASE_MS,
   REPLIT_TOOL,
@@ -339,7 +340,61 @@ test("ditto r4511210612: a rejecting KV renewal does not cause unhandled rejecti
   assert.equal(outcome.asked, true);
 });
 
+test("ditto r4515088492: timed-out discovery does not stack another listTools", async () => {
+  __testOnly_resetDiscoveryQueue();
+  __testOnly_setLeaseMs(1_400);
+  try {
+    const store = plainKvOnly();
+    let releaseListTools: () => void = () => {};
+    const listToolsBlocked = new Promise<void>((resolve) => {
+      releaseListTools = resolve;
+    });
+    let listToolsCalls = 0;
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => {
+        listToolsCalls += 1;
+        await listToolsBlocked;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const headA = "e".repeat(40);
+    const headB = "f".repeat(40);
+    const first = __testOnly_askReplitOnceCrossProcess({
+      kv: store,
+      mcp: slow,
+      ref: REF,
+      headSha: headA,
+    });
+    await sleep(1_100);
+    const firstDone = await Promise.race([
+      first,
+      sleep(2_000).then(() => {
+        throw new Error("first ask wedged");
+      }),
+    ]);
+    assert.equal(firstDone.asked, false);
+    assert.equal(listToolsCalls, 1);
+    const second = __testOnly_askReplitOnceCrossProcess({
+      kv: store,
+      mcp: slow,
+      ref: REF,
+      headSha: headB,
+    });
+    await sleep(50);
+    assert.equal(listToolsCalls, 1, "second head must not start discovery while the first listTools is still live");
+    releaseListTools();
+    await first;
+    await second;
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
+  }
+});
+
 test("ditto r4513514628 / r4513568040: discovery timeout returns without wedging; later caller recovers", async () => {
+  __testOnly_resetDiscoveryQueue();
   __testOnly_setLeaseMs(1_400);
   try {
     const store = plainKvOnly();
@@ -376,12 +431,14 @@ test("ditto r4513514628 / r4513568040: discovery timeout returns without wedging
     if (!firstDone.asked) {
       assert.equal(firstDone.reason, "unavailable");
     }
-    const second = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: head });
-    assert.equal(fastListTools, 1, "later caller may discover after timeout released the lease");
-    assert.equal(second.asked, true);
     releaseListTools();
+    await first;
+    const second = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: head });
+    assert.equal(fastListTools, 1, "later caller may discover after the serialized slot drains");
+    assert.equal(second.asked, true);
   } finally {
     __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
   }
 });
 

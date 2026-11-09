@@ -187,13 +187,31 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
   }
 }
 
+/** At most one live `listTools` per process; later heads wait on this tail. */
+let discoveryTail: Promise<void> = Promise.resolve();
+
+function runSerializedDiscovery<T>(work: () => Promise<T>): Promise<T> {
+  const prior = discoveryTail;
+  let release!: () => void;
+  const slot = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  discoveryTail = prior.then(() => slot, () => slot);
+  return prior.then(work).finally(() => release());
+}
+
+/** Tests reset the module queue between cases. */
+export function __testOnly_resetDiscoveryQueue(): void {
+  discoveryTail = Promise.resolve();
+}
+
 type DiscoveryOutcome = { kind: "ready"; available: boolean } | { kind: "timeout" };
 
 async function awaitDiscovery(
   mcp: HostMcpRegistry,
   budgetMs: number | undefined,
 ): Promise<DiscoveryOutcome> {
-  const discovery = replitAvailable(mcp);
+  const discovery = runSerializedDiscovery(() => replitAvailable(mcp));
   if (budgetMs === undefined) {
     return { kind: "ready", available: await discovery };
   }
@@ -207,7 +225,7 @@ async function awaitDiscovery(
       deadline,
     ]);
     if (raced.kind === "timeout") {
-      // Plain KV cannot cancel MCP; abandon the pending call and release the lease.
+      // MCP has no cancel; the serialized slot stays held until `listTools` settles.
       void discovery.catch(() => undefined);
       return { kind: "timeout" };
     }
