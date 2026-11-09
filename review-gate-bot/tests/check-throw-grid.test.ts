@@ -422,6 +422,18 @@ test("RD-03: dedupe unchanged with open workingCheck does not leave extra conclu
   assert.equal(w.checks.filter((c) => c.conclusion === "action_required").length, 1);
 });
 
+test("ditto r4508316655: base-unavail without expectedPair rejects stale head before check", async () => {
+  const gateMoved = state("await_cursor_ditto", { headSha: MOVED });
+  const w = world([HEAD], [MERGE], [BASE], [null]);
+  const outcome = await postGateCheck({
+    ...w.deps,
+    state: gateMoved,
+    read: async () => gateMoved,
+  });
+  assert.equal(outcome, "stale-head");
+  assert.equal(w.checks.length, 0);
+});
+
 test("Ditto TC-base-unavail-admit-mismatch-no-handle: stale-head, no merge-base blocker", async () => {
   const w = world([MOVED], [MERGE], [BASE], [null]);
   const outcome = await postGateCheck({

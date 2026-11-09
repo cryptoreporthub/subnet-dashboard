@@ -673,6 +673,9 @@ export async function postGateCheck(input: {
       const a0 = await observePair(octokit, ref);
       if (a0.kind !== "ready") {
         const stateEarly = await read();
+        if (a0.kind === "base-unavailable" && a0.headSha !== stateEarly.headSha) {
+          return "stale-head";
+        }
         const tip = a0.kind === "base-unavailable" ? a0.baseTipSha : undefined;
         const title = a0.kind === "base-unavailable" ? MERGE_BASE_UNAVAILABLE_TITLE : GITHUB_READ_FAILURE_TITLE;
         const check =
