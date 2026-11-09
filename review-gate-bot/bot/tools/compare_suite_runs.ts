@@ -160,7 +160,13 @@ export default defineTool({
       };
     }
 
-    if (currentBaseSha === undefined || currentBaseSha === "" || currentBaseTipSha === undefined || currentBaseTipSha === "") {
+    if (
+      !isEval &&
+      (currentBaseSha === undefined ||
+        currentBaseSha === "" ||
+        currentBaseTipSha === undefined ||
+        currentBaseTipSha === "")
+    ) {
       return { recorded: false, reason: "base-unavailable", carried: false, clean: false };
     }
 

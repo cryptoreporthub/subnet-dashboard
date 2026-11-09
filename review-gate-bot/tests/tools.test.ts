@@ -299,6 +299,37 @@ test("an eval gate state is not shown beside a PR head the fixture does not pin"
   await assert.rejects(run(checkGateState)({}, await evalContext(FIXTURE_GATE, OLD)), /pinned to/);
 });
 
+test("ditto r4508316186: eval compare_suite_runs returns eval-no-runner, not base-unavailable", async () => {
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE },
+    await evalContext(FIXTURE_GATE),
+  )) as Record<string, unknown>;
+  assert.equal(result.recorded, false);
+  assert.equal(result.reason, "eval-no-runner");
+});
+
+test("ditto r4508316186: eval carry reaches carry logic without live base SHAs", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "gate-eval-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({
+      number: 1519,
+      title: "t",
+      url: "u",
+      headSha: HEAD,
+      baseSha: BASE,
+      draft: false,
+      files: [".github/workflows/fly-enable-v2.yml", "scripts/fly_disable_worker_v2.sh"],
+    }),
+  );
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    { session: { purpose: "eval" }, workspaceDir: dir },
+  )) as Record<string, unknown>;
+  assert.equal(result.reason, "code-changed");
+  assert.equal(result.carried, false);
+});
+
 // --- An eval read is capped and scrubbed the way a live read is ---------------
 
 async function repoEvalContext(files: Record<string, string>): Promise<unknown> {
