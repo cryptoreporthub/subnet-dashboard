@@ -274,6 +274,23 @@ test("ditto r4511038925: a stale in-flight claim after crash permits retry", asy
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** Plain get/put/delete only — matches hosted KV without CAS. */
+function plainKvOnly(): HostKvApi & { store: Map<string, unknown> } {
+  const store = new Map<string, unknown>();
+  return {
+    store,
+    async get(key) {
+      return store.get(key) as never;
+    },
+    async put(key, value) {
+      store.set(key, value);
+    },
+    async delete(key) {
+      store.delete(key);
+    },
+  };
+}
+
 /** CAS-capable KV without atomic create — production CAS hosts expose `putIfAbsent`. */
 type CasMemoryKv = ReturnType<typeof createMemoryKv>;
 
@@ -320,6 +337,46 @@ test("ditto r4511210612: a rejecting KV renewal does not cause unhandled rejecti
   release();
   const outcome = await ask;
   assert.equal(outcome.asked, true);
+});
+
+test("ditto r4513514628: discovery timeout keeps the lease until listTools finishes", async () => {
+  __testOnly_setLeaseMs(1_400);
+  try {
+    const store = plainKvOnly();
+    let releaseListTools: () => void = () => {};
+    const listToolsBlocked = new Promise<void>((resolve) => {
+      releaseListTools = resolve;
+    });
+    let fastListTools = 0;
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => {
+        await listToolsBlocked;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const fast = {
+      names: () => ["replit"],
+      listTools: async () => {
+        fastListTools += 1;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const first = __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha: HEAD });
+    await sleep(1_100);
+    const blocked = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
+    assert.equal(fastListTools, 0, "must not start a second discovery while the first listTools is still active");
+    assert.equal(blocked.asked, false);
+    if (!blocked.asked) {
+      assert.equal(blocked.reason, "already-asked");
+    }
+    releaseListTools();
+    await first;
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+  }
 });
 
 test("ditto r4513373769: ask lease renews during slow listTools so a second process cannot take over", async () => {
