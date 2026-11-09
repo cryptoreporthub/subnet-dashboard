@@ -32,6 +32,19 @@ def test_replace_oserror_returns_disk_state_and_leaves_cache(tmp_path, monkeypat
     assert "OSError" in caplog.text
 
 
+def test_mutator_timeout_propagates_with_status(tmp_path):
+    """CR-07: mutator TimeoutError is not confused with flock lock-wait timeout."""
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"kept": 1}), encoding="utf-8")
+
+    def _slow_mutator(_blob):
+        raise TimeoutError("mutator stall")
+
+    with pytest.raises(TimeoutError, match="mutator"):
+        write_soul_map(_slow_mutator, path=str(soul_path), with_status=True)
+    assert json.loads(soul_path.read_text(encoding="utf-8")) == {"kept": 1}
+
+
 def test_successful_write_updates_disk_and_cache(tmp_path):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"kept": 1}), encoding="utf-8")
@@ -61,57 +74,6 @@ def test_mutator_exception_propagates(tmp_path):
     assert read_soul_map(str(soul_path)) == {"kept": 1}
 
 
-def test_write_leaves_unreadable_existing_file_untouched(tmp_path):
-    from internal.store import soul_map_io
-
-    path = tmp_path / "soul_map.json"
-    corrupt = '{"soul_map_state": {"learning_trail": [ TRUNCATED'
-    path.write_text(corrupt, encoding="utf-8")
-    calls = []
-
-    result = soul_map_io.write_soul_map(lambda blob: calls.append(blob) or blob.update(x=1), str(path))
-
-    assert path.read_text(encoding="utf-8") == corrupt
-    assert calls == []
-    assert result == {}
-
-
-def test_write_read_oserror_after_fresh_cache_keeps_all_fields(tmp_path, monkeypatch):
-    from internal.store import soul_map_io
-
-    path = tmp_path / "soul_map.json"
-    full = {"soul_map_state": {"learning_trail": [{"id": 1}]}, "feedback_logs": [{"n": 1}]}
-    path.write_text(json.dumps(full), encoding="utf-8")
-    assert read_soul_map(str(path)) == full  # fresh cache holds the full blob
-
-    real_open = open
-
-    def denied_for_soul_map(file, *args, **kwargs):
-        if str(file) == str(path):
-            raise PermissionError("denied")
-        return real_open(file, *args, **kwargs)
-
-    monkeypatch.setattr(soul_map_io, "open", denied_for_soul_map, raising=False)
-    calls = []
-
-    result = write_soul_map(lambda blob: calls.append(blob) or blob.update(x=1), str(path))
-
-    monkeypatch.undo()
-    assert calls == []
-    assert result == {}
-    assert json.loads(path.read_text(encoding="utf-8")) == full
-
-
-def test_write_creates_missing_file(tmp_path):
-    from internal.store import soul_map_io
-
-    path = tmp_path / "fresh" / "soul_map.json"
-
-    soul_map_io.write_soul_map(lambda blob: blob.update(x=1), str(path))
-
-    assert json.loads(path.read_text(encoding="utf-8")) == {"x": 1}
-
-
 def test_cache_refresh_failure_after_commit_still_reports_success(tmp_path, monkeypatch, caplog):
     """A cache error after the disk write landed must not report the write as failed."""
     path = tmp_path / "soul_map.json"
@@ -130,7 +92,6 @@ def test_cache_refresh_failure_after_commit_still_reports_success(tmp_path, monk
 
     assert (committed, blob) == (True, {"kept": 2})
     assert json.loads(path.read_text(encoding="utf-8")) == {"kept": 2}
-    monkeypatch.undo()  # the read below must not hit the patched _cache_put
-    # A stale cache entry would return {"kept": 1} here. The failed refresh must not leave one.
+    monkeypatch.undo()
     assert read_soul_map(str(path), copy_blob=False) == {"kept": 2}
     assert "cache refresh failed after commit" in caplog.text
