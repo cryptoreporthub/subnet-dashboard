@@ -234,6 +234,14 @@ test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
 });
 
+test("ditto r4508840723: header decoys do not rescan a shared long payload", () => {
+  const header = `eyJ${"a".repeat(20)}${"eyJ".repeat(80)}${"b".repeat(40)}`;
+  const payload = "p".repeat(30_000);
+  const jwt = `${header}.${payload}.${"s".repeat(5)}`;
+  const { ms } = timed(`noise ${jwt}`);
+  assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
+});
+
 test("ditto r4508598811: a JWT with an oversized payload segment is redacted whole", () => {
   const header = "eyJhbGciOiJIUzI1NiJ9";
   const payload = "a".repeat(65_537);

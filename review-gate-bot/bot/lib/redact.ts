@@ -190,14 +190,34 @@ function scrubJwtCredentials(input: string, redactedNames: string[]): string {
     }
     const headerScan = jwtHeaderDotScan(input, index);
     let end: number | null = null;
+    let failAdvance = 0;
     if (headerScan.dot !== null) {
-      const payloadDot = jwtDotAfterSegment(input, headerScan.dot + 1, JWT_MIN_SEGMENT, true);
-      if (payloadDot !== null) {
-        const sigEnd = jwtSignatureEnd(input, payloadDot + 1);
+      const payloadStart = headerScan.dot + 1;
+      const payloadScan = jwtDotAfterSegmentScan(
+        input,
+        payloadStart,
+        JWT_MIN_SEGMENT,
+        true,
+        JWT_SEGMENT_SCAN_LIMIT,
+      );
+      if (payloadScan.dot !== null) {
+        const sigEnd = jwtSignatureEnd(input, payloadScan.dot + 1);
         if (sigEnd !== null) {
           end = sigEnd;
+        } else {
+          let sigIdx = payloadScan.dot + 1;
+          while (sigIdx < input.length && isJwtSegmentChar(input[sigIdx])) {
+            sigIdx += 1;
+          }
+          failAdvance = Math.max(failAdvance, sigIdx);
         }
+      } else {
+        failAdvance = Math.max(
+          failAdvance,
+          payloadStart + Math.max(payloadScan.scanned, 1),
+        );
       }
+      failAdvance = Math.max(failAdvance, headerScan.dot + 1);
     }
     if (end !== null) {
       out += input.slice(mark, index) + REDACTED;
@@ -209,6 +229,10 @@ function scrubJwtCredentials(input: string, redactedNames: string[]): string {
     if (headerScan.hitBound) {
       const skip = skipAfterFailedJwtCandidate(input, index);
       index = skip < index + JWT_MAX_HEADER_NO_DOT ? skip : index + headerScan.scanned;
+      continue;
+    }
+    if (failAdvance > index) {
+      index = failAdvance;
       continue;
     }
     index = skipAfterFailedJwtCandidate(input, index);
