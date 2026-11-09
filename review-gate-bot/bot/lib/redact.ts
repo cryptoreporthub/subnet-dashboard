@@ -62,14 +62,44 @@ const REDACTED = "<redacted>";
 const JWT_MIN_SEGMENT = 8;
 const JWT_MIN_HEADER = 11;
 const JWT_MAX_SEGMENT = 65_536;
-/** Real JWT headers are short; abort header dot scan early to keep decoy perf. */
-const JWT_MAX_HEADER_NO_DOT = 128;
+/** Probe bound for JWT headers; long x5c chains extend up to {@link JWT_MAX_SEGMENT}. */
+const JWT_HEADER_DOT_PROBE = 128;
+/** Header dot scan bound; real x5c-chain headers can exceed 128 base64url chars. */
+const JWT_MAX_HEADER_NO_DOT = JWT_MAX_SEGMENT;
+
+type JwtDotScan = { dot: number | null; scanned: number; hitBound: boolean };
 
 function isJwtSegmentChar(char: string | undefined): boolean {
   return char !== undefined && /[A-Za-z0-9_-]/.test(char);
 }
 
 /** Index of `.` ending a segment, or null when the run is not JWT-shaped. */
+function jwtDotAfterSegmentScan(
+  input: string,
+  start: number,
+  minLength: number,
+  allowNestedEyJ: boolean,
+  maxWithoutDot: number,
+): JwtDotScan {
+  let index = start;
+  const limit = Math.min(input.length, start + maxWithoutDot);
+  while (index < limit) {
+    const char = input[index];
+    if (char === ".") {
+      const dot = index - start >= minLength ? index : null;
+      return { dot, scanned: index - start, hitBound: false };
+    }
+    if (!isJwtSegmentChar(char)) {
+      return { dot: null, scanned: index - start, hitBound: false };
+    }
+    if (!allowNestedEyJ && index > start && input.startsWith("eyJ", index)) {
+      return { dot: null, scanned: index - start, hitBound: false };
+    }
+    index += 1;
+  }
+  return { dot: null, scanned: index - start, hitBound: index >= limit };
+}
+
 function jwtDotAfterSegment(
   input: string,
   start: number,
@@ -77,22 +107,46 @@ function jwtDotAfterSegment(
   allowNestedEyJ: boolean,
   maxWithoutDot: number = JWT_MAX_SEGMENT,
 ): number | null {
-  let index = start;
-  const limit = Math.min(input.length, start + maxWithoutDot);
-  while (index < limit) {
-    const char = input[index];
-    if (char === ".") {
-      return index - start >= minLength ? index : null;
-    }
-    if (!isJwtSegmentChar(char)) {
-      return null;
-    }
-    if (!allowNestedEyJ && index > start && input.startsWith("eyJ", index)) {
-      return null;
-    }
-    index += 1;
+  return jwtDotAfterSegmentScan(input, start, minLength, allowNestedEyJ, maxWithoutDot).dot;
+}
+
+/** Header segment may be long; probe then search for `.` inside {@link JWT_MAX_HEADER_NO_DOT}. */
+function jwtHeaderDotScan(input: string, start: number): JwtDotScan {
+  const quick = jwtDotAfterSegmentScan(
+    input,
+    start,
+    JWT_MIN_HEADER,
+    true,
+    JWT_HEADER_DOT_PROBE,
+  );
+  if (quick.dot !== null || !quick.hitBound) {
+    return quick;
   }
-  return null;
+
+  const windowEnd = Math.min(input.length, start + JWT_MAX_HEADER_NO_DOT);
+  let search = start + JWT_HEADER_DOT_PROBE;
+  while (search < windowEnd) {
+    const dotIdx = input.indexOf(".", search);
+    if (dotIdx === -1 || dotIdx >= windowEnd) {
+      break;
+    }
+    if (dotIdx - start < JWT_MIN_HEADER) {
+      search = dotIdx + 1;
+      continue;
+    }
+    let valid = true;
+    for (let i = start; i < dotIdx; i += 1) {
+      if (!isJwtSegmentChar(input[i])) {
+        valid = false;
+        break;
+      }
+    }
+    if (valid) {
+      return { dot: dotIdx, scanned: dotIdx - start, hitBound: false };
+    }
+    search = dotIdx + 1;
+  }
+  return { dot: null, scanned: windowEnd - start, hitBound: true };
 }
 
 /** End index (exclusive) of a terminal base64url signature segment. */
@@ -125,6 +179,9 @@ function skipAfterFailedJwtCandidate(input: string, at: number): number {
 
 /** Linear scan for `eyJ…`.`…`.`…` triples (no lookbehind; long segments allowed). */
 function scrubJwtCredentials(input: string, redactedNames: string[]): string {
+  if (!input.includes(".")) {
+    return input;
+  }
   let out = "";
   let mark = 0;
   for (let index = 0; index < input.length; ) {
@@ -132,16 +189,10 @@ function scrubJwtCredentials(input: string, redactedNames: string[]): string {
       index += 1;
       continue;
     }
-    const headerDot = jwtDotAfterSegment(
-      input,
-      index,
-      JWT_MIN_HEADER,
-      true,
-      JWT_MAX_HEADER_NO_DOT,
-    );
+    const headerScan = jwtHeaderDotScan(input, index);
     let end: number | null = null;
-    if (headerDot !== null) {
-      const payloadDot = jwtDotAfterSegment(input, headerDot + 1, JWT_MIN_SEGMENT, true);
+    if (headerScan.dot !== null) {
+      const payloadDot = jwtDotAfterSegment(input, headerScan.dot + 1, JWT_MIN_SEGMENT, true);
       if (payloadDot !== null) {
         const sigEnd = jwtSignatureEnd(input, payloadDot + 1);
         if (sigEnd !== null) {
@@ -154,6 +205,11 @@ function scrubJwtCredentials(input: string, redactedNames: string[]): string {
       mark = end;
       redactedNames.push("unlabelled-credential");
       index = end;
+      continue;
+    }
+    if (headerScan.hitBound) {
+      const skip = skipAfterFailedJwtCandidate(input, index);
+      index = skip < index + JWT_MAX_HEADER_NO_DOT ? skip : index + headerScan.scanned;
       continue;
     }
     index = skipAfterFailedJwtCandidate(input, index);

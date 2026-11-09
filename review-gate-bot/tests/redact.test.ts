@@ -234,6 +234,17 @@ test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
 });
 
+test("ditto r4508694445: a JWT with a header segment longer than 128 characters is redacted", () => {
+  const x5c = ["A".repeat(100), "B".repeat(100)];
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", x5c })).toString("base64url");
+  assert.ok(header.length > 128, `header length ${header.length}`);
+  const payload = Buffer.from(JSON.stringify({ sub: "x" })).toString("base64url");
+  const jwt = `${header}.${payload}.${"C".repeat(43)}`;
+  const { text, redactedNames } = redactSecrets(`cert=${jwt}`);
+  assert.equal(text.includes(jwt), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
 test("ditto r4508668004: a JWT whose header encoding contains nested eyJ is redacted whole", () => {
   const header = Buffer.from(
     JSON.stringify({ alg: "HS256", ctx: { eyJ: "nested", v: 1 } }),
