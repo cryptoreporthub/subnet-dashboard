@@ -62,6 +62,8 @@ const REDACTED = "<redacted>";
 const JWT_MIN_SEGMENT = 8;
 const JWT_MIN_HEADER = 11;
 const JWT_MAX_SEGMENT = 65_536;
+/** Real JWT headers are short; abort header dot scan early to keep decoy perf. */
+const JWT_MAX_HEADER_NO_DOT = 128;
 
 function isJwtSegmentChar(char: string | undefined): boolean {
   return char !== undefined && /[A-Za-z0-9_-]/.test(char);
@@ -73,9 +75,10 @@ function jwtDotAfterSegment(
   start: number,
   minLength: number,
   allowNestedEyJ: boolean,
+  maxWithoutDot: number = JWT_MAX_SEGMENT,
 ): number | null {
   let index = start;
-  const limit = Math.min(input.length, start + JWT_MAX_SEGMENT);
+  const limit = Math.min(input.length, start + maxWithoutDot);
   while (index < limit) {
     const char = input[index];
     if (char === ".") {
@@ -129,7 +132,13 @@ function scrubJwtCredentials(input: string, redactedNames: string[]): string {
       index += 1;
       continue;
     }
-    const headerDot = jwtDotAfterSegment(input, index, JWT_MIN_HEADER, false);
+    const headerDot = jwtDotAfterSegment(
+      input,
+      index,
+      JWT_MIN_HEADER,
+      true,
+      JWT_MAX_HEADER_NO_DOT,
+    );
     let end: number | null = null;
     if (headerDot !== null) {
       const payloadDot = jwtDotAfterSegment(input, headerDot + 1, JWT_MIN_SEGMENT, true);

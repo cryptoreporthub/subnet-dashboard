@@ -234,6 +234,19 @@ test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
 });
 
+test("ditto r4508668004: a JWT whose header encoding contains nested eyJ is redacted whole", () => {
+  const header = Buffer.from(
+    JSON.stringify({ alg: "HS256", ctx: { eyJ: "nested", v: 1 } }),
+  ).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sub: "x" })).toString("base64url");
+  const jwt = `${header}.${payload}.${"A".repeat(43)}`;
+  assert.match(header, /eyJ/);
+  const { text, redactedNames } = redactSecrets(`prefix ${jwt} suffix`);
+  assert.equal(text.includes(jwt), false);
+  assert.equal(text.includes(header), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
 test("ditto r4508617566: skip past a failed candidate does not jump over an embedded JWT", () => {
   const pad = "a".repeat(65_530);
   const jwt =
