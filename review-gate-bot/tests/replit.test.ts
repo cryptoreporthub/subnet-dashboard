@@ -340,6 +340,57 @@ test("ditto r4511110608: in-flight renewal blocks a second process during a slow
   }
 });
 
+test("ditto r4511267518: a stale failure cannot roll back a newer attempt count", async () => {
+  __testOnly_setInFlightLeaseMs(80);
+  __testOnly_setRenewInFlightDuringCall(false);
+  try {
+    const store = kv();
+    let releaseA: () => void = () => {};
+    const pendingA = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    const slowA = {
+      names: () => ["replit"],
+      listTools: async () => [{ name: REPLIT_TOOL }],
+      callTool: async () => {
+        await pendingA;
+        throw new Error("stale fail");
+      },
+    } as unknown as HostMcpRegistry;
+    const failing = mcp({ throwOnCall: true });
+    const askA = __testOnly_askReplit({ kv: store, mcp: slowA, ref: REF, headSha: HEAD });
+    await sleep(90);
+
+    const askB = await __testOnly_askReplit({ kv: store, mcp: failing, ref: REF, headSha: HEAD });
+    assert.equal(askB.asked, false);
+    if (!askB.asked && askB.reason !== "already-asked") {
+      assert.equal(askB.attempts, 1);
+    }
+
+    const askC = await __testOnly_askReplit({ kv: store, mcp: failing, ref: REF, headSha: HEAD });
+    assert.equal(askC.asked, false);
+    if (!askC.asked && askC.reason !== "already-asked") {
+      assert.equal(askC.attempts, 2);
+    }
+
+    const nonceBeforeLate = (store.store.get(replitAskKey(REF, HEAD)) as { claimNonce?: string }).claimNonce;
+    releaseA();
+    const lateA = await askA;
+    assert.equal(lateA.asked, false);
+
+    const record = store.store.get(replitAskKey(REF, HEAD)) as {
+      failedAttempts?: number;
+      claimNonce?: string;
+    };
+    assert.equal(record.failedAttempts, 2);
+    assert.equal(record.claimNonce, nonceBeforeLate);
+    assert.equal(failing.calls, 2, "stale A must not consume another attempt slot");
+  } finally {
+    __testOnly_setInFlightLeaseMs(undefined);
+    __testOnly_setRenewInFlightDuringCall(true);
+  }
+});
+
 test("ditto r4511110136: a stale attempt cannot erase a newer successful ask", async () => {
   __testOnly_setInFlightLeaseMs(80);
   __testOnly_setRenewInFlightDuringCall(false);

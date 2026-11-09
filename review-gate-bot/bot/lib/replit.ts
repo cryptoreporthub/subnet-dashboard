@@ -172,7 +172,10 @@ async function putFailureUnlessTerminal(kv: HostKvApi, key: string, next: AskRec
   }
 }
 
-function blocksOtherClaim(record: AskRecord, claimNonce: string, now = Date.now()): boolean {
+type PutRecordMode = "acquire" | "owner";
+
+/** Whether a new claim must wait (active in-flight lease or terminal success). */
+function blocksNewClaim(record: AskRecord, claimNonce: string, now = Date.now()): boolean {
   if (terminalAskRecorded(record)) {
     return true;
   }
@@ -185,16 +188,34 @@ function blocksOtherClaim(record: AskRecord, claimNonce: string, now = Date.now(
   return now - record.inFlightAt < inFlightLeaseMs();
 }
 
-async function putRecordUnlessSuperseded(kv: HostKvApi, key: string, claimNonce: string, next: AskRecord): Promise<boolean> {
+/** Whether an in-flight owner write is stale relative to the stored record. */
+function blocksOwnerWrite(record: AskRecord, ownerClaimNonce: string): boolean {
+  return record.claimNonce !== undefined && record.claimNonce !== ownerClaimNonce;
+}
+
+function blocksWrite(record: AskRecord, claimNonce: string, mode: PutRecordMode, now = Date.now()): boolean {
+  if (mode === "owner") {
+    return blocksOwnerWrite(record, claimNonce);
+  }
+  return blocksNewClaim(record, claimNonce, now);
+}
+
+async function putRecordUnlessSuperseded(
+  kv: HostKvApi,
+  key: string,
+  claimNonce: string,
+  next: AskRecord,
+  mode: PutRecordMode,
+): Promise<boolean> {
   const read = asAskRecord(await kv.get(key));
-  if (read !== undefined && blocksOtherClaim(read, claimNonce)) {
+  if (read !== undefined && blocksWrite(read, claimNonce, mode)) {
     return false;
   }
 
   if (supportsKvCas(kv) && typeof kv.getWithVersion === "function" && typeof kv.putIfVersion === "function") {
     const current = await kv.getWithVersion(key);
     const live = asAskRecord(current?.value);
-    if (live !== undefined && blocksOtherClaim(live, claimNonce)) {
+    if (live !== undefined && blocksWrite(live, claimNonce, mode)) {
       return false;
     }
     if (current === undefined) {
@@ -233,7 +254,7 @@ async function renewInFlightLease(kv: HostKvApi, key: string, claimNonce: string
       return;
     }
     const now = Date.now();
-    await putRecordUnlessSuperseded(kv, key, claimNonce, { ...current, at: now, inFlightAt: now, claimNonce });
+    await putRecordUnlessSuperseded(kv, key, claimNonce, { ...current, at: now, inFlightAt: now, claimNonce }, "owner");
   } catch {
     // Best-effort: a transient KV error must not escape the timer callback.
   }
@@ -315,7 +336,7 @@ async function askReplit(input: {
     const wrote =
       ownerNonce === undefined
         ? await putFailureUnlessTerminal(input.kv, key, failureRecord)
-        : await putRecordUnlessSuperseded(input.kv, key, ownerNonce, failureRecord);
+        : await putRecordUnlessSuperseded(input.kv, key, ownerNonce, failureRecord, "owner");
     if (!wrote) {
       const current = asAskRecord(await input.kv.get(key));
       if (current !== undefined && (terminalAskRecorded(current) || askAlreadySent(current))) {
@@ -343,7 +364,7 @@ async function askReplit(input: {
     inFlightAt: claimTime,
     claimNonce,
     failedAttempts: failedAttempts > 0 ? failedAttempts : undefined,
-  } satisfies AskRecord);
+  } satisfies AskRecord, "acquire");
   if (!claimed) {
     return { asked: false, reason: "already-asked", detail: "ask in flight for this head" };
   }
@@ -381,7 +402,7 @@ async function askReplit(input: {
       askedAt: now,
       inFlightAt: now,
       claimNonce,
-    } satisfies AskRecord);
+    } satisfies AskRecord, "owner");
     if (!wrote) {
       const current = asAskRecord(await input.kv.get(key));
       if (current !== undefined && terminalAskRecorded(current)) {
@@ -392,7 +413,7 @@ async function askReplit(input: {
         deliveredAt: now,
         inFlightAt: now,
         claimNonce,
-      } satisfies AskRecord);
+      } satisfies AskRecord, "owner");
     }
 
     return { asked: true, text, attempts: failedAttempts + 1 };
