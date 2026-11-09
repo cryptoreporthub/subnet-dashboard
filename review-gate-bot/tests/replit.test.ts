@@ -5,6 +5,9 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import {
   ASK_ATTEMPTS,
   askReplitOnce,
+  __testOnly_askReplit,
+  __testOnly_setInFlightLeaseMs,
+  __testOnly_setRenewInFlightDuringCall,
   IN_FLIGHT_LEASE_MS,
   REPLIT_TOOL,
   replitQuestion,
@@ -258,11 +261,75 @@ test("ditto r4511038426: a fresh in-flight claim suppresses a concurrent duplica
 test("ditto r4511038925: a stale in-flight claim after crash permits retry", async () => {
   const store = kv();
   const stale = Date.now() - IN_FLIGHT_LEASE_MS - 1;
-  await store.put(replitAskKey(REF, HEAD), { at: stale, inFlightAt: stale });
+  await store.put(replitAskKey(REF, HEAD), { at: stale, inFlightAt: stale, claimNonce: "stale" });
   const registry = mcp();
   const outcome = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
   assert.equal(outcome.asked, true);
   assert.equal(registry.calls, 1);
+});
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+test("ditto r4511110608: in-flight renewal blocks a second process during a slow call", async () => {
+  __testOnly_setInFlightLeaseMs(120);
+  __testOnly_setRenewInFlightDuringCall(true);
+  try {
+    const store = kv();
+    let releaseSlow: () => void = () => {};
+    const slowDone = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => [{ name: REPLIT_TOOL }],
+      callTool: async () => {
+        await Promise.race([slowDone, sleep(400)]);
+        return { isError: false, content: [{ type: "text", text: "ok" }] };
+      },
+    } as unknown as HostMcpRegistry;
+    const fast = mcp();
+    const slowAsk = __testOnly_askReplit({ kv: store, mcp: slow, ref: REF, headSha: HEAD });
+    await sleep(50);
+    const blocked = await __testOnly_askReplit({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
+    releaseSlow();
+    await slowAsk;
+    assert.equal(blocked.asked, false);
+    assert.equal(blocked.reason, "already-asked");
+    assert.equal(fast.calls, 0, "must not call Replit while the first ask is in flight");
+  } finally {
+    __testOnly_setInFlightLeaseMs(undefined);
+    __testOnly_setRenewInFlightDuringCall(true);
+  }
+});
+
+test("ditto r4511110136: a stale attempt cannot erase a newer successful ask", async () => {
+  __testOnly_setInFlightLeaseMs(80);
+  __testOnly_setRenewInFlightDuringCall(false);
+  try {
+    const store = kv();
+    const slowFail = {
+      names: () => ["replit"],
+      listTools: async () => [{ name: REPLIT_TOOL }],
+      callTool: async () => {
+        await sleep(150);
+        throw new Error("late fail");
+      },
+    } as unknown as HostMcpRegistry;
+    const fast = mcp();
+    const late = __testOnly_askReplit({ kv: store, mcp: slowFail, ref: REF, headSha: HEAD });
+    await sleep(90);
+    const reclaim = await __testOnly_askReplit({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
+    await late;
+    const record = store.store.get(replitAskKey(REF, HEAD)) as { askedAt?: number; deliveredAt?: number };
+    assert.equal(reclaim.asked, true);
+    assert.ok(record.askedAt !== undefined || record.deliveredAt !== undefined);
+    const again = await __testOnly_askReplit({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
+    assert.equal(again.reason, "already-asked");
+    assert.equal(fast.calls, 1);
+  } finally {
+    __testOnly_setInFlightLeaseMs(undefined);
+    __testOnly_setRenewInFlightDuringCall(true);
+  }
 });
 
 test("an MCP error that echoes a credential is scrubbed before it is stored or returned", async () => {

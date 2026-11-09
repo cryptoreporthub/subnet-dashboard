@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
+import { supportsKvCas } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { replitAskKey } from "./gate.js";
 import { exclusive } from "./lock.js";
@@ -58,8 +60,13 @@ export function replitQuestion(prNumber: number, headSha: string): string {
 /** Attempts per head before the ask is reported as persistently failing. */
 export const ASK_ATTEMPTS = 3;
 
-/** Reclaim `inFlightAt` after a crash before `callTool`; must exceed a slow MCP round-trip. */
-export const IN_FLIGHT_LEASE_MS = 5 * 60_000;
+/**
+ * Reclaim `inFlightAt` after a crash before `callTool`. Matches the gate lease
+ * order of magnitude and is renewed while `callTool` is pending.
+ */
+export const IN_FLIGHT_LEASE_MS = 15 * 60_000;
+
+export const IN_FLIGHT_RENEW_MS = Math.floor(IN_FLIGHT_LEASE_MS / 3);
 
 export type ReplitAskFailure = "unavailable" | "no-tool" | "error";
 
@@ -82,11 +89,33 @@ type AskRecord = {
   deliveredAt?: number;
   /** Claim before `callTool`; suppresses overlap until lease expires or delivery is recorded. */
   inFlightAt?: number;
+  /** Owning attempt for in-flight writes across processes. */
+  claimNonce?: string;
   /** Failed attempts, so a retry is bounded and a persistent failure is visible. */
   failedAttempts?: number;
   lastFailure?: string;
   at: number;
 };
+
+/** Tests pin a shorter lease without affecting production defaults. */
+let testInFlightLeaseMs: number | undefined;
+let testRenewInFlightDuringCall = true;
+
+export function __testOnly_setInFlightLeaseMs(ms: number | undefined): void {
+  testInFlightLeaseMs = ms;
+}
+
+export function __testOnly_setRenewInFlightDuringCall(enabled: boolean): void {
+  testRenewInFlightDuringCall = enabled;
+}
+
+function inFlightLeaseMs(): number {
+  return testInFlightLeaseMs ?? IN_FLIGHT_LEASE_MS;
+}
+
+function terminalAskRecorded(record: AskRecord): boolean {
+  return record.askedAt !== undefined || record.deliveredAt !== undefined;
+}
 
 function asAskRecord(value: unknown): AskRecord | undefined {
   if (typeof value !== "object" || value === null) {
@@ -99,14 +128,14 @@ function asAskRecord(value: unknown): AskRecord | undefined {
   return record as AskRecord;
 }
 
-function askAlreadySent(record: AskRecord, now = Date.now()): boolean {
-  if (record.askedAt !== undefined || record.deliveredAt !== undefined) {
+export function askAlreadySent(record: AskRecord, now = Date.now()): boolean {
+  if (terminalAskRecorded(record)) {
     return true;
   }
   if (record.inFlightAt === undefined) {
     return false;
   }
-  return now - record.inFlightAt < IN_FLIGHT_LEASE_MS;
+  return now - record.inFlightAt < inFlightLeaseMs();
 }
 
 /**
@@ -125,6 +154,79 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function putFailureUnlessTerminal(kv: HostKvApi, key: string, next: AskRecord): Promise<boolean> {
+  const read = asAskRecord(await kv.get(key));
+  if (read !== undefined && terminalAskRecorded(read)) {
+    return false;
+  }
+  if (read !== undefined && askAlreadySent(read)) {
+    return false;
+  }
+  try {
+    await kv.put(key, next);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function blocksOtherClaim(record: AskRecord, claimNonce: string, now = Date.now()): boolean {
+  if (terminalAskRecorded(record)) {
+    return true;
+  }
+  if (record.claimNonce === undefined || record.claimNonce === claimNonce) {
+    return false;
+  }
+  return now - (record.inFlightAt ?? record.at) < inFlightLeaseMs();
+}
+
+async function putRecordUnlessSuperseded(kv: HostKvApi, key: string, claimNonce: string, next: AskRecord): Promise<boolean> {
+  const read = asAskRecord(await kv.get(key));
+  if (read !== undefined && blocksOtherClaim(read, claimNonce)) {
+    return false;
+  }
+
+  if (supportsKvCas(kv) && typeof kv.getWithVersion === "function" && typeof kv.putIfVersion === "function") {
+    const current = await kv.getWithVersion(key);
+    const live = asAskRecord(current?.value);
+    if (live !== undefined && blocksOtherClaim(live, claimNonce)) {
+      return false;
+    }
+    if (current === undefined) {
+      try {
+        await kv.put(key, next);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    try {
+      return (await kv.putIfVersion(key, next, current.version)).ok;
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    await kv.put(key, next);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function renewInFlightLease(kv: HostKvApi, key: string, claimNonce: string): Promise<void> {
+  const current = asAskRecord(await kv.get(key));
+  if (current === undefined || current.claimNonce !== claimNonce) {
+    return;
+  }
+  if (terminalAskRecorded(current)) {
+    return;
+  }
+  const now = Date.now();
+  await putRecordUnlessSuperseded(kv, key, claimNonce, { ...current, at: now, inFlightAt: now });
 }
 
 /**
@@ -147,6 +249,16 @@ export function askReplitOnce(input: {
   return exclusive(replitAskKey(input.ref, input.headSha), () => askReplit(input));
 }
 
+/** Parallel cross-process tests call the same path without the process-local queue. */
+export function __testOnly_askReplit(input: {
+  kv: HostKvApi;
+  mcp: HostMcpRegistry;
+  ref: PrRef;
+  headSha: string;
+}): Promise<ReplitAskOutcome> {
+  return askReplit(input);
+}
+
 async function askReplit(input: {
   kv: HostKvApi;
   mcp: HostMcpRegistry;
@@ -161,9 +273,7 @@ async function askReplit(input: {
       asked: false,
       reason: "already-asked",
       detail:
-        previous.askedAt !== undefined || previous.deliveredAt !== undefined
-          ? "recorded for this head"
-          : "ask in flight for this head",
+        terminalAskRecorded(previous) ? "recorded for this head" : "ask in flight for this head",
     };
   }
 
@@ -178,26 +288,64 @@ async function askReplit(input: {
     };
   }
 
-  // The detail is the connector's own text, which can echo a credential it was given. It is scrubbed
-  // here, once, so the stored failure, the returned outcome and every log line that carries it are clean.
-  const fail = async (reason: ReplitAskFailure, rawDetail: string): Promise<ReplitAskOutcome> => {
+  const recordFailure = async (
+    reason: ReplitAskFailure,
+    rawDetail: string,
+    ownerNonce: string | undefined,
+  ): Promise<ReplitAskOutcome> => {
     const detail = redactSecrets(rawDetail).text;
     const attempts = failedAttempts + 1;
-    await input.kv.put(key, {
-      at: Date.now(),
+    const now = Date.now();
+    const failureRecord = {
+      at: now,
       failedAttempts: attempts,
       lastFailure: `${reason}: ${detail}`.slice(0, 300),
-    } satisfies AskRecord);
+    } satisfies AskRecord;
+    const wrote =
+      ownerNonce === undefined
+        ? await putFailureUnlessTerminal(input.kv, key, failureRecord)
+        : await putRecordUnlessSuperseded(input.kv, key, ownerNonce, failureRecord);
+    if (!wrote) {
+      const current = asAskRecord(await input.kv.get(key));
+      if (current !== undefined && (terminalAskRecorded(current) || askAlreadySent(current))) {
+        return { asked: false, reason: "already-asked", detail: "recorded for this head" };
+      }
+      return {
+        asked: false,
+        reason: "error",
+        detail: "superseded by a newer ask attempt",
+        attempts,
+        persistent: false,
+      };
+    }
     return { asked: false, reason, detail, attempts, persistent: attempts >= ASK_ATTEMPTS };
   };
 
   if (!(await replitAvailable(input.mcp))) {
-    return fail("unavailable", `no ${REPLIT_TOOL} on the "${REPLIT_CONNECTION}" connection`);
+    return recordFailure("unavailable", `no ${REPLIT_TOOL} on the "${REPLIT_CONNECTION}" connection`, undefined);
+  }
+
+  const claimNonce = randomUUID();
+  const claimTime = Date.now();
+  const claimed = await putRecordUnlessSuperseded(input.kv, key, claimNonce, {
+    at: claimTime,
+    inFlightAt: claimTime,
+    claimNonce,
+    failedAttempts: failedAttempts > 0 ? failedAttempts : undefined,
+  } satisfies AskRecord);
+  if (!claimed) {
+    return { asked: false, reason: "already-asked", detail: "ask in flight for this head" };
+  }
+
+  const renewMs = Math.max(50, Math.floor(inFlightLeaseMs() / 3));
+  let renewTimer: ReturnType<typeof setInterval> | undefined;
+  if (testRenewInFlightDuringCall) {
+    renewTimer = setInterval(() => {
+      void renewInFlightLease(input.kv, key, claimNonce);
+    }, renewMs);
   }
 
   try {
-    await input.kv.put(key, { at: Date.now(), inFlightAt: Date.now() } satisfies AskRecord);
-
     const result = await input.mcp.callTool(REPLIT_CONNECTION, REPLIT_TOOL, {
       replId: REPL_ID,
       question: replitQuestion(input.ref.number, input.headSha),
@@ -208,7 +356,7 @@ async function askReplit(input: {
         .map((part) => (part.type === "text" ? part.text : `<${part.type}>`))
         .join(" ")
         .slice(0, 300);
-      return fail("error", detail);
+      return recordFailure("error", detail, claimNonce);
     }
 
     const text = result.content
@@ -217,19 +365,31 @@ async function askReplit(input: {
       .slice(0, 500);
 
     const now = Date.now();
-    try {
-      await input.kv.put(key, { at: now, askedAt: now, inFlightAt: now } satisfies AskRecord);
-    } catch {
-      try {
-        await input.kv.put(key, { at: now, deliveredAt: now, inFlightAt: now } satisfies AskRecord);
-      } catch {
-        // Fresh inFlightAt still suppresses duplicates until the lease expires.
+    const wrote = await putRecordUnlessSuperseded(input.kv, key, claimNonce, {
+      at: now,
+      askedAt: now,
+      inFlightAt: now,
+      claimNonce,
+    } satisfies AskRecord);
+    if (!wrote) {
+      const current = asAskRecord(await input.kv.get(key));
+      if (current !== undefined && terminalAskRecorded(current)) {
+        return { asked: false, reason: "already-asked", detail: "recorded for this head" };
       }
-      return { asked: true, text, attempts: failedAttempts + 1 };
+      await putRecordUnlessSuperseded(input.kv, key, claimNonce, {
+        at: now,
+        deliveredAt: now,
+        inFlightAt: now,
+        claimNonce,
+      } satisfies AskRecord);
     }
 
     return { asked: true, text, attempts: failedAttempts + 1 };
   } catch (error) {
-    return fail("error", error instanceof Error ? error.message : String(error));
+    return recordFailure("error", error instanceof Error ? error.message : String(error), claimNonce);
+  } finally {
+    if (renewTimer !== undefined) {
+      clearInterval(renewTimer);
+    }
   }
 }
