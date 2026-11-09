@@ -190,14 +190,30 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
 /** At most one live `listTools` per process; later heads wait on this tail. */
 let discoveryTail: Promise<void> = Promise.resolve();
 
-function runSerializedDiscovery<T>(work: () => Promise<T>): Promise<T> {
+type SerializedDiscovery<T> = { promise: Promise<T>; abandon: () => void };
+
+function runSerializedDiscovery<T>(work: () => Promise<T>): SerializedDiscovery<T> {
+  let abandoned = false;
   const prior = discoveryTail;
   let release!: () => void;
   const slot = new Promise<void>((resolve) => {
     release = resolve;
   });
   discoveryTail = prior.then(() => slot, () => slot);
-  return prior.then(work).finally(() => release());
+  const promise = prior
+    .then(() => {
+      if (abandoned) {
+        return false as T;
+      }
+      return work();
+    })
+    .finally(() => release());
+  return {
+    promise,
+    abandon: () => {
+      abandoned = true;
+    },
+  };
 }
 
 /** Tests reset the module queue between cases. */
@@ -211,7 +227,7 @@ async function awaitDiscovery(
   mcp: HostMcpRegistry,
   budgetMs: number | undefined,
 ): Promise<DiscoveryOutcome> {
-  const discovery = runSerializedDiscovery(() => replitAvailable(mcp));
+  const { promise: discovery, abandon } = runSerializedDiscovery(() => replitAvailable(mcp));
   if (budgetMs === undefined) {
     return { kind: "ready", available: await discovery };
   }
@@ -225,7 +241,8 @@ async function awaitDiscovery(
       deadline,
     ]);
     if (raced.kind === "timeout") {
-      // MCP has no cancel; the serialized slot stays held until `listTools` settles.
+      abandon();
+      // In-flight `listTools` cannot be cancelled; queued work is skipped once abandoned.
       void discovery.catch(() => undefined);
       return { kind: "timeout" };
     }

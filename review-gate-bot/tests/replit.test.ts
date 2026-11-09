@@ -393,6 +393,53 @@ test("ditto r4515088492: timed-out discovery does not stack another listTools", 
   }
 });
 
+test("ditto r4515179842: queued discovery abandoned after timeout does not run listTools", async () => {
+  __testOnly_resetDiscoveryQueue();
+  __testOnly_setLeaseMs(1_400);
+  try {
+    const store = plainKvOnly();
+    let releaseListTools: () => void = () => {};
+    const listToolsBlocked = new Promise<void>((resolve) => {
+      releaseListTools = resolve;
+    });
+    let listToolsCalls = 0;
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => {
+        listToolsCalls += 1;
+        await listToolsBlocked;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const headA = "a".repeat(40);
+    const headB = "b".repeat(40);
+    const first = __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha: headA });
+    await sleep(50);
+    assert.equal(listToolsCalls, 1);
+    const second = __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha: headB });
+    const secondDone = await Promise.race([
+      second,
+      sleep(3_000).then(() => {
+        throw new Error("second ask wedged");
+      }),
+    ]);
+    assert.equal(secondDone.asked, false);
+    if (!secondDone.asked) {
+      assert.equal(secondDone.reason, "unavailable");
+    }
+    assert.equal(listToolsCalls, 1, "queued second must not call listTools before first settles");
+    releaseListTools();
+    await first;
+    await second;
+    await sleep(50);
+    assert.equal(listToolsCalls, 1, "abandoned queued discovery must not run listTools after first settles");
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
+  }
+});
+
 test("ditto r4513514628 / r4513568040: discovery timeout returns without wedging; later caller recovers", async () => {
   __testOnly_resetDiscoveryQueue();
   __testOnly_setLeaseMs(1_400);
