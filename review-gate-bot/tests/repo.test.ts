@@ -246,6 +246,19 @@ test("a secret in a file is scrubbed before it is returned", async () => {
   assert.ok(!JSON.stringify(file).includes(token));
 });
 
+test("ditto r4508316862: listRepoFiles redacts credential-shaped path segments", async () => {
+  const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
+  const tree = [
+    { path: `secrets/${token}.env`, type: "blob" },
+    { path: "internal/ok.py", type: "blob" },
+  ];
+  const { octokit } = fake({ tree });
+  const listing = await listRepoFiles(octokit, REF, HEAD, {});
+  assert.ok(!JSON.stringify(listing).includes(token));
+  assert.equal(listing.paths.length, 2);
+  assert.ok(listing.paths.every((p) => !p.includes(token)));
+});
+
 test("the file listing is filtered by prefix, only files, and capped", async () => {
   const tree = [
     { path: "internal", type: "tree" },

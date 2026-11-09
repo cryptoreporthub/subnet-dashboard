@@ -258,5 +258,7 @@ export async function listRepoFiles(
     .filter((node) => node.type === "blob" && typeof node.path === "string" && node.path.startsWith(prefix))
     .map((node) => node.path as string);
   const capped = capListing(matching);
-  return { sha, paths: capped.paths, truncated: Boolean(data.truncated) || capped.truncated };
+  // Scrub every path before it leaves: listings go to the model and public review, same as readDiff filenames.
+  const paths = capped.paths.map((path) => redactSecrets(path).text);
+  return { sha, paths, truncated: Boolean(data.truncated) || capped.truncated };
 }
