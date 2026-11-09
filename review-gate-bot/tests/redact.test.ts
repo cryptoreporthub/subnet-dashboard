@@ -234,6 +234,17 @@ test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
 });
 
+test("ditto r4508598602: a JWT signature longer than 65536 characters is redacted whole", () => {
+  const header = "eyJhbGciOiJIUzI1NiJ9";
+  const payload = "a".repeat(80);
+  const signature = "B".repeat(65_537);
+  const jwt = `${header}.${payload}.${signature}`;
+  const { text } = redactSecrets(`leak=${jwt}`);
+  assert.equal(text.includes(signature), false);
+  assert.equal(text.includes(signature.slice(65_500)), false);
+  assert.equal(text.includes("<redacted>"), true);
+});
+
 test("ditto r4508757420: a JWT whose header segment is exactly JWT_MAX_HEADER_NO_DOT characters is redacted", () => {
   const maxHeader = 65_536;
   const header = `eyJ${"A".repeat(maxHeader - 3)}`;

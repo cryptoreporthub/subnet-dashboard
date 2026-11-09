@@ -149,8 +149,7 @@ function jwtHeaderDotScan(input: string, start: number): JwtDotScan {
 /** End index (exclusive) of a terminal base64url signature segment. */
 function jwtSignatureEnd(input: string, start: number): number | null {
   let index = start;
-  const limit = Math.min(input.length, start + JWT_MAX_SEGMENT);
-  while (index < limit && isJwtSegmentChar(input[index])) {
+  while (index < input.length && isJwtSegmentChar(input[index])) {
     index += 1;
   }
   if (index - start < JWT_MIN_SEGMENT) {
