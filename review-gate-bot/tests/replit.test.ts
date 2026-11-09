@@ -324,7 +324,10 @@ test("ditto r4511110136: a stale attempt cannot erase a newer successful ask", a
     assert.equal(reclaim.asked, true);
     assert.ok(record.askedAt !== undefined || record.deliveredAt !== undefined);
     const again = await __testOnly_askReplit({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
-    assert.equal(again.reason, "already-asked");
+    assert.equal(again.asked, false);
+    if (!again.asked) {
+      assert.equal(again.reason, "already-asked");
+    }
     assert.equal(fast.calls, 1);
   } finally {
     __testOnly_setInFlightLeaseMs(undefined);
