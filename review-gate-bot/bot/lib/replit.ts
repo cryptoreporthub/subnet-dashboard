@@ -180,36 +180,65 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
   }
 }
 
-async function putFailureUnlessTerminal(kv: HostKvApi, key: string, next: AskRecord): Promise<boolean> {
-  if (supportsKvCas(kv) && typeof kv.getWithVersion === "function" && typeof kv.putIfVersion === "function") {
-    try {
-      const current = await kv.getWithVersion(key);
-      const live = asAskRecord(current?.value);
-      if (live !== undefined && (terminalAskRecorded(live) || askAlreadySent(live))) {
-        return false;
-      }
-      if (current === undefined) {
-        if (typeof kv.putIfAbsent === "function") {
-          const created = await kv.putIfAbsent(key, next);
-          if (created.ok) {
-            return true;
-          }
-          const raced = asAskRecord(created.current?.value);
-          if (raced !== undefined && (terminalAskRecorded(raced) || askAlreadySent(raced))) {
-            return false;
-          }
-          if (created.current !== undefined) {
-            return (await kv.putIfVersion(key, next, created.current.version)).ok;
-          }
-          return false;
-        }
-        await kv.put(key, next);
-        return true;
-      }
-      return (await kv.putIfVersion(key, next, current.version)).ok;
-    } catch {
+function casKvReady(kv: HostKvApi): boolean {
+  const cas = kv as HostKvApi & {
+    getWithVersion?: (key: string) => Promise<{ value: unknown; version: string } | undefined>;
+    putIfVersion?: (key: string, value: unknown, version: string) => Promise<{ ok: boolean }>;
+    putIfAbsent?: (key: string, value: unknown) => Promise<{ ok: boolean; current?: { value: unknown; version: string } }>;
+  };
+  return typeof cas.getWithVersion === "function" && typeof cas.putIfVersion === "function";
+}
+
+/**
+ * CAS insert or update. Absent keys require `putIfAbsent`; otherwise fail closed
+ * so a concurrent successful ask cannot be erased by an unconditional put.
+ */
+async function casWriteRecord(
+  kv: HostKvApi,
+  key: string,
+  next: AskRecord,
+  rejectLive: (live: AskRecord) => boolean,
+): Promise<boolean> {
+  if (!casKvReady(kv)) {
+    return false;
+  }
+  const cas = kv as HostKvApi & {
+    getWithVersion: (key: string) => Promise<{ value: unknown; version: string } | undefined>;
+    putIfVersion: (key: string, value: unknown, version: string) => Promise<{ ok: boolean }>;
+    putIfAbsent?: (key: string, value: unknown) => Promise<{ ok: boolean; current?: { value: unknown; version: string } }>;
+  };
+  try {
+    const current = await cas.getWithVersion(key);
+    const live = asAskRecord(current?.value);
+    if (live !== undefined && rejectLive(live)) {
       return false;
     }
+    if (current === undefined) {
+      if (typeof cas.putIfAbsent !== "function") {
+        return false;
+      }
+      const created = await cas.putIfAbsent(key, next);
+      if (created.ok) {
+        return true;
+      }
+      const raced = asAskRecord(created.current?.value);
+      if (raced !== undefined && rejectLive(raced)) {
+        return false;
+      }
+      if (created.current !== undefined) {
+        return (await cas.putIfVersion(key, next, created.current.version)).ok;
+      }
+      return false;
+    }
+    return (await cas.putIfVersion(key, next, current.version)).ok;
+  } catch {
+    return false;
+  }
+}
+
+async function putFailureUnlessTerminal(kv: HostKvApi, key: string, next: AskRecord): Promise<boolean> {
+  if (casKvReady(kv)) {
+    return casWriteRecord(kv, key, next, (live) => terminalAskRecorded(live) || askAlreadySent(live));
   }
 
   const read = asAskRecord(await kv.get(key));
@@ -279,25 +308,8 @@ async function putRecordUnlessSuperseded(
     return false;
   }
 
-  if (supportsKvCas(kv) && typeof kv.getWithVersion === "function" && typeof kv.putIfVersion === "function") {
-    const current = await kv.getWithVersion(key);
-    const live = asAskRecord(current?.value);
-    if (live !== undefined && blocksWrite(live, claimNonce, mode, next)) {
-      return false;
-    }
-    if (current === undefined) {
-      try {
-        await kv.put(key, next);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    try {
-      return (await kv.putIfVersion(key, next, current.version)).ok;
-    } catch {
-      return false;
-    }
+  if (casKvReady(kv)) {
+    return casWriteRecord(kv, key, next, (live) => blocksWrite(live, claimNonce, mode, next));
   }
 
   try {

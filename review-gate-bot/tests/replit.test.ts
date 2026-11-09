@@ -272,6 +272,16 @@ test("ditto r4511038925: a stale in-flight claim after crash permits retry", asy
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** CAS-capable KV without atomic create — production CAS hosts expose `putIfAbsent`. */
+type CasMemoryKv = ReturnType<typeof createMemoryKv>;
+
+function casKvWithoutPutIfAbsent(): CasMemoryKv {
+  const memory = createMemoryKv();
+  Reflect.deleteProperty(memory, "putIfAbsent");
+  assert.equal(typeof memory.putIfAbsent, "undefined");
+  return memory;
+}
+
 test("ditto r4511210612: a rejecting KV renewal does not cause unhandled rejection", async () => {
   const base = kv();
   let rejectRenewal = false;
@@ -340,6 +350,64 @@ test("ditto r4511110608: in-flight renewal blocks a second process during a slow
     __testOnly_setInFlightLeaseMs(undefined);
     __testOnly_setRenewInFlightDuringCall(true);
   }
+});
+
+test("ditto r4511438066: absent-key failure write fails closed without putIfAbsent", async () => {
+  const head = "f".repeat(40);
+  const memory = casKvWithoutPutIfAbsent();
+  const key = replitAskKey(REF, head);
+  let interpose = false;
+  const origGetWithVersion = memory.getWithVersion.bind(memory);
+  memory.getWithVersion = async (k) => {
+    const entry = await origGetWithVersion(k);
+    if (interpose && k === key) {
+      interpose = false;
+      const now = Date.now();
+      await memory.put(key, { at: now, askedAt: now, claimNonce: "winner" });
+    }
+    return entry;
+  };
+
+  interpose = true;
+  const outcome = await askReplitOnce({
+    kv: memory,
+    mcp: mcp({ available: false }),
+    ref: REF,
+    headSha: head,
+  });
+  assert.equal(outcome.asked, false);
+  const record = (await memory.get(key)) as { askedAt?: number; failedAttempts?: number };
+  assert.ok(record.askedAt !== undefined);
+  assert.equal(record.failedAttempts, undefined);
+});
+
+test("ditto r4511438066: absent-key claim write fails closed without putIfAbsent", async () => {
+  const head = "f1".repeat(20);
+  const memory = casKvWithoutPutIfAbsent();
+  const key = replitAskKey(REF, head);
+  let interpose = false;
+  const origGetWithVersion = memory.getWithVersion.bind(memory);
+  memory.getWithVersion = async (k) => {
+    const entry = await origGetWithVersion(k);
+    if (interpose && k === key) {
+      interpose = false;
+      const now = Date.now();
+      await memory.put(key, { at: now, askedAt: now, claimNonce: "winner" });
+    }
+    return entry;
+  };
+
+  interpose = true;
+  const outcome = await __testOnly_askReplit({
+    kv: memory,
+    mcp: mcp(),
+    ref: REF,
+    headSha: head,
+  });
+  assert.equal(outcome.asked, false);
+  const record = (await memory.get(key)) as { askedAt?: number; inFlightAt?: number };
+  assert.ok(record.askedAt !== undefined);
+  assert.equal(record.inFlightAt, undefined, "must not replace terminal success with a claim");
 });
 
 test("ditto r4511211560: failure bookkeeping cannot overwrite concurrent success", async () => {
