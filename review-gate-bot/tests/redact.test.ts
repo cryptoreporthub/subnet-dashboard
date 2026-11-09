@@ -234,6 +234,16 @@ test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
 });
 
+test("ditto r4508617566: skip past a failed candidate does not jump over an embedded JWT", () => {
+  const pad = "a".repeat(65_530);
+  const jwt =
+    "eyJhbGciOiJIUzI1NiJ9.eyJ4IjowLCJ5IjogeyJ6IjoxfX0.AAAAAAAAAAAAAAAA";
+  const input = `eyJ${pad}${jwt}`;
+  const { text } = redactSecrets(input);
+  assert.equal(text.includes(jwt), false);
+  assert.equal(text.includes("eyJ4Ijow"), false);
+});
+
 test("ditto r4508598457: a JWT with eyJ inside the payload segment is redacted whole", () => {
   const jwt =
     "eyJhbGciOiJIUzI1NiJ9.eyJ4IjowLCJ5IjogeyJ6IjoxfX0.AAAAAAAAAAAAAAAA";

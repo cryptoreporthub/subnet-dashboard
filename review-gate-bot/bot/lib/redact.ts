@@ -68,7 +68,12 @@ function isJwtSegmentChar(char: string | undefined): boolean {
 }
 
 /** Index of `.` ending a segment, or null when the run is not JWT-shaped. */
-function jwtDotAfterSegment(input: string, start: number, minLength: number): number | null {
+function jwtDotAfterSegment(
+  input: string,
+  start: number,
+  minLength: number,
+  allowNestedEyJ: boolean,
+): number | null {
   let index = start;
   const limit = Math.min(input.length, start + JWT_MAX_SEGMENT);
   while (index < limit) {
@@ -77,6 +82,9 @@ function jwtDotAfterSegment(input: string, start: number, minLength: number): nu
       return index - start >= minLength ? index : null;
     }
     if (!isJwtSegmentChar(char)) {
+      return null;
+    }
+    if (!allowNestedEyJ && index > start && input.startsWith("eyJ", index)) {
       return null;
     }
     index += 1;
@@ -101,7 +109,12 @@ function jwtSignatureEnd(input: string, start: number): number | null {
 function skipAfterFailedJwtCandidate(input: string, at: number): number {
   let scan = at + 3;
   const limit = Math.min(input.length, at + JWT_MAX_SEGMENT);
-  while (scan < limit && isJwtSegmentChar(input[scan]) && input[scan] !== ".") {
+  while (
+    scan < limit &&
+    !input.startsWith("eyJ", scan) &&
+    isJwtSegmentChar(input[scan]) &&
+    input[scan] !== "."
+  ) {
     scan += 1;
   }
   return Math.max(at + 3, scan);
@@ -116,10 +129,10 @@ function scrubJwtCredentials(input: string, redactedNames: string[]): string {
       index += 1;
       continue;
     }
-    const headerDot = jwtDotAfterSegment(input, index, JWT_MIN_HEADER);
+    const headerDot = jwtDotAfterSegment(input, index, JWT_MIN_HEADER, false);
     let end: number | null = null;
     if (headerDot !== null) {
-      const payloadDot = jwtDotAfterSegment(input, headerDot + 1, JWT_MIN_SEGMENT);
+      const payloadDot = jwtDotAfterSegment(input, headerDot + 1, JWT_MIN_SEGMENT, true);
       if (payloadDot !== null) {
         const sigEnd = jwtSignatureEnd(input, payloadDot + 1);
         if (sigEnd !== null) {
