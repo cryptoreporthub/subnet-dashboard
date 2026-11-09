@@ -257,8 +257,20 @@ export async function listRepoFiles(
   const matching = data.tree
     .filter((node) => node.type === "blob" && typeof node.path === "string" && node.path.startsWith(prefix))
     .map((node) => node.path as string);
-  const capped = capListing(matching);
-  // Scrub every path before it leaves: listings go to the model and public review, same as readDiff filenames.
-  const paths = capped.paths.map((path) => redactSecrets(path).text);
-  return { sha, paths, truncated: Boolean(data.truncated) || capped.truncated };
+  // Omit sensitive paths before the listing cap so a scrubbed path cannot consume a slot.
+  let omittedSensitive = false;
+  const safeMatching: string[] = [];
+  for (const path of matching) {
+    if (redactSecrets(path).text !== path) {
+      omittedSensitive = true;
+      continue;
+    }
+    safeMatching.push(path);
+  }
+  const capped = capListing(safeMatching);
+  return {
+    sha,
+    paths: capped.paths,
+    truncated: Boolean(data.truncated) || capped.truncated || omittedSensitive,
+  };
 }

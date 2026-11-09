@@ -246,7 +246,7 @@ test("a secret in a file is scrubbed before it is returned", async () => {
   assert.ok(!JSON.stringify(file).includes(token));
 });
 
-test("ditto r4508316862: listRepoFiles redacts credential-shaped path segments", async () => {
+test("ditto r4508316862: listRepoFiles omits credential-shaped paths and flags truncated", async () => {
   const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
   const tree = [
     { path: `secrets/${token}.env`, type: "blob" },
@@ -255,8 +255,22 @@ test("ditto r4508316862: listRepoFiles redacts credential-shaped path segments",
   const { octokit } = fake({ tree });
   const listing = await listRepoFiles(octokit, REF, HEAD, {});
   assert.ok(!JSON.stringify(listing).includes(token));
-  assert.equal(listing.paths.length, 2);
-  assert.ok(listing.paths.every((p) => !p.includes(token)));
+  assert.deepEqual(listing.paths, ["internal/ok.py"]);
+  assert.equal(listing.truncated, true);
+});
+
+test("ditto r4513209614: sensitive path omitted before listing cap", async () => {
+  const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
+  const tree = [
+    { path: `secrets/${token}.env`, type: "blob" },
+    ...Array.from({ length: 2_001 }, (_, i) => ({ path: `internal/f${i}.py`, type: "blob" })),
+  ];
+  const { octokit } = fake({ tree });
+  const listing = await listRepoFiles(octokit, REF, HEAD, {});
+  assert.equal(listing.paths.length, 2_000);
+  assert.ok(listing.paths.every((p) => p.startsWith("internal/")));
+  assert.equal(listing.truncated, true);
+  assert.ok(!JSON.stringify(listing).includes(token));
 });
 
 test("the file listing is filtered by prefix, only files, and capped", async () => {
