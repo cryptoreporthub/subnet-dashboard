@@ -10,9 +10,11 @@ test("a named credential keeps the name and loses the value", () => {
 });
 
 test("JSON-shaped credentials are redacted too", () => {
-  const { text } = redactSecrets('{"RESOLVER_API_KEY": "sk-live-abcdefghijklmnop"}');
+  const raw = '{"RESOLVER_API_KEY": "sk-live-abcdefghijklmnop"}';
+  const { text } = redactSecrets(raw);
   assert.equal(text.includes("sk-live"), false);
-  assert.equal(text.includes("RESOLVER_API_KEY=<redacted:RESOLVER_API_KEY>"), true);
+  const parsed = JSON.parse(text) as { RESOLVER_API_KEY: string };
+  assert.equal(parsed.RESOLVER_API_KEY, "<redacted:RESOLVER_API_KEY>");
 });
 
 test("an unlabelled GitHub token is redacted without a name", () => {
@@ -89,10 +91,27 @@ test("a numeric value that cannot be a credential is still left readable", () =>
 // --- Finding 6: lowercase credential keys --------------------------------
 
 test("a lowercase JSON token key is matched case-insensitively", () => {
-  const { text, redactedNames } = redactSecrets('{"token": "opaquevalue1234"}');
+  const raw = '{"token": "opaquevalue1234"}';
+  const { text, redactedNames } = redactSecrets(raw);
   assert.equal(text.includes("opaquevalue1234"), false);
-  assert.equal(text.includes("<redacted:token>"), true);
+  const parsed = JSON.parse(text) as { token: string };
+  assert.equal(parsed.token, "<redacted:token>");
   assert.deepEqual(redactedNames, ["token"]);
+});
+
+test("ditto r4508315657: JSON credential assignments stay parseable", () => {
+  const cases: { raw: string; secret: string }[] = [
+    { raw: '{"token":"supersecretvalue"}', secret: "supersecretvalue" },
+    { raw: '{"client_secret":"987654321","label":"keep"}', secret: "987654321" },
+    { raw: '{"api_key":"keyval1234567890"}', secret: "keyval1234567890" },
+  ];
+  for (const { raw, secret } of cases) {
+    const { text } = redactSecrets(raw);
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    assert.equal(JSON.stringify(parsed).includes(secret), false, raw);
+    assert.ok(text.includes("<redacted:"), raw);
+    assert.equal(JSON.stringify(parsed).includes(secret), false, raw);
+  }
 });
 
 test("a bare lowercase key=value pair is matched too", () => {

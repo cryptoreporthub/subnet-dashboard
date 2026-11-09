@@ -278,6 +278,16 @@ export type RedactResult = {
  * all digits**: a six-digit PIN or a numeric database password is a credential,
  * and the old all-digit exemption published it.
  */
+function redactedAssignmentValue(label: string, rawValue: string): string {
+  if (rawValue.startsWith('"')) {
+    return JSON.stringify(`<redacted:${label}>`);
+  }
+  if (rawValue.startsWith("'")) {
+    return `'${`<redacted:${label}>`.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+  }
+  return `<redacted:${label}>`;
+}
+
 function isPlaceholder(value: string): boolean {
   const trimmed = value.replace(/^["']|["']$/g, "").trim();
   if (trimmed === "") {
@@ -327,7 +337,8 @@ function scrubAssignments(input: string, redactedNames: string[]): string {
       names.lastIndex = values.lastIndex;
       continue;
     }
-    out += input.slice(copied, found.index + lead.length) + `${label}=<redacted:${label}>`;
+    const valueStart = value.index;
+    out += input.slice(copied, valueStart) + redactedAssignmentValue(label, value[0]);
     copied = values.lastIndex;
     redactedNames.push(label);
     names.lastIndex = copied;
