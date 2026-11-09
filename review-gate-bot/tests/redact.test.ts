@@ -234,6 +234,16 @@ test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
   assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
 });
 
+test("ditto r4508757420: a JWT whose header segment is exactly JWT_MAX_HEADER_NO_DOT characters is redacted", () => {
+  const maxHeader = 65_536;
+  const header = `eyJ${"A".repeat(maxHeader - 3)}`;
+  assert.equal(header.length, maxHeader);
+  const payload = Buffer.from(JSON.stringify({ sub: "x" })).toString("base64url");
+  const jwt = `${header}.${payload}.${"B".repeat(43)}`;
+  const { text } = redactSecrets(`wrapped ${jwt}`);
+  assert.equal(text.includes(jwt), false);
+});
+
 test("ditto r4508757228: jwtHeaderDotScan does not rescan a long prefix for every dot", () => {
   const prefix = `eyJ${"A".repeat(300)}`;
   const input = `${prefix}@${".".repeat(2_000)}`;

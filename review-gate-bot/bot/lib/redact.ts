@@ -123,7 +123,7 @@ function jwtHeaderDotScan(input: string, start: number): JwtDotScan {
     return quick;
   }
 
-  const windowEnd = Math.min(input.length, start + JWT_MAX_HEADER_NO_DOT);
+  const windowEnd = Math.min(input.length, start + JWT_MAX_HEADER_NO_DOT + 1);
   let search = start + JWT_HEADER_DOT_PROBE;
   let validatedThrough = search;
   while (search < windowEnd) {
