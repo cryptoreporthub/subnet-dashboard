@@ -5,16 +5,137 @@ Provides a read/write interface for the Soul-Map within the hierarchical,
 Mindmap-integrated Engine.
 """
 
+import itertools
+import logging
 import os
 import json
+import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from internal.store.soul_map_io import read_soul_map, write_soul_map
+from internal.store.soul_map_io import read_soul_map, write_soul_map_committed
+
+logger = logging.getLogger(__name__)
 
 # Mirror CYCLE_HISTORY_MAX=10 / learning_trail[-200:] — memory-only heal; on-disk
 # shrink is the compaction operation (Runbook v4), not this constant alone.
 FEEDBACK_LOGS_MAX = 10
+
+# Trail rows whose disk write failed, per soul-map path (abspath). Process-local, shared by
+# every bridge, because callers such as trail_events build a fresh bridge per event. A row
+# leaves the buffer only after a write that carried it commits. Capped, so a long outage
+# cannot grow memory without bound; overflow drops the oldest rows and logs the count.
+_PENDING_TRAIL_MAX = 50
+_PENDING_TRAIL: Dict[str, List[Tuple[int, Dict[str, Any], Any]]] = {}
+# Resolved ids are kept apart from the trail rows: the cap evicts rows, but an evicted row's
+# resolution must still reach the ledger and still count as pending for the dedupe guard.
+_PENDING_RESOLVED: Dict[str, List[Tuple[int, Any]]] = {}
+_PENDING_TRAIL_LOCK = threading.Lock()
+_PENDING_SEQ = itertools.count(1)
+
+
+def _pending_key(persistence_path: str) -> str:
+    return os.path.abspath(persistence_path)
+
+
+def _enqueue_pending(key: str, entry: Dict[str, Any], resolved_prediction_id: Any) -> None:
+    with _PENDING_TRAIL_LOCK:
+        seq = next(_PENDING_SEQ)
+        rows = _PENDING_TRAIL.setdefault(key, [])
+        rows.append((seq, entry, resolved_prediction_id))
+        if resolved_prediction_id is not None:
+            _PENDING_RESOLVED.setdefault(key, []).append((seq, resolved_prediction_id))
+        dropped = len(rows) - _PENDING_TRAIL_MAX
+        if dropped > 0:
+            del rows[:dropped]
+            logger.warning(
+                "soul_map pending trail buffer over cap path=%s dropped=%d", key, dropped
+            )
+
+
+def _snapshot_pending(key: str) -> Tuple[int, List[Tuple[Dict[str, Any], Any]], List[Any]]:
+    """Return (highest seq buffered, rows, resolved ids) for `key`. The seq bounds what a commit covers."""
+    with _PENDING_TRAIL_LOCK:
+        rows = _PENDING_TRAIL.get(key, [])
+        resolved = _PENDING_RESOLVED.get(key, [])
+        through = max(rows[-1][0] if rows else 0, resolved[-1][0] if resolved else 0)
+        return through, [(entry, rid) for _, entry, rid in rows], [rid for _, rid in resolved]
+
+
+def _drop_pending_through(key: str, seq: int) -> None:
+    """Drop rows and resolved ids a committed write carried. Later appends stay buffered."""
+    with _PENDING_TRAIL_LOCK:
+        for buffer in (_PENDING_TRAIL, _PENDING_RESOLVED):
+            rows = buffer.get(key)
+            if rows is None:
+                continue
+            remaining = [row for row in rows if row[0] > seq]
+            if remaining:
+                buffer[key] = remaining
+            else:
+                del buffer[key]
+
+
+def pending_resolved_ids(persistence_path: str) -> List[Any]:
+    """Resolved prediction ids not yet on disk for this path, including ones whose rows were evicted."""
+    with _PENDING_TRAIL_LOCK:
+        return [rid for _, rid in _PENDING_RESOLVED.get(_pending_key(persistence_path), [])]
+
+
+def _trail_key(entry: Any) -> Optional[Tuple[str, ...]]:
+    """Identity of a trail row. Rows without a time cannot be matched, so they are never skipped.
+
+    A resolution is keyed by its prediction id: two resolutions can share one timestamp.
+    """
+    if isinstance(entry, dict) and entry.get("time") is not None:
+        event_type = str(entry.get("event_type"))
+        evidence = entry.get("evidence")
+        if event_type == "prediction_resolved" and isinstance(evidence, dict):
+            prediction_id = evidence.get("prediction_id")
+            if prediction_id is not None:
+                return event_type, "prediction_id", str(prediction_id)
+        return event_type, "time", str(entry["time"])
+    return None
+
+
+def _record_resolved_ids(state: Dict[str, Any], prediction_ids: List[Any]) -> None:
+    """Add resolved prediction ids to the never-truncated ledger. Idempotent."""
+    if not prediction_ids:
+        return
+    ledger = state.get("resolved_prediction_ids")
+    if not isinstance(ledger, list):
+        ledger = []
+        state["resolved_prediction_ids"] = ledger
+    for prediction_id in prediction_ids:
+        if prediction_id not in ledger:
+            ledger.append(prediction_id)
+
+
+def _replay_trail_rows(state: Dict[str, Any], rows: List[Tuple[Dict[str, Any], Any]]) -> None:
+    """Apply learning-trail rows and their resolved ids to a soul_map_state dict in order.
+
+    Idempotent: a row whose _trail_key is already in the trail is skipped, ledger id included.
+    A resolution keys by prediction id, any other row by (event_type, time). The same buffered row is replayed by every write until one commits, so it can
+    arrive more than once.
+    """
+    if not rows:
+        return
+    trail = state.get("learning_trail")
+    if not isinstance(trail, list):
+        trail = []
+    present = {key for key in map(_trail_key, trail) if key is not None}
+    for entry, resolved_prediction_id in rows:
+        # The ledger id is recorded even when the row itself is a duplicate, so a row trimmed
+        # from the trail window cannot leave its resolution unrecorded.
+        if resolved_prediction_id is not None:
+            _record_resolved_ids(state, [resolved_prediction_id])
+        key = _trail_key(entry)
+        if key is not None:
+            if key in present:
+                continue
+            present.add(key)
+        trail.append(entry)
+    state["learning_trail"] = trail[-200:]
 
 
 class MindmapBridge:
@@ -44,27 +165,83 @@ class MindmapBridge:
         dir_name = os.path.dirname(self.persistence_path)
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
-        try:
-            write_soul_map(
-                lambda blob: (
-                    blob.__setitem__("soul_map_state", self.soul_map_state),
-                    blob.__setitem__("feedback_logs", self.feedback_logs),
-                ),
-                self.persistence_path,
-            )
-        except Exception:
-            pass
 
-    def append_learning_trail(self, entry: Dict[str, Any]) -> None:
-        """Append a mind-map learning trail row (pick/resolve/rotation events)."""
-        trail = self.soul_map_state.setdefault("learning_trail", [])
-        if not isinstance(trail, list):
-            trail = []
-            self.soul_map_state["learning_trail"] = trail
-        trail.append(entry)
-        if len(trail) > 200:
-            self.soul_map_state["learning_trail"] = trail[-200:]
-        self._save_to_disk()
+        key = _pending_key(self.persistence_path)
+        flushed = {"through": 0}
+
+        def _apply(blob: Dict[str, Any]) -> None:
+            # This bridge's snapshot is stale. Keep the persisted ledger and trail rows that other
+            # bridges wrote, and union this bridge's own ledger ids (replay guard).
+            current = blob.get("soul_map_state")
+            current_state = current if isinstance(current, dict) else {}
+            current_ledger = current_state.get("resolved_prediction_ids")
+            own_ledger = self.soul_map_state.get("resolved_prediction_ids")
+            if isinstance(current_ledger, list) or isinstance(own_ledger, list):
+                merged: list = list(current_ledger) if isinstance(current_ledger, list) else []
+                for prediction_id in own_ledger if isinstance(own_ledger, list) else []:
+                    if prediction_id not in merged:
+                        merged.append(prediction_id)
+                self.soul_map_state["resolved_prediction_ids"] = merged
+            if "learning_trail" in current_state:
+                self.soul_map_state["learning_trail"] = current_state["learning_trail"]
+            else:
+                self.soul_map_state.pop("learning_trail", None)
+            # Rows whose earlier save failed never reached disk. Replay the buffered rows onto the
+            # disk trail so this save keeps them.
+            through, rows, resolved = _snapshot_pending(key)
+            flushed["through"] = through
+            _record_resolved_ids(self.soul_map_state, resolved)
+            _replay_trail_rows(self.soul_map_state, rows)
+            blob["soul_map_state"] = self.soul_map_state
+            blob["feedback_logs"] = self.feedback_logs
+
+        try:
+            committed, _ = write_soul_map_committed(_apply, self.persistence_path)
+        except Exception:
+            return
+        if committed:
+            _drop_pending_through(key, flushed["through"])
+
+    def append_learning_trail(self, entry: Dict[str, Any], *, resolved_prediction_id: Any = None) -> None:
+        """Append a mind-map learning trail row (pick/resolve/rotation events).
+
+        A resolved prediction id is also recorded in ``resolved_prediction_ids`` in the same save.
+        That ledger is never truncated, so a replay still matches after the trail window moves on.
+        """
+        key = _pending_key(self.persistence_path)
+        _enqueue_pending(key, entry, resolved_prediction_id)
+        flushed = {"through": 0}
+
+        def _apply(blob: Dict[str, Any]) -> None:
+            # Mutate the latest on-disk blob under the save lock, not this bridge's
+            # snapshot, so another bridge's earlier append survives this save.
+            state = blob.get("soul_map_state")
+            if not isinstance(state, dict):
+                state = {}
+                blob["soul_map_state"] = state
+            through, rows, resolved = _snapshot_pending(key)
+            flushed["through"] = through
+            _record_resolved_ids(state, resolved)
+            _replay_trail_rows(state, rows)
+
+        committed, result = write_soul_map_committed(_apply, self.persistence_path)
+        if committed:
+            # The disk write landed. Drop only the rows this commit carried, then sync the rows
+            # and ledger to the merged on-disk state, so rows other bridges appended since this
+            # bridge loaded are visible here too.
+            _drop_pending_through(key, flushed["through"])
+            committed_state = result.get("soul_map_state")
+            committed_state = committed_state if isinstance(committed_state, dict) else {}
+            for field in ("learning_trail", "resolved_prediction_ids"):
+                if field in committed_state:
+                    self.soul_map_state[field] = committed_state[field]
+                else:
+                    self.soul_map_state.pop(field, None)
+        else:
+            # The disk write failed. Keep this row in memory; the returned blob is the
+            # pre-append snapshot and would drop it. Earlier failed rows are already in
+            # memory from their own attempts, so only this row is added here.
+            _replay_trail_rows(self.soul_map_state, [(entry, resolved_prediction_id)])
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

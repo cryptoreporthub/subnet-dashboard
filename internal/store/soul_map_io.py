@@ -194,10 +194,8 @@ def write_soul_map(
                 resolved, retry_file_lock_timeouts=not with_status
             ):
                 locks_held = True
-                now = time.monotonic()
-                cached = _cache_get_fresh(resolved, now)
-                # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
-                blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
+                # Read disk under lock (not stale cache) so concurrent writers' rows are visible.
+                blob = _read_blob(resolved)
                 prior = copy.deepcopy(blob)
                 try:
                     mutator(blob)
@@ -215,9 +213,18 @@ def write_soul_map(
                     if pre_replace is not None:
                         pre_replace()
                     os.replace(temp_path, resolved)
-                    _cache_put(resolved, blob, time.monotonic())
                     temp_path = ""
                     committed = True
+                    try:
+                        _cache_put(resolved, blob, time.monotonic())
+                    except Exception as exc:
+                        _cache.pop(resolved, None)
+                        logger.warning(
+                            "soul_map cache refresh failed after commit path=%s error_type=%s error=%s",
+                            resolved,
+                            type(exc).__name__,
+                            exc,
+                        )
                 except Exception as exc:
                     logger.warning(
                         "soul_map persistence failed path=%s error_type=%s error=%s",
@@ -259,3 +266,13 @@ def write_soul_map(
             if with_status:
                 return _read_blob(resolved), False
             raise
+
+
+def write_soul_map_committed(
+    mutator: Callable[[Dict[str, Any]], None],
+    path: Optional[str] = None,
+) -> Tuple[bool, Dict[str, Any]]:
+    """Like ``write_soul_map(..., with_status=True)`` but returns ``(committed, blob)``."""
+    out = write_soul_map(mutator, path, with_status=True)
+    blob, committed = out  # type: ignore[misc]
+    return committed, blob
