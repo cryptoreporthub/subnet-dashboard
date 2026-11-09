@@ -308,6 +308,29 @@ test("ditto r4508316186: eval compare_suite_runs returns eval-no-runner, not bas
   assert.equal(result.reason, "eval-no-runner");
 });
 
+test("ditto r4510979471: eval prose-only carry refuses without recorded clean source", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "gate-eval-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({
+      number: 1522,
+      title: "t",
+      url: "u",
+      headSha: HEAD,
+      baseSha: BASE,
+      draft: false,
+      files: ["README.md", "docs/notes.md"],
+    }),
+  );
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    { session: { purpose: "eval" }, workspaceDir: dir },
+  )) as Record<string, unknown>;
+  assert.equal(result.recorded, false);
+  assert.equal(result.reason, "no-clean-source");
+  assert.equal(result.carried, false);
+});
+
 test("ditto r4508316186: eval carry reaches carry logic without live base SHAs", async () => {
   const dir = await mkdtemp(join(tmpdir(), "gate-eval-"));
   await writeFile(

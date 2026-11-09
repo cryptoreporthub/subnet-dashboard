@@ -188,7 +188,7 @@ export default defineTool({
     if (input.carryFromSha !== undefined) {
       let prior: SuiteState | "missing";
       if (isEval) {
-        prior = "clean";
+        prior = "missing";
       } else {
         const obs = readyObs;
         if (obs === undefined || obs.kind !== "ready") {
