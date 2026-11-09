@@ -125,26 +125,23 @@ function jwtHeaderDotScan(input: string, start: number): JwtDotScan {
 
   const windowEnd = Math.min(input.length, start + JWT_MAX_HEADER_NO_DOT);
   let search = start + JWT_HEADER_DOT_PROBE;
+  let validatedThrough = search;
   while (search < windowEnd) {
     const dotIdx = input.indexOf(".", search);
     if (dotIdx === -1 || dotIdx >= windowEnd) {
       break;
     }
+    for (let i = validatedThrough; i < dotIdx; i += 1) {
+      if (!isJwtSegmentChar(input[i])) {
+        return { dot: null, scanned: windowEnd - start, hitBound: true };
+      }
+    }
+    validatedThrough = dotIdx + 1;
     if (dotIdx - start < JWT_MIN_HEADER) {
       search = dotIdx + 1;
       continue;
     }
-    let valid = true;
-    for (let i = start; i < dotIdx; i += 1) {
-      if (!isJwtSegmentChar(input[i])) {
-        valid = false;
-        break;
-      }
-    }
-    if (valid) {
-      return { dot: dotIdx, scanned: dotIdx - start, hitBound: false };
-    }
-    search = dotIdx + 1;
+    return { dot: dotIdx, scanned: dotIdx - start, hitBound: false };
   }
   return { dot: null, scanned: windowEnd - start, hitBound: true };
 }
