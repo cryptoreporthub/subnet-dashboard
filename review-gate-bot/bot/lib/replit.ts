@@ -58,6 +58,9 @@ export function replitQuestion(prNumber: number, headSha: string): string {
 /** Attempts per head before the ask is reported as persistently failing. */
 export const ASK_ATTEMPTS = 3;
 
+/** Reclaim `inFlightAt` after a crash before `callTool`; must exceed a slow MCP round-trip. */
+export const IN_FLIGHT_LEASE_MS = 5 * 60_000;
+
 export type ReplitAskFailure = "unavailable" | "no-tool" | "error";
 
 export type ReplitAskOutcome =
@@ -75,7 +78,9 @@ export type ReplitAskOutcome =
 type AskRecord = {
   /** Successful asks. Present means: do not ask again for this head. */
   askedAt?: number;
-  /** Ask reached Replit; block duplicate MCP if the success write never landed. */
+  /** MCP returned OK but `askedAt` may not have persisted — still no second ask. */
+  deliveredAt?: number;
+  /** Claim before `callTool`; suppresses overlap until lease expires or delivery is recorded. */
   inFlightAt?: number;
   /** Failed attempts, so a retry is bounded and a persistent failure is visible. */
   failedAttempts?: number;
@@ -92,6 +97,16 @@ function asAskRecord(value: unknown): AskRecord | undefined {
     return undefined;
   }
   return record as AskRecord;
+}
+
+function askAlreadySent(record: AskRecord, now = Date.now()): boolean {
+  if (record.askedAt !== undefined || record.deliveredAt !== undefined) {
+    return true;
+  }
+  if (record.inFlightAt === undefined) {
+    return false;
+  }
+  return now - record.inFlightAt < IN_FLIGHT_LEASE_MS;
 }
 
 /**
@@ -141,11 +156,14 @@ async function askReplit(input: {
   const key = replitAskKey(input.ref, input.headSha);
   const previous = asAskRecord(await input.kv.get(key));
 
-  if (previous?.askedAt !== undefined || previous?.inFlightAt !== undefined) {
+  if (previous !== undefined && askAlreadySent(previous)) {
     return {
       asked: false,
       reason: "already-asked",
-      detail: previous?.askedAt !== undefined ? "recorded for this head" : "ask already sent for this head",
+      detail:
+        previous.askedAt !== undefined || previous.deliveredAt !== undefined
+          ? "recorded for this head"
+          : "ask in flight for this head",
     };
   }
 
@@ -198,9 +216,15 @@ async function askReplit(input: {
       .join(" ")
       .slice(0, 500);
 
+    const now = Date.now();
     try {
-      await input.kv.put(key, { at: Date.now(), askedAt: Date.now() } satisfies AskRecord);
+      await input.kv.put(key, { at: now, askedAt: now, inFlightAt: now } satisfies AskRecord);
     } catch {
+      try {
+        await input.kv.put(key, { at: now, deliveredAt: now, inFlightAt: now } satisfies AskRecord);
+      } catch {
+        // Fresh inFlightAt still suppresses duplicates until the lease expires.
+      }
       return { asked: true, text, attempts: failedAttempts + 1 };
     }
 

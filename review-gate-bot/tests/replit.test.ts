@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { ASK_ATTEMPTS, askReplitOnce, REPLIT_TOOL, replitQuestion } from "../bot/lib/replit.js";
+import {
+  ASK_ATTEMPTS,
+  askReplitOnce,
+  IN_FLIGHT_LEASE_MS,
+  REPLIT_TOOL,
+  replitQuestion,
+} from "../bot/lib/replit.js";
 import { replitAskKey } from "../bot/lib/gate.js";
 
 const HEAD = "c".repeat(40);
@@ -212,8 +218,8 @@ test("ditto r4508316408: a failed success-record write does not permit a duplica
     get: base.get.bind(base),
     delete: base.delete.bind(base),
     async put(key, value) {
-      const record = value as { askedAt?: number; inFlightAt?: number };
-      if (record.askedAt !== undefined) {
+      const record = value as { askedAt?: number; deliveredAt?: number };
+      if (record.askedAt !== undefined || record.deliveredAt !== undefined) {
         throw new Error("kv transient");
       }
       return base.put(key, value);
@@ -228,9 +234,35 @@ test("ditto r4508316408: a failed success-record write does not permit a duplica
   assert.equal(second.asked, false);
   assert.equal(second.reason, "already-asked");
   assert.equal(registry.calls, 1, "must not ask Replit again");
-  const record = store.store.get(replitAskKey(REF, HEAD)) as { inFlightAt?: number; askedAt?: number };
+  const record = store.store.get(replitAskKey(REF, HEAD)) as {
+    inFlightAt?: number;
+    askedAt?: number;
+    deliveredAt?: number;
+  };
   assert.ok(record.inFlightAt !== undefined);
   assert.equal(record.askedAt, undefined);
+  assert.equal(record.deliveredAt, undefined, "both terminal writes failed; in-flight lease suppresses duplicate");
+});
+
+test("ditto r4511038426: a fresh in-flight claim suppresses a concurrent duplicate ask", async () => {
+  const store = kv();
+  const now = Date.now();
+  await store.put(replitAskKey(REF, HEAD), { at: now, inFlightAt: now });
+  const registry = mcp();
+  const outcome = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(outcome.asked, false);
+  assert.equal(outcome.reason, "already-asked");
+  assert.equal(registry.calls, 0);
+});
+
+test("ditto r4511038925: a stale in-flight claim after crash permits retry", async () => {
+  const store = kv();
+  const stale = Date.now() - IN_FLIGHT_LEASE_MS - 1;
+  await store.put(replitAskKey(REF, HEAD), { at: stale, inFlightAt: stale });
+  const registry = mcp();
+  const outcome = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
+  assert.equal(outcome.asked, true);
+  assert.equal(registry.calls, 1);
 });
 
 test("an MCP error that echoes a credential is scrubbed before it is stored or returned", async () => {
