@@ -48,8 +48,30 @@ def emit_trail_event(
         logger.warning("Trail event %s failed: %s", event_type, exc)
 
 
+def _trail_has_prediction_resolved(prediction_id: Any) -> bool:
+    """True when the learning trail already holds a prediction_resolved row for this id."""
+    from internal.council.mindmap_bridge import MindmapBridge
+    from internal.council.weights import SOUL_MAP_PATH
+
+    trail = MindmapBridge(persistence_path=SOUL_MAP_PATH).soul_map_state.get("learning_trail")
+    if not isinstance(trail, list):
+        trail = []
+    for e in trail:
+        if not isinstance(e, dict) or e.get("event_type") != "prediction_resolved":
+            continue
+        evidence = e.get("evidence")
+        # Legacy rows may carry non-dict evidence; they cannot match, and must not raise.
+        if isinstance(evidence, dict) and evidence.get("prediction_id") == prediction_id:
+            return True
+    return False
+
+
 def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) -> None:
     """Trail event when a prediction resolves and nudges expert weights."""
+    prediction_id = prediction.get("id")
+    if prediction_id is not None and _trail_has_prediction_resolved(prediction_id):
+        # Replayed resolution: the row is already on the trail, so emit nothing.
+        return
     correct = prediction.get("correct")
     outcome = prediction.get("outcome")
     impact = prediction.get("market_impact") if isinstance(prediction.get("market_impact"), dict) else {}

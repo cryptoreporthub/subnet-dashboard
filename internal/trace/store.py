@@ -117,6 +117,38 @@ def get_record(trace_id: str, path: Optional[str] = None) -> Optional[Dict[str, 
     return None
 
 
+def _row_matches_prediction(
+    row: Dict[str, Any], decision_type: str, prediction_id: Any
+) -> bool:
+    if not isinstance(row, dict) or row.get("decision_type") != decision_type:
+        return False
+    decision = row.get("decision")
+    return isinstance(decision, dict) and decision.get("prediction_id") == prediction_id
+
+
+def has_decision_row(decision_type: str, prediction_id: Any, path: Optional[str] = None) -> bool:
+    """True when the trace store already holds a row of this type for this prediction.
+
+    Uses the same backend as load_store (SQLite when canonical, else JSON). Only the last
+    MAX_RECORDS rows are retained, so the check covers that window.
+    """
+    if _sqlite_enabled(path):
+        try:
+            from internal.store import get_trail_rows
+
+            for row in get_trail_rows(limit=MAX_RECORDS):
+                if _row_matches_prediction(row, decision_type, prediction_id):
+                    return True
+        except Exception as exc:
+            logger.warning("SQLite has_decision_row before JSON mirror: %s", exc)
+
+    store_path = _resolve_path(path)
+    for row in _load_json_store(store_path).get("records") or []:
+        if _row_matches_prediction(row, decision_type, prediction_id):
+            return True
+    return False
+
+
 def append_record(record: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
     store_path = _resolve_path(path)
     data = _load_json_store(store_path)

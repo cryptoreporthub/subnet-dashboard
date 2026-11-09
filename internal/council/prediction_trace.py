@@ -100,7 +100,14 @@ def record_prediction_resolved(
 ) -> Dict[str, Any]:
     payload = build_trace_payload(prediction, event="resolved")
     try:
+        from internal.trace import store as trace_store
         from internal.trace.engine import record_lineage
+
+        # A replayed resolution (abandoned cycle, then revived) must not add a second row.
+        if payload.get("prediction_id") is not None and trace_store.has_decision_row(
+            "prediction_resolve", payload.get("prediction_id"), path=store_path
+        ):
+            return payload
 
         return record_lineage(
             decision_type="prediction_resolve",
