@@ -3,7 +3,14 @@ import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { supportsKvCas } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { replitAskKey, replitAskLeaseKey } from "./gate.js";
-import { exclusive, leaseRenewIntervalMs, leaseToken, releaseLeaseIfHolder, renewLeaseIfHolder } from "./lock.js";
+import {
+  askDiscoveryBudgetMs,
+  exclusive,
+  leaseRenewIntervalMs,
+  leaseToken,
+  releaseLeaseIfHolder,
+  renewLeaseIfHolder,
+} from "./lock.js";
 import type { PrRef } from "./gh.js";
 import { redactSecrets } from "./redact.js";
 
@@ -177,6 +184,23 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
     return tools.some((tool) => tool.name === REPLIT_TOOL);
   } catch {
     return false;
+  }
+}
+
+async function replitAvailableWithin(mcp: HostMcpRegistry, budgetMs: number | undefined): Promise<boolean> {
+  if (budgetMs === undefined) {
+    return replitAvailable(mcp);
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => resolve(false), budgetMs);
+  });
+  try {
+    return await Promise.race([replitAvailable(mcp), deadline]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -373,11 +397,15 @@ async function askReplitOnceWithLease(input: {
     };
   }
   const renewMs = leaseRenewIntervalMs();
-  let renewTimer: ReturnType<typeof setInterval> | undefined = setInterval(() => {
-    void renewLeaseIfHolder(input.kv, leaseKey, token).catch(() => undefined);
-  }, renewMs);
+  let renewTimer: ReturnType<typeof setInterval> | undefined;
+  if (supportsKvCas(input.kv)) {
+    renewTimer = setInterval(() => {
+      void renewLeaseIfHolder(input.kv, leaseKey, token).catch(() => undefined);
+    }, renewMs);
+  }
+  const discoveryBudget = supportsKvCas(input.kv) ? undefined : askDiscoveryBudgetMs();
   try {
-    return await askReplit(input);
+    return await askReplit({ ...input, maxDiscoveryMs: discoveryBudget });
   } finally {
     if (renewTimer !== undefined) {
       clearInterval(renewTimer);
@@ -422,6 +450,8 @@ async function askReplit(input: {
   mcp: HostMcpRegistry;
   ref: PrRef;
   headSha: string;
+  /** When set, bound MCP discovery so plain-KV leases are not outlived. */
+  maxDiscoveryMs?: number;
 }): Promise<ReplitAskOutcome> {
   const key = replitAskKey(input.ref, input.headSha);
   const previous = asAskRecord(await input.kv.get(key));
@@ -480,8 +510,12 @@ async function askReplit(input: {
     return { asked: false, reason, detail, attempts, persistent: attempts >= ASK_ATTEMPTS };
   };
 
-  if (!(await replitAvailable(input.mcp))) {
-    return recordFailure("unavailable", `no ${REPLIT_TOOL} on the "${REPLIT_CONNECTION}" connection`, undefined);
+  if (!(await replitAvailableWithin(input.mcp, input.maxDiscoveryMs))) {
+    const detail =
+      input.maxDiscoveryMs === undefined
+        ? `no ${REPLIT_TOOL} on the "${REPLIT_CONNECTION}" connection`
+        : `replit discovery timed out after ${input.maxDiscoveryMs}ms`;
+    return recordFailure("unavailable", detail, undefined);
   }
 
   const claimNonce = randomUUID();

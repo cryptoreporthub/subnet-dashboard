@@ -223,9 +223,16 @@ export function renewLeaseIfHolder(
     if (claim?.state !== "claimed" || claim.nonce !== token) {
       return false;
     }
-    await kv.put(key, refreshed);
-    return asClaim(await kv.get(key))?.nonce === token;
+    // Plain KV has no conditional write; an unconditional put can clobber a
+    // replacement owner. Long work on this surface must fit the initial lease or
+    // use a CAS-capable store (`supportsKvCas`).
+    return false;
   });
+}
+
+/** Discovery must finish inside this window when the lease cannot be renewed safely. */
+export function askDiscoveryBudgetMs(): number {
+  return Math.max(1_000, Math.floor(effectiveLeaseMs() * 0.75));
 }
 
 /** How often long-running work should refresh a cross-process lease. */

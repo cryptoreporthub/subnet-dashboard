@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemoryKv, type HostKvApi } from "@grok/agent-sdk/kv";
-import { LEASE_MS, ranOnce } from "../bot/lib/lock.js";
+import { LEASE_MS, leaseToken, renewLeaseIfHolder, ranOnce } from "../bot/lib/lock.js";
 
 /** A plain kv that exposes only get/put/delete — the documented surface. */
 function plainKv(): HostKvApi & { store: Map<string, unknown> } {
@@ -290,4 +290,47 @@ test("a failure with compare-and-swap frees the key for an immediate retry", asy
   const retry = await ranOnce({ kv, key: "tag:1:abc", alreadyDone: async () => false, run: async () => { ran += 1; } });
   assert.equal(retry.ran, true);
   assert.equal(ran, 1);
+});
+
+test("ditto r4513463100: plain-KV renewal does not write after a takeover between read and finish", async () => {
+  const store = plainKv();
+  const key = "ask-lease:test";
+  const staleToken = "stale-owner";
+  const newToken = "new-owner";
+  const at = 1_000_000;
+  store.store.set(key, { state: "claimed", nonce: staleToken, at });
+
+  let atRead!: () => void;
+  const readSeen = new Promise<void>((resolve) => {
+    atRead = resolve;
+  });
+  let releaseRenew!: () => void;
+  const renewMayFinish = new Promise<void>((resolve) => {
+    releaseRenew = resolve;
+  });
+
+  const baseGet = store.get.bind(store);
+  store.get = async (k) => {
+    const value = await baseGet(k);
+    if (k === key && (value as { nonce?: string } | undefined)?.nonce === staleToken) {
+      atRead();
+      await renewMayFinish;
+    }
+    return baseGet(k);
+  };
+
+  const renew = renewLeaseIfHolder(store, key, staleToken, at + 100);
+  await readSeen;
+  store.store.set(key, { state: "claimed", nonce: newToken, at: at + 1 });
+  releaseRenew();
+  assert.equal(await renew, false);
+  assert.equal((store.store.get(key) as { nonce?: string }).nonce, newToken);
+});
+
+test("compare-and-swap renewal refreshes a held lease", async () => {
+  const kv = createMemoryKv();
+  const key = "lease:cas";
+  const token = await leaseToken(kv, key, () => 1_000);
+  assert.ok(token);
+  assert.equal(await renewLeaseIfHolder(kv, key, token, 2_000), true);
 });
