@@ -280,6 +280,11 @@ export function replitAskKey(ref: { owner: string; repo: string; number: number 
   return `ask:${prKey(ref)}:${headSha}:replit`;
 }
 
+/** Cross-process lease while `askReplitOnce` runs; separate from the ask record shape. */
+export function replitAskLeaseKey(ref: { owner: string; repo: string; number: number }, headSha: string): string {
+  return `ask-lease:${prKey(ref)}:${headSha}:replit`;
+}
+
 /**
  * Key for the review-turn lease. One turn per (PR, head): a burst of deliveries
  * reads the same missing verdict, and only the one that takes the lease runs it.

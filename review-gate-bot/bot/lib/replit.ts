@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { supportsKvCas } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { replitAskKey } from "./gate.js";
-import { exclusive } from "./lock.js";
+import { replitAskKey, replitAskLeaseKey } from "./gate.js";
+import { exclusive, leaseToken, releaseLeaseIfHolder } from "./lock.js";
 import type { PrRef } from "./gh.js";
 import { redactSecrets } from "./redact.js";
 
@@ -347,16 +347,56 @@ async function renewInFlightLease(kv: HostKvApi, key: string, claimNonce: string
  * increments the attempt count and comes back with `persistent: true` once the
  * budget is spent, which the channel logs loudly.
  */
+async function askReplitOnceWithLease(input: {
+  kv: HostKvApi;
+  mcp: HostMcpRegistry;
+  ref: PrRef;
+  headSha: string;
+}): Promise<ReplitAskOutcome> {
+  const key = replitAskKey(input.ref, input.headSha);
+  const leaseKey = replitAskLeaseKey(input.ref, input.headSha);
+  const token = await leaseToken(input.kv, leaseKey);
+  if (token === undefined) {
+    const previous = asAskRecord(await input.kv.get(key));
+    if (previous !== undefined && askAlreadySent(previous)) {
+      return {
+        asked: false,
+        reason: "already-asked",
+        detail:
+          terminalAskRecorded(previous) ? "recorded for this head" : "ask in flight for this head",
+      };
+    }
+    return {
+      asked: false,
+      reason: "already-asked",
+      detail: "another handler holds the replit ask lease",
+    };
+  }
+  try {
+    return await askReplit(input);
+  } finally {
+    await releaseLeaseIfHolder(input.kv, leaseKey, token).catch(() => undefined);
+  }
+}
+
 export function askReplitOnce(input: {
   kv: HostKvApi;
   mcp: HostMcpRegistry;
   ref: PrRef;
   headSha: string;
 }): Promise<ReplitAskOutcome> {
-  // One caller at a time per (PR, head): a read of the record followed by a
-  // write is not a claim, so overlapping events used to all ask, and a late
-  // failure could overwrite a recorded success.
-  return exclusive(replitAskKey(input.ref, input.headSha), () => askReplit(input));
+  // In-process queue plus a KV lease: `exclusive` alone does not span hosted processes.
+  return exclusive(replitAskKey(input.ref, input.headSha), () => askReplitOnceWithLease(input));
+}
+
+/** Parallel tests simulate another process without the in-process `exclusive` queue. */
+export function __testOnly_askReplitOnceCrossProcess(input: {
+  kv: HostKvApi;
+  mcp: HostMcpRegistry;
+  ref: PrRef;
+  headSha: string;
+}): Promise<ReplitAskOutcome> {
+  return askReplitOnceWithLease(input);
 }
 
 /** Parallel cross-process tests call the same path without the process-local queue. */

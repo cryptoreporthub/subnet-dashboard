@@ -7,6 +7,7 @@ import {
   ASK_ATTEMPTS,
   askReplitOnce,
   __testOnly_askReplit,
+  __testOnly_askReplitOnceCrossProcess,
   __testOnly_setInFlightLeaseMs,
   __testOnly_setRenewInFlightDuringCall,
   __testOnly_ownerFailureWrite,
@@ -318,6 +319,38 @@ test("ditto r4511210612: a rejecting KV renewal does not cause unhandled rejecti
   release();
   const outcome = await ask;
   assert.equal(outcome.asked, true);
+});
+
+test("ditto r4508317090: cross-process lease blocks a second handler before MCP", async () => {
+  __testOnly_setInFlightLeaseMs(120);
+  __testOnly_setRenewInFlightDuringCall(true);
+  try {
+    const store = createMemoryKv();
+    let releaseSlow: () => void = () => {};
+    const slowDone = new Promise<void>((resolve) => {
+      releaseSlow = resolve;
+    });
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => [{ name: REPLIT_TOOL }],
+      callTool: async () => {
+        await Promise.race([slowDone, sleep(400)]);
+        return { isError: false, content: [{ type: "text", text: "ok" }] };
+      },
+    } as unknown as HostMcpRegistry;
+    const fast = mcp();
+    const slowAsk = __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha: HEAD });
+    await sleep(50);
+    const blocked = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: HEAD });
+    releaseSlow();
+    await slowAsk;
+    assert.equal(blocked.asked, false);
+    assert.equal(blocked.reason, "already-asked");
+    assert.equal(fast.calls, 0, "must not call Replit while another handler holds the ask lease");
+  } finally {
+    __testOnly_setInFlightLeaseMs(undefined);
+    __testOnly_setRenewInFlightDuringCall(true);
+  }
 });
 
 test("ditto r4511110608: in-flight renewal blocks a second process during a slow call", async () => {
