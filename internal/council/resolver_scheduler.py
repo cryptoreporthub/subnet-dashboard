@@ -1513,7 +1513,10 @@ class PredictionResolverScheduler:
             owned_cycle = True
         acquired = self._persist_lock.acquire(timeout=_PERSIST_LOCK_WAIT_SECONDS)
         if not acquired:
-            return PersistResult(outcome=WriteOutcome.LOCK_WAIT_FAILED)
+            return PersistResult(
+                outcome=WriteOutcome.LOCK_WAIT_FAILED,
+                detail=f"persist_lock_wait>{_PERSIST_LOCK_WAIT_SECONDS}s",
+            )
         try:
             if not force and owner_gen is not None:
                 if self._persist_owner_gen is None:

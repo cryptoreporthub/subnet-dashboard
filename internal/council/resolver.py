@@ -7,6 +7,7 @@ weights, atomic ledger resolution, and dedupe before resolve.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import math
@@ -244,13 +245,22 @@ def _is_shadow(prediction: Dict[str, Any]) -> bool:
     return bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
 
-def _load_json(path: str, default: Any) -> Any:
+def _load_json(path: str, default: Any, *, fail_closed: bool = False) -> Any:
     from internal.store.soul_map_io import StateUnreadable, read_blob_checked
 
     checked = read_blob_checked(path)
     if checked.kind in ("unreadable", "transient"):
-        if os.path.normpath(path) == os.path.normpath(PREDICTIONS_PATH):
+        ledger = os.path.normpath(path) == os.path.normpath(PREDICTIONS_PATH)
+        if ledger and fail_closed:
             raise StateUnreadable(checked.kind, path, error=checked.error)
+        if ledger:
+            logger.warning(
+                "predictions ledger read-only degraded kind=%s path=%s error=%s",
+                checked.kind,
+                path,
+                checked.error or "",
+            )
+            return copy.deepcopy(default) if isinstance(default, dict) else default
         return default
 
     now = datetime.now(timezone.utc)
@@ -1404,6 +1414,7 @@ def expire_stale_predictions(
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
+        fail_closed=True,
     )
     predictions: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
@@ -1440,7 +1451,7 @@ def expire_stale_predictions(
 
 def _merge_regraded_resolved(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Re-sync rows regrade_expired_predictions updated on disk (RF-3 follow-up)."""
-    fresh = _load_json(PREDICTIONS_PATH, {}).get("resolved") or []
+    fresh = _load_json(PREDICTIONS_PATH, {}, fail_closed=True).get("resolved") or []
     by_id = {
         str(row.get("id")): row
         for row in fresh
@@ -1481,6 +1492,7 @@ def _resolve_due_predictions(
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
+        fail_closed=True,
     )
     now = datetime.now(timezone.utc)
     restored_now = _restore_recently_expired_predictions(data, now=now)
@@ -1680,6 +1692,7 @@ def regrade_expired_predictions(
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {}},
+        fail_closed=True,
     )
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     regraded: List[Dict[str, Any]] = []

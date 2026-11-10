@@ -1,4 +1,4 @@
-"""Resolver must not overwrite predictions.json when the ledger is unreadable."""
+"""Predictions ledger: fail-closed writes, degraded read-only API."""
 
 from __future__ import annotations
 
@@ -8,6 +8,19 @@ import pytest
 
 from internal.council import resolver
 from internal.store.soul_map_io import StateUnreadable
+
+
+def test_get_resolved_predictions_degrades_unreadable_without_raise(tmp_path, monkeypatch):
+    pred = tmp_path / "predictions.json"
+    pred.write_text("not-json{{{", encoding="utf-8")
+    before = pred.read_bytes()
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(pred))
+
+    out = resolver.get_resolved_predictions()
+
+    assert out["resolved"] == []
+    assert isinstance(out.get("stats"), dict)
+    assert pred.read_bytes() == before
 
 
 def test_corrupt_price_cache_degrades_and_resolution_runs(tmp_path, monkeypatch):

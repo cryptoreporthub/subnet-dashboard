@@ -67,3 +67,19 @@ def test_persist_honesty_preserves_existing_cycle_error():
     )
     assert result["error"] == "resolve phase failed"
     assert result.get("skipped") == "persist_skipped"
+
+
+def test_persist_refused_keeps_cycle_error_and_exposes_persist_outcome():
+    from internal.store.soul_map_io import WriteOutcome
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    result = {"ok": True, "error": "resolve phase failed"}
+    sched._apply_persist_honesty(
+        result,
+        resolver_scheduler.PersistResult(
+            outcome=WriteOutcome.UNREADABLE_BLOB, detail="sidecar=abc"
+        ),
+    )
+    assert result["error"] == "resolve phase failed"
+    assert result.get("persist_outcome") == "unreadable_blob"
+    assert result["ok"] is False

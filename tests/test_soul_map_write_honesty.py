@@ -66,8 +66,21 @@ def test_declined_compares_canonical_json_not_python_equality(tmp_path):
         path=str(soul_path),
         raise_on_lock_timeout=False,
     )
+    assert 1 == True  # noqa: E712 — Python equality is not the declined gate
     assert result.outcome is WriteOutcome.APPLIED
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"flag": True}
+
+
+def test_canonical_json_treats_one_and_true_as_distinct_values(tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text('{"flag": true}', encoding="utf-8")
+    result = write_soul_map(
+        lambda blob: blob.__setitem__("flag", 1),
+        path=str(soul_path),
+        raise_on_lock_timeout=False,
+    )
+    assert result.outcome is WriteOutcome.APPLIED
+    assert json.loads(soul_path.read_text(encoding="utf-8")) == {"flag": 1}
 
 
 def test_lock_timeout_returns_no_blob_and_never_reads(tmp_path, monkeypatch):
