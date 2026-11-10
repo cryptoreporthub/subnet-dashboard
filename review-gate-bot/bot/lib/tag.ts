@@ -175,6 +175,7 @@ export async function tagCursorAndDitto(input: {
     slot: "cursor-ditto",
     key: cursorDittoTagKey(ref, headSha),
     body: cursorDittoTagBody(headSha),
+    stillReady: async () => (await readGateState({ octokit, kv, ref, headSha })).next !== "blocked",
   });
   return tagOutcome(posted, state.next);
 }

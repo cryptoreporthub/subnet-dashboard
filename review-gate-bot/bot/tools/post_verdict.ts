@@ -14,15 +14,32 @@ const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
  */
 const BLOCKING_KINDS = ["never-expires", "overflow", "aborts-cycle", "poisons-later-row"] as const;
 
+const REQUIRED_SKILLS = ["adversarial-review", "owner-rules", "settled-check"] as const;
+
 const SkillsTable = z
   .array(
     z.object({
       skill: z.string().min(1),
       used: z.boolean(),
-      note: z.string().describe("What it found or changed, or `skipped: <reason>`."),
+      note: z.string().min(1).describe("What it found or changed, or `skipped: <reason>`."),
     }),
   )
-  .min(1);
+  .min(1)
+  .superRefine((rows, ctx) => {
+    const seen = new Map<string, number>();
+    for (const row of rows) {
+      seen.set(row.skill, (seen.get(row.skill) ?? 0) + 1);
+    }
+    for (const skill of REQUIRED_SKILLS) {
+      const count = seen.get(skill) ?? 0;
+      if (count !== 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `the Skills table must include exactly one row for \`${skill}\``,
+        });
+      }
+    }
+  });
 
 function renderTable(skills: { skill: string; used: boolean; note: string }[]): string {
   const rows = skills.map((s) => `| \`${s.skill}\` | ${s.used ? "yes" : "no"} | ${s.note} |`);
@@ -77,25 +94,26 @@ export function composeVerdictBody(input: {
  * from the model, so a post always says who posted it.
  *
  */
+export const verdictToolInputSchema = z.object({
+  headSha: Sha,
+  verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
+  body: z.string().min(1).describe("The review body: findings, severities, and measured/inferred labels."),
+  skills: SkillsTable,
+  blocking: z
+    .array(z.enum(BLOCKING_KINDS))
+    .describe(
+      "Every finding that makes rows never expire (`never-expires`), lets a value overflow to inf or NaN (`overflow`), lets a cycle or a later row abort (`aborts-cycle`), or writes bad state that later cycles read back (`poisons-later-row`). Declare each one whatever its severity. PASS is refused while any is declared. Pass an empty array when none apply.",
+    ),
+});
+
 export default defineTool({
   description:
     "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required.",
-  inputSchema: z.object({
-    headSha: Sha,
-    verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
-    body: z.string().min(1).describe("The review body: findings, severities, and measured/inferred labels."),
-    skills: SkillsTable,
-    blocking: z
-      .array(z.enum(BLOCKING_KINDS))
-      .optional()
-      .describe(
-        "Every finding that makes rows never expire (`never-expires`), lets a value overflow to inf or NaN (`overflow`), lets a cycle or a later row abort (`aborts-cycle`), or writes bad state that later cycles read back (`poisons-later-row`). Declare each one whatever its severity. PASS is refused while any is declared.",
-      ),
-  }),
+  inputSchema: verdictToolInputSchema,
   effect: "write",
   dryRunResult: (input) => ({ posted: false, reason: "dry-run", verdict: input.verdict }),
   async execute(input, ctx) {
-    const blocking = input.blocking ?? [];
+    const blocking = input.blocking;
     if (input.verdict === "PASS" && blocking.length > 0) {
       return { posted: false, reason: "pass-with-blocking-finding", verdict: input.verdict, blocking };
     }

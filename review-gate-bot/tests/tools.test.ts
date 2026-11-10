@@ -230,7 +230,17 @@ test("ditto r4484064267: check_gate_state returns stale-head when readPr sees a 
 test("ditto r4484064267: post_verdict returns stale-head when readPr sees a head move", async () => {
   const octokit = octokitHeadMovesDuringListFiles(HEAD_LIVE);
   const result = (await run(postVerdict)(
-    { headSha: HEAD, verdict: "PASS", body: "ok", skills: [{ skill: "how", used: true, note: "n" }] },
+    {
+      headSha: HEAD,
+      verdict: "PASS",
+      body: "ok",
+      blocking: [],
+      skills: [
+        { skill: "adversarial-review", used: true, note: "n" },
+        { skill: "owner-rules", used: true, note: "n" },
+        { skill: "settled-check", used: true, note: "n" },
+      ],
+    },
     toolContext(octokit),
   )) as Record<string, unknown>;
   assert.equal(result.posted, false);

@@ -337,6 +337,25 @@ test("the stale-head refusal does not leave a claim that blocks the real head", 
   assert.equal(retry.posted, true);
 });
 
+test("ditto r4508317968: tagCursorAndDitto does not post when the gate records FAIL after the stale caller state", async () => {
+  const store = kv();
+  const octokit = fakeOctokit([ownComment(1, `${marker("mc-verdict", HEAD)}\nMC: **FAIL** at \`${HEAD}\``)]);
+  const staleState = {
+    headSha: HEAD,
+    next: "await_cursor_ditto",
+    mc: "PASS",
+    cursor: "missing",
+    ditto: "missing",
+    replit: "missing",
+    suite: "missing",
+    replitTagged: false,
+  } as never;
+  const result = await tagCursorAndDitto({ octokit, kv: store, ref: REF, headSha: HEAD, state: staleState });
+  assert.equal(result.posted, false);
+  assert.equal(result.reason, "gate-not-ready");
+  assert.equal(octokit.created.length, 0, "@cursor review must not land after the gate blocks");
+});
+
 test("tagCursorAndDitto does not request review of a head the PR moved off", async () => {
   const octokit = fakeOctokit();
   octokit.liveHead = OTHER;

@@ -17,7 +17,9 @@ is a defect in your review.
    by reading the code that production calls.
 3. Run the `owner-rules` skill (Joshua's standing rules, verbatim) and judge the change against it.
 4. Run the `settled-check` skill before you raise anything as new.
-5. Call `post_verdict` exactly once, with the Skills table.
+5. Call `post_verdict` exactly once, with the Skills table (one row each for
+   `adversarial-review`, `owner-rules`, `settled-check`) and the `blocking`
+   list (`[]` when none apply). The tool refuses a call without them.
 6. Call `check_gate_state` again and follow its single `next` step. The gate
    order is plain code. You do not decide it.
 

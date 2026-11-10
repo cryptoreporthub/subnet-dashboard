@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { GateState } from "./gate.js";
 import type { PrSnapshot } from "./gh.js";
-import type { Diff } from "./repo.js";
+import type { Diff, DiffFile } from "./repo.js";
 
 /**
  * Eval sessions have no GitHub PR behind them: `continuationKey` is absent, so
@@ -24,6 +24,17 @@ export const GATE_FIXTURE = "gate.json";
 export const DIFF_FIXTURE = "diff.json";
 export const REPO_FIXTURE = "repo.json";
 
+export class FixtureMalformedError extends Error {
+  readonly name = "FixtureMalformedError";
+
+  constructor(
+    readonly fixture: string,
+    detail: string,
+  ) {
+    super(`${fixture}: ${detail}`);
+  }
+}
+
 /**
  * A fixture that is not there means its case did not seed it. One that is there but unreadable or malformed
  * is a broken case, and it fails loudly: otherwise an eval session would run without the PR it claims to test.
@@ -39,6 +50,75 @@ async function readJson<T>(workspaceDir: string, name: string): Promise<T | unde
     throw error;
   }
   return JSON.parse(text) as T;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function parseDiffFixture(name: string, value: unknown): Diff {
+  if (typeof value !== "object" || value === null) {
+    throw new FixtureMalformedError(name, "expected an object");
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.totalFiles !== "number") {
+    throw new FixtureMalformedError(name, "totalFiles must be a number");
+  }
+  if (!Array.isArray(record.files)) {
+    throw new FixtureMalformedError(name, "files must be an array");
+  }
+  if (typeof record.truncated !== "boolean") {
+    throw new FixtureMalformedError(name, "truncated must be a boolean");
+  }
+  if (!isStringArray(record.omittedPaths)) {
+    throw new FixtureMalformedError(name, "omittedPaths must be an array of strings");
+  }
+  const files = record.files.map((file, index) => {
+    if (typeof file !== "object" || file === null) {
+      throw new FixtureMalformedError(name, `files[${index}] must be an object`);
+    }
+    const entry = file as Record<string, unknown>;
+    if (typeof entry.path !== "string") {
+      throw new FixtureMalformedError(name, `files[${index}].path must be a string`);
+    }
+    if (typeof entry.status !== "string") {
+      throw new FixtureMalformedError(name, `files[${index}].status must be a string`);
+    }
+    if (typeof entry.additions !== "number" || typeof entry.deletions !== "number") {
+      throw new FixtureMalformedError(name, `files[${index}] additions and deletions must be numbers`);
+    }
+    const diffFile: DiffFile = {
+      path: entry.path,
+      status: entry.status,
+      additions: entry.additions,
+      deletions: entry.deletions,
+    };
+    if (entry.previousPath !== undefined) {
+      if (typeof entry.previousPath !== "string") {
+        throw new FixtureMalformedError(name, `files[${index}].previousPath must be a string`);
+      }
+      diffFile.previousPath = entry.previousPath;
+    }
+    if (entry.patch !== undefined) {
+      if (typeof entry.patch !== "string") {
+        throw new FixtureMalformedError(name, `files[${index}].patch must be a string`);
+      }
+      diffFile.patch = entry.patch;
+    }
+    if (entry.patchOmitted !== undefined) {
+      if (typeof entry.patchOmitted !== "string") {
+        throw new FixtureMalformedError(name, `files[${index}].patchOmitted must be a string`);
+      }
+      diffFile.patchOmitted = entry.patchOmitted;
+    }
+    return diffFile;
+  });
+  return {
+    totalFiles: record.totalFiles,
+    files,
+    truncated: record.truncated,
+    omittedPaths: record.omittedPaths,
+  };
 }
 
 /** The PR a fixture describes, or undefined when the case did not seed one. */
@@ -62,8 +142,12 @@ export function readGateFixture(workspaceDir: string): Promise<GateFixture | und
 }
 
 /** The PR's diff as the case pins it, or undefined when the case did not seed one. */
-export function readDiffFixture(workspaceDir: string): Promise<Diff | undefined> {
-  return readJson<Diff>(workspaceDir, DIFF_FIXTURE);
+export async function readDiffFixture(workspaceDir: string): Promise<Diff | undefined> {
+  const raw = await readJson<unknown>(workspaceDir, DIFF_FIXTURE);
+  if (raw === undefined) {
+    return undefined;
+  }
+  return parseDiffFixture(DIFF_FIXTURE, raw);
 }
 
 /** File contents at the pinned head: `{ "files": { "<path>": "<text>" } }`. */

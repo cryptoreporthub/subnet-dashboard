@@ -3,9 +3,14 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import postVerdict from "../bot/tools/post_verdict.js";
+import postVerdict, { verdictToolInputSchema } from "../bot/tools/post_verdict.js";
+import {
+  FixtureMalformedError,
+  readDiffFixture,
+  readGateFixture,
+  readPrFixture,
+} from "../bot/lib/fixtures.js";
 import { collectPinnedVerdicts } from "../bot/lib/verdicts.js";
-import { readGateFixture, readPrFixture } from "../bot/lib/fixtures.js";
 import { redactSecrets } from "../bot/lib/redact.js";
 
 /**
@@ -72,11 +77,18 @@ test("a malformed fixture fails loudly: a broken case must not run as one that s
   await assert.rejects(readPrFixture(dir));
 });
 
+const VERDICT_SKILLS = [
+  { skill: "adversarial-review", used: true, note: "ran" },
+  { skill: "owner-rules", used: true, note: "none applied" },
+  { skill: "settled-check", used: true, note: "none applied" },
+] as const;
+
 const VERDICT = {
   headSha: "a".repeat(40),
   verdict: "PASS" as const,
   body: "Looks right.",
-  skills: [{ skill: "adversarial-review", used: true, note: "ran" }],
+  skills: [...VERDICT_SKILLS],
+  blocking: [] as const,
 };
 
 /** `defineTool` types `execute` for the SDK's host; the test supplies its own context. */
@@ -125,6 +137,36 @@ test("the same finding under MODIFY or FAIL goes through, so the model can resub
 
 test("a PASS that declares no blocking finding is not refused", async () => {
   assert.deepEqual(await execute({ ...VERDICT, blocking: [] }, contextFor("eval")), { posted: false, reason: "eval", verdict: "PASS" });
+});
+
+test("ditto r4508317977: post_verdict refuses a PASS that omits the blocking declaration", () => {
+  const result = verdictToolInputSchema.safeParse({
+    headSha: VERDICT.headSha,
+    verdict: "PASS",
+    body: VERDICT.body,
+    skills: VERDICT.skills,
+  });
+  assert.equal(result.success, false);
+});
+
+test("ditto r4474463005: post_verdict refuses a verdict without the required skill rows", () => {
+  const result = verdictToolInputSchema.safeParse({
+    ...VERDICT,
+    skills: [{ skill: "adversarial-review", used: true, note: "ran" }],
+  });
+  assert.equal(result.success, false);
+});
+
+test("ditto r4508317974: a structurally empty diff fixture is rejected", async () => {
+  const dir = await workspaceWith({ "diff.json": "{}" });
+  await assert.rejects(readDiffFixture(dir), (error: unknown) => error instanceof FixtureMalformedError);
+});
+
+test("ditto r4508317974: diff.json with files as an object is rejected", async () => {
+  const dir = await workspaceWith({
+    "diff.json": JSON.stringify({ totalFiles: 0, files: {}, truncated: false, omittedPaths: [] }),
+  });
+  await assert.rejects(readDiffFixture(dir), (error: unknown) => error instanceof FixtureMalformedError);
 });
 
 test("Joshua's own PASS is never read as a Replit verdict", () => {
