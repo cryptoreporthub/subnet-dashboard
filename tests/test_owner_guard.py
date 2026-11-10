@@ -812,3 +812,75 @@ def test_legacy_marker_missing_exclusive_machine_id_blocks(prod_mount, monkeypat
     ok, detail = og.try_acquire_write_owner_lock()
     assert ok is False
     assert "marker_mismatch:exclusive_machine_id_missing" in detail
+
+
+def test_fork_from_worker_thread_releases_parent_acquire_rlock_subprocess():
+    """Fork hook must release _acquire_rlock in the parent after a worker-thread fork."""
+    script = textwrap.dedent(
+        """
+        import os
+        import threading
+
+        import internal.owner_guard as og  # noqa: F401 — registers at_fork hooks
+
+        # Required ordering: fork from the main thread first.
+        pid = os.fork()
+        if pid == 0:
+            os._exit(0)
+        os.waitpid(pid, 0)
+
+        def worker():
+            pid = os.fork()
+            if pid == 0:
+                os._exit(0)
+            os.waitpid(pid, 0)
+            print("FORK_WORKER_MARKER", flush=True)
+
+        t = threading.Thread(target=worker, name="fork-worker")
+        t.start()
+        t.join(5)
+        print(f"THREAD_ALIVE={t.is_alive()}", flush=True)
+        if t.is_alive():
+            os._exit(92)
+        """
+    )
+    result = _fork_subprocess(script, timeout=15)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "FORK_WORKER_MARKER" in result.stdout
+    assert "THREAD_ALIVE=False" in result.stdout
+
+
+def test_fork_from_main_thread_allows_acquire_from_other_thread_subprocess(owner_env):
+    data = owner_env
+    script = textwrap.dedent(
+        f"""
+        import os
+        import threading
+
+        os.environ["DATA_DIR"] = {str(data)!r}
+        from internal.owner_guard import try_acquire_write_owner_lock
+
+        pid = os.fork()
+        if pid == 0:
+            os._exit(0)
+        os.waitpid(pid, 0)
+
+        outcome = {{"ok": None, "detail": "timeout"}}
+
+        def acquire():
+            ok, detail = try_acquire_write_owner_lock()
+            outcome["ok"] = ok
+            outcome["detail"] = detail
+
+        t = threading.Thread(target=acquire, name="acquire-after-fork")
+        t.start()
+        t.join(5)
+        if t.is_alive():
+            print("ACQUIRE_THREAD_ALIVE=True", flush=True)
+            os._exit(93)
+        print(f"ACQUIRE={{outcome['ok']}}|{{outcome['detail']}}", flush=True)
+        """
+    )
+    result = _fork_subprocess(script, timeout=15)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "ACQUIRE=True|" in result.stdout
