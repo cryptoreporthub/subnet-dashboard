@@ -948,6 +948,7 @@ class PredictionResolverScheduler:
                     )
             else:
                 self._backoff_minutes = self.refresh_minutes
+                self._consecutive_failures = 0
             next_interval = self._backoff_minutes
             if "cycle_timeout" in str(result.get("error") or ""):
                 # ponytail: hung cycle abandoned — retry soon while last success still fresh
@@ -1811,9 +1812,16 @@ class PredictionResolverScheduler:
         if persist.skipped_not_owner:
             result["persist_outcome"] = "skipped_not_owner"
             result["skipped"] = result.get("skipped") or "persist_skipped"
+            result["ok"] = False
+            if not had_cycle_error:
+                result.pop("error", None)
             return
         if persist.outcome is WriteOutcome.DECLINED:
             result["persist_outcome"] = persist.outcome.value
+            result["skipped"] = result.get("skipped") or "persist_declined"
+            result["ok"] = False
+            if not had_cycle_error:
+                result.pop("error", None)
             return
         if persist.outcome is WriteOutcome.APPLIED:
             result["persist_outcome"] = persist.outcome.value

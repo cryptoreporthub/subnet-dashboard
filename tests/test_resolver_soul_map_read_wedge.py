@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from internal.council import resolver_scheduler, weights
+from internal.council import resolver, resolver_scheduler, weights
+from internal.store.soul_map_io import WriteOutcome
 
 
 def test_corrupt_soul_map_does_not_wedge_cycle_generation_seed(tmp_path, monkeypatch):
@@ -25,22 +28,32 @@ def test_load_json_degrades_unreadable_to_empty_dict(tmp_path):
     assert resolver_scheduler._load_json(str(soul)) == {}
 
 
-def test_declined_persist_leaves_ok_true_and_refresh_backoff():
-    from internal.store.soul_map_io import WriteOutcome
-
+def test_declined_persist_tick_records_skip_and_refresh_backoff(monkeypatch):
     sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = True
     sched._backoff_minutes = 240
     sched._consecutive_failures = 3
-    result = {"ok": True, "resolved_now": 2, "expired_now": 0, "pending": 0}
+    skips: list[str] = []
+    monkeypatch.setattr(sched.liveness, "record_skip", lambda reason: skips.append(reason))
+    monkeypatch.setattr(sched.liveness, "record_success", lambda **_: pytest.fail("success"))
+    monkeypatch.setattr(sched.liveness, "record_failure", lambda **_: pytest.fail("failure"))
+
+    cycle = {"ok": True, "resolved_now": 2, "expired_now": 0, "pending": 0}
     sched._apply_persist_honesty(
-        result,
+        cycle,
         resolver_scheduler.PersistResult(outcome=WriteOutcome.DECLINED),
     )
-    assert result["ok"] is True
-    assert result.get("persist_outcome") == "declined"
-    if result.get("ok"):
-        sched._consecutive_failures = 0
-        sched._backoff_minutes = sched.refresh_minutes
+    monkeypatch.setattr(
+        sched, "_run_refresh_cycle_with_timeout", lambda: cycle
+    )
+    monkeypatch.setattr(sched, "_schedule_next", lambda *_a, **_k: None)
+    monkeypatch.setattr(sched, "_persist_lifecycle_state", lambda: None)
+    monkeypatch.setattr(sched, "_mark_first_tick", lambda _r: False)
+
+    sched._tick(sync_manual=True)
+
+    assert skips == ["persist_declined"]
+    assert cycle.get("persist_outcome") == "declined"
     assert sched._backoff_minutes == 15
     assert sched._consecutive_failures == 0
 

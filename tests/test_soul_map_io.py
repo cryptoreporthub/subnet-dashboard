@@ -20,6 +20,33 @@ def _applied_blob(result):
     return result.blob
 
 
+@contextmanager
+def _hold_path_flock(path: str, timeout_seconds: float = 5.0):
+    """Test-only: hold cross-process flock like an external writer."""
+    lock_path = path + ".lock"
+    soul_map_io.os.makedirs(soul_map_io.os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        acquired = False
+        while time.monotonic() < deadline:
+            try:
+                soul_map_io.fcntl.flock(
+                    lock_file.fileno(), soul_map_io.fcntl.LOCK_EX | soul_map_io.fcntl.LOCK_NB
+                )
+                acquired = True
+                break
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+        if not acquired:
+            raise TimeoutError(
+                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
+            )
+        try:
+            yield
+        finally:
+            soul_map_io.fcntl.flock(lock_file.fileno(), soul_map_io.fcntl.LOCK_UN)
+
+
 def test_write_soul_map_concurrent_increments_no_lost_updates(tmp_path):
     soul_path = tmp_path / "soul_map.json"
 
@@ -153,7 +180,7 @@ def test_write_soul_map_waits_for_file_lock(tmp_path):
     release = threading.Event()
 
     def hold():
-        with soul_map_io._locked_soul_map_file(str(soul_path)):
+        with _hold_path_flock(str(soul_path)):
             started.set()
             assert release.wait(timeout=5)
 
@@ -206,7 +233,7 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, t
     monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_signalling_contention)
 
     def hold():
-        with soul_map_io._locked_soul_map_file(str(soul_path)):
+        with _hold_path_flock(str(soul_path)):
             started.set()
             release.wait(timeout=10)
 
@@ -256,7 +283,7 @@ def test_a_writer_completes_when_the_file_lock_is_held_past_the_poll(monkeypatch
     monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_signalling_contention)
 
     def hold():
-        with soul_map_io._locked_soul_map_file(str(soul_path)):
+        with _hold_path_flock(str(soul_path)):
             started.set()
             if writer_blocked.wait(timeout=5):
                 time.sleep(6.0)
@@ -328,7 +355,7 @@ def test_a_writer_in_another_process_is_not_starved_by_a_slow_reader(tmp_path):
     release = threading.Event()
 
     def hold_flock():
-        with soul_map_io._locked_soul_map_file(str(soul_path), timeout_seconds=10.0):
+        with _hold_path_flock(str(soul_path), timeout_seconds=10.0):
             started.set()
             release.wait(timeout=10)
 

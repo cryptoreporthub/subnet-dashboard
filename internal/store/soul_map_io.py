@@ -79,6 +79,10 @@ class StateUnreadable(Exception):
         self.error = error
 
 
+class SoulMapLockWaitTimeout(TimeoutError):
+    """Timed out acquiring .writers, flock, or reader mutex within the write deadline."""
+
+
 def _resolve_path(path: Optional[str]) -> str:
     if path is not None:
         return path
@@ -133,31 +137,6 @@ def _log_read_once(path: str, kind: str, message: str) -> bool:
     _read_log_guard[key] = now
     logger.warning("%s", message)
     return True
-
-
-@contextmanager
-def _locked_soul_map_file(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
-    """Cross-process lock for soul_map read-modify-replace."""
-    lock_path = path + ".lock"
-    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
-    with open(lock_path, "a+", encoding="utf-8") as lock_file:
-        deadline = time.monotonic() + timeout_seconds
-        acquired = False
-        while time.monotonic() < deadline:
-            try:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
-                break
-            except (BlockingIOError, OSError):
-                time.sleep(0.01)
-        if not acquired:
-            raise TimeoutError(
-                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
-            )
-        try:
-            yield
-        finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def _sidecar_paths(path: str) -> list[str]:
@@ -244,7 +223,7 @@ def _acquire_write_locks(path: str, deadline: float) -> Iterator[None]:
     try:
         remaining = deadline - time.monotonic()
         if remaining <= 0 or not writers.acquire(timeout=max(0.0, remaining)):
-            raise TimeoutError(f"Timed out waiting for writers lock on {path}")
+            raise SoulMapLockWaitTimeout(f"Timed out waiting for writers lock on {path}")
         writers_acquired = True
 
         while time.monotonic() < deadline:
@@ -254,13 +233,13 @@ def _acquire_write_locks(path: str, deadline: float) -> Iterator[None]:
             except (BlockingIOError, OSError):
                 time.sleep(0.01)
         else:
-            raise TimeoutError(f"Timed out waiting for flock on {lock_path}")
+            raise SoulMapLockWaitTimeout(f"Timed out waiting for flock on {lock_path}")
 
         remaining = deadline - time.monotonic()
         if remaining <= 0 or not reader.acquire(timeout=max(0.0, remaining)):
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
             flock_released = True
-            raise TimeoutError(f"Timed out waiting for reader lock on {path}")
+            raise SoulMapLockWaitTimeout(f"Timed out waiting for reader lock on {path}")
         reader_acquired = True
         try:
             yield
@@ -402,7 +381,7 @@ def write_soul_map(
                 )
                 return WriteResult(
                     WriteOutcome.REPLACE_FAILED,
-                    prior,
+                    None,
                     detail=str(exc),
                 )
             finally:
@@ -411,9 +390,7 @@ def write_soul_map(
                         os.unlink(temp_path)
                     except OSError:
                         pass
-    except TimeoutError as exc:
-        if not str(exc).startswith("Timed out waiting"):
-            raise
+    except SoulMapLockWaitTimeout as exc:
         logger.warning(
             "soul_map lock wait timed out path=%s error=%s",
             resolved,

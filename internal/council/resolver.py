@@ -249,7 +249,9 @@ def _load_json(path: str, default: Any) -> Any:
 
     checked = read_blob_checked(path)
     if checked.kind in ("unreadable", "transient"):
-        raise StateUnreadable(checked.kind, path, error=checked.error)
+        if os.path.normpath(path) == os.path.normpath(PREDICTIONS_PATH):
+            raise StateUnreadable(checked.kind, path, error=checked.error)
+        return default
 
     now = datetime.now(timezone.utc)
     file_bytes = 0

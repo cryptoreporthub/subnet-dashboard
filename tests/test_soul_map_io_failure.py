@@ -32,7 +32,7 @@ def test_replace_oserror_returns_disk_state_and_leaves_cache(
         )
 
     assert returned.outcome is WriteOutcome.REPLACE_FAILED
-    assert returned.blob == {"kept": 1}
+    assert returned.blob is None
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"kept": 1}
     assert read_soul_map(str(soul_path), copy_blob=False) == {"kept": 1}
     assert "soul_map persistence failed" in caplog.text

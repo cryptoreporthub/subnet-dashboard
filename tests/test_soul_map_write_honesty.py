@@ -10,7 +10,12 @@ from contextlib import contextmanager
 import pytest
 
 import internal.store.soul_map_io as soul_map_io
-from internal.store.soul_map_io import WriteOutcome, read_soul_map, write_soul_map
+from internal.store.soul_map_io import (
+    SoulMapLockWaitTimeout,
+    WriteOutcome,
+    read_soul_map,
+    write_soul_map,
+)
 
 
 def test_transient_read_does_not_overwrite_file(tmp_path, monkeypatch):
@@ -76,7 +81,7 @@ def test_lock_timeout_returns_no_blob_and_never_reads(tmp_path, monkeypatch):
 
     @contextmanager
     def _instant_timeout(_path, _deadline):
-        raise TimeoutError("Timed out waiting for flock test")
+        raise SoulMapLockWaitTimeout("Timed out waiting for flock test")
         yield  # pragma: no cover
 
     monkeypatch.setattr(soul_map_io, "_acquire_write_locks", _instant_timeout)

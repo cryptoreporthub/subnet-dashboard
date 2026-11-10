@@ -1959,8 +1959,10 @@ def test_gate_deadline_returns_pending(monkeypatch, tmp_path):
     seed = b'{"seed": true}'
     soul_path.write_bytes(seed)
 
+    from internal.store.soul_map_io import SoulMapLockWaitTimeout
+
     def _instant_timeout(*_a, **_k):
-        raise TimeoutError("Timed out waiting for flock test")
+        raise SoulMapLockWaitTimeout("Timed out waiting for flock test")
 
     monkeypatch.setattr(soul_map_io, "_acquire_write_locks", _instant_timeout)
     result = soul_map_io.write_soul_map(
