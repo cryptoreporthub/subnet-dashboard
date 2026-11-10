@@ -53,7 +53,6 @@ def _patch_paths(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     daily = tmp_path / "daily_picks.json"
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(preds))
-    monkeypatch.setattr("internal.learning.ledger_heal.PREDICTIONS_PATH", str(preds))
     monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
     monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(preds))
     return preds, daily

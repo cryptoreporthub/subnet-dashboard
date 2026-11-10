@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.learning.loop_health import _daily_pick_today, _day_ledger_present
-from internal.learning.predictions_store import PREDICTIONS_PATH, load_predictions, save_predictions
+from internal.learning import predictions_store
+from internal.learning.predictions_store import load_predictions, save_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ def heal_daily_pick_ledger(
 
     from internal.store.soul_map_io import read_blob_checked
 
-    pred_path = predictions_path or PREDICTIONS_PATH
+    pred_path = predictions_path or predictions_store.PREDICTIONS_PATH
     checked = read_blob_checked(pred_path)
     if checked.kind in ("unreadable", "transient"):
         return {
@@ -172,7 +173,7 @@ def archive_predictions_epoch(
     re_heal_daily: bool = True,
 ) -> Dict[str, Any]:
     """Archive predictions.json and start a fresh epoch; re-heal today's LONG if possible."""
-    src = predictions_path or PREDICTIONS_PATH
+    src = predictions_path or predictions_store.PREDICTIONS_PATH
     dest_dir = archive_dir or ARCHIVE_DIR
     os.makedirs(dest_dir, exist_ok=True)
     stamp = _utcnow().strftime("pre-epoch-%Y-%m-%dT%H%M%SZ")

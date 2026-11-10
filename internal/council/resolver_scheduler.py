@@ -1380,14 +1380,17 @@ class PredictionResolverScheduler:
                 timing.mark_checkpoint("t1_5")
                 persist_partial()
 
-            heal_summary: Dict[str, Any] = {"ok": True}
+            def _neutral_heal_summary() -> Dict[str, Any]:
+                return {"healed": False}
+
+            heal_summary: Dict[str, Any] = _neutral_heal_summary()
             with timing.stage("ledger_heal", _persist_after_ledger):
                 try:
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
 
                     raw_heal = heal_daily_pick_ledger(dry_run=False)
                     heal_summary = (
-                        raw_heal if isinstance(raw_heal, dict) else {"ok": True}
+                        raw_heal if isinstance(raw_heal, dict) else _neutral_heal_summary()
                     )
                 except Exception as heal_exc:
                     import logging
