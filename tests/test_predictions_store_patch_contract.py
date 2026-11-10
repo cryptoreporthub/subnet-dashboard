@@ -23,7 +23,7 @@ def _accepts_arbitrary_kwargs(node: ast.AST) -> bool:
     """Require ``**kwargs`` (or ``**_kwargs``), not bare keyword-only params."""
     if isinstance(node, ast.Lambda):
         return bool(node.args.kwarg)
-    if isinstance(node, ast.FunctionDef):
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return bool(node.args.kwarg)
     return False
 
@@ -53,13 +53,46 @@ def _setattr_targets_store(call: ast.Call) -> tuple[bool, ast.AST | None]:
     return False, None
 
 
-def _resolve_stub(tree: ast.Module, stub: ast.AST) -> ast.AST | None:
-    if isinstance(stub, (ast.Lambda, ast.FunctionDef)):
+def _parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
+    parents: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+    return parents
+
+
+def _direct_defs_in_scope(scope: ast.AST) -> dict[str, ast.AST]:
+    """Function defs declared as direct statements in this scope (incl. async)."""
+    body: list[ast.stmt]
+    if isinstance(scope, ast.Module):
+        body = scope.body
+    elif isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        body = scope.body
+    else:
+        return {}
+    found: dict[str, ast.AST] = {}
+    for stmt in body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            found[stmt.name] = stmt
+    return found
+
+
+def _resolve_stub(
+    tree: ast.Module, call_node: ast.Call, stub: ast.AST
+) -> ast.AST | None:
+    """Resolve stub to a callable AST node; ``None`` means unresolvable."""
+    if isinstance(stub, (ast.Lambda, ast.FunctionDef, ast.AsyncFunctionDef)):
         return stub
-    if isinstance(stub, ast.Name):
-        for node in tree.body:
-            if isinstance(node, ast.FunctionDef) and node.name == stub.id:
-                return node
+    if not isinstance(stub, ast.Name):
+        return None
+    parents = _parent_map(tree)
+    current: ast.AST | None = call_node
+    while current is not None:
+        if isinstance(current, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef)):
+            local = _direct_defs_in_scope(current)
+            if stub.id in local:
+                return local[stub.id]
+        current = parents.get(current)
     return None
 
 
@@ -74,8 +107,11 @@ def _scan_module(tree: ast.Module, rel: str) -> list[tuple[int, str]]:
         targeted, stub = _setattr_targets_store(node)
         if not targeted or stub is None:
             continue
-        resolved = _resolve_stub(tree, stub)
+        resolved = _resolve_stub(tree, node, stub)
         if resolved is None:
+            hits.append(
+                (node.lineno, "stub name could not be resolved — unsafe skip")
+            )
             continue
         if not _accepts_arbitrary_kwargs(resolved):
             hits.append((node.lineno, "stub must accept **kwargs (fail_closed/persist)"))
@@ -116,6 +152,30 @@ def test_guard_positive_three_arg_name_reference_without_kwargs():
     assert hits, "expected Name stub without **kwargs violation"
 
 
+def test_guard_positive_nested_test_function_without_kwargs():
+    bad = """
+    def test_wrap(monkeypatch):
+        def locked_load():
+            return {}
+
+        monkeypatch.setattr(predictions_store, "load_predictions", locked_load)
+    """
+    hits = _violations_in_source(bad, "nested_test.py")
+    assert hits, "expected nested Name stub without **kwargs violation"
+
+
+def test_guard_nested_compatible_stub_passes():
+    good = """
+    def test_wrap(monkeypatch):
+        def locked_load(**kwargs):
+            return {}
+
+        monkeypatch.setattr(predictions_store, "load_predictions", locked_load)
+    """
+    hits = _violations_in_source(good, "nested_ok.py")
+    assert not hits
+
+
 def test_guard_positive_rejects_kwonly_underscore_without_var_keyword():
     bad = """
     def _load(*, persist=True, _fail_closed=False):
@@ -139,3 +199,16 @@ def test_prediction_store_monkeypatch_stubs_accept_kwargs():
         for lineno, msg in _scan_module(tree, rel):
             violations.append(f"{rel}:{lineno} {msg}")
     assert not violations, "Incompatible stubs:\n" + "\n".join(violations)
+
+
+def test_save_predictions_signature_locked_save_compatibility():
+    """``locked_save(data)`` in loop-closure tests matches store API today."""
+    sig = inspect.signature(predictions_store.save_predictions)
+    params = list(sig.parameters.values())
+    assert params[0].name == "data"
+    assert all(
+        p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        for p in params[1:]
+    )
+    assert params[-1].name == "trigger"
+    assert params[-1].default == "save_predictions"
