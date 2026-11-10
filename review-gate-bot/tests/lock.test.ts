@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemoryKv, type HostKvApi } from "@grok/agent-sdk/kv";
-import { LEASE_MS, leaseToken, renewLeaseIfHolder, ranOnce } from "../bot/lib/lock.js";
+import { LEASE_MS, leaseToken, releaseLeaseIfHolder, renewLeaseIfHolder, ranOnce } from "../bot/lib/lock.js";
 
 /** A plain kv that exposes only get/put/delete — the documented surface. */
 function plainKv(): HostKvApi & { store: Map<string, unknown> } {
@@ -290,6 +290,45 @@ test("a failure with compare-and-swap frees the key for an immediate retry", asy
   const retry = await ranOnce({ kv, key: "tag:1:abc", alreadyDone: async () => false, run: async () => { ran += 1; } });
   assert.equal(retry.ran, true);
   assert.equal(ran, 1);
+});
+
+test("ditto r4397568789: compare-and-swap release does not clobber a takeover", async () => {
+  const memory = createMemoryKv();
+  const key = "lease:cas-release";
+  const staleToken = "stale-owner";
+  await memory.put(key, { state: "claimed", nonce: staleToken, at: 1_000 });
+
+  let atRead!: () => void;
+  const readSeen = new Promise<void>((resolve) => {
+    atRead = resolve;
+  });
+  let releaseMayFinish!: () => void;
+  const releaseMayProceed = new Promise<void>((resolve) => {
+    releaseMayFinish = resolve;
+  });
+
+  const baseGetWithVersion = memory.getWithVersion.bind(memory);
+  let stalled = false;
+  const kv = {
+    ...memory,
+    async getWithVersion(k: string) {
+      const entry = await baseGetWithVersion(k);
+      const nonce = (entry?.value as { nonce?: string } | undefined)?.nonce;
+      if (k === key && !stalled && nonce === staleToken) {
+        stalled = true;
+        atRead();
+        await releaseMayProceed;
+      }
+      return entry;
+    },
+  } as typeof memory;
+
+  const release = releaseLeaseIfHolder(kv, key, staleToken);
+  await readSeen;
+  await memory.put(key, { state: "claimed", nonce: "new-owner", at: 2_000 });
+  releaseMayFinish();
+  assert.equal(await release, false);
+  assert.equal(((await memory.get(key)) as { nonce: string }).nonce, "new-owner");
 });
 
 test("ditto r4513463100: plain-KV renewal does not write after a takeover between read and finish", async () => {

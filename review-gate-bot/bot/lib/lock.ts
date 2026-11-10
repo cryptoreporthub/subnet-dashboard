@@ -185,11 +185,23 @@ export async function lease(kv: HostKvApi, key: string, now: () => number = Date
  * still `claimed` with this token, and it is then removed. A lease that expired and was taken
  * by someone else, or a token that never held this key, changes nothing and returns false.
  *
- * The check and the delete run inside `exclusive(key)`, so a takeover in this process cannot
- * land between them. Across processes a small window remains, as with every write here.
+ * The check and delete run inside `exclusive(key)`, so a takeover in this process cannot land
+ * between them. With compare-and-swap, release is a conditional write on the version read. On
+ * plain KV there is no conditional delete: `get`, nonce check, then `delete`, with a
+ * cross-process window between check and delete, as with every plain write here.
  */
-export function releaseLeaseIfHolder(kv: HostKvApi, key: string, token: string): Promise<boolean> {
+export function releaseLeaseIfHolder(kv: HostKvApi, key: string, token: string, now: () => number = Date.now): Promise<boolean> {
   return exclusive(key, async () => {
+    const at = now();
+    if (supportsKvCas(kv)) {
+      const current = await kv.getWithVersion(key);
+      const claim = asClaim(current?.value);
+      if (current === undefined || claim?.state !== "claimed" || claim.nonce !== token) {
+        return false;
+      }
+      const released: ClaimRecord = { state: "released", nonce: token, at };
+      return (await kv.putIfVersion(key, released, current.version)).ok;
+    }
     const record = asClaim(await kv.get(key));
     if (record?.state !== "claimed" || record.nonce !== token) {
       return false;
