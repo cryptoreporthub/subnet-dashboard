@@ -213,3 +213,24 @@ def test_import_write_soul_map_no_crash():
     from internal.store.soul_map_io import write_soul_map
 
     assert callable(write_soul_map)
+
+
+def test_execute_write_refusal_restores_and_exits_6(tmp_path, monkeypatch, capsys):
+    path, bak = _backup_pair(tmp_path)
+    bak_bytes = bak.read_bytes()
+    before_bytes = path.read_bytes()
+    monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    from internal.store import soul_map_io as smio
+
+    def _refuse(*_a, **_k):
+        return smio.WriteResult(smio.WriteOutcome.REPLACE_FAILED, None, detail="test")
+
+    monkeypatch.setattr(smio, "write_soul_map", _refuse)
+    rc = compact.execute(str(path), str(bak))
+    out = capsys.readouterr().out
+    assert rc == 6
+    assert "COMPACTION_FAILED_RESTORED" in out
+    assert "write_soul_map_replace_failed" in out
+    assert path.read_bytes() == bak_bytes == before_bytes
