@@ -37,6 +37,22 @@ def test_transient_read_does_not_overwrite_file(tmp_path, monkeypatch):
     assert soul_path.read_bytes() == before
 
 
+def test_declined_returns_prior_blob_not_mutated_copy(tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text('{"n": 1}', encoding="utf-8")
+    seen = {}
+
+    def touch(blob):
+        blob["scratch"] = 1
+        del blob["scratch"]
+        seen["ran"] = True
+
+    result = write_soul_map(touch, path=str(soul_path), raise_on_lock_timeout=False)
+    assert result.outcome is WriteOutcome.DECLINED
+    assert result.blob == {"n": 1}
+    assert seen["ran"] is True
+
+
 def test_declined_compares_canonical_json_not_python_equality(tmp_path):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text('{"flag": 1}', encoding="utf-8")
@@ -60,7 +76,7 @@ def test_lock_timeout_returns_no_blob_and_never_reads(tmp_path, monkeypatch):
 
     @contextmanager
     def _instant_timeout(_path, _deadline):
-        raise TimeoutError("deadline")
+        raise TimeoutError("Timed out waiting for flock test")
         yield  # pragma: no cover
 
     monkeypatch.setattr(soul_map_io, "_acquire_write_locks", _instant_timeout)

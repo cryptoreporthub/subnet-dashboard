@@ -25,6 +25,26 @@ def test_load_json_degrades_unreadable_to_empty_dict(tmp_path):
     assert resolver_scheduler._load_json(str(soul)) == {}
 
 
+def test_declined_persist_leaves_ok_true_and_refresh_backoff():
+    from internal.store.soul_map_io import WriteOutcome
+
+    sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
+    sched._backoff_minutes = 240
+    sched._consecutive_failures = 3
+    result = {"ok": True, "resolved_now": 2, "expired_now": 0, "pending": 0}
+    sched._apply_persist_honesty(
+        result,
+        resolver_scheduler.PersistResult(outcome=WriteOutcome.DECLINED),
+    )
+    assert result["ok"] is True
+    assert result.get("persist_outcome") == "declined"
+    if result.get("ok"):
+        sched._consecutive_failures = 0
+        sched._backoff_minutes = sched.refresh_minutes
+    assert sched._backoff_minutes == 15
+    assert sched._consecutive_failures == 0
+
+
 def test_persist_honesty_preserves_existing_cycle_error():
     sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
     result = {"ok": True, "error": "resolve phase failed"}

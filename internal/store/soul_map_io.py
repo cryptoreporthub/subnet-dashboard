@@ -124,16 +124,6 @@ def read_blob_checked(path: str) -> BlobRead:
     return BlobRead("loaded", data)
 
 
-def _read_blob(path: str) -> Dict[str, Any]:
-    """Legacy disk read for callers not yet on read_blob_checked."""
-    checked = read_blob_checked(path)
-    if checked.kind == "missing":
-        return {}
-    if checked.kind == "loaded" and checked.blob is not None:
-        return checked.blob
-    return {}
-
-
 def _log_read_once(path: str, kind: str, message: str) -> bool:
     key = f"{path}:{kind}"
     now = time.monotonic()
@@ -305,7 +295,11 @@ def read_soul_map(path: Optional[str] = None, *, copy_blob: bool = True) -> Dict
     """Thread-safe read of the whole soul_map blob.
 
     Returns {} on missing/invalid/non-dict or transient read failure; never raises.
-  Unreadable/transient results are not cached.
+    Unreadable/transient results are not cached.
+
+    copy_blob=True (default): return an independent deep copy (safe to mutate).
+    copy_blob=False: return the cached blob for read-only use. Scoring hot paths
+    must use this — deepcopy-per-subnet of soul_map starved Fly's single worker.
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved):
@@ -341,7 +335,6 @@ def write_soul_map(
     """Thread-safe read-modify-write under per-path locks with typed outcomes."""
     resolved = _resolve_path(path)
     deadline = time.monotonic() + _SOUL_MAP_LOCK_DEADLINE_SECONDS
-    mutator_timeout = False
     try:
         with _acquire_write_locks(resolved, deadline):
             checked = read_blob_checked(resolved)
@@ -355,17 +348,21 @@ def write_soul_map(
                 detail = _quarantine_corrupt(resolved)
                 return WriteResult(WriteOutcome.UNREADABLE_BLOB, None, detail=detail)
 
-            assert checked.blob is not None
-            blob = copy.deepcopy(checked.blob)
+            if checked.kind == "missing":
+                blob: Dict[str, Any] = {}
+            elif checked.kind == "loaded" and checked.blob is not None:
+                blob = copy.deepcopy(checked.blob)
+            else:
+                return WriteResult(
+                    WriteOutcome.READ_FAILED,
+                    None,
+                    detail=checked.error or "read_failed",
+                )
             prior = copy.deepcopy(blob)
-            try:
-                mutator(blob)
-            except TimeoutError:
-                mutator_timeout = True
-                raise
+            mutator(blob)
 
             if _canonical_blob_json(blob) == _canonical_blob_json(prior):
-                return WriteResult(WriteOutcome.DECLINED, blob)
+                return WriteResult(WriteOutcome.DECLINED, prior)
 
             temp_path = ""
             try:
@@ -415,7 +412,7 @@ def write_soul_map(
                     except OSError:
                         pass
     except TimeoutError as exc:
-        if mutator_timeout:
+        if not str(exc).startswith("Timed out waiting"):
             raise
         logger.warning(
             "soul_map lock wait timed out path=%s error=%s",
@@ -441,6 +438,5 @@ def write_soul_map_committed(
     blob = out.blob if out.outcome in (
         WriteOutcome.APPLIED,
         WriteOutcome.DECLINED,
-        WriteOutcome.REPLACE_FAILED,
     ) else None
     return out.committed, blob

@@ -250,14 +250,14 @@ def test_phase3_dark_region_telemetry_t1_5_and_persist_subtimers(monkeypatch):
     """t1_5 + persist subtimers; rmw/mutator split must be able to diverge."""
     real_write = resolver_scheduler.write_soul_map
 
-    def _write_with_post_mutator_io(mutator, path=None):
+    def _write_with_post_mutator_io(mutator, path=None, **kwargs):
         # Sleep AFTER the timed mutator returns but still inside write_soul_map's
         # mutator callback slot → inflates RMW wall, not mutator body.
         def outer(blob):
             mutator(blob)
             time.sleep(0.05)
 
-        return real_write(outer, path)
+        return real_write(outer, path, **kwargs)
 
     monkeypatch.setattr(resolver_scheduler, "write_soul_map", _write_with_post_mutator_io)
 

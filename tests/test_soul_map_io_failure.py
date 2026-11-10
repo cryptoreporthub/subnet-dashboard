@@ -82,6 +82,26 @@ def test_mutator_exception_propagates(tmp_path):
     assert read_soul_map(str(soul_path)) == {"kept": 1}
 
 
+def test_write_soul_map_committed_replace_failed_blob_is_none(
+    tmp_path, monkeypatch, caplog
+):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"kept": 1}), encoding="utf-8")
+
+    def boom(*_a, **_kw):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(soul_map_io.os, "replace", boom)
+    with caplog.at_level("WARNING"):
+        committed, blob = soul_map_io.write_soul_map_committed(
+            lambda b: b.__setitem__("kept", 2),
+            str(soul_path),
+        )
+
+    assert committed is False
+    assert blob is None
+
+
 def test_cache_refresh_failure_after_commit_still_reports_success(
     tmp_path, monkeypatch, caplog
 ):

@@ -946,6 +946,8 @@ class PredictionResolverScheduler:
                         self.refresh_minutes * (2 ** self._consecutive_failures),
                         self.max_backoff_minutes,
                     )
+            else:
+                self._backoff_minutes = self.refresh_minutes
             next_interval = self._backoff_minutes
             if "cycle_timeout" in str(result.get("error") or ""):
                 # ponytail: hung cycle abandoned — retry soon while last success still fresh
@@ -1808,17 +1810,10 @@ class PredictionResolverScheduler:
         had_cycle_error = bool(result.get("error"))
         if persist.skipped_not_owner:
             result["persist_outcome"] = "skipped_not_owner"
-            result["ok"] = False
-            if not had_cycle_error:
-                result.pop("error", None)
             result["skipped"] = result.get("skipped") or "persist_skipped"
             return
         if persist.outcome is WriteOutcome.DECLINED:
             result["persist_outcome"] = persist.outcome.value
-            result["ok"] = False
-            if not had_cycle_error:
-                result.pop("error", None)
-            result["skipped"] = result.get("skipped") or "persist_declined"
             return
         if persist.outcome is WriteOutcome.APPLIED:
             result["persist_outcome"] = persist.outcome.value
@@ -1828,10 +1823,10 @@ class PredictionResolverScheduler:
         result["persist_outcome"] = persist.outcome.value
         result["ok"] = False
         if not had_cycle_error:
-            result["error"] = (
-                f"persist:{persist.outcome.value}"
-                + (f":{persist.detail}" if persist.detail else "")
-            )
+            msg = f"persist_refused:{persist.outcome.value}"
+            if persist.detail:
+                msg = f"{msg} {persist.detail}"
+            result["error"] = msg
 
 
 def _default_subnets() -> Any:
