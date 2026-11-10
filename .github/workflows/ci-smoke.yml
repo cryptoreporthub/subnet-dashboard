@@ -84,6 +84,10 @@ jobs:
             tests/test_subnet_universe.py \
             tests/test_universe_stale_stamp.py \
             tests/test_owner_guard.py -q 2>&1 | tee ci-test-output.txt
+      - name: Unit 1 soul-map gated pytest
+        env:
+          DISABLE_BACKGROUND_SCANS: "1"
+        run: bash scripts/gated_unit1_pytest.sh
       - name: Upload test output artifact
         if: failure()
         continue-on-error: true
