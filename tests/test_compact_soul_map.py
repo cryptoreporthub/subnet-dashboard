@@ -137,11 +137,13 @@ def test_d_missing_required_key_aborts_and_restores(tmp_path, monkeypatch):
     _age_file(bak)
 
     def evil_write(mutator, path=None):
+        from internal.store.soul_map_io import WriteOutcome, WriteResult
+
         blob = json.loads(Path(path).read_text(encoding="utf-8"))
         mutator(blob)
         del blob["expert_weights"]  # drop after mutator
         Path(path).write_text(json.dumps(blob, indent=2), encoding="utf-8")
-        return blob
+        return WriteResult(WriteOutcome.APPLIED, blob)
 
     monkeypatch.setattr(
         "internal.store.soul_map_io.write_soul_map",

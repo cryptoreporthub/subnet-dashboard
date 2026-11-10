@@ -47,6 +47,27 @@ def test_corrupt_price_cache_degrades_and_resolution_runs(tmp_path, monkeypatch)
     assert result.get("stats", {}).get("pending") == 0
 
 
+def test_corrupt_predictions_read_only_stable_across_calls_before_write_refused(
+    tmp_path, monkeypatch
+):
+    """Ditto bar (a): dashboards keep reading; write paths stay fail-closed."""
+    pred = tmp_path / "predictions.json"
+    pred.write_text("not-json{{{", encoding="utf-8")
+    before = pred.read_bytes()
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(pred))
+
+    for _ in range(2):
+        out = resolver.get_resolved_predictions()
+        assert out["resolved"] == []
+
+    with pytest.raises(StateUnreadable):
+        resolver._resolve_due_predictions(subnets=[])
+
+    assert pred.read_bytes() == before
+    out2 = resolver.get_resolved_predictions()
+    assert out2["resolved"] == []
+
+
 def test_unreadable_predictions_json_is_not_persisted_as_empty_default(tmp_path, monkeypatch):
     pred = tmp_path / "predictions.json"
     pred.write_text("not-json{{{", encoding="utf-8")
