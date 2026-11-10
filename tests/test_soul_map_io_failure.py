@@ -7,10 +7,16 @@ import json
 import pytest
 
 import internal.store.soul_map_io as soul_map_io
-from internal.store.soul_map_io import read_soul_map, write_soul_map
+from internal.store.soul_map_io import (
+    WriteOutcome,
+    read_soul_map,
+    write_soul_map,
+)
 
 
-def test_replace_oserror_returns_disk_state_and_leaves_cache(tmp_path, monkeypatch, caplog):
+def test_replace_oserror_returns_disk_state_and_leaves_cache(
+    tmp_path, monkeypatch, caplog
+):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"kept": 1}), encoding="utf-8")
     assert read_soul_map(str(soul_path)) == {"kept": 1}
@@ -25,15 +31,16 @@ def test_replace_oserror_returns_disk_state_and_leaves_cache(tmp_path, monkeypat
             path=str(soul_path),
         )
 
-    assert returned == {"kept": 1}
+    assert returned.outcome is WriteOutcome.REPLACE_FAILED
+    assert returned.blob == {"kept": 1}
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"kept": 1}
     assert read_soul_map(str(soul_path), copy_blob=False) == {"kept": 1}
     assert "soul_map persistence failed" in caplog.text
     assert "OSError" in caplog.text
 
 
-def test_mutator_timeout_propagates_with_status(tmp_path):
-    """CR-07: mutator TimeoutError is not confused with flock lock-wait timeout."""
+def test_mutator_timeout_propagates_with_raise_on_lock_timeout(tmp_path):
+    """Mutator TimeoutError is not confused with flock lock-wait timeout."""
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"kept": 1}), encoding="utf-8")
 
@@ -41,7 +48,7 @@ def test_mutator_timeout_propagates_with_status(tmp_path):
         raise TimeoutError("mutator stall")
 
     with pytest.raises(TimeoutError, match="mutator"):
-        write_soul_map(_slow_mutator, path=str(soul_path), with_status=True)
+        write_soul_map(_slow_mutator, path=str(soul_path))
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"kept": 1}
 
 
@@ -54,7 +61,8 @@ def test_successful_write_updates_disk_and_cache(tmp_path):
         path=str(soul_path),
     )
 
-    assert returned == {"kept": 2}
+    assert returned.outcome is WriteOutcome.APPLIED
+    assert returned.blob == {"kept": 2}
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"kept": 2}
     assert read_soul_map(str(soul_path), copy_blob=False) == {"kept": 2}
 
@@ -74,7 +82,9 @@ def test_mutator_exception_propagates(tmp_path):
     assert read_soul_map(str(soul_path)) == {"kept": 1}
 
 
-def test_cache_refresh_failure_after_commit_still_reports_success(tmp_path, monkeypatch, caplog):
+def test_cache_refresh_failure_after_commit_still_reports_success(
+    tmp_path, monkeypatch, caplog
+):
     """A cache error after the disk write landed must not report the write as failed."""
     path = tmp_path / "soul_map.json"
     path.write_text(json.dumps({"kept": 1}), encoding="utf-8")
