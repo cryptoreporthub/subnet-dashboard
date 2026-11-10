@@ -91,8 +91,8 @@ export default githubChannel({
       return turnFor(ctx, await reviewEventReviewTurn(await depsOf(ctx)));
     }
     if (ctx.eventName === "push") {
-      const payload = ctx.payload as { ref?: string };
-      if (typeof payload.ref === "string") {
+      const payload = ctx.payload as { ref?: string; deleted?: boolean };
+      if (payload.deleted !== true && typeof payload.ref === "string") {
         await pushToBaseBranch(await depsOf(ctx), { ref: payload.ref });
       }
       return null;
