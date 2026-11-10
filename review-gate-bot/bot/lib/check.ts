@@ -819,12 +819,12 @@ export async function postGateCheck(input: {
     const desiredSummary = buildOut().summary;
     const bodiesMatch = typeof storedSummary === "string" && storedSummary === desiredSummary;
 
-    if (bodiesMatch && !requiresInvalidRecordRepost(state, conclusion, recordInvalid)) {
+    if (bodiesMatch && !requiresInvalidRecordRepost(state, conclusion, recordInvalid) && workingCheck === undefined) {
       return "unchanged";
     }
 
     if (bodiesMatch && requiresInvalidRecordRepost(state, conclusion, recordInvalid)) {
-      const handle = workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: state.headSha }) : undefined);
+      const handle = workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: finalObs.headSha }) : undefined);
       if (handle === undefined) {
         return "pair-unverifiable";
       }
@@ -852,7 +852,7 @@ export async function postGateCheck(input: {
       return "finalization-unresolved";
     }
 
-    const check = workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: state.headSha }) : undefined);
+    const check = workingCheck ?? (takeCreateCheck(budget) ? await createCheck({ name: CHECK_NAME, sha: finalObs.headSha }) : undefined);
     if (check === undefined) {
       return "pair-unverifiable";
     }

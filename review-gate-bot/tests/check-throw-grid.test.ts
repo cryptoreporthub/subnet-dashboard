@@ -406,7 +406,27 @@ test("TC-cancel-nodedupe: stale admission drift does not write check dedupe kv",
   assert.equal(w.store.has(dedupeKey), false);
 });
 
-test("RD-03: dedupe unchanged with open workingCheck does not leave extra concluded checks", async () => {
+test("RD-03: dedupe with open workingCheck on mergeable gate posts success on supplied handle", async () => {
+  const w = world([HEAD]);
+  const gate = state("mergeable");
+  seedClean(w, gate);
+  const first = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(gate) });
+  assert.equal(first, "posted");
+  const workingCheck = await w.deps.createCheck({ name: CHECK_NAME, sha: HEAD });
+  const second = await postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    workingCheck,
+    ...same(gate),
+  });
+  assert.equal(second, "posted", "dedupe hit must still terminalize the open working check");
+  const headChecks = w.checks.filter((c) => c.sha === HEAD && c.name === CHECK_NAME);
+  assert.equal(headChecks.at(-1)?.conclusion, "success", "newest review-gate run must match stored terminal");
+  assert.equal(headChecks.filter((c) => c.conclusion === "cancelled").length, 0);
+  assert.equal(headChecks.filter((c) => c.conclusion === undefined || c.status === "in_progress").length, 0);
+});
+
+test("RD-03b: dedupe with open workingCheck on waiting gate posts action_required", async () => {
   const w = world([HEAD]);
   const gate = state("await_cursor_ditto", { ditto: "missing" });
   const first = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(gate) });
@@ -418,8 +438,21 @@ test("RD-03: dedupe unchanged with open workingCheck does not leave extra conclu
     workingCheck,
     ...same(gate),
   });
+  assert.equal(second, "posted");
+  const headChecks = w.checks.filter((c) => c.sha === HEAD && c.name === CHECK_NAME);
+  assert.equal(headChecks.at(-1)?.conclusion, "action_required");
+  assert.equal(headChecks.filter((c) => c.conclusion === "cancelled").length, 0);
+});
+
+test("RD-03c: dedupe without workingCheck stays unchanged and creates no new check", async () => {
+  const w = world([HEAD]);
+  const gate = state("await_cursor_ditto", { ditto: "missing" });
+  const first = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(gate) });
+  assert.equal(first, "posted");
+  const second = await postGateCheck({ ...w.deps, expectedPair: deliveryPair(), ...same(gate) });
   assert.equal(second, "unchanged");
-  assert.equal(w.checks.filter((c) => c.conclusion === "action_required").length, 1);
+  assert.equal(w.checks.length, 1);
+  assert.equal(w.checks[0]?.conclusion, "action_required");
 });
 
 test("ditto r4508316655: base-unavail without expectedPair rejects stale head before check", async () => {
