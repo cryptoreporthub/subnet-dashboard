@@ -102,11 +102,14 @@ def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
     write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
 
 
-def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
+def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> Optional[Dict[str, Any]]:
     """Apply a mutation to the latest serialized blob under the store lock."""
-    from internal.store.soul_map_io import write_soul_map
+    from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
-    return write_soul_map(mutator, path)
+    result = write_soul_map(mutator, path)
+    if result.outcome is WriteOutcome.APPLIED and result.blob is not None:
+        return result.blob
+    return None
 
 
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
@@ -718,6 +721,9 @@ def nudge_expert(
         data["expert_weights"] = dict(canonical)
 
     persisted = _mutate_raw(apply_delta, path)
+    if persisted is None:
+        logger.warning("council weight nudge skipped: soul_map write did not apply")
+        return None
     root_weights = persisted.get("expert_weights")
     return (
         desired
@@ -925,6 +931,9 @@ def nudge_signal_weight(
         }
 
     persisted = _mutate_raw(apply_signal_delta, path)
+    if persisted is None:
+        logger.warning("signal weight nudge skipped: soul_map write did not apply")
+        return None
     persisted_adv = persisted.get("adversarial_state")
     persisted_signal = (
         persisted_adv.get("signal_weights") if isinstance(persisted_adv, dict) else None
@@ -1089,6 +1098,9 @@ def nudge_impact_strength(
         target["last_impact_strength_update"] = _now_iso()
 
     persisted = _mutate_raw(apply_impact_delta, path)
+    if persisted is None:
+        logger.warning("impact strength nudge skipped: soul_map write did not apply")
+        return load_impact_strength(path)
     persisted_adv = persisted.get("adversarial_state")
     if isinstance(persisted_adv, dict) and persisted_adv.get(
         "impact_strength"

@@ -245,6 +245,8 @@ def _is_shadow(prediction: Dict[str, Any]) -> bool:
 
 
 def _load_json(path: str, default: Any) -> Any:
+    from internal.store.soul_map_io import StateUnreadable, read_blob_checked
+
     now = datetime.now(timezone.utc)
     file_bytes = 0
     mtime_iso: Optional[str] = None
@@ -259,13 +261,20 @@ def _load_json(path: str, default: Any) -> Any:
         )
         mtime_age_seconds = max(0.0, now.timestamp() - stat.st_mtime)
         file_bytes = stat.st_size
-        with open(path, "r", encoding="utf-8") as f:
-            result = json.load(f)
+        checked = read_blob_checked(path)
+        if checked.kind in ("unreadable", "transient"):
+            raise StateUnreadable(checked.kind, path, error=checked.error)
+        if checked.kind == "missing":
+            result = default
+        else:
+            result = checked.blob if checked.blob is not None else default
         partial_parse = False
         if isinstance(result, dict):
             parse_scope = path + ":" + "|".join(sorted(str(k) for k in result.keys()))
         else:
             parse_scope = f"{path}:non_dict"
+    except StateUnreadable:
+        raise
     except Exception:
         pass
     logger.info(
