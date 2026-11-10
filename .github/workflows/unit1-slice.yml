@@ -9,11 +9,31 @@ on:
       - "internal/learning/**"
       - "internal/store/**"
       - "internal/council/**"
+      - "scripts/compact_soul_map.py"
       - "tests/test_predictions_store_patch_contract.py"
       - "tests/test_predictions_store_contract.py"
       - "tests/test_expiry_ledger.py"
       - "tests/test_acc0_ledger_heal.py"
       - "tests/test_resolver_corrupt_ledger_tick.py"
+      - "tests/test_compact_soul_map.py"
+      - "tests/test_soul_map_io.py"
+      - "tests/test_soul_map_io_failure.py"
+      - "tests/test_soul_map_write_honesty.py"
+      - ".github/workflows/unit1-slice.yml"
+      - ".github/workflows/ci-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "internal/learning/**"
+      - "internal/store/**"
+      - "internal/council/**"
+      - "scripts/compact_soul_map.py"
+      - "tests/test_predictions_store_patch_contract.py"
+      - "tests/test_predictions_store_contract.py"
+      - "tests/test_expiry_ledger.py"
+      - "tests/test_acc0_ledger_heal.py"
+      - "tests/test_resolver_corrupt_ledger_tick.py"
+      - "tests/test_compact_soul_map.py"
       - "tests/test_soul_map_io.py"
       - "tests/test_soul_map_io_failure.py"
       - "tests/test_soul_map_write_honesty.py"
@@ -46,6 +66,7 @@ jobs:
             tests/test_expiry_ledger.py \
             tests/test_acc0_ledger_heal.py \
             tests/test_resolver_corrupt_ledger_tick.py \
+            tests/test_compact_soul_map.py \
             tests/test_soul_map_io.py \
             tests/test_soul_map_io_failure.py \
             tests/test_soul_map_write_honesty.py
