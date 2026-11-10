@@ -203,6 +203,39 @@ test("an unchanged gate state at the same head does not open another check; a ch
   assert.deepEqual(w.checks.map((c) => c.conclusion), ["action_required", "success"]);
 });
 
+test("ditto r4397178722: different delivery input headSha serializes gate posts on PR", async () => {
+  const STALE = "d".repeat(40);
+  const w = world([HEAD]);
+  let gate = state("await_cursor_ditto", { ditto: "missing" });
+  const read = async () => ({ ...gate, headSha: HEAD });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const stalled = async (input: { name: string; sha: string }) => {
+    await held;
+    return w.deps.createCheck(input);
+  };
+  const first = postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    createCheck: stalled,
+    read,
+    state: { ...gate, headSha: STALE },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  gate = state("mergeable");
+  seedClean(w, gate);
+  const second = postGateCheck({
+    ...w.deps,
+    expectedPair: deliveryPair(),
+    read,
+    state: gate,
+  });
+  await Promise.race([second, new Promise<void>((resolve) => setTimeout(resolve, 50))]);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(w.checks.at(-1)?.conclusion, "success", `checks: ${JSON.stringify(w.checks)}`);
+});
+
 test("a delivery that read the gate earlier cannot conclude over a newer delivery's check", async () => {
   // The first delivery read the gate while it was still waiting, then stalls before it opens its check.
   // The gate turns green, and a second delivery concludes green. The first must not land after it.

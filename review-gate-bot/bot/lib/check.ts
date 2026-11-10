@@ -39,6 +39,11 @@ export function checkDedupeKey(
   return `check:${prKey(ref)}:${headSha}:${baseTipSha}:${mergeBaseSha}:${holdFingerprint}`;
 }
 
+/** In-process queue for all gate-check posts on one PR (8j-A). */
+export function checkPostQueueKey(ref: PrRef): string {
+  return `check:${prKey(ref)}`;
+}
+
 export type GateConclusion = "success" | "failure" | "action_required";
 export type CheckPost =
   | "posted"
@@ -532,7 +537,7 @@ export async function postGateCheck(input: {
   const budget = input.deliveryBudget ?? newDeliveryBudget();
   const expected = input.expectedPair;
 
-  return exclusive(`check:${prKey(ref)}:${input.state.headSha}`, async () => {
+  return exclusive(checkPostQueueKey(ref), async () => {
     let obs: ReadyPair;
 
     if (expected !== undefined) {
