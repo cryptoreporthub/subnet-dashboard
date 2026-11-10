@@ -337,7 +337,18 @@ def _fork_after_in_child() -> None:
         pass
 
 
-os.register_at_fork(before=_fork_before, after_in_child=_fork_after_in_child)
+def _fork_after_in_parent() -> None:
+    try:
+        _acquire_rlock.release()
+    except RuntimeError:
+        pass
+
+
+os.register_at_fork(
+    before=_fork_before,
+    after_in_parent=_fork_after_in_parent,
+    after_in_child=_fork_after_in_child,
+)
 
 
 def _schedule_terminal_exit() -> None:
