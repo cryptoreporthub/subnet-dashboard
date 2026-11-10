@@ -107,7 +107,10 @@ def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> Optional[Dict[str, A
     from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
     result = write_soul_map(mutator, path)
-    if result.outcome is WriteOutcome.APPLIED and result.blob is not None:
+    if (
+        result.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
+        and result.blob is not None
+    ):
         return result.blob
     return None
 

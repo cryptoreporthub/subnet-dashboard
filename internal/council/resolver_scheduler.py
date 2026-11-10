@@ -298,14 +298,13 @@ def _cancel_resolver_jobs(job_ids: Tuple[str, ...]) -> Dict[str, bool]:
 
 
 def _load_json(path: str) -> Dict[str, Any]:
-    from internal.store.soul_map_io import StateUnreadable, read_blob_checked
+    """Bootstrap/cycle reads degrade like the legacy API (never wedge the scheduler)."""
+    from internal.store.soul_map_io import read_blob_checked
 
     checked = read_blob_checked(path)
-    if checked.kind in ("unreadable", "transient"):
-        raise StateUnreadable(checked.kind, path, error=checked.error)
-    if checked.blob is None:
-        return {}
-    return checked.blob
+    if checked.kind == "loaded" and checked.blob is not None:
+        return checked.blob
+    return {}
 
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
@@ -1806,16 +1805,19 @@ class PredictionResolverScheduler:
         self, result: Dict[str, Any], persist: PersistResult
     ) -> None:
         """Fold summary persist outcome into the cycle row the tick reads."""
+        had_cycle_error = bool(result.get("error"))
         if persist.skipped_not_owner:
             result["persist_outcome"] = "skipped_not_owner"
             result["ok"] = False
-            result.pop("error", None)
+            if not had_cycle_error:
+                result.pop("error", None)
             result["skipped"] = result.get("skipped") or "persist_skipped"
             return
         if persist.outcome is WriteOutcome.DECLINED:
             result["persist_outcome"] = persist.outcome.value
             result["ok"] = False
-            result.pop("error", None)
+            if not had_cycle_error:
+                result.pop("error", None)
             result["skipped"] = result.get("skipped") or "persist_declined"
             return
         if persist.outcome is WriteOutcome.APPLIED:
@@ -1825,10 +1827,11 @@ class PredictionResolverScheduler:
             return
         result["persist_outcome"] = persist.outcome.value
         result["ok"] = False
-        result["error"] = (
-            f"persist:{persist.outcome.value}"
-            + (f":{persist.detail}" if persist.detail else "")
-        )
+        if not had_cycle_error:
+            result["error"] = (
+                f"persist:{persist.outcome.value}"
+                + (f":{persist.detail}" if persist.detail else "")
+            )
 
 
 def _default_subnets() -> Any:

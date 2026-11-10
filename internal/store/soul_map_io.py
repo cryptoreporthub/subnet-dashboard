@@ -101,6 +101,8 @@ def read_blob_checked(path: str) -> BlobRead:
             raw = f.read()
     except FileNotFoundError:
         return BlobRead("missing", {})
+    except UnicodeDecodeError:
+        return BlobRead("unreadable", None, error="encoding")
     except (OSError, MemoryError) as exc:
         return BlobRead("transient", None, error=str(exc))
     except Exception as exc:
@@ -132,14 +134,15 @@ def _read_blob(path: str) -> Dict[str, Any]:
     return {}
 
 
-def _log_read_once(path: str, kind: str, message: str) -> None:
+def _log_read_once(path: str, kind: str, message: str) -> bool:
     key = f"{path}:{kind}"
     now = time.monotonic()
     last = _read_log_guard.get(key, 0.0)
     if now - last < 60.0:
-        return
+        return False
     _read_log_guard[key] = now
-    logger.warning(message)
+    logger.warning("%s", message)
+    return True
 
 
 @contextmanager
@@ -325,7 +328,6 @@ def read_soul_map(path: Optional[str] = None, *, copy_blob: bool = True) -> Dict
             f"soul_map read classified as {checked.kind} path={resolved} error={checked.error}"
         )
         _log_read_once(resolved, checked.kind, msg)
-        logger.warning("%s", msg)
         return {}
 
 
@@ -339,6 +341,7 @@ def write_soul_map(
     """Thread-safe read-modify-write under per-path locks with typed outcomes."""
     resolved = _resolve_path(path)
     deadline = time.monotonic() + _SOUL_MAP_LOCK_DEADLINE_SECONDS
+    mutator_timeout = False
     try:
         with _acquire_write_locks(resolved, deadline):
             checked = read_blob_checked(resolved)
@@ -358,6 +361,7 @@ def write_soul_map(
             try:
                 mutator(blob)
             except TimeoutError:
+                mutator_timeout = True
                 raise
 
             if _canonical_blob_json(blob) == _canonical_blob_json(prior):
@@ -411,6 +415,8 @@ def write_soul_map(
                     except OSError:
                         pass
     except TimeoutError as exc:
+        if mutator_timeout:
+            raise
         logger.warning(
             "soul_map lock wait timed out path=%s error=%s",
             resolved,

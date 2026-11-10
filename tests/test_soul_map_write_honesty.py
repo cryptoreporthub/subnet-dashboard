@@ -123,6 +123,18 @@ def test_unreadable_blob_sidecar_dedupes_by_hash(tmp_path, monkeypatch):
     assert soul_path.read_text(encoding="utf-8") == "not-json"
 
 
+def test_mutator_timeout_is_not_lock_wait_failed(tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text("{}", encoding="utf-8")
+
+    def stall(_blob):
+        raise TimeoutError("mutator stall")
+
+    with pytest.raises(TimeoutError, match="mutator"):
+        write_soul_map(stall, path=str(soul_path), raise_on_lock_timeout=False)
+    assert soul_path.read_text(encoding="utf-8") == "{}"
+
+
 def test_read_soul_map_does_not_cache_transient_empty(tmp_path, monkeypatch):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text('{"a": 1}', encoding="utf-8")
