@@ -187,38 +187,142 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
   }
 }
 
-/** At most one live `listTools` per process; later heads wait on this tail. */
-let discoveryTail: Promise<void> = Promise.resolve();
+type DiscoverySubscriber = {
+  resolve: (available: boolean) => void;
+};
 
-type SerializedDiscovery<T> = { promise: Promise<T>; abandon: () => void };
+type InFlightDiscovery = {
+  promise: Promise<boolean>;
+  settled: boolean;
+  available: boolean;
+};
 
-function runSerializedDiscovery<T>(work: () => Promise<T>): SerializedDiscovery<T> {
-  let abandoned = false;
-  const prior = discoveryTail;
-  let release!: () => void;
-  const slot = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  discoveryTail = prior.then(() => slot, () => slot);
-  const promise = prior
-    .then(() => {
-      if (abandoned) {
-        return false as T;
-      }
-      return work();
-    })
-    .finally(() => release());
-  return {
-    promise,
-    abandon: () => {
-      abandoned = true;
-    },
-  };
+type RegistryDiscoveryState = {
+  inFlight: InFlightDiscovery | undefined;
+  subscribers: Set<DiscoverySubscriber>;
+  /** Bumped when a new flight starts so an older flight's `finally` cannot clear a successor. */
+  flightEpoch: number;
+};
+
+/**
+ * One in-flight `listTools` per `HostMcpRegistry` object identity (WeakMap key).
+ * Production passes `ctx.host.mcp` from the gate channel (`bot/channels/github.ts`);
+ * the SDK does not promise one stable registry instance for the process — a fresh
+ * wrapper each turn coalesces only within that turn's object, which is less sharing
+ * but not incorrect.
+ */
+let discoveryByRegistry = new WeakMap<HostMcpRegistry, RegistryDiscoveryState>();
+
+let discoveryJoinCount = 0;
+/** Test-only counter; production does not enumerate the WeakMap. */
+let discoverySubscriberCount = 0;
+
+function registryDiscoveryState(mcp: HostMcpRegistry): RegistryDiscoveryState {
+  let state = discoveryByRegistry.get(mcp);
+  if (!state) {
+    state = { inFlight: undefined, subscribers: new Set(), flightEpoch: 0 };
+    discoveryByRegistry.set(mcp, state);
+  }
+  return state;
 }
 
-/** Tests reset the module queue between cases. */
+function addDiscoverySubscriber(state: RegistryDiscoveryState, sub: DiscoverySubscriber): void {
+  state.subscribers.add(sub);
+  discoverySubscriberCount += 1;
+}
+
+function removeDiscoverySubscriber(state: RegistryDiscoveryState, sub: DiscoverySubscriber): void {
+  if (state.subscribers.delete(sub)) {
+    discoverySubscriberCount -= 1;
+  }
+}
+
+function notifyDiscoverySubscribers(state: RegistryDiscoveryState, available: boolean): void {
+  for (const sub of state.subscribers) {
+    sub.resolve(available);
+  }
+  const detached = state.subscribers.size;
+  state.subscribers.clear();
+  discoverySubscriberCount -= detached;
+}
+
+function sharedDiscovery(mcp: HostMcpRegistry): Promise<boolean> {
+  const state = registryDiscoveryState(mcp);
+  if (!state.inFlight) {
+    state.flightEpoch += 1;
+    const epoch = state.flightEpoch;
+    const flight: InFlightDiscovery = {
+      promise: Promise.resolve(false),
+      settled: false,
+      available: false,
+    };
+    // Hung `listTools` holds this registry slot until the coalesced promise settles.
+    const promise = replitAvailable(mcp)
+      .then(
+        (available) => {
+          flight.settled = true;
+          flight.available = available;
+          notifyDiscoverySubscribers(state, available);
+          return available;
+        },
+        () => {
+          flight.settled = true;
+          flight.available = false;
+          notifyDiscoverySubscribers(state, false);
+          return false;
+        },
+      )
+      .finally(() => {
+        if (state.flightEpoch === epoch) {
+          state.inFlight = undefined;
+        }
+      });
+    flight.promise = promise;
+    state.inFlight = flight;
+  }
+  return state.inFlight.promise;
+}
+
+function registerDiscoverySubscriber(
+  mcp: HostMcpRegistry,
+  resolve: (available: boolean) => void,
+): DiscoverySubscriber {
+  const state = registryDiscoveryState(mcp);
+  const sub: DiscoverySubscriber = { resolve };
+  if (state.inFlight?.settled) {
+    resolve(state.inFlight.available);
+    return sub;
+  }
+  addDiscoverySubscriber(state, sub);
+  return sub;
+}
+
+/**
+ * Tests reset discovery without walking the WeakMap (not enumerable).
+ * Replaces the map so a stale flight `finally` cannot touch a new flight on a reused `mcp`.
+ * Does not zero `discoveryJoinCount` — callers still in `awaitDiscovery` balance in `finally`.
+ */
 export function __testOnly_resetDiscoveryQueue(): void {
-  discoveryTail = Promise.resolve();
+  discoveryByRegistry = new WeakMap();
+  discoverySubscriberCount = 0;
+}
+
+/** Tests assert coalesced discovery does not retain unbounded waiters. */
+export function __testOnly_discoveryJoinCount(): number {
+  return discoveryJoinCount;
+}
+
+/** Tests assert timed-out callers detach from the shared discovery fan-out. */
+export function __testOnly_discoverySubscriberCount(): number {
+  return discoverySubscriberCount;
+}
+
+/** Tests wait until in-flight discovery for a registry has cleared after listTools settles. */
+export async function __testOnly_discoveryIdle(mcp: HostMcpRegistry): Promise<void> {
+  const state = discoveryByRegistry.get(mcp);
+  if (state?.inFlight) {
+    await state.inFlight.promise;
+  }
 }
 
 type DiscoveryOutcome = { kind: "ready"; available: boolean } | { kind: "timeout" };
@@ -227,30 +331,39 @@ async function awaitDiscovery(
   mcp: HostMcpRegistry,
   budgetMs: number | undefined,
 ): Promise<DiscoveryOutcome> {
-  const { promise: discovery, abandon } = runSerializedDiscovery(() => replitAvailable(mcp));
-  if (budgetMs === undefined) {
-    return { kind: "ready", available: await discovery };
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<{ kind: "timeout" }>((resolve) => {
-    timer = setTimeout(() => resolve({ kind: "timeout" }), budgetMs);
-  });
+  discoveryJoinCount += 1;
   try {
-    const raced = await Promise.race([
-      discovery.then((available) => ({ kind: "ready" as const, available })),
-      deadline,
-    ]);
-    if (raced.kind === "timeout") {
-      abandon();
-      // In-flight `listTools` cannot be cancelled; queued work is skipped once abandoned.
-      void discovery.catch(() => undefined);
-      return { kind: "timeout" };
+    const discovery = sharedDiscovery(mcp);
+    if (budgetMs === undefined) {
+      return { kind: "ready", available: await discovery };
     }
-    return raced;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let subscriber: DiscoverySubscriber | undefined;
+    const ready = new Promise<{ kind: "ready"; available: boolean }>((resolve) => {
+      subscriber = registerDiscoverySubscriber(mcp, (available) =>
+        resolve({ kind: "ready", available }),
+      );
+    });
+    const deadline = new Promise<{ kind: "timeout" }>((resolve) => {
+      timer = setTimeout(() => resolve({ kind: "timeout" }), budgetMs);
+    });
+    try {
+      const raced = await Promise.race([ready, deadline]);
+      if (raced.kind === "timeout") {
+        // In-flight `listTools` cannot be cancelled; unregister so the shared promise keeps one fan-out chain.
+        return { kind: "timeout" };
+      }
+      return raced;
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      if (subscriber !== undefined) {
+        removeDiscoverySubscriber(registryDiscoveryState(mcp), subscriber);
+      }
+    }
   } finally {
-    if (timer !== undefined) {
-      clearTimeout(timer);
-    }
+    discoveryJoinCount -= 1;
   }
 }
 
@@ -453,7 +566,7 @@ async function askReplitOnceWithLease(input: {
       void renewLeaseIfHolder(input.kv, leaseKey, token).catch(() => undefined);
     }, renewMs);
   }
-  const discoveryBudget = supportsKvCas(input.kv) ? undefined : askDiscoveryBudgetMs();
+  const discoveryBudget = askDiscoveryBudgetMs();
   try {
     return await askReplit({ ...input, maxDiscoveryMs: discoveryBudget });
   } finally {
@@ -562,6 +675,7 @@ async function askReplit(input: {
 
   const discovery = await awaitDiscovery(input.mcp, input.maxDiscoveryMs);
   if (discovery.kind === "timeout") {
+    // CAS and plain KV both pass `maxDiscoveryMs`; a discovery timeout burns one attempt like any other failure.
     return recordFailure("unavailable", `replit discovery timed out after ${input.maxDiscoveryMs}ms`, undefined);
   }
   if (!discovery.available) {

@@ -11,13 +11,16 @@ import {
   __testOnly_setInFlightLeaseMs,
   __testOnly_setRenewInFlightDuringCall,
   __testOnly_resetDiscoveryQueue,
+  __testOnly_discoveryJoinCount,
+  __testOnly_discoverySubscriberCount,
+  __testOnly_discoveryIdle,
   __testOnly_ownerFailureWrite,
   IN_FLIGHT_LEASE_MS,
   REPLIT_TOOL,
   replitQuestion,
 } from "../bot/lib/replit.js";
 import { replitAskKey } from "../bot/lib/gate.js";
-import { __testOnly_setLeaseMs } from "../bot/lib/lock.js";
+import { askDiscoveryBudgetMs, __testOnly_setLeaseMs } from "../bot/lib/lock.js";
 
 const HEAD = "c".repeat(40);
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1 };
@@ -483,6 +486,334 @@ test("ditto r4513514628 / r4513568040: discovery timeout returns without wedging
     const second = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: fast, ref: REF, headSha: head });
     assert.equal(fastListTools, 1, "later caller may discover after the serialized slot drains");
     assert.equal(second.asked, true);
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
+  }
+});
+
+test("pr-1522 8h: CAS KV returns unavailable when listTools hangs; later head discovers after release", async () => {
+  __testOnly_resetDiscoveryQueue();
+  __testOnly_setLeaseMs(1_400);
+  const budget = askDiscoveryBudgetMs();
+  try {
+    const store = createMemoryKv();
+    let releaseListTools: () => void = () => {};
+    const listToolsBlocked = new Promise<void>((resolve) => {
+      releaseListTools = resolve;
+    });
+    let listToolsCalls = 0;
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => {
+        listToolsCalls += 1;
+        await listToolsBlocked;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const headA = "8".repeat(40);
+    const headB = "9".repeat(40);
+    const started = Date.now();
+    const first = __testOnly_askReplitOnceCrossProcess({
+      kv: store,
+      mcp: slow,
+      ref: REF,
+      headSha: headA,
+    });
+    const firstDone = await Promise.race([
+      first,
+      sleep(budget + 2_000).then(() => {
+        throw new Error("CAS ask wedged without discovery budget");
+      }),
+    ]);
+    assert.equal(firstDone.asked, false);
+    if (!firstDone.asked) {
+      assert.equal(firstDone.reason, "unavailable");
+    }
+    assert.ok(Date.now() - started < budget + 1_500, "must finish within discovery budget, not hang forever");
+    assert.equal(listToolsCalls, 1);
+    releaseListTools();
+    await first;
+    await __testOnly_discoveryIdle(slow);
+    const second = await __testOnly_askReplitOnceCrossProcess({
+      kv: store,
+      mcp: slow,
+      ref: REF,
+      headSha: headB,
+    });
+    assert.equal(second.asked, true);
+    assert.equal(listToolsCalls, 2, "coalesced discovery must not stack parallel listTools flights");
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
+  }
+});
+
+test("pr-1522 8h: plain KV times out many heads with one listTools; fresh caller succeeds after release", async () => {
+  __testOnly_resetDiscoveryQueue();
+  __testOnly_setLeaseMs(1_400);
+  const budget = askDiscoveryBudgetMs();
+  try {
+    const store = plainKvOnly();
+    let releaseListTools: () => void = () => {};
+    const listToolsBlocked = new Promise<void>((resolve) => {
+      releaseListTools = resolve;
+    });
+    let listToolsCalls = 0;
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => {
+        listToolsCalls += 1;
+        await listToolsBlocked;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const heads = ["0", "1", "2", "3", "4"].map((d) => d.repeat(40));
+    const asks = heads.map((headSha) =>
+      __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha }),
+    );
+    const outcomes = await Promise.all(
+      asks.map((ask) =>
+        Promise.race([
+          ask,
+          sleep(budget + 2_000).then(() => {
+            throw new Error("queued ask wedged without discovery budget");
+          }),
+        ]),
+      ),
+    );
+    for (const outcome of outcomes) {
+      assert.equal(outcome.asked, false);
+      if (!outcome.asked) {
+        assert.equal(outcome.reason, "unavailable");
+      }
+    }
+    assert.equal(listToolsCalls, 1);
+    assert.equal(__testOnly_discoveryJoinCount(), 0, "all barrier callers must detach after timing out");
+    assert.equal(__testOnly_discoverySubscriberCount(), 0, "timed-out callers must unregister from discovery fan-out");
+    releaseListTools();
+    await Promise.all(asks);
+    await __testOnly_discoveryIdle(slow);
+    const freshHead = "f".repeat(40);
+    const fresh = await __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha: freshHead });
+    assert.equal(fresh.asked, true);
+    assert.equal(listToolsCalls, 2, "after release, exactly one follow-up discovery flight");
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
+  }
+});
+
+test("pr-1522 8h REVISE: repeated hung-listTools batches detach subscribers", async () => {
+  __testOnly_resetDiscoveryQueue();
+  __testOnly_setLeaseMs(1_400);
+  const budget = askDiscoveryBudgetMs();
+  try {
+    const store = plainKvOnly();
+    const batches = 3;
+    const headsPerBatch = 4;
+    let listToolsCalls = 0;
+    let releaseListTools: () => void = () => {};
+    const listToolsBlocked = new Promise<void>((resolve) => {
+      releaseListTools = resolve;
+    });
+    const slow = {
+      names: () => ["replit"],
+      listTools: async () => {
+        listToolsCalls += 1;
+        await listToolsBlocked;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const pendingAsks: Promise<unknown>[] = [];
+    for (let batch = 0; batch < batches; batch += 1) {
+      const heads = Array.from({ length: headsPerBatch }, (_, i) =>
+        String(batch * headsPerBatch + i).repeat(40),
+      );
+      const asks = heads.map((headSha) =>
+        __testOnly_askReplitOnceCrossProcess({ kv: store, mcp: slow, ref: REF, headSha }),
+      );
+      pendingAsks.push(...asks);
+      const outcomes = await Promise.all(
+        asks.map((ask) =>
+          Promise.race([
+            ask,
+            sleep(budget + 2_000).then(() => {
+              throw new Error("batch ask wedged without discovery budget");
+            }),
+          ]),
+        ),
+      );
+      for (const outcome of outcomes) {
+        assert.equal(outcome.asked, false);
+        if (!outcome.asked) {
+          assert.equal(outcome.reason, "unavailable");
+        }
+      }
+      assert.equal(listToolsCalls, 1, "one hung listTools shared across hung batches");
+      assert.equal(__testOnly_discoveryJoinCount(), 0);
+      assert.equal(__testOnly_discoverySubscriberCount(), 0);
+    }
+    releaseListTools();
+    await Promise.all(pendingAsks);
+    await __testOnly_discoveryIdle(slow);
+    const fresh = await __testOnly_askReplitOnceCrossProcess({
+      kv: store,
+      mcp: slow,
+      ref: REF,
+      headSha: "a".repeat(40),
+    });
+    assert.equal(fresh.asked, true);
+    assert.equal(listToolsCalls, 2, "single recovery listTools after one release");
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
+  }
+});
+
+test("pr-1522 8h v3: registry-scoped discovery does not inherit another registry result", async () => {
+  __testOnly_resetDiscoveryQueue();
+  __testOnly_setLeaseMs(1_400);
+  const budget = askDiscoveryBudgetMs();
+  try {
+    const storeA = plainKvOnly();
+    const storeB = plainKvOnly();
+    let releaseHung: () => void = () => {};
+    const hungGate = new Promise<void>((resolve) => {
+      releaseHung = resolve;
+    });
+    let callsAvailable = 0;
+    let callsUnavailable = 0;
+    const availableMcp = {
+      names: () => ["replit"],
+      listTools: async () => {
+        callsAvailable += 1;
+        await hungGate;
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const unavailableMcp = {
+      names: () => ["replit"],
+      listTools: async () => {
+        callsUnavailable += 1;
+        return [];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const headAvailable = "b".repeat(40);
+    const headUnavailable = "c".repeat(40);
+    const hungAsk = __testOnly_askReplitOnceCrossProcess({
+      kv: storeA,
+      mcp: availableMcp,
+      ref: REF,
+      headSha: headAvailable,
+    });
+    const quickAsk = __testOnly_askReplitOnceCrossProcess({
+      kv: storeB,
+      mcp: unavailableMcp,
+      ref: REF,
+      headSha: headUnavailable,
+    });
+    const [hungOutcome, quickOutcome] = await Promise.all([
+      Promise.race([
+        hungAsk,
+        sleep(budget + 2_000).then(() => {
+          throw new Error("available-registry ask wedged");
+        }),
+      ]),
+      Promise.race([
+        quickAsk,
+        sleep(budget + 2_000).then(() => {
+          throw new Error("unavailable-registry ask wedged");
+        }),
+      ]),
+    ]);
+    assert.equal(hungOutcome.asked, false);
+    if (!hungOutcome.asked) {
+      assert.equal(hungOutcome.reason, "unavailable");
+    }
+    assert.equal(quickOutcome.asked, false);
+    if (!quickOutcome.asked) {
+      assert.equal(quickOutcome.reason, "unavailable");
+    }
+    assert.equal(callsAvailable, 1, "hung registry must own its sole listTools");
+    assert.equal(callsUnavailable, 1, "fast registry must run its own listTools");
+    assert.equal(__testOnly_discoveryJoinCount(), 0);
+    releaseHung();
+    await hungAsk;
+    await __testOnly_discoveryIdle(availableMcp);
+    const recover = await __testOnly_askReplitOnceCrossProcess({
+      kv: storeA,
+      mcp: availableMcp,
+      ref: REF,
+      headSha: "d".repeat(40),
+    });
+    assert.equal(recover.asked, true);
+    assert.equal(callsAvailable, 2);
+    assert.equal(callsUnavailable, 1, "unavailable registry must not pick up available boolean");
+  } finally {
+    __testOnly_setLeaseMs(undefined);
+    __testOnly_resetDiscoveryQueue();
+  }
+});
+
+test("pr-1522 8h v4: resetDiscoveryQueue prevents stale flight finally on reused mcp", async () => {
+  __testOnly_resetDiscoveryQueue();
+  __testOnly_setLeaseMs(1_400);
+  const budget = askDiscoveryBudgetMs();
+  try {
+    const store = plainKvOnly();
+    let releaseHang: () => void = () => {};
+    const hangGate = new Promise<void>((resolve) => {
+      releaseHang = resolve;
+    });
+    let listToolsCalls = 0;
+    const mcp = {
+      names: () => ["replit"],
+      listTools: async () => {
+        listToolsCalls += 1;
+        if (listToolsCalls === 1) {
+          await hangGate;
+        }
+        return [{ name: REPLIT_TOOL }];
+      },
+      callTool: async () => ({ isError: false, content: [{ type: "text", text: "ok" }] }),
+    } as unknown as HostMcpRegistry;
+    const hungAsk = __testOnly_askReplitOnceCrossProcess({
+      kv: store,
+      mcp,
+      ref: REF,
+      headSha: "1".repeat(40),
+    });
+    const firstOutcome = await Promise.race([
+      hungAsk,
+      sleep(budget + 2_000).then(() => {
+        throw new Error("pre-reset ask wedged");
+      }),
+    ]);
+    assert.equal(firstOutcome.asked, false);
+    assert.equal(listToolsCalls, 1);
+    __testOnly_resetDiscoveryQueue();
+    const afterReset = __testOnly_askReplitOnceCrossProcess({
+      kv: store,
+      mcp,
+      ref: REF,
+      headSha: "2".repeat(40),
+    });
+    releaseHang();
+    const recovered = await Promise.race([
+      afterReset,
+      sleep(budget + 2_000).then(() => {
+        throw new Error("post-reset ask wedged — stale flight finally may have cleared in-flight");
+      }),
+    ]);
+    assert.equal(recovered.asked, true);
+    assert.equal(listToolsCalls, 2);
+    await hungAsk.catch(() => undefined);
   } finally {
     __testOnly_setLeaseMs(undefined);
     __testOnly_resetDiscoveryQueue();
