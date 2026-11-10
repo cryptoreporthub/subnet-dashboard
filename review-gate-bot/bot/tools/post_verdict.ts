@@ -1,7 +1,7 @@
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
-import { readPr } from "../lib/gh.js";
+import { PrHeadMovedDuringReadError, readPr, staleHeadCurrentFromReadError } from "../lib/gh.js";
 import { redactSecrets } from "../lib/redact.js";
 import { postVerdictComment } from "../lib/tag.js";
 
@@ -112,7 +112,19 @@ export default defineTool({
     const octokit = await ctx.host.github.getOctokit();
     // Re-read immediately before posting: this is the head the guard compares
     // against, not one read earlier in the turn.
-    const pr = await readPr(octokit, ref);
+    let pr;
+    try {
+      pr = await readPr(octokit, ref);
+    } catch (error) {
+      if (error instanceof PrHeadMovedDuringReadError) {
+        return {
+          posted: false,
+          reason: "stale-head",
+          current: staleHeadCurrentFromReadError(error),
+        };
+      }
+      throw error;
+    }
     if (pr.headSha !== input.headSha) {
       return { posted: false, reason: "stale-head", current: pr.headSha };
     }

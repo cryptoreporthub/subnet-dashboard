@@ -12,6 +12,22 @@ export type PrRef = { owner: string; repo: string; number: number };
 /** `pulls.get` response body — shared with `observePairFromPull` for a single PR fetch per delivery (RD-08). */
 export type PullsGetData = Awaited<ReturnType<Octokit["rest"]["pulls"]["get"]>>["data"];
 
+/** `readPr` saw different head SHAs on entry and exit (push during listFiles). */
+export class PrHeadMovedDuringReadError extends Error {
+  readonly name = "PrHeadMovedDuringReadError";
+
+  constructor(
+    readonly headBefore: string,
+    readonly headAfter: string,
+  ) {
+    super("PR head moved while reading the pull request");
+  }
+}
+
+function pullHeadSha(pr: PullsGetData): string {
+  return pr.head?.sha ?? "";
+}
+
 export type PrSnapshot = {
   number: number;
   headSha: string;
@@ -42,6 +58,17 @@ export const GATE_HEAD_CHANGED_DETAIL = "PR head moved before the gate state was
 
 export function isValidHeadSha(sha: string): boolean {
   return /^[0-9a-f]{40}$/.test(sha);
+}
+
+function refuseUnreadableHeadDuringRead(headBefore: string, headAfter: string): void {
+  if (!isValidHeadSha(headBefore) || !isValidHeadSha(headAfter)) {
+    throw new PrHeadMovedDuringReadError(headBefore, headAfter);
+  }
+}
+
+/** Prefer a 40-hex live head for stale-head tool responses; fall back to the earlier observation. */
+export function staleHeadCurrentFromReadError(error: PrHeadMovedDuringReadError): string {
+  return isValidHeadSha(error.headAfter) ? error.headAfter : error.headBefore;
 }
 
 export function pairCompareReady(pair: Pick<LivePair, "headSha" | "baseSha" | "baseTipSha">): boolean {
@@ -169,21 +196,43 @@ export async function prSnapshotFromPullFiles(
   };
 }
 
+/**
+ * PR metadata plus the current `pulls.listFiles` names for the PR number.
+ *
+ * **Fence (guarantees):** `pulls.get`, then `pulls.listFiles`, then `pulls.get` again. Throws
+ * `PrHeadMovedDuringReadError` when either observed `head.sha` is missing or not a 40-character hex
+ * string, or when the two observed head SHAs differ (a push/repoint during `listFiles`).
+ *
+ * **Not guaranteed:** `listFiles` is keyed by pull request number, not by commit SHA. A force-push
+ * that leaves and returns to the same head SHA during the read (H1→H2→H1) is not detected here;
+ * endpoint equality does not bind the file list to a SHA. Review patches use `get_pr_diff` /
+ * `readDiff`, which call `compareCommitsWithBasehead` with `${base}...${head}` and are SHA-pinned.
+ * `PrSnapshot.files` is advisory for the model (`check_gate_state` exposes names and `fileCount`); it is
+ * not used on the gate, suite, or diff correctness path. Tools label it advisory; patches come from
+ * `get_pr_diff` / `readDiff`, which are SHA-pinned.
+ */
 export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> {
-  const [{ data: pr }, files] = await Promise.all([
+  const pull = () =>
     octokit.rest.pulls.get({
       owner: ref.owner,
       repo: ref.repo,
       pull_number: ref.number,
-    }),
-    octokit.paginate(octokit.rest.pulls.listFiles, {
-      owner: ref.owner,
-      repo: ref.repo,
-      pull_number: ref.number,
-      per_page: 100,
-    }),
-  ]);
-  return prSnapshotFromPullFiles(octokit, ref, pr, files);
+    });
+  const { data: prBefore } = await pull();
+  const headBefore = pullHeadSha(prBefore);
+  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+    owner: ref.owner,
+    repo: ref.repo,
+    pull_number: ref.number,
+    per_page: 100,
+  });
+  const { data: prAfter } = await pull();
+  const headAfter = pullHeadSha(prAfter);
+  refuseUnreadableHeadDuringRead(headBefore, headAfter);
+  if (headBefore !== headAfter) {
+    throw new PrHeadMovedDuringReadError(headBefore, headAfter);
+  }
+  return prSnapshotFromPullFiles(octokit, ref, prAfter, files);
 }
 
 /**

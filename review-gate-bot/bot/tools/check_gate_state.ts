@@ -1,6 +1,6 @@
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
-import { readGateState, readPr } from "../lib/gh.js";
+import { PrHeadMovedDuringReadError, readGateState, readPr, staleHeadCurrentFromReadError } from "../lib/gh.js";
 import { readGateFixture, readPrFixture } from "../lib/fixtures.js";
 
 /**
@@ -15,7 +15,7 @@ import { readGateFixture, readPrFixture } from "../lib/fixtures.js";
  */
 export default defineTool({
   description:
-    "Read this session's pull request and the gate at its head: head SHA, base SHA, changed files, draft flag, each reviewer's formal verdict pinned to that exact SHA, the suite result, and the single next step the gate allows. Call this first and review only the head SHA it returns. Do not decide the order yourself.",
+    "Read this session's pull request and the gate at its head: head SHA, base SHA, changed file names, draft flag, each reviewer's formal verdict pinned to that exact SHA, the suite result, and the single next step the gate allows. Changed file names come from pulls.listFiles (advisory, PR-number keyed, not SHA-bound). Call this first and review only the head SHA it returns. Do not decide the order yourself.",
   effect: "read",
   async execute(_input, ctx) {
     if (ctx.session.purpose === "eval") {
@@ -36,7 +36,15 @@ export default defineTool({
       throw new Error("check_gate_state needs a GitHub pull request session");
     }
     const octokit = await ctx.host.github.getOctokit();
-    const pr = await readPr(octokit, ref);
+    let pr;
+    try {
+      pr = await readPr(octokit, ref);
+    } catch (error) {
+      if (error instanceof PrHeadMovedDuringReadError) {
+        return { reason: "stale-head", current: staleHeadCurrentFromReadError(error), source: "github" };
+      }
+      throw error;
+    }
     const baseAvailable = pr.observation.kind === "ready";
     const state = await readGateState({ octokit, kv: ctx.host.kv, ref, headSha: pr.headSha, prSnapshot: pr });
     return {

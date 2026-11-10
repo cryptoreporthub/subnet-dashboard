@@ -4,17 +4,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
-import { readPr, suiteKey } from "../bot/lib/gh.js";
+import { PrHeadMovedDuringReadError, readPr, suiteKey } from "../bot/lib/gh.js";
 import { checkHoldFingerprint } from "../bot/lib/gate.js";
 import { READER_EXPECTED_SCHEMA_VERSION } from "../bot/lib/pair-record.js";
 import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
-import { composeVerdictBody } from "../bot/tools/post_verdict.js";
+import postVerdict, { composeVerdictBody } from "../bot/tools/post_verdict.js";
 import listRepoFiles from "../bot/tools/list_repo_files.js";
 import readRepoFile from "../bot/tools/read_repo_file.js";
+import getPrDiff from "../bot/tools/get_pr_diff.js";
 
 const HEAD = "a".repeat(40);
+const HEAD_LIVE = "f".repeat(40);
 const OLD = "b".repeat(40);
 const BASE = "c".repeat(40);
 const KEY = "cont:github-pr:cryptoreporthub/subnet-dashboard#1522";
@@ -106,6 +108,46 @@ function pr(
   } as unknown as Octokit;
 }
 
+/** Octokit stub: head changes between first and second `pulls.get` around `listFiles` (ditto r4484064267). */
+function octokitHeadMovesDuringListFiles(
+  headAfterSecondGet: string,
+  listRows: { filename: string }[] = [{ filename: "only-on-new-head.py" }],
+  headBeforeFirstGet: string = HEAD,
+) {
+  let getCalls = 0;
+  const listFiles = () => {};
+  const baseRepo = { owner: { login: "cryptoreporthub" }, name: "subnet-dashboard" };
+  const octokit = {
+    paginate: async (fn: unknown) => (fn === listFiles ? listRows : []),
+    rest: {
+      pulls: {
+        get: async () => {
+          getCalls += 1;
+          const sha = getCalls === 1 ? headBeforeFirstGet : headAfterSecondGet;
+          return {
+            data: {
+              number: 1522,
+              head: { sha },
+              base: { sha: BASE, ref: "main", repo: baseRepo },
+              draft: false,
+              title: "t",
+              html_url: "u",
+            },
+          };
+        },
+        listFiles,
+      },
+      repos: {
+        getBranch: async () => ({ data: { commit: { sha: BASE } } }),
+        compareCommitsWithBasehead: async () => ({
+          data: { merge_base_commit: { sha: BASE }, files: [] },
+        }),
+      },
+    },
+  } as unknown as Octokit;
+  return octokit;
+}
+
 function toolContext(octokit: Octokit, seed: Record<string, unknown> = {}): unknown {
   const store = new Map<string, unknown>(Object.entries(seed));
   return {
@@ -132,12 +174,68 @@ test("the verdict body carries no gate marker the model wrote", () => {
   assert.deepEqual(parseMarkers(body), [], "the only marker on a verdict comment is the one the poster adds");
 });
 
-test("M2 RD-08: readPr issues a single pulls.get (pair share)", async () => {
+test("M2 RD-08: readPr issues two pulls.get when the head is stable (fence after listFiles)", async () => {
   const calls = { count: 0 };
   const octokit = pr({ head: HEAD, base: BASE, pullsGetCalls: calls });
   const snapshot = await readPr(octokit, { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 });
-  assert.equal(calls.count, 1);
+  assert.equal(calls.count, 2);
   assert.equal(snapshot.headSha, HEAD);
+});
+
+test("ditto r4484064267: readPr refuses when the head moves between pulls.get and listFiles", async () => {
+  const octokit = octokitHeadMovesDuringListFiles(HEAD_LIVE);
+  await assert.rejects(
+    () => readPr(octokit, { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 }),
+    (error: unknown) => error instanceof PrHeadMovedDuringReadError && error.headBefore === HEAD && error.headAfter === HEAD_LIVE,
+  );
+});
+
+test("ditto r4484064267: readPr refuses when the second pulls.get returns an unreadable head sha", async () => {
+  const octokit = octokitHeadMovesDuringListFiles("");
+  await assert.rejects(
+    () => readPr(octokit, { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 }),
+    (error: unknown) => error instanceof PrHeadMovedDuringReadError && error.headBefore === HEAD && error.headAfter === "",
+  );
+});
+
+test("ditto r4484064267: readPr refuses when the first pulls.get returns an unreadable head sha", async () => {
+  const octokit = octokitHeadMovesDuringListFiles(HEAD, [], "");
+  await assert.rejects(
+    () => readPr(octokit, { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 }),
+    (error: unknown) => error instanceof PrHeadMovedDuringReadError && error.headBefore === "" && error.headAfter === HEAD,
+  );
+});
+
+test("ditto r4484064267: get_pr_diff returns stale-head when readPr sees a head move", async () => {
+  const octokit = octokitHeadMovesDuringListFiles(HEAD_LIVE);
+  const result = (await run(getPrDiff)({ headSha: HEAD }, toolContext(octokit))) as {
+    ok: boolean;
+    reason?: string;
+    current?: string;
+  };
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "stale-head");
+  assert.equal(result.current, HEAD_LIVE);
+});
+
+test("ditto r4484064267: check_gate_state returns stale-head when readPr sees a head move", async () => {
+  const octokit = octokitHeadMovesDuringListFiles(HEAD_LIVE);
+  const result = (await run(checkGateState)({}, toolContext(octokit))) as Record<string, unknown>;
+  assert.equal(result.reason, "stale-head");
+  assert.equal(result.current, HEAD_LIVE);
+  assert.equal(result.source, "github");
+  assert.equal(result.headSha, undefined);
+});
+
+test("ditto r4484064267: post_verdict returns stale-head when readPr sees a head move", async () => {
+  const octokit = octokitHeadMovesDuringListFiles(HEAD_LIVE);
+  const result = (await run(postVerdict)(
+    { headSha: HEAD, verdict: "PASS", body: "ok", skills: [{ skill: "how", used: true, note: "n" }] },
+    toolContext(octokit),
+  )) as Record<string, unknown>;
+  assert.equal(result.posted, false);
+  assert.equal(result.reason, "stale-head");
+  assert.equal(result.current, HEAD_LIVE);
 });
 
 test("check_gate_state reads the PR's live head, so the model never names one", async () => {
