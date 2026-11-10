@@ -103,15 +103,22 @@ def heal_daily_pick_ledger(
     if netuid is None:
         return {"ok": False, "healed": False, "reason": "missing_netuid"}
 
-    pred_data: Optional[Dict[str, Any]] = None
-    if predictions_path:
-        try:
-            with open(predictions_path, "r", encoding="utf-8") as handle:
-                pred_data = json.load(handle)
-        except Exception:
-            pred_data = {"predictions": [], "resolved": [], "stats": {}}
+    from internal.store.soul_map_io import read_blob_checked
+
+    pred_path = predictions_path or PREDICTIONS_PATH
+    checked = read_blob_checked(pred_path)
+    if checked.kind in ("unreadable", "transient"):
+        return {
+            "ok": False,
+            "healed": False,
+            "reason": "ledger_unreadable",
+            "error": checked.error or checked.kind,
+            "netuid": netuid,
+        }
+    if checked.kind == "loaded" and isinstance(checked.blob, dict):
+        pred_data: Dict[str, Any] = checked.blob
     else:
-        pred_data = load_predictions()
+        pred_data = {"predictions": [], "resolved": [], "stats": {}}
 
     if _day_ledger_present(netuid, pred_data):
         return {"ok": True, "healed": False, "reason": "ledger_present", "netuid": netuid}

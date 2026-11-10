@@ -35,6 +35,36 @@ def _sample_pick(netuid: int = 15, price: float = 1.23) -> dict:
     }
 
 
+def test_heal_refuses_unreadable_ledger_without_write(tmp_path, monkeypatch):
+    preds = tmp_path / "predictions.json"
+    daily = tmp_path / "daily_picks.json"
+    preds.write_text("corrupt", encoding="utf-8")
+    daily.write_text(
+        json.dumps(
+            [
+                {
+                    "date": _today(),
+                    "action": "long",
+                    "has_pick": True,
+                    "pick_netuid": 15,
+                    "pick": _sample_pick(),
+                    "market_context": {},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    before = preds.read_bytes()
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
+
+    summary = heal_daily_pick_ledger(
+        dry_run=False, daily_picks_path=str(daily), predictions_path=str(preds)
+    )
+    assert summary["ok"] is False
+    assert summary["reason"] == "ledger_unreadable"
+    assert preds.read_bytes() == before
+
+
 def test_heal_backfills_gap(tmp_path, monkeypatch):
     daily = tmp_path / "daily_picks.json"
     preds = tmp_path / "predictions.json"

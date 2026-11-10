@@ -1380,17 +1380,27 @@ class PredictionResolverScheduler:
                 timing.mark_checkpoint("t1_5")
                 persist_partial()
 
+            heal_summary: Dict[str, Any] = {"ok": True}
             with timing.stage("ledger_heal", _persist_after_ledger):
                 try:
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
 
-                    heal_daily_pick_ledger(dry_run=False)
+                    raw_heal = heal_daily_pick_ledger(dry_run=False)
+                    heal_summary = (
+                        raw_heal if isinstance(raw_heal, dict) else {"ok": True}
+                    )
                 except Exception as heal_exc:
                     import logging
                     logging.getLogger(__name__).warning(
                         "ledger heal in resolver tick failed: %s", heal_exc
                     )
+                    heal_summary = {"ok": False, "reason": str(heal_exc)}
             timing.mark_checkpoint("t2")
+
+            ledger_unreadable = heal_summary.get("reason") == "ledger_unreadable"
+            if ledger_unreadable:
+                result["ok"] = False
+                result["error"] = "ledger_unreadable"
 
             with timing.stage("subnet_provider", persist_partial):
                 subnets = self._subnet_provider() or []
@@ -1424,53 +1434,61 @@ class PredictionResolverScheduler:
                 "stats": {},
                 "watchdog": None,
             }
-            with timing.stage("resolve_due", persist_partial):
-                # Phase 3 mid-guard: stop computing once abandoned.
-                if timing.is_abandoned() or (
-                    timing.owner_gen() is not None
-                    and timing.owner_gen() != self._cycle_generation
-                ):
-                    result["skipped"] = "cycle_abandoned"
-                else:
-                    resolved = self._resolve_with_timing(subnets, timing)
-            timing.mark_checkpoint("t6")
-            result["resolved_now"] = len(resolved.get("resolved_now", []))
-            expired_count = len(resolved.get("expired_now", []))
+            if not ledger_unreadable:
+                with timing.stage("resolve_due", persist_partial):
+                    # Phase 3 mid-guard: stop computing once abandoned.
+                    if timing.is_abandoned() or (
+                        timing.owner_gen() is not None
+                        and timing.owner_gen() != self._cycle_generation
+                    ):
+                        result["skipped"] = "cycle_abandoned"
+                    else:
+                        resolved = self._resolve_with_timing(subnets, timing)
+                timing.mark_checkpoint("t6")
+                result["resolved_now"] = len(resolved.get("resolved_now", []))
+                expired_count = len(resolved.get("expired_now", []))
 
-            # 2. Safety net: retire any predictions that are past due with no
-            #    resolvable price so the registry never fills with ungradeable
-            #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
-            #    Most are already retired in step 1; this catches stragglers
-            #    (e.g. corrupt records that step 1 skipped).
-            expired: Dict[str, Any] = {"expired_now": [], "stats": {}, "watchdog": None}
-            with timing.stage("expire_stale", persist_partial):
-                if timing.is_abandoned() or (
-                    timing.owner_gen() is not None
-                    and timing.owner_gen() != self._cycle_generation
-                ):
-                    result["skipped"] = result.get("skipped") or "cycle_abandoned"
-                else:
-                    expired = resolver.expire_stale_predictions()
-            expired_count += len(expired.get("expired_now", []))
-            result["expired_now"] = expired_count
-            result["pending"] = expired.get("stats", {}).get("pending", 0)
-            result["watchdog"] = resolved.get("watchdog") or expired.get("watchdog")
+                # 2. Safety net: retire any predictions that are past due with no
+                #    resolvable price so the registry never fills with ungradeable
+                #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
+                expired: Dict[str, Any] = {
+                    "expired_now": [],
+                    "stats": {},
+                    "watchdog": None,
+                }
+                with timing.stage("expire_stale", persist_partial):
+                    if timing.is_abandoned() or (
+                        timing.owner_gen() is not None
+                        and timing.owner_gen() != self._cycle_generation
+                    ):
+                        result["skipped"] = result.get("skipped") or "cycle_abandoned"
+                    else:
+                        expired = resolver.expire_stale_predictions()
+                expired_count += len(expired.get("expired_now", []))
+                result["expired_now"] = expired_count
+                result["pending"] = expired.get("stats", {}).get("pending", 0)
+                result["watchdog"] = resolved.get("watchdog") or expired.get("watchdog")
 
-            # B1b t7: immediately before ok=True.
-            timing.mark_checkpoint("t7")
-            result["ok"] = True
-            result["stats"] = expired.get("stats", resolved.get("stats", {}))
+                # B1b t7: immediately before ok=True.
+                timing.mark_checkpoint("t7")
+                result["ok"] = True
+                result["stats"] = expired.get("stats", resolved.get("stats", {}))
 
-            # N3: optional env-gated auto-retrain after resolver (non-blocking).
-            with timing.stage("auto_retrain", persist_partial):
-                try:
-                    from internal.calibration.scheduler import maybe_trigger_auto_retrain
+                # N3: optional env-gated auto-retrain after resolver (non-blocking).
+                with timing.stage("auto_retrain", persist_partial):
+                    try:
+                        from internal.calibration.scheduler import (
+                            maybe_trigger_auto_retrain,
+                        )
 
-                    result["auto_retrain"] = maybe_trigger_auto_retrain(
-                        resolved_now=result.get("resolved_now", 0)
-                    )
-                except Exception as exc:
-                    result["auto_retrain"] = {"triggered": False, "error": str(exc)}
+                        result["auto_retrain"] = maybe_trigger_auto_retrain(
+                            resolved_now=result.get("resolved_now", 0)
+                        )
+                    except Exception as exc:
+                        result["auto_retrain"] = {
+                            "triggered": False,
+                            "error": str(exc),
+                        }
         except Exception as exc:
             result["error"] = str(exc)
         finally:

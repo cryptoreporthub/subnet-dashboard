@@ -31,6 +31,15 @@ class FileLockTimeout(Exception):
     pass
 
 
+class PredictionsLedgerUnreadable(Exception):
+    """predictions.json could not be read for a write path."""
+
+    def __init__(self, kind: str, *, error: str = "") -> None:
+        super().__init__(f"{kind} predictions ledger: {error}")
+        self.kind = kind
+        self.error = error
+
+
 @contextlib.contextmanager
 def locked_predictions_file(timeout_seconds: float = 5.0):
     """Cross-process advisory lock with bounded wait.
@@ -127,14 +136,28 @@ def _migrate_evidence(data: Dict[str, Any]) -> bool:
     return changed
 
 
-def load_predictions(*, persist: bool = False) -> Dict[str, Any]:
-    try:
-        with open(PREDICTIONS_PATH, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except Exception:
+def load_predictions(*, persist: bool = False, fail_closed: bool = False) -> Dict[str, Any]:
+    """Load predictions.json. Read-only callers may degrade; writers use ``fail_closed=True``."""
+    from internal.store.soul_map_io import read_blob_checked
+
+    checked = read_blob_checked(PREDICTIONS_PATH)
+    if checked.kind in ("unreadable", "transient"):
+        if fail_closed:
+            raise PredictionsLedgerUnreadable(checked.kind, error=checked.error or "")
+        logger.warning(
+            "predictions ledger degraded read kind=%s error=%s",
+            checked.kind,
+            checked.error or "",
+        )
         return _default_data()
+    if checked.kind == "missing":
+        data = _default_data()
+    elif isinstance(checked.blob, dict):
+        data = checked.blob
+    else:
+        data = _default_data()
     if not isinstance(data, dict):
-        return _default_data()
+        data = _default_data()
     data.setdefault("predictions", [])
     data.setdefault("resolved", [])
     data.setdefault("stats", _default_data()["stats"])
@@ -267,7 +290,7 @@ def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_pred
     shadow = bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
     with locked_predictions_file(timeout_seconds=5.0):
-        data = load_predictions()
+        data = load_predictions(fail_closed=True)
         pending = data.get("predictions", [])
         for existing in pending:
             if (
