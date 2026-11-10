@@ -8,7 +8,7 @@ import {
 } from "../bot/lib/advance.js";
 import { CHECK_NAME, postGateCheck } from "../bot/lib/check.js";
 import { checkHoldFingerprint, prKey, reviewTurnKey, type GateState } from "../bot/lib/gate.js";
-import { legacySuiteKey, readGateState, readSuiteRecord, suiteKey } from "../bot/lib/gh.js";
+import { GATE_HEAD_CHANGED_DETAIL, legacySuiteKey, readGateState, readSuiteRecord, suiteKey } from "../bot/lib/gh.js";
 import { recordSuiteComparison, runSuiteIfDue } from "../bot/lib/suite-record.js";
 import { marker } from "../bot/lib/verdicts.js";
 import { JUNIT_ARTIFACT, type RunnerReader } from "../bot/lib/runner.js";
@@ -41,6 +41,7 @@ function freshGateState(): GateState {
 
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 const HEAD = "c".repeat(40);
+const HEAD_LIVE = "f".repeat(40);
 const BASE_A = "a".repeat(40);
 const BASE_B = "b".repeat(40);
 const TIP_D = "d".repeat(40);
@@ -169,6 +170,98 @@ const botReviews = [
   { id: 10, body: "", state: "APPROVED", submitted_at: "2026-10-26T05:10:00Z", commit_id: HEAD, user: { login: "cursor[bot]", type: "Bot" } },
   { id: 11, body: "", state: "APPROVED", submitted_at: "2026-10-26T05:11:00Z", commit_id: HEAD, user: { login: "ditto-code[bot]", type: "Bot" } },
 ];
+
+test("ditto r4486944691: recordSuiteComparison rejects caller pair that disagrees with live read", async () => {
+  const w = world();
+  const outcome = await recordSuiteComparison({
+    octokit: {
+      ...w.octokit,
+      rest: {
+        ...w.octokit.rest,
+        pulls: {
+          ...w.octokit.rest.pulls,
+          get: async () => ({
+            data: {
+              number: REF.number,
+              head: { sha: HEAD_LIVE },
+              base: { sha: BASE_A, ref: "main", repo: { owner: { login: REF.owner }, name: REF.repo } },
+              draft: false,
+            },
+          }),
+        },
+      },
+    } as unknown as Octokit,
+    kv: w.deps.kv,
+    ref: REF,
+    headSha: HEAD,
+    baseSha: BASE_A,
+    baseTipSha: BASE_A,
+    reader: reader(),
+  });
+  assert.equal(outcome.ok, false);
+  assert.equal(!outcome.ok && outcome.reason, "stale-pair");
+  assert.equal(w.store.has(suiteKey(REF, HEAD, BASE_A)), false);
+  assert.equal(w.store.has(suiteKey(REF, HEAD_LIVE, BASE_A)), false);
+});
+
+test("ditto r4486944691: runSuiteIfDue returns stale-pair when caller pair disagrees with live read", async () => {
+  const w = world({ comments: [mcPass], reviews: botReviews });
+  const octokit = {
+    ...w.octokit,
+    rest: {
+      ...w.octokit.rest,
+      pulls: {
+        ...w.octokit.rest.pulls,
+        get: async () => ({
+          data: {
+            number: REF.number,
+            head: { sha: HEAD_LIVE },
+            base: { sha: BASE_A, ref: "main", repo: { owner: { login: REF.owner }, name: REF.repo } },
+            draft: false,
+          },
+        }),
+      },
+    },
+  } as unknown as Octokit;
+  const label = await runSuiteIfDue({
+    octokit,
+    kv: w.deps.kv,
+    ref: REF,
+    headSha: HEAD,
+    baseSha: BASE_A,
+    baseTipSha: BASE_A,
+    reader: reader(),
+  });
+  assert.equal(label, "stale-pair");
+  assert.equal(w.store.has(suiteKey(REF, HEAD, BASE_A)), false);
+  assert.equal(w.store.has(suiteKey(REF, HEAD_LIVE, BASE_A)), false);
+});
+
+test("ditto r4486945190: readGateState is not mergeable when live PR head differs from delivery headSha", async () => {
+  const replitTag = {
+    id: 2,
+    body: `${marker("replit", HEAD)}\n@replit review ${HEAD}`,
+    created_at: "2026-10-26T05:20:00Z",
+    user: { login: "cryptoreporthub", type: "User" },
+    performed_via_github_app: null,
+  };
+  const replitPass = {
+    id: 3,
+    body: `Replit: **PASS** at ${HEAD}`,
+    created_at: "2026-10-26T05:30:00Z",
+    user: { login: "cryptoreporthub", type: "User" },
+    performed_via_github_app: null,
+  };
+  const w = world({
+    comments: [mcPass, replitTag, replitPass],
+    reviews: botReviews,
+    seed: { [suiteKey(REF, HEAD, BASE_A)]: pairTrust(BASE_A, { state: "clean", at: 1 }) },
+  });
+  w.live.head = HEAD_LIVE;
+  const state = await readGateState({ octokit: w.octokit, kv: w.deps.kv, ref: REF, headSha: HEAD });
+  assert.notEqual(state.next, "mergeable");
+  assert.equal(state.suiteDetail, GATE_HEAD_CHANGED_DETAIL);
+});
 
 test("suite keys include the PR base; a base move leaves the old pair orphaned", async () => {
   assert.notEqual(suiteKey(REF, HEAD, BASE_A), suiteKey(REF, HEAD, BASE_B));

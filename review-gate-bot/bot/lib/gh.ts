@@ -37,6 +37,9 @@ export type LivePair = {
 
 export const GITHUB_PAIR_READ_DETAIL = "GitHub could not resolve the PR base pair for suite compare";
 
+/** `readGateState` delivery head disagrees with live PR head at read time. */
+export const GATE_HEAD_CHANGED_DETAIL = "PR head moved before the gate state was read";
+
 export function isValidHeadSha(sha: string): boolean {
   return /^[0-9a-f]{40}$/.test(sha);
 }
@@ -45,15 +48,18 @@ export function pairCompareReady(pair: Pick<LivePair, "headSha" | "baseSha" | "b
   return isValidHeadSha(pair.headSha) && pair.baseSha !== "" && pair.baseTipSha !== "";
 }
 
-/** After computeGate: never report mergeable when live pair compare fields are missing. */
+/** After computeGate: never report mergeable when pair compare fields are missing or live head drifted. */
 export function downgradeIfStaleGreen(state: GateState, pair: Pick<LivePair, "headSha" | "baseSha" | "baseTipSha">): GateState {
   if (state.next !== "mergeable") {
     return state;
   }
-  if (pairCompareReady(pair)) {
-    return state;
+  if (!pairCompareReady(pair)) {
+    return { ...state, next: "run_suite", suiteDetail: GITHUB_PAIR_READ_DETAIL };
   }
-  return { ...state, next: "run_suite", suiteDetail: GITHUB_PAIR_READ_DETAIL };
+  if (pair.headSha !== state.headSha) {
+    return { ...state, next: "run_suite", suiteDetail: GATE_HEAD_CHANGED_DETAIL };
+  }
+  return state;
 }
 
 /** Head, merge-base, and live base-branch tip. Single source for pair identity and suite compare. */

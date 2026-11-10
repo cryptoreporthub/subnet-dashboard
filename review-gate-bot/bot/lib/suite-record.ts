@@ -9,6 +9,7 @@ import {
   suiteKey,
   readLivePair,
   pairCompareReady,
+  type LivePair,
   type PrRef,
 } from "./gh.js";
 import { READER_EXPECTED_SCHEMA_VERSION } from "./pair-record.js";
@@ -117,6 +118,17 @@ function unavailableBase(): SuiteComparison {
   return { ok: false, step: "base", reason: "base-unavailable", detail: "merge-base or base tip is not available" };
 }
 
+function stalePairMismatch(): SuiteComparison {
+  return { ok: false, step: "head", reason: "stale-pair", detail: "head, merge-base, or base tip moved before the suite record was written" };
+}
+
+function callerMatchesLive(
+  input: Pick<ComparisonInput, "headSha" | "baseSha" | "baseTipSha">,
+  live: Pick<LivePair, "headSha" | "baseSha" | "baseTipSha">,
+): boolean {
+  return input.headSha === live.headSha && input.baseSha === live.baseSha && input.baseTipSha === live.baseTipSha;
+}
+
 /**
  * Compare the full suite at `baseSha` and `headSha` from their JUnit artifacts, and record the head's
  * result. Shared by the `compare_suite_runs` tool and the gate's own driver, so both record the same
@@ -131,26 +143,20 @@ export async function recordSuiteComparison(input: ComparisonInput): Promise<Sui
   if (!pairCompareReady(live)) {
     return unavailableBase();
   }
-  const aligned: ComparisonInput = {
-    ...input,
-    headSha: live.headSha,
-    baseSha: live.baseSha,
-    baseTipSha: live.baseTipSha,
-  };
-  if (!pairCompareReady(aligned)) {
-    return unavailableBase();
+  if (!callerMatchesLive(input, live)) {
+    return stalePairMismatch();
   }
   let definition: DefinitionRead;
   try {
-    definition = await readDefinition(aligned);
+    definition = await readDefinition(input);
   } catch {
     return { ok: false, step: "head", reason: "compare-unavailable", detail: "the PR file compare could not be read" };
   }
-  const refusal = await refuseUnlessDefinitionClear(aligned, definition);
+  const refusal = await refuseUnlessDefinitionClear(input, definition);
   if (refusal !== undefined) {
     return { ok: false, step: "head", reason: "needs-joshua", detail: refusal.detail };
   }
-  return recordComparison(aligned);
+  return recordComparison(input);
 }
 
 /**
@@ -183,7 +189,7 @@ async function recordComparison(input: ComparisonInput): Promise<SuiteComparison
         : undefined;
   const live = await readLivePair(input.octokit, input.ref);
   if (live.headSha !== headSha || live.baseTipSha !== baseTipSha || live.baseSha !== baseSha) {
-    return { ok: false, step: "head", reason: "stale-pair", detail: "head, merge-base, or base tip moved before the suite record was written" };
+    return stalePairMismatch();
   }
   const suiteState: "clean" | "regressed" = diff.clean && diff.invalid === undefined ? "clean" : "regressed";
   const body = {
@@ -231,46 +237,40 @@ export async function runSuiteIfDue(input: {
   if (!pairCompareReady(live)) {
     return "refused:base-unavailable";
   }
-  const aligned = {
-    ...input,
-    headSha: live.headSha,
-    baseSha: live.baseSha,
-    baseTipSha: live.baseTipSha,
-  };
-  if (!pairCompareReady(aligned)) {
-    return "refused:base-unavailable";
+  if (!callerMatchesLive(input, live)) {
+    return "stale-pair";
   }
-  const reader = aligned.reader ?? octokitRunner(aligned.octokit, { owner: aligned.ref.owner, repo: aligned.ref.repo });
-  const baseTipSha = aligned.baseTipSha;
-  return exclusive(`suite-run:${prKey(aligned.ref)}:${aligned.headSha}`, async () => {
-    if ((await readSuiteRecord(aligned.kv, aligned.ref, aligned.headSha, baseTipSha))?.invalid === "needs-joshua") {
+  const reader = input.reader ?? octokitRunner(input.octokit, { owner: input.ref.owner, repo: input.ref.repo });
+  const baseTipSha = input.baseTipSha;
+  return exclusive(`suite-run:${prKey(input.ref)}:${input.headSha}`, async () => {
+    if ((await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha))?.invalid === "needs-joshua") {
       return "already-refused";
     }
     let definition: DefinitionRead;
     try {
-      definition = await readDefinition(aligned);
+      definition = await readDefinition(input);
     } catch {
       return "refused:head-compare-unavailable";
     }
-    const refusal = await refuseUnlessDefinitionClear(aligned, definition);
+    const refusal = await refuseUnlessDefinitionClear(input, definition);
     if (refusal !== undefined) {
       return refusal.reason === "diff-incomplete" ? "refused:head-diff-incomplete" : "refused:head-needs-joshua";
     }
-    const latest = pickRun(await reader.runsForSha(aligned.headSha));
+    const latest = pickRun(await reader.runsForSha(input.headSha));
     if (latest === undefined) {
       return "waiting:no-run";
     }
-    const recorded = await readSuiteRecord(aligned.kv, aligned.ref, aligned.headSha, baseTipSha);
+    const recorded = await readSuiteRecord(input.kv, input.ref, input.headSha, baseTipSha);
     if (recorded !== undefined && recorded.runId === latest.id && recorded.state !== "carried") {
       return "already-recorded";
     }
-    const refused = (await aligned.kv.get(refusalKey(aligned.ref, aligned.headSha, aligned.baseTipSha, aligned.baseSha))) as
+    const refused = (await input.kv.get(refusalKey(input.ref, input.headSha, input.baseTipSha, input.baseSha))) as
       | { runId?: number }
       | undefined;
     if (refused?.runId === latest.id) {
       return "already-refused";
     }
-    const outcome = await recordComparison({ ...aligned, reader });
+    const outcome = await recordComparison({ ...input, reader });
     if (outcome.ok) {
       return "recorded";
     }
@@ -282,7 +282,7 @@ export async function runSuiteIfDue(input: {
     }
     // Only a permanent fact about this run is remembered. A lookup or a download that failed on GitHub is transient.
     if (outcome.step === "head" && (outcome.reason === "unreadable" || outcome.reason === "no-artifact")) {
-      await aligned.kv.put(refusalKey(aligned.ref, aligned.headSha, aligned.baseTipSha, aligned.baseSha), {
+      await input.kv.put(refusalKey(input.ref, input.headSha, input.baseTipSha, input.baseSha), {
         runId: latest.id,
         reason: outcome.reason,
       });
