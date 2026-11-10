@@ -94,6 +94,19 @@ def heal_daily_pick_ledger(
 ) -> Dict[str, Any]:
     """Backfill missing day ledger row for today's published LONG."""
     picks_path = daily_picks_path or DAILY_PICKS_PATH
+    pred_path = predictions_path or predictions_store.PREDICTIONS_PATH
+
+    from internal.store.soul_map_io import read_blob_checked
+
+    checked = read_blob_checked(pred_path)
+    if checked.kind in ("unreadable", "transient"):
+        return {
+            "ok": False,
+            "healed": False,
+            "reason": "ledger_unreadable",
+            "error": checked.error or checked.kind,
+        }
+
     daily = _daily_pick_today(picks_path)
     action = str(daily.get("action") or "").upper()
     if action in ("HOLD", "NONE", "") or not daily.get("has_pick"):
@@ -102,19 +115,6 @@ def heal_daily_pick_ledger(
     netuid = daily.get("pick_netuid")
     if netuid is None:
         return {"ok": False, "healed": False, "reason": "missing_netuid"}
-
-    from internal.store.soul_map_io import read_blob_checked
-
-    pred_path = predictions_path or predictions_store.PREDICTIONS_PATH
-    checked = read_blob_checked(pred_path)
-    if checked.kind in ("unreadable", "transient"):
-        return {
-            "ok": False,
-            "healed": False,
-            "reason": "ledger_unreadable",
-            "error": checked.error or checked.kind,
-            "netuid": netuid,
-        }
     if checked.kind == "loaded" and isinstance(checked.blob, dict):
         pred_data: Dict[str, Any] = checked.blob
     else:

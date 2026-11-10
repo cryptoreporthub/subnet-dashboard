@@ -101,19 +101,44 @@ def test_tick_corrupt_ledger_with_published_long_leaves_file_unchanged(
     assert result.get("error") == "ledger_unreadable"
 
 
-def test_tick_corrupt_ledger_hold_twice_no_predictions_write(
-    tmp_path, monkeypatch, _cycle_stubs
-):
+def test_tick_corrupt_ledger_hold_twice_no_predictions_write(tmp_path, monkeypatch):
     preds, daily = _patch_paths(tmp_path, monkeypatch)
     preds.write_text("{broken ledger", encoding="utf-8")
     before = preds.read_bytes()
     daily.write_text(json.dumps(_hold_daily_pick()), encoding="utf-8")
+
+    resolve_calls: list[int] = []
+    expire_calls: list[int] = []
+
+    def _resolve(_subnets):
+        resolve_calls.append(1)
+        return {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {},
+        }
+
+    def _expire():
+        expire_calls.append(1)
+        return {"expired_now": [], "stats": {"pending": 0}, "watchdog": {}}
+
+    monkeypatch.setattr(resolver, "resolve_due_predictions", _resolve)
+    monkeypatch.setattr(resolver, "expire_stale_predictions", _expire)
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda **_kw: {"triggered": False},
+    )
 
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=15, subnet_provider=lambda: []
     )
     sched._active = True
     sched._first_tick_pending = False
-    for _ in range(2):
-        sched._run_refresh_cycle_with_timeout()
+    for tick in range(2):
+        result = sched._run_refresh_cycle_with_timeout()
+        assert result.get("ok") is not True
+        assert result.get("error") == "ledger_unreadable"
+        assert resolve_calls == []
+        assert expire_calls == []
     assert preds.read_bytes() == before
