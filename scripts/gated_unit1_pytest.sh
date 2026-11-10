@@ -22,4 +22,7 @@ exec python -m pytest -q \
   tests/test_acc0_ledger_heal.py \
   tests/test_predictions_write_race.py \
   tests/test_tribunal_hero_live.py \
+  tests/test_predictions_store_patch_contract.py \
+  tests/test_dev_radar.py \
+  tests/test_graded_chat.py \
   "$@"

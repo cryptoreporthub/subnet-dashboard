@@ -137,6 +137,41 @@ def test_heal_uses_prediction_reference_price(tmp_path, monkeypatch):
     assert summary["netuid"] == 15
 
 
+def test_heal_no_duplicate_after_corrupt_then_restore(tmp_path, monkeypatch):
+    """Operator repairs ledger mid-cycle; second heal must not add a duplicate day row."""
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    _write_json(
+        daily,
+        [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}],
+    )
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
+
+    first = heal_daily_pick_ledger(dry_run=False, daily_picks_path=str(daily))
+    assert first["healed"] is True
+    good_bytes = preds.read_bytes()
+
+    preds.write_text("corrupt", encoding="utf-8")
+    blocked = heal_daily_pick_ledger(dry_run=False, daily_picks_path=str(daily))
+    assert blocked["reason"] == "ledger_unreadable"
+
+    preds.write_bytes(good_bytes)
+    again = heal_daily_pick_ledger(dry_run=False, daily_picks_path=str(daily))
+    assert again["healed"] is False
+    assert again["reason"] in ("ledger_present", "duplicate_skipped")
+
+    data = json.loads(preds.read_text(encoding="utf-8"))
+    day_rows = [
+        r
+        for r in data.get("predictions", [])
+        if r.get("horizon_type") == "day" and not r.get("shadow")
+    ]
+    assert len(day_rows) == 1
+
+
 def test_heal_idempotent(tmp_path, monkeypatch):
     daily = tmp_path / "daily_picks.json"
     preds = tmp_path / "predictions.json"
