@@ -92,7 +92,12 @@ export default githubChannel({
     }
     if (ctx.eventName === "push") {
       const payload = ctx.payload as { ref?: string; deleted?: boolean };
-      if (payload.deleted !== true && typeof payload.ref === "string") {
+      // Deleted-branch pushes set deleted:true; tag pushes use refs/tags/ and never name a PR base.
+      if (
+        payload.deleted !== true &&
+        typeof payload.ref === "string" &&
+        payload.ref.startsWith("refs/heads/")
+      ) {
         await pushToBaseBranch(await depsOf(ctx), { ref: payload.ref });
       }
       return null;
