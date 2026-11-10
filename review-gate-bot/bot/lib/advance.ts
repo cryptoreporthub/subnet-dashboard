@@ -507,7 +507,11 @@ export async function pushToBaseBranch(deps: GateDeps, push: { ref: string }): P
   });
   for (const pr of prs) {
     try {
-      await advanceGate({ ...deps, ref: { owner: anchor.owner, repo: anchor.repo, number: pr.number } });
+      const ref = { owner: anchor.owner, repo: anchor.repo, number: pr.number };
+      const result = await advanceGate({ ...deps, ref });
+      if (result.reviewLease !== undefined) {
+        await releaseReviewTurnIfHolder(deps.kv, ref, result.reviewLease);
+      }
     } catch (error) {
       console.error(
         JSON.stringify({

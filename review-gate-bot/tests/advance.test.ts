@@ -2,7 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
-import { advanceGate, commentReviewTurn, commentTurn, failureReleasesLease, logAsk, pullRequestReviewTurn, pullRequestTurn, releaseReviewTurnIfHolder, reviewEventTurn, reviewLeaseFromState, type GateDeps } from "../bot/lib/advance.js";
+import {
+  advanceGate,
+  commentReviewTurn,
+  commentTurn,
+  failureReleasesLease,
+  logAsk,
+  pullRequestReviewTurn,
+  pullRequestTurn,
+  pushToBaseBranch,
+  releaseReviewTurnIfHolder,
+  reviewEventTurn,
+  reviewLeaseFromState,
+  type GateDeps,
+} from "../bot/lib/advance.js";
 import { suiteKey } from "../bot/lib/gh.js";
 import { checkHoldFingerprint, prKey, replitAskKey, replitTagKey, reviewTurnKey, type GateState } from "../bot/lib/gate.js";
 import { LEASE_MS, leaseToken, releaseLeaseIfHolder } from "../bot/lib/lock.js";
@@ -186,6 +199,27 @@ test("ditto r4508315974: a base edit releases the review lease when no turn star
   assert.equal(lease, undefined);
   assert.equal(w.store.has(reviewTurnKey(REF, HEAD)), false, "the lease must not strand on the head");
   assert.equal(await commentTurn(w.deps, "some-reviewer"), true, "a later delivery can acquire a turn");
+});
+
+test("L2: push to the PR base releases the review lease when no turn starts", async () => {
+  const w = world({ comments: [] });
+  (w.deps.octokit as { paginate: (fn: unknown) => Promise<unknown[]> }).paginate = async (fn: unknown) => {
+    if (fn === w.deps.octokit.rest.pulls.list) {
+      return [{ number: REF.number }];
+    }
+    return [];
+  };
+  await pushToBaseBranch(w.deps, { ref: "refs/heads/main" });
+  assert.equal(w.store.has(reviewTurnKey(REF, HEAD)), false, "pushToBaseBranch must not strand the review lease on the head");
+  const lease = await pullRequestReviewTurn(w.deps, { action: "synchronize", draft: false });
+  assert.notEqual(lease, undefined, "a later synchronize delivery can start a review turn");
+});
+
+test("L2 control: synchronize without a base push still takes the review lease", async () => {
+  const w = world({ comments: [] });
+  const lease = await pullRequestReviewTurn(w.deps, { action: "synchronize", draft: false });
+  assert.notEqual(lease, undefined);
+  assert.equal(w.store.has(reviewTurnKey(REF, HEAD)), true, "a normal delivery holds the lease until the turn ends");
 });
 
 test("a PR with no MC verdict yet starts a review turn and tags Cursor and Ditto once", async () => {
