@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional
 
 from internal.learning.loop_health import _daily_pick_today, _day_ledger_present
 from internal.learning import predictions_store
-from internal.learning.predictions_store import load_predictions, save_predictions
 
 logger = logging.getLogger(__name__)
 
@@ -191,16 +190,27 @@ def archive_predictions_epoch(
     # must never vanish into "expired" just because the graded ledger rolled
     # (root cause of the 69% expired_rate). Toggle off with
     # PREDICTIONS_ARCHIVE_PRESERVE_PENDING=0 for a true hard reset.
+    from internal.store.soul_map_io import read_blob_checked
+
+    checked = read_blob_checked(src)
+    if checked.kind in ("unreadable", "transient"):
+        return {
+            "ok": False,
+            "reason": "ledger_unreadable",
+            "error": checked.error or checked.kind,
+            "heal": {"skipped": True},
+        }
+
     preserve_pending = os.environ.get("PREDICTIONS_ARCHIVE_PRESERVE_PENDING", "1") != "0"
     pending_kept: List[Dict[str, Any]] = []
-    try:
-        old = load_predictions()
-        pending_kept = [
-            p for p in (old.get("predictions") or [])
-            if isinstance(p, dict) and p.get("status", "pending") in (None, "pending")
-        ]
-    except Exception as exc:
-        logger.warning("epoch archive: could not preserve pending rows: %s", exc)
+    if checked.kind == "loaded" and isinstance(checked.blob, dict):
+        old = checked.blob
+    else:
+        old = {"predictions": [], "resolved": [], "stats": {}}
+    pending_kept = [
+        p for p in (old.get("predictions") or [])
+        if isinstance(p, dict) and p.get("status", "pending") in (None, "pending")
+    ]
     empty = {
         "predictions": pending_kept if preserve_pending else [],
         "resolved": [],
@@ -212,7 +222,7 @@ def archive_predictions_epoch(
         },
         "epoch_reset_at": _utcnow().isoformat().replace("+00:00", "Z"),
     }
-    save_predictions(empty)
+    predictions_store.save_predictions(empty)
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:

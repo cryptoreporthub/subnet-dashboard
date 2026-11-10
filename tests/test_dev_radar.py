@@ -6,7 +6,7 @@ from internal.dev_radar.service import build_dev_radar_payload, build_dev_radar_
 def test_dev_radar_rows_risk_flag_and_snippet(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     subnets = [
         {"netuid": 1, "name": "Alpha", "github": "https://github.com/org/alpha", "emission": 2.0},
@@ -24,7 +24,7 @@ def test_dev_radar_rows_risk_flag_and_snippet(monkeypatch):
 def test_dev_radar_sort_repos_first_by_emission(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     subnets = [
         {"netuid": 1, "name": "Low", "github": "https://github.com/a/b", "emission": 1.0},
@@ -66,7 +66,7 @@ def _many_subnets(count):
 def test_dev_radar_rows_are_not_truncated_by_default(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     assert len(build_dev_radar_rows(_many_subnets(300))) == 300
 
@@ -76,7 +76,7 @@ def test_dev_radar_payload_returns_every_subnet_by_default(monkeypatch):
 
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     monkeypatch.setattr(svc, "_load_registry_subnets", lambda: _many_subnets(300))
     monkeypatch.setattr(svc, "_CACHE", {"at": 0.0, "payload": None})

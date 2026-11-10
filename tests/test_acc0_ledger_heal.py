@@ -35,6 +35,21 @@ def _sample_pick(netuid: int = 15, price: float = 1.23) -> dict:
     }
 
 
+def test_epoch_archive_refuses_unreadable_ledger_without_write(tmp_path):
+    preds = tmp_path / "predictions.json"
+    preds.write_text("not-json{{{", encoding="utf-8")
+    before = preds.read_bytes()
+
+    summary = archive_predictions_epoch(
+        predictions_path=str(preds),
+        archive_dir=str(tmp_path / "arc"),
+        re_heal_daily=False,
+    )
+    assert summary["ok"] is False
+    assert summary["reason"] == "ledger_unreadable"
+    assert preds.read_bytes() == before
+
+
 def test_heal_refuses_unreadable_ledger_without_write(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     daily = tmp_path / "daily_picks.json"

@@ -19,7 +19,7 @@ def test_graded_context_extracts_netuid():
 def test_prompt_includes_snippet_for_sn64(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {
+        lambda *_a, **_k: {
             "predictions": [],
             "resolved": [
                 {
@@ -69,7 +69,7 @@ def test_generic_message_no_graded_bloat():
 def test_offline_reply_uses_snippet_not_hallucination(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {
+        lambda *_a, **_k: {
             "predictions": [],
             "resolved": [
                 {
@@ -114,7 +114,7 @@ def test_wants_trust_stats_keywords():
 def test_build_graded_context_sources_for_subnet(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     graded = build_graded_context("subnet 42 track record", {}, include_pick_explain=False)
     assert graded["active"] is True

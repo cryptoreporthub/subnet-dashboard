@@ -71,7 +71,7 @@ def test_run_github_sync_writes_cache(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
 
     result = run_github_sync()
@@ -97,7 +97,7 @@ def test_gap_signal_when_velocity_high_price_flat(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.dev_radar.github_sync.CACHE_PATH", str(cache_path))
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     rows = build_dev_radar_rows(
         [
@@ -117,7 +117,7 @@ def test_velocity_null_when_github_unreachable(monkeypatch):
     )
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     rows = build_dev_radar_rows(
         [{"netuid": 7, "github": "https://github.com/a/b", "emission": 1.0}],

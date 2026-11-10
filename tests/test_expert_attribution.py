@@ -55,7 +55,7 @@ def test_regime_hits_skip_unclassified(monkeypatch):
 
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: rows,
+        lambda *_a, **_k: rows,
     )
     hits = _expert_hits_by_regime()
     chop = hits.get("chop", {})
