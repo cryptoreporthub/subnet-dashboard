@@ -1207,33 +1207,8 @@ def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler,
 
 
 @pytest.fixture(autouse=True)
-def isolate_liveness_persistence(tmp_path, monkeypatch):
-    """Point internal.liveness soul-map IO at a per-test JSON file."""
-    from internal import liveness as _liv_mod
-
-    sm_path = tmp_path / "liveness_soul_map.json"
-
-    def _read():
-        try:
-            return json.loads(sm_path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-
-    def _write(mutator):
-        blob = _read() or {}
-        mutator(blob)
-        sm_path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=str(sm_path.parent), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(blob, f)
-            os.replace(tmp, sm_path)
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-
-    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
-    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+def isolate_liveness_persistence(liveness_real_soul_map):
+    return liveness_real_soul_map
 
 
 # ---------------------------------------------------------------------------
@@ -1714,7 +1689,7 @@ def test_commit_writer_wins_then_revoke(tmp_path, monkeypatch):
         def _m(blob: Dict[str, Any]) -> None:
             blob["revoke_marker"] = True
 
-        soul_map_io.write_soul_map(_m, str(soul_path), with_status=True)
+        soul_map_io.write_soul_map(_m, str(soul_path), raise_on_lock_timeout=False)
         done_second.set()
 
     def _writer() -> None:
@@ -1987,12 +1962,16 @@ def test_gate_deadline_returns_pending(monkeypatch, tmp_path):
     def _instant_timeout(*_a, **_k):
         raise TimeoutError("fast")
 
-    monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", _instant_timeout)
-    blob, committed = soul_map_io.write_soul_map(
-        lambda b: b.update({"x": 1}), path=str(soul_path), with_status=True
+    monkeypatch.setattr(soul_map_io, "_acquire_write_locks", _instant_timeout)
+    result = soul_map_io.write_soul_map(
+        lambda b: b.update({"x": 1}),
+        path=str(soul_path),
+        raise_on_lock_timeout=False,
     )
-    assert committed is False
-    assert isinstance(blob, dict)
+    from internal.store.soul_map_io import WriteOutcome
+
+    assert result.outcome is WriteOutcome.LOCK_WAIT_FAILED
+    assert result.blob is None
     assert soul_path.read_bytes() == seed
 
 

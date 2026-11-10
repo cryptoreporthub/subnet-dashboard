@@ -74,6 +74,27 @@ def _clear_message_intel_load_cache():
 
 
 @pytest.fixture
+def liveness_real_soul_map(tmp_path, monkeypatch):
+    """Route internal.liveness soul_map I/O through the real primitive on a temp file."""
+    from internal import liveness as _liv_mod
+    from internal.store import soul_map_io as smio
+
+    sm_path = tmp_path / "liveness_soul_map.json"
+
+    def _write(mutator, path=None):
+        target = str(sm_path) if path is None else path
+        return smio.write_soul_map(mutator, target)
+
+    def _read(path=None, **kwargs):
+        target = str(sm_path) if path is None else path
+        return smio.read_soul_map(target, **kwargs)
+
+    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
+    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+    return sm_path
+
+
+@pytest.fixture
 def usable_soul_map(tmp_path, monkeypatch):
     """A valid soul_map for tests that run the real snapshot producer.
 

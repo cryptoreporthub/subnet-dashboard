@@ -14,26 +14,9 @@ from tests.liveness_conformance import assert_liveness_compliant
 
 
 @pytest.fixture(autouse=True)
-def isolate_liveness_persistence(tmp_path, monkeypatch):
-    """Point internal.liveness soul-map IO at a per-test JSON file."""
-    from internal import liveness as _liv_mod
-
-    sm_path = tmp_path / "liveness_soul_map.json"
-
-    def _read():
-        try:
-            return json.loads(sm_path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-
-    def _write(mutator):
-        blob = _read() or {}
-        mutator(blob)
-        sm_path.parent.mkdir(parents=True, exist_ok=True)
-        sm_path.write_text(json.dumps(blob), encoding="utf-8")
-
-    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
-    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+def isolate_liveness_persistence(liveness_real_soul_map):
+    """Point internal.liveness soul-map IO at the real primitive (per-test file)."""
+    return liveness_real_soul_map
 
 
 def test_pick_scheduler_disabled(monkeypatch):

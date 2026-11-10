@@ -14,35 +14,8 @@ import internal.learning.outcome_snapshot_scheduler as sched
 
 
 @pytest.fixture(autouse=True)
-def isolate_liveness_persistence(tmp_path, monkeypatch):
-    """Point internal.liveness soul-map IO at a per-test JSON file (atomic)."""
-    from internal import liveness as _liv_mod
-
-    sm_path = tmp_path / "liveness_soul_map.json"
-
-    def _read():
-        try:
-            return json.loads(sm_path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-
-    def _write(mutator):
-        blob = _read() or {}
-        mutator(blob)
-        fd, tmp = tempfile.mkstemp(dir=str(sm_path.parent), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(blob, f)
-            os.replace(tmp, sm_path)
-        finally:
-            if os.path.exists(tmp):
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-
-    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
-    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+def isolate_liveness_persistence(liveness_real_soul_map):
+    return liveness_real_soul_map
 
 
 def test_council_health_score_watch_at_33pct():
