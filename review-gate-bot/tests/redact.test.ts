@@ -155,10 +155,43 @@ test("prose after the word bearer stays readable", () => {
   assert.equal(redactSecrets(source).text, source);
 });
 
+test("a bearer label on one line redacts the token but keeps line boundaries", () => {
+  const token = "Q7mK4pV9xR2nL6sT8wY3aB5";
+  const source = `x Bearer\n${token}\nL3`;
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes(token), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.equal(text.endsWith("L3"), true);
+  assert.match(text, /Bearer\n<redacted>\nL3$/);
+});
+
+test("a bearer label with CRLF redacts the token but keeps line boundaries", () => {
+  const token = "Q7mK4pV9xR2nL6sT8wY3aB5";
+  const source = `x Bearer\r\n${token}\r\nL3`;
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes(token), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.match(text, /\r?\nL3$/);
+  assert.equal(text.includes("<redacted>"), true);
+});
+
+test("URL userinfo redaction keeps the last at-sign before the host", () => {
+  const { text } = redactSecrets("api https://user:pass@word@host/x");
+  assert.equal(text.includes("pass"), false);
+  assert.equal(text, "api https://<redacted>@host/x");
+});
+
 test("credentials inside a URL are removed", () => {
   const { text } = redactSecrets("DATABASE at postgres://admin:hunter22@db.internal:5432/app is down");
   assert.equal(text.includes("hunter22"), false);
   assert.equal(text.includes("db.internal"), true, "the host stays; only the userinfo goes");
+});
+
+test("a URL password that contains @ is redacted through the last @ before the host", () => {
+  const { text } = redactSecrets("DATABASE at postgres://admin:p@ss@db:5432/app is down");
+  assert.equal(text.includes("p@ss"), false, `leaked password: ${text}`);
+  assert.equal(text.includes("ss@db"), false, `leaked password tail: ${text}`);
+  assert.equal(text.includes("db:5432"), true, "the host stays readable");
 });
 
 test("provider key shapes are removed without a variable name", () => {
@@ -363,8 +396,209 @@ test("an angle-bracketed credential is redacted; only generic placeholder words 
   assert.equal(redactSecrets("PASSWORD=<placeholder>").text.includes("<placeholder>"), true);
 });
 
-test("a dollar-prefixed credential is redacted: only ${VAR} and $VAR references are placeholders", () => {
+test("a lowercase dollar assignment value is redacted", () => {
   assert.equal(redactSecrets("PASSWORD=$hunter2").text.includes("hunter2"), false);
+});
+
+test("whole shell variable references pass through unchanged", () => {
+  assert.equal(redactSecrets("PASSWORD=$VAR").text, "PASSWORD=$VAR");
+  assert.equal(redactSecrets("PASSWORD=${VAR}").text, "PASSWORD=${VAR}");
+  assert.equal(redactSecrets("PASSWORD=$HUNTER2").text, "PASSWORD=$HUNTER2");
+  assert.equal(redactSecrets("PASSWORD=${VAR} next").text, "PASSWORD=${VAR} next");
+});
+
+test("fail-safe credential lines redact through end of line when the token is not a boundary placeholder", () => {
+  const secrets = [
+    "p@ss",
+    "p#ss!word",
+    "secret",
+    "Tr0ngPass9",
+    "%secret",
+    "-suffix",
+    "@x",
+  ] as const;
+  const sources = [
+    "PASSWORD=${VAR}' p@ss'",
+    "PASSWORD=abc}secret",
+    "PASSWORD=p${VAR}secret",
+    "PASSWORD=${VAR}p@ss",
+    "PASSWORD=${VAR}p#ss!word",
+    "PASSWORD=${VAR",
+    "PASSWORD=$Tr0ngPass9",
+    "PASSWORD=$VAR%secret",
+    "PASSWORD=$VAR-suffix",
+    "PASSWORD=$VAR@x",
+  ] as const;
+  for (const source of sources) {
+    const { text, redactedNames } = redactSecrets(source);
+    for (const secret of secrets) {
+      assert.equal(text.includes(secret), false, `${source} leaked ${secret}`);
+    }
+    assert.equal(text.includes("<redacted:PASSWORD>"), true, source);
+    assert.deepEqual(redactedNames, ["PASSWORD"], source);
+  }
+});
+
+test("a parenthesized placeholder assignment keeps closing syntax", () => {
+  assert.equal(redactSecrets("(PASSWORD=$VAR)").text, "(PASSWORD=$VAR)");
+});
+
+test("a quoted assignment value with a glued suffix is redacted through end of line", () => {
+  const cases = [
+    'PASSWORD="abc"def',
+    "PASSWORD='x'secret",
+    'PASSWORD="${VAR}"p@ss',
+  ] as const;
+  for (const source of cases) {
+    const { text } = redactSecrets(source);
+    assert.equal(text.includes("def"), false, source);
+    assert.equal(text.includes("secret"), false, source);
+    assert.equal(text.includes("p@ss"), false, source);
+    assert.equal(text, "PASSWORD=<redacted:PASSWORD>", source);
+  }
+});
+
+test("a quoted assignment value with a whitespace boundary redacts the token only", () => {
+  const { text } = redactSecrets('PASSWORD="ok" next');
+  assert.equal(text.includes("next"), true);
+  assert.equal(text, 'PASSWORD="<redacted:PASSWORD>" next');
+});
+
+test("a closing brace after a dollar token does not count as a placeholder boundary", () => {
+  for (const source of ["PASSWORD=$VAR}secret", "PASSWORD=${VAR}}secret"] as const) {
+    const { text } = redactSecrets(source);
+    assert.equal(text.includes("secret"), false, source);
+    assert.equal(text, "PASSWORD=<redacted:PASSWORD>", source);
+  }
+});
+
+test("pretty-printed JSON with a quoted password at end of line stays parseable", () => {
+  const raw = '{\n  "password": "hunter22"\n}';
+  const { text } = redactSecrets(raw);
+  const parsed = JSON.parse(text) as { password: string };
+  assert.equal(parsed.password, "<redacted:password>");
+  assert.equal(text.includes("hunter22"), false);
+});
+
+test("single-line JSON with a quoted credential stays parseable after redaction", () => {
+  const raw = '{"password": "hunter22"}';
+  const { text } = redactSecrets(raw);
+  const parsed = JSON.parse(text) as { password: string };
+  assert.equal(parsed.password, "<redacted:password>");
+});
+
+test("an ampersand glued after a placeholder token triggers whole-line redaction", () => {
+  const { text } = redactSecrets("PASSWORD=$VAR&p@ss");
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text, "PASSWORD=<redacted:PASSWORD>");
+});
+
+test("a quoted value that spans a raw newline is fail-safe redacted without a suffix leak", () => {
+  const source = 'PASSWORD="p@ss\nword"x';
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("word"), false);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unquoted shell line continuation is redacted on the following physical line", () => {
+  const source = "PASSWORD=abc\\\nsecret";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("secret"), false);
+  assert.equal(text.includes("abc"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unterminated quoted assignment value does not leave a suffix on the next line", () => {
+  const source = 'PASSWORD="hunter\nword';
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("word"), false);
+  assert.equal(text.includes("hunter"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("a whole-line redaction applies to a typical source line with a quoted env lookup", () => {
+  const source = 'token = os.environ["GITHUB_TOKEN"]';
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("GITHUB_TOKEN"), false);
+  assert.equal(text, "token = <redacted:token>");
+});
+
+test("multiline fail-safe redaction preserves physical line count for backslash continuation", () => {
+  const source = ["PASSWORD=abc\\", "secret", "MARKER=ok"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("secret"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.equal(text.split("\n")[2], "MARKER=ok");
+});
+
+test("a complete quoted $VAR placeholder stays readable on the same line", () => {
+  assert.equal(redactSecrets('PASSWORD="$VAR" next').text, 'PASSWORD="$VAR" next');
+});
+
+test("an unclosed quoted placeholder does not skip redaction on the next line", () => {
+  const source = ['PASSWORD="$VAR', "hunter2", "tail"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("hunter2"), false);
+  assert.equal(text.includes("tail"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unclosed single-quoted placeholder does not skip redaction on the next line", () => {
+  const source = ["PASSWORD='$VAR", "hunter2", "tail"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("hunter2"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unclosed quoted stub redacts a secret on the following line", () => {
+  const source = ['PASSWORD="x', "hunter2", "tail"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("hunter2"), false);
+  assert.equal(text.includes("tail"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an open quote closed mid-line without a boundary redacts glued suffix text", () => {
+  const source = ['PASSWORD="first\\', 'second"p@ss', "MARKER=ok"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.includes("second"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an open quote with a false close and glued suffix redacts under CRLF", () => {
+  const source = "PASSWORD=\"first\\\r\nsecond\"p@ss\r\nMARKER=ok";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("multiline fail-safe redaction with CRLF preserves physical line count", () => {
+  const source = "PASSWORD=abc\\\r\nsecret\r\nMARKER=ok";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("secret"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.equal(text.split("\n")[2], "MARKER=ok");
+});
+
+test("multiline fail-safe redaction preserves line count for open and closed quoted values", () => {
+  const open = ['PASSWORD="first', 'hunter2"', "tail"].join("\n");
+  const closed = ['PASSWORD="first', 'second"', "tail"].join("\n");
+  for (const source of [open, closed]) {
+    const { text } = redactSecrets(source);
+    assert.equal(text.includes("hunter2"), false);
+    assert.equal(text.includes("second"), false);
+    assert.equal(text.split("\n").length, source.split("\n").length);
+    assert.equal(text.split("\n")[2], "tail");
+  }
+});
+
+test("redacting one credential line leaves the next line readable", () => {
+  const source = "PASSWORD=${VAR}p@ss\nLOG_LEVEL=debug";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.endsWith("LOG_LEVEL=debug"), true);
 });
 
 test("an angle-bracketed value with a digit is a credential, not a placeholder word", () => {

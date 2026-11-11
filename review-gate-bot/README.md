@@ -30,7 +30,11 @@ shadow mode.
 Four read-only tools let the bot see the change it reviews: `check_gate_state`
 (the PR's head, files and gate), `get_pr_diff`, `list_repo_files` and
 `read_repo_file`. Each is pinned to the PR its session is
-bound to, applies secret redaction, and caps its output. The built-in shell and
+bound to, applies secret redaction, and caps its output. Credential assignments
+that are not clear placeholders are redacted through the rest of the physical
+line (fail-safe); quoted values with a valid boundary keep JSON-shaped quotes.
+An unclosed quote on a credential assignment hides the rest of the file (same
+fail-safe). The built-in shell and
 file tools stay off (`tools: []`), so the bot reads code and cannot run it.
 Whatever it concludes about behaviour is labelled inferred.
 

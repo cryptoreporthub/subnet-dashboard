@@ -323,6 +323,49 @@ test("a private key that begins and ends on one line is redacted there, and only
   assert.ok(window.text.includes("ok"));
 });
 
+test("a line window starting inside a multiline credential value does not leak the tail", () => {
+  const content = ['PASSWORD="first', 'hunter2"', "ok"].join("\n");
+  const window = windowText(content, { startLine: 2, endLine: 2 });
+  assert.equal(window.text.includes("hunter2"), false);
+});
+
+test("a line window on the second line of an unclosed quoted assignment does not leak", () => {
+  const content = ['PASSWORD="$VAR', "hunter2", "ok"].join("\n");
+  const window = windowText(content, { startLine: 2, endLine: 2 });
+  assert.equal(window.text.includes("hunter2"), false);
+});
+
+test("a line window on the second line of an unclosed single-quoted assignment does not leak", () => {
+  const content = ["PASSWORD='x", "hunter2", "ok"].join("\n");
+  const window = windowText(content, { startLine: 2, endLine: 2 });
+  assert.equal(window.text.includes("hunter2"), false);
+});
+
+test("a line window on the suffix line after a false closing quote does not leak", () => {
+  const content = ['PASSWORD="first\\', 'second"p@ss', "ok"].join("\n");
+  const window = windowText(content, { startLine: 2, endLine: 2 });
+  assert.equal(window.text.includes("p@ss"), false);
+  assert.equal(window.text.includes("second"), false);
+});
+
+test("a line window on the third line stays aligned when Bearer does not cross a newline", () => {
+  const content = "x Bearer\nQ7mK4pV9xR2nL6sT8wY3aB5\nL3";
+  const window = windowText(content, { startLine: 3, endLine: 3 });
+  assert.equal(window.text, "L3");
+  assert.equal(window.startLine, 3);
+  assert.equal(window.totalLines, 3);
+});
+
+test("after multiline credential redaction, a line window on a later marker keeps its line number", () => {
+  const content = ["PASSWORD=abc\\", "secret", "MARKER=ok"].join("\n");
+  const window = windowText(content, { startLine: 3, endLine: 3 });
+  assert.equal(window.text.includes("secret"), false);
+  assert.equal(window.text, "MARKER=ok");
+  assert.equal(window.startLine, 3);
+  assert.equal(window.endLine, 3);
+  assert.equal(window.totalLines, 3);
+});
+
 test("scrubbing a key block keeps the line numbers of the file", () => {
   const content = ["a", "-----BEGIN PRIVATE KEY-----", KEY_BODY, "-----END PRIVATE KEY-----", "b", "c"].join("\n");
   const window = windowText(content, { startLine: 5, endLine: 6 });

@@ -46,11 +46,6 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   // Private key blocks, whole. A block with no END line (cut off, or the END
   // line trimmed from a log) is removed to the end of the text.
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
-  // A bearer credential with no header name in front of it. Sixteen characters
-  // is the floor for an opaque token, so prose such as "bearer authentication"
-  // stays readable.
-  /\bbearer\s+[A-Za-z0-9._~+/=-]{16,}/gi,
-
   // Opaque credentials with no recognised prefix: a whole run of 32+ base64url characters with both cases and a
   // digit. A run is not matched when it sits after `+ / .` or before `+ / =`, so a piece of a base64 hash (a lockfile's
   // integrity value, which ends in `==`) is not scrubbed as a fragment of its own.
@@ -262,7 +257,7 @@ const ASSIGNED_VALUE =
   /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+/iy;
 
 /** `scheme://user:password@host`: the userinfo goes, the host stays readable. */
-const URL_USERINFO = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi;
+const URL_USERINFO = /(?<![a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/]*@/gi;
 
 export type RedactResult = {
   text: string;
@@ -293,8 +288,7 @@ function isPlaceholder(value: string): boolean {
   if (trimmed === "") {
     return true;
   }
-  // `${VAR}` and `$VAR` are references, and only upper-case names count: `$hunter2` is a value.
-  if (/^(?:\$\{|\$[A-Z_])/.test(trimmed)) {
+  if (/^\$[A-Z_][A-Z0-9_]*$/.test(trimmed) || /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(trimmed)) {
     return true;
   }
   // A generic placeholder word, with no digits: `<yourhunter2>` is a value, `<your-password>` is not.
@@ -306,6 +300,137 @@ function isPlaceholder(value: string): boolean {
     return true;
   }
   return /^(\.\.\.|x{3,}|\*{3,}|changeme|placeholder|example|redacted|none|null|true|false)$/i.test(trimmed);
+}
+
+function placeholderBoundaryAfterToken(
+  input: string,
+  indexAfterToken: number,
+  quoted: boolean,
+): boolean {
+  if (indexAfterToken >= input.length) {
+    return true;
+  }
+  const ch = input[indexAfterToken];
+  if (ch === undefined) {
+    return false;
+  }
+  if (/[\s,)]/.test(ch)) {
+    return true;
+  }
+  if (quoted && ch === "}") {
+    return true;
+  }
+  if (ch === ";" || ch === "&" || ch === "|") {
+    const next = input[indexAfterToken + 1];
+    return next === undefined || /[\s]/.test(next);
+  }
+  return false;
+}
+
+function skipLineBreak(input: string, at: number): number {
+  if (at >= input.length) {
+    return at;
+  }
+  if (input[at] === "\n") {
+    return at + 1;
+  }
+  if (input[at] === "\r") {
+    return at + 1 + (input[at + 1] === "\n" ? 1 : 0);
+  }
+  return at;
+}
+
+function isCompleteQuotedToken(token: string): boolean {
+  return (
+    (token.length >= 2 && token.startsWith('"') && token.endsWith('"')) ||
+    (token.length >= 2 && token.startsWith("'") && token.endsWith("'"))
+  );
+}
+
+/** Fail-safe redact extent: whole-line, backslash continuations, or quoted multiline. */
+function failSafeRedactEnd(
+  input: string,
+  valueStart: number,
+  tokenEnd: number,
+  quotedLike: boolean,
+  openQuoted: boolean,
+): number {
+  let end = Math.max(assignmentLineEnd(input, valueStart), tokenEnd);
+  if (!quotedLike) {
+    while (end > valueStart && end <= input.length && input[end - 1] === "\\") {
+      const at = skipLineBreak(input, end);
+      end = Math.max(end, assignmentLineEnd(input, at));
+    }
+    return end;
+  }
+  if (openQuoted) {
+    const open = input[valueStart];
+    if (open !== '"' && open !== "'") {
+      return input.length;
+    }
+    let i = valueStart + 1;
+    while (i < input.length) {
+      if (input[i] === open) {
+        let backslashes = 0;
+        let j = i - 1;
+        while (j >= valueStart && input[j] === "\\") {
+          backslashes += 1;
+          j -= 1;
+        }
+        if (backslashes % 2 === 0) {
+          const afterQuote = i + 1;
+          if (placeholderBoundaryAfterToken(input, afterQuote, true)) {
+            return afterQuote;
+          }
+        }
+      }
+      i += 1;
+    }
+    return input.length;
+  }
+  while (end < input.length && !placeholderBoundaryAfterToken(input, end, true)) {
+    const nextLine = assignmentLineEnd(input, end);
+    if (nextLine <= end) {
+      break;
+    }
+    end = nextLine;
+  }
+  return end;
+}
+
+/** When ASSIGNED_VALUE stops before `}`, include the closing brace only for placeholder checks. */
+function bracedTokenForPlaceholderCheck(
+  input: string,
+  token: string,
+  tokenEnd: number,
+): { token: string; tokenEnd: number } {
+  if (token.startsWith("${") && !token.endsWith("}") && input[tokenEnd] === "}") {
+    return { token: `${token}}`, tokenEnd: tokenEnd + 1 };
+  }
+  return { token, tokenEnd };
+}
+
+function assignmentLineEnd(input: string, valueStart: number): number {
+  let end = valueStart;
+  while (end < input.length && input[end] !== "\n" && input[end] !== "\r") {
+    end += 1;
+  }
+  return end;
+}
+
+/** Copy each line break in a replaced span so redaction does not shift line numbers. */
+function lineBreaksInSpan(input: string, start: number, end: number): string {
+  let breaks = "";
+  for (let i = start; i < end; i++) {
+    const ch = input[i];
+    if (ch === "\r" && input[i + 1] === "\n") {
+      breaks += "\r\n";
+      i += 1;
+    } else if (ch === "\n" || ch === "\r") {
+      breaks += ch;
+    }
+  }
+  return breaks;
 }
 
 /**
@@ -332,14 +457,42 @@ function scrubAssignments(input: string, redactedNames: string[]): string {
     if (value === null) {
       continue;
     }
-    if (isPlaceholder(value[0])) {
-      // A placeholder value is passed over whole, as the scrubber always did.
-      names.lastIndex = values.lastIndex;
+    const valueStart = value.index;
+    let token = value[0];
+    let tokenEnd = values.lastIndex;
+    if (!token.startsWith('"') && !token.startsWith("'")) {
+      ({ token, tokenEnd } = bracedTokenForPlaceholderCheck(input, token, tokenEnd));
+      while (
+        tokenEnd > valueStart &&
+        !isPlaceholder(token) &&
+        token.endsWith(")") &&
+        isPlaceholder(token.slice(0, -1))
+      ) {
+        token = token.slice(0, -1);
+        tokenEnd -= 1;
+      }
+    }
+    const quoted = isCompleteQuotedToken(token);
+    const quotedLike = quoted || token.startsWith('"') || token.startsWith("'");
+    const openQuoted = quotedLike && !quoted;
+    if (
+      !openQuoted &&
+      isPlaceholder(token) &&
+      placeholderBoundaryAfterToken(input, tokenEnd, quoted)
+    ) {
+      names.lastIndex = tokenEnd;
       continue;
     }
-    const valueStart = value.index;
-    out += input.slice(copied, valueStart) + redactedAssignmentValue(label, value[0]);
-    copied = values.lastIndex;
+    const quotedTokenOnly = quoted && placeholderBoundaryAfterToken(input, tokenEnd, true);
+    const redactEnd = quotedTokenOnly
+      ? tokenEnd
+      : failSafeRedactEnd(input, valueStart, tokenEnd, quotedLike, openQuoted);
+    let replacement = quotedTokenOnly
+      ? redactedAssignmentValue(label, token)
+      : `<redacted:${label}>`;
+    replacement += lineBreaksInSpan(input, valueStart, redactEnd);
+    out += input.slice(copied, valueStart) + replacement;
+    copied = redactEnd;
     redactedNames.push(label);
     names.lastIndex = copied;
   }
@@ -358,6 +511,14 @@ export function redactSecrets(input: string): RedactResult {
   });
 
   text = scrubJwtCredentials(text, redactedNames);
+
+  text = text.replace(
+    /\b(bearer)(\s+)([A-Za-z0-9._~+/=-]{16,})/gi,
+    (_match, label: string, whitespace: string) => {
+      redactedNames.push("unlabelled-credential");
+      return `${label}${whitespace}${REDACTED}`;
+    },
+  );
 
   for (const pattern of VALUE_PATTERNS) {
     text = text.replace(pattern, () => {

@@ -186,10 +186,12 @@ const REDACTED_KEY_LINE = "<redacted:private-key>";
  * the cap, and the scrubber does not match a head, so it would go out in the clear.
  */
 export function windowText(content: string, options: { startLine?: number; endLine?: number }): TextWindow {
-  const lines = content.split("\n");
   const startLine = Math.max(1, options.startLine ?? 1);
+  const rawLines = content.split("\n");
+  const scrubbedFull = redactSecrets(redactKeyBlockLines(rawLines).join("\n")).text;
+  const lines = scrubbedFull.split("\n");
   const endLine = Math.min(lines.length, options.endLine ?? lines.length);
-  const scrubbed = redactSecrets(redactKeyBlockLines(lines).slice(startLine - 1, endLine).join("\n")).text;
+  const scrubbed = lines.slice(startLine - 1, endLine).join("\n");
   const truncated = scrubbed.length > LIMITS.fileChars;
   const text = truncated ? scrubbed.slice(0, LIMITS.fileChars) : scrubbed;
   return {
