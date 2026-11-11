@@ -62,7 +62,10 @@ function renderTable(skills: { skill: string; used: boolean; note: string }[]): 
  * tagged, or as a second mc-verdict marker, which makes the comment unreadable.
  */
 function withoutMarkers(text: string): string {
-  return text.replace(/<!--\s*subnet-review-gate:/gi, "[marker removed]<!-- ");
+  return text
+    .replace(/<!--\s*subnet-review-gate:/gi, "[marker removed]")
+    .replace(/subnet-review-gate:/gi, "[marker removed]")
+    .replace(/<!--/g, "&lt;!--");
 }
 
 export function composeVerdictBody(input: {
