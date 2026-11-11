@@ -14,10 +14,15 @@ from pathlib import Path
 
 import pytest
 
+import tools.review_orchestrator.deadman as deadman
 import tools.review_orchestrator.exam_v0 as exam_v0
 import tools.review_orchestrator.persist as persist
 from tools.review_orchestrator import db
-from tools.review_orchestrator.db import DuplicateTickIdError, StoreCorruptError
+from tools.review_orchestrator.db import (
+    DuplicateTickIdError,
+    StoreCorruptError,
+    StoreUnavailableError,
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -325,3 +330,231 @@ def test_mutation_exam_detects_remapped_tick_ids(tmp_path: Path, monkeypatch) ->
 
     monkeypatch.setattr(exam_v0, "_read_rows", real)
     assert exam_v0.run_exam(tmp_path / "clean_ids") == 0
+
+
+# --- corruption vs unavailability ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "unable to open database file",
+        "attempt to write a readonly database",
+        "could not enable WAL",
+    ],
+)
+def test_unavailable_failures_are_not_reported_as_corruption(
+    tmp_path: Path, monkeypatch, message: str
+) -> None:
+    def boom(*_args, **_kwargs):
+        raise sqlite3.OperationalError(message)
+
+    monkeypatch.setattr(db.sqlite3, "connect", boom)
+    with pytest.raises(StoreUnavailableError):
+        persist.run_tick(tmp_path, tick_id="x", noop=True)
+
+
+def test_corrupt_markers_still_map_to_corruption(tmp_path: Path, monkeypatch) -> None:
+    def boom(*_args, **_kwargs):
+        raise sqlite3.OperationalError("file is not a database")
+
+    monkeypatch.setattr(db.sqlite3, "connect", boom)
+    with pytest.raises(StoreCorruptError):
+        persist.run_tick(tmp_path, tick_id="x", noop=True)
+
+
+def test_unavailable_and_corrupt_are_distinct_types() -> None:
+    assert not issubclass(StoreUnavailableError, StoreCorruptError)
+    assert not issubclass(StoreCorruptError, StoreUnavailableError)
+
+
+def test_repair_in_unwritable_directory_raises_unavailable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db.db_path(tmp_path).write_text("not a database", encoding="utf-8")
+
+    def denied(self, target):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "replace", denied)
+    with pytest.raises(StoreUnavailableError):
+        persist.repair_store(tmp_path)
+
+
+# --- atomicity of the tick transitions ----------------------------------
+
+
+def test_complete_tick_replay_is_a_no_op(tmp_path: Path) -> None:
+    result = persist.run_tick(tmp_path, tick_id="once", noop=False)
+    before = {row["tick_id"]: row for row in _rows(tmp_path)}["once"]
+    conn = db.connect(tmp_path)
+    try:
+        db.complete_tick(
+            conn, result.seq, outcome="failed", duration_ms=12345, noop=False
+        )
+    finally:
+        conn.close()
+    after = {row["tick_id"]: row for row in _rows(tmp_path)}["once"]
+    assert after["outcome"] == "completed"
+    assert after["duration_ms"] == before["duration_ms"]
+
+
+def test_sweep_and_overlap_are_atomic_with_the_insert(tmp_path: Path) -> None:
+    persist.run_tick(tmp_path, tick_id="taken", noop=True)
+    old = datetime.now(timezone.utc) - timedelta(minutes=41)
+    _plant_running(tmp_path, "killed", old.isoformat())
+
+    with pytest.raises(DuplicateTickIdError):
+        persist.run_tick(tmp_path, tick_id="taken", noop=True)
+
+    outcomes = {row["tick_id"]: row["outcome"] for row in _rows(tmp_path)}
+    assert outcomes["killed"] == "running"
+    assert outcomes["taken"] == "completed"
+
+
+def test_schema_rejects_non_boolean_last_alert_ok(tmp_path: Path) -> None:
+    conn = db.connect(tmp_path)
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO ticks "
+                "(tick_id, started_at, outcome, duration_ms, last_alert_ok) "
+                "VALUES ('z', ?, 'completed', 1, 2)",
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+    finally:
+        conn.close()
+
+
+# --- the newest row is chosen by seq, never by time ---------------------
+
+_STALE_VIEW_SQL = (
+    "CREATE VIEW latest AS SELECT seq, tick_id, started_at, duration_ms, outcome, "
+    "noop, overlap, last_alert_ok FROM ticks ORDER BY started_at ASC LIMIT 1"
+)
+
+
+def test_latest_is_newest_seq_even_when_a_later_tick_starts_earlier(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(persist, "utc_now", lambda: base)
+    persist.run_tick(tmp_path, tick_id="first", noop=True)
+    # Backward clock step: the next tick holds the newest seq but an earlier time.
+    monkeypatch.setattr(persist, "utc_now", lambda: base - timedelta(hours=2))
+    persist.run_tick(tmp_path, tick_id="second", noop=True)
+
+    rows = _rows(tmp_path)
+    assert [row["tick_id"] for row in rows] == ["first", "second"]
+    assert rows[1]["seq"] > rows[0]["seq"]
+    assert rows[1]["started_at"] < rows[0]["started_at"]
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "second"
+
+
+def test_stale_view_definition_is_repaired_on_connect(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(persist, "utc_now", lambda: base)
+    persist.run_tick(tmp_path, tick_id="a", noop=True)
+    monkeypatch.setattr(persist, "utc_now", lambda: base + timedelta(hours=1))
+    persist.run_tick(tmp_path, tick_id="b", noop=True)
+
+    raw = sqlite3.connect(str(db.db_path(tmp_path)))
+    try:
+        raw.execute("DROP VIEW IF EXISTS latest")
+        raw.execute(_STALE_VIEW_SQL)
+        raw.commit()
+        # A view ordered by time picks the earliest tick; the canonical view must
+        # be restored so the newest seq wins.
+        assert raw.execute("SELECT tick_id FROM latest").fetchone()[0] == "a"
+    finally:
+        raw.close()
+
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "b"
+
+
+# --- contention and a real kill -----------------------------------------
+
+
+def test_second_writer_under_held_lock_fails_and_leaves_no_partial_row(
+    tmp_path: Path, holding_writer
+) -> None:
+    persist.run_tick(tmp_path, tick_id="committed", noop=True)
+    with holding_writer(tmp_path, "holder", seconds=8):
+        with pytest.raises(sqlite3.OperationalError) as excinfo:
+            persist.run_tick(tmp_path, tick_id="contender", noop=True)
+    assert not isinstance(excinfo.value, StoreCorruptError)
+    text = str(excinfo.value).lower()
+    assert "locked" in text or "busy" in text
+    assert {row["tick_id"] for row in _rows(tmp_path)} == {"committed"}
+
+
+def test_stale_view_restore_under_a_live_writer_reports_contention(
+    tmp_path: Path, holding_writer
+) -> None:
+    """A lock seen while bringing the schema up to date is contention, not
+    corruption: the caller retries, it does not run `repair`."""
+    persist.run_tick(tmp_path, tick_id="a", noop=True)
+    raw = sqlite3.connect(str(db.db_path(tmp_path)))
+    try:
+        raw.execute("DROP VIEW IF EXISTS latest")
+        raw.execute(_STALE_VIEW_SQL)
+        raw.commit()
+    finally:
+        raw.close()
+
+    with holding_writer(tmp_path, "holder", seconds=8):
+        with pytest.raises(sqlite3.OperationalError) as excinfo:
+            db.connect(tmp_path)
+    assert not isinstance(excinfo.value, StoreCorruptError)
+    assert not isinstance(excinfo.value, StoreUnavailableError)
+    text = str(excinfo.value).lower()
+    assert "locked" in text or "busy" in text
+
+
+_RUNNING_TICK_SOURCE = (
+    "import sys, time\n"
+    "from pathlib import Path\n"
+    "from tools.review_orchestrator import db, persist\n"
+    "state, tick_id = Path(sys.argv[1]), sys.argv[2]\n"
+    "started = persist.utc_now()\n"
+    "conn = db.connect(state)\n"
+    "db.start_tick(\n"
+    "    conn,\n"
+    "    tick_id,\n"
+    "    started.isoformat(),\n"
+    "    cutoff_iso=(started - persist.ABANDONED_AFTER).isoformat(),\n"
+    ")\n"
+    "print('READY', flush=True)\n"
+    "time.sleep(120)\n"
+)
+
+
+def test_sigkill_between_transactions_leaves_a_running_row(tmp_path: Path) -> None:
+    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _RUNNING_TICK_SOURCE, str(tmp_path), "killed-mid-flight"],
+        env=env,
+        cwd=str(_REPO_ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert proc.stdout.readline().strip() == "READY"
+        proc.kill()
+        proc.wait(timeout=15)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=15)
+
+    outcomes = {row["tick_id"]: row["outcome"] for row in _rows(tmp_path)}
+    assert outcomes == {"killed-mid-flight": "running"}
+
+    later = datetime.now(timezone.utc) + timedelta(minutes=41)
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=later)
+    assert verdict.reason == "attempt_stale"
+
+    assert persist.run_tick(tmp_path, tick_id="after-kill", noop=True).overlap is True

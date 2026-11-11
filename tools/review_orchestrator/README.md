@@ -30,18 +30,25 @@ CHECK ((outcome IN ('running', 'abandoned')) = (duration_ms IS NULL))
 so a completed row with no duration, or a running row with one, is rejected at the
 store boundary.
 
-## Corruption and repair
+## Corruption, unavailability, and repair
 
-`db.connect` raises `StoreCorruptError` when the file is not a database or the
-schema cannot be read. `run_tick` and `evaluate_deadman` surface that; the dead-man
-reports it as `heartbeat_unreadable` rather than crashing. Recover explicitly:
+`db.connect` raises `StoreCorruptError` only when the bytes are not a database
+("not a database", or "malformed"). Every other open failure — a read-only
+directory, a missing permission, a filesystem that cannot do WAL — raises
+`StoreUnavailableError`, because `repair` cannot help with those and reporting
+them as corruption sends the operator down the wrong path. A lock is neither:
+`connect` re-raises the sqlite `OperationalError` so the caller retries.
+
+`run_tick` surfaces both errors; the dead-man reports either as
+`heartbeat_unreadable` rather than crashing. Recover a corrupt store explicitly:
 
 ```bash
 .venv/bin/python -m tools.review_orchestrator.persist repair --state-dir /path/to/store
 ```
 
 This moves the corrupt store aside as `orchestrator.sqlite.corrupt-<stamp>` and the
-next tick creates a fresh one.
+next tick creates a fresh one. In an unwritable directory `repair` raises
+`StoreUnavailableError` instead of letting a `PermissionError` escape.
 
 The store is WAL, so a reader needs write access to the state directory (to create
 or write the `-shm` wal-index beside the database). Run the dead-man with the same

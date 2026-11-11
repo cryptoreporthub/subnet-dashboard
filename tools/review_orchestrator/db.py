@@ -61,6 +61,27 @@ class StoreCorruptError(RuntimeError):
     """
 
 
+class StoreUnavailableError(RuntimeError):
+    """The store cannot be opened, but its bytes may be perfectly fine.
+
+    A missing permission, a read-only directory, or a filesystem that cannot do
+    WAL. Unlike StoreCorruptError, `repair` cannot help: fix the access and
+    retry.
+    """
+
+
+#: sqlite messages that mean the bytes on disk are not a database. Everything
+#: else is access, contention, or I/O, and must not be reported as corruption.
+_CORRUPT_MARKERS = ("not a database", "malformed")
+
+
+def _store_error(exc: sqlite3.Error, path: Path) -> Exception:
+    text = str(exc).lower()
+    if any(marker in text for marker in _CORRUPT_MARKERS):
+        return StoreCorruptError(f"{path}: {exc}")
+    return StoreUnavailableError(f"{path}: {exc}")
+
+
 class DuplicateTickIdError(ValueError):
     """Caller-supplied tick_id is already present in this store."""
 
@@ -91,12 +112,13 @@ def connect(state_dir: Path) -> sqlite3.Connection:
         _ensure_view(conn)
         conn.execute(f"SELECT {COLUMNS} FROM latest LIMIT 1").fetchone()
     except sqlite3.OperationalError as exc:
-        # Contention is transient, not corruption; let the caller retry.
-        if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+        # Contention is transient: the caller retries, it does not repair.
+        text = str(exc).lower()
+        if "locked" in text or "busy" in text:
             raise
-        raise StoreCorruptError(f"{path}: {exc}") from exc
+        raise _store_error(exc, path) from exc
     except sqlite3.DatabaseError as exc:
-        raise StoreCorruptError(f"{path}: {exc}") from exc
+        raise _store_error(exc, path) from exc
     return conn
 
 

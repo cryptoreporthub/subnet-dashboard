@@ -1,6 +1,10 @@
 """Review orchestrator: SQLite tick store and the dead-man check."""
 
-from tools.review_orchestrator.db import DuplicateTickIdError, StoreCorruptError
+from tools.review_orchestrator.db import (
+    DuplicateTickIdError,
+    StoreCorruptError,
+    StoreUnavailableError,
+)
 from tools.review_orchestrator.persist import (
     TickResult,
     read_latest_tick,
@@ -11,6 +15,7 @@ from tools.review_orchestrator.persist import (
 __all__ = [
     "DuplicateTickIdError",
     "StoreCorruptError",
+    "StoreUnavailableError",
     "TickResult",
     "read_latest_tick",
     "repair_store",

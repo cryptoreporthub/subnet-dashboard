@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -357,3 +358,57 @@ def test_mutation_reader_ignoring_failed_outcome_misreports(
     monkeypatch.undo()
     fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert fixed.reason == "tick_failed"
+
+
+# --- reads during a live writer, and clock steps -------------------------
+
+
+def _rows(state_dir: Path) -> list[dict]:
+    conn = db.connect(state_dir)
+    try:
+        return [
+            dict(row)
+            for row in conn.execute(
+                "SELECT seq, tick_id, started_at, duration_ms, outcome, noop, overlap "
+                "FROM ticks ORDER BY seq"
+            )
+        ]
+    finally:
+        conn.close()
+
+
+def test_deadman_read_while_a_writer_holds_the_lock_returns_at_once(
+    tmp_path: Path, holding_writer
+) -> None:
+    persist.run_tick(tmp_path, tick_id="committed", noop=True)
+    with holding_writer(tmp_path, "holder", seconds=3):
+        started = time.monotonic()
+        verdict = deadman.evaluate_deadman(tmp_path)
+        elapsed = time.monotonic() - started
+    assert verdict.ok is True
+    assert verdict.reason == "ok"
+    # The reader must not wait out the writer's busy timeout.
+    assert elapsed < 2.0
+
+
+def test_reader_sees_only_committed_rows(tmp_path: Path, holding_writer) -> None:
+    persist.run_tick(tmp_path, tick_id="committed", noop=True)
+    with holding_writer(tmp_path, "in-flight", seconds=3):
+        assert {row["tick_id"] for row in _rows(tmp_path)} == {"committed"}
+
+
+def test_forward_clock_step_still_reads_the_newest_seq(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(persist, "utc_now", lambda: base)
+    persist.run_tick(tmp_path, tick_id="first", noop=True)
+    monkeypatch.setattr(persist, "utc_now", lambda: base + timedelta(hours=1))
+    persist.run_tick(tmp_path, tick_id="second", noop=True)
+
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "second"
+    verdict = deadman.evaluate_deadman(
+        tmp_path, max_age_minutes=40, now=base + timedelta(hours=1)
+    )
+    assert verdict.ok is True
+    assert verdict.reason == "ok"

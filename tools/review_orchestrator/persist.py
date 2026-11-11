@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from tools.review_orchestrator import db
-from tools.review_orchestrator.db import DuplicateTickIdError, StoreCorruptError
+from tools.review_orchestrator.db import DuplicateTickIdError, StoreUnavailableError
 
 #: A running row older than this is swept to 'abandoned' before the next tick
 #: measures overlap, so a tick SIGKILLed between start and completion cannot pin
@@ -134,7 +134,12 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
         return path
     stamp = stamp or utc_now().strftime("%Y%m%dT%H%M%SZ")
     moved = path.with_name(f"{path.name}.corrupt-{stamp}")
-    path.replace(moved)
+    try:
+        path.replace(moved)
+    except PermissionError as exc:
+        # A read-only directory is not a corrupt store: `repair` itself cannot
+        # run. Name the real problem instead of letting a traceback escape.
+        raise StoreUnavailableError(f"{path}: {exc}") from exc
     return moved
 
 
