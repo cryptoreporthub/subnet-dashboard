@@ -224,12 +224,3 @@ def complete_tick(
 
 def latest_row(conn: sqlite3.Connection) -> sqlite3.Row | None:
     return conn.execute(f"SELECT {COLUMNS} FROM latest").fetchone()
-
-
-def terminal_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return list(
-        conn.execute(
-            f"SELECT {COLUMNS} FROM ticks "
-            "WHERE outcome IN ('completed', 'failed') ORDER BY seq"
-        )
-    )

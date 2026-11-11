@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import tools.review_orchestrator.exam_v0 as exam_v0
 import tools.review_orchestrator.persist as persist
 from tools.review_orchestrator import db
 from tools.review_orchestrator.db import DuplicateTickIdError, StoreCorruptError
@@ -291,3 +292,36 @@ def test_exam_state_dir_parent_is_rerunnable(tmp_path: Path) -> None:
     for _ in range(2):
         subprocess.run(cmd, check=True, env=env, cwd=str(_REPO_ROOT))
     assert list(parent.iterdir()) == []
+
+
+def test_exam_passes_unmutated(tmp_path: Path) -> None:
+    assert exam_v0.run_exam(tmp_path / "clean") == 0
+
+
+def test_mutation_exam_detects_broken_seq_order(tmp_path: Path, monkeypatch) -> None:
+    real = exam_v0._read_rows
+
+    def reversed_seq(state_dir: Path) -> list[dict]:
+        rows = real(state_dir)
+        total = len(rows)
+        return [{**row, "seq": total - row["seq"]} for row in rows]
+
+    monkeypatch.setattr(exam_v0, "_read_rows", reversed_seq)
+    assert exam_v0.run_exam(tmp_path / "mut_seq") == 1
+
+    monkeypatch.setattr(exam_v0, "_read_rows", real)
+    assert exam_v0.run_exam(tmp_path / "clean_seq") == 0
+
+
+def test_mutation_exam_detects_remapped_tick_ids(tmp_path: Path, monkeypatch) -> None:
+    real = exam_v0._read_rows
+
+    def remapped(state_dir: Path) -> list[dict]:
+        rows = real(state_dir)
+        return [{**row, "tick_id": "wrong-" + row["tick_id"]} for row in rows]
+
+    monkeypatch.setattr(exam_v0, "_read_rows", remapped)
+    assert exam_v0.run_exam(tmp_path / "mut_ids") == 1
+
+    monkeypatch.setattr(exam_v0, "_read_rows", real)
+    assert exam_v0.run_exam(tmp_path / "clean_ids") == 0
