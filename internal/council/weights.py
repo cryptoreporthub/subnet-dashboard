@@ -484,10 +484,12 @@ def rebalance_council_weights(
             "on",
         }:
             blended = apply_rebase_guards(blended, merged_rows)
-        saved_ok = save_weights(blended, soul, expected_weights=before)
+        saved_ok, saved_applied = _save_weights_outcome(
+            blended, soul, expected_weights=before
+        )
         if not saved_ok:
             trail_emitted = False
-        else:
+        elif saved_applied:
             try:
                 from internal.learning.trail_bus import emit_weight_change
 
@@ -659,6 +661,19 @@ def save_weights(
     computed a map from a prior snapshot may pass ``expected_weights``; a newer
     map then raises ``ConcurrentWeightUpdate`` instead of silently overwriting it.
     """
+    ok, _ = _save_weights_outcome(
+        weights, path, expected_weights=expected_weights
+    )
+    return ok
+
+
+def _save_weights_outcome(
+    weights: Dict[str, float],
+    path: Optional[str] = None,
+    *,
+    expected_weights: Optional[Dict[str, float]] = None,
+) -> tuple[bool, bool]:
+    """Like save_weights but returns (persist_ok, bytes_applied)."""
     path = path or SOUL_MAP_PATH
     canonical = normalize_council_weights(weights)
     expected = (
@@ -673,16 +688,25 @@ def save_weights(
             current = normalize_council_weights(current_raw or {})
             if current != expected:
                 raise ConcurrentWeightUpdate("weight map changed before replacement")
+        current_raw = _council_weight_snapshot(data)
+        current = normalize_council_weights(current_raw or {})
+        rounded = {k: round(float(v), 4) for k, v in canonical.items()}
+        root = data.get("expert_weights")
+        root_norm = (
+            normalize_council_weights(root) if isinstance(root, dict) else {}
+        )
+        if current == canonical and root_norm == canonical:
+            return
         adv = data.setdefault("adversarial_state", {})
         if not isinstance(adv, dict):
             adv = {}
             data["adversarial_state"] = adv
-        adv["council_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
+        adv["council_weights"] = rounded
         adv["last_weight_update"] = _now_iso()
         # Mirror to root expert_weights so legacy readers always see learned values.
-        data["expert_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
+        data["expert_weights"] = dict(rounded)
 
-    return _mutate_raw(replace_weights, path)
+    return _write_mutate(replace_weights, path)
 
 
 def nudge_expert(
