@@ -13,7 +13,7 @@ from tools.reviewer_scorecard.coverage import derive_counting
 from tools.reviewer_scorecard.metrics import compute_reviewer_metrics
 from tools.reviewer_scorecard.tables import ScorecardTables
 
-GENERATOR_VERSION = "reviewer-scorecard/3.3.0-phase1"
+GENERATOR_VERSION = "reviewer-scorecard/3.3.0-phase2"
 SCHEMA_VERSION = "scorecard.json/3.3.0"
 
 
