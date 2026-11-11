@@ -484,8 +484,8 @@ def rebalance_council_weights(
             "on",
         }:
             blended = apply_rebase_guards(blended, merged_rows)
-        saved_ok, saved_applied = _save_weights_outcome(
-            blended, soul, expected_weights=before
+        saved_ok, saved_applied = save_weights(
+            blended, soul, expected_weights=before, return_outcome=True
         )
         if not saved_ok:
             trail_emitted = False
@@ -653,18 +653,24 @@ def save_weights(
     path: Optional[str] = None,
     *,
     expected_weights: Optional[Dict[str, float]] = None,
-) -> bool:
+    return_outcome: bool = False,
+):
     """Replace the full council weight map and mirror it to the root compatibility map.
 
     The replacement is applied to the latest locked blob, so unrelated keys are
     retained and a same-key caller wins by serialized write order. Callers that
     computed a map from a prior snapshot may pass ``expected_weights``; a newer
     map then raises ``ConcurrentWeightUpdate`` instead of silently overwriting it.
+
+    With ``return_outcome=True``, returns ``(persist_ok, bytes_applied)`` for
+    callers that must skip side effects when nothing was written.
     """
-    ok, _ = _save_weights_outcome(
+    outcome = _save_weights_outcome(
         weights, path, expected_weights=expected_weights
     )
-    return ok
+    if return_outcome:
+        return outcome
+    return outcome[0]
 
 
 def _save_weights_outcome(
