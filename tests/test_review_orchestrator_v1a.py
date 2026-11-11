@@ -1,8 +1,7 @@
-"""v1a dead-man: heartbeat/latest.json only."""
+"""v1a dead-man: reads the store's latest row."""
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -14,423 +13,115 @@ import pytest
 
 import tools.review_orchestrator.deadman as deadman
 import tools.review_orchestrator.persist as persist
-from tools.review_orchestrator.persist import _write_tick_atomically, run_tick
+from tools.review_orchestrator import db
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _write_heartbeat(
+def _plant(
     state_dir: Path,
+    tick_id: str,
+    started_at: datetime,
     *,
-    tick_id: str = "hb",
-    attempt_at: datetime,
-    completed_at: datetime,
-    last_alert_ok: bool | None = None,
+    duration_ms: int | None = None,
+    last_alert_ok: int | None = None,
 ) -> None:
-    payload: dict = {
-        "tick_id": tick_id,
-        "attempt_at": attempt_at.isoformat(),
-        "completed_at": completed_at.isoformat(),
-    }
-    if last_alert_ok is not None:
-        payload["last_alert_ok"] = last_alert_ok
-    _write_tick_atomically(state_dir / "heartbeat" / "latest.json", payload)
-
-
-def test_run_tick_writes_heartbeat(tmp_path: Path) -> None:
-    result = run_tick(tmp_path, tick_id="v1", noop=False)
-    hb_path = tmp_path / "heartbeat" / "latest.json"
-    assert hb_path.is_file()
-    data = json.loads(hb_path.read_text(encoding="utf-8"))
-    assert data["tick_id"] == "v1"
-    assert data["seq"] == result.seq
-    assert "last_alert_ok" not in data
-    tick = json.loads(result.path.read_text(encoding="utf-8"))
-    assert data["attempt_at"] == tick["started_at"]
-    assert data["completed_at"] == tick["completed_at"]
-    assert "last_alert_ok" not in tick
-
-
-def test_heartbeat_monotonic_publish_rejects_older_after_newer(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    newer = {
-        "tick_id": "new",
-        "seq": 2,
-        "attempt_at": (now - timedelta(minutes=2)).isoformat(),
-        "completed_at": (now - timedelta(minutes=1)).isoformat(),
-    }
-    older = {
-        "tick_id": "old",
-        "seq": 1,
-        "attempt_at": (now - timedelta(minutes=50)).isoformat(),
-        "completed_at": (now - timedelta(minutes=49)).isoformat(),
-    }
-    persist._publish_heartbeat_monotonic(tmp_path, newer)
-    persist._publish_heartbeat_monotonic(tmp_path, older)
-    data = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert data["tick_id"] == "new"
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.ok is True
-
-
-def test_mutation_heartbeat_beats_guard_removed(tmp_path: Path, monkeypatch) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    newer = {
-        "tick_id": "new",
-        "seq": 2,
-        "attempt_at": (now - timedelta(minutes=2)).isoformat(),
-        "completed_at": (now - timedelta(minutes=1)).isoformat(),
-    }
-    older = {
-        "tick_id": "old",
-        "seq": 1,
-        "attempt_at": (now - timedelta(minutes=50)).isoformat(),
-        "completed_at": (now - timedelta(minutes=49)).isoformat(),
-    }
-
-    monkeypatch.setattr(persist, "_heartbeat_beats", lambda _i, _c: True)
-    persist._publish_heartbeat_monotonic(tmp_path, newer)
-    persist._publish_heartbeat_monotonic(tmp_path, older)
-    broken = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert broken["tick_id"] == "old"
-    broken_verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken_verdict.reason == "attempt_stale"
-
-    monkeypatch.undo()
-    (tmp_path / "heartbeat" / "latest.json").unlink()
-    persist._publish_heartbeat_monotonic(tmp_path, newer)
-    persist._publish_heartbeat_monotonic(tmp_path, older)
-    fixed = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert fixed["tick_id"] == "new"
-    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
-
-
-def test_heartbeat_future_incumbent_replaced_by_normal_tick(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    bootstrap = run_tick(tmp_path, tick_id="bootstrap", noop=True)
-    future_incumbent = {
-        "tick_id": "future",
-        "seq": bootstrap.seq,
-        "attempt_at": (now + timedelta(hours=1)).isoformat(),
-        "completed_at": (now + timedelta(hours=1, minutes=1)).isoformat(),
-    }
-    persist._publish_heartbeat_monotonic(tmp_path, future_incumbent)
-    result = run_tick(tmp_path, tick_id="normal", noop=True)
-    data = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert data["tick_id"] == "normal"
-    assert data["seq"] == result.seq
-    assert data["seq"] > bootstrap.seq
-    completed = persist._parse_utc_iso(data["completed_at"])
-    assert completed is not None
-    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=completed).ok is True
-
-
-def test_heartbeat_clock_step_cannot_drop_newer_seq(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    newer = {
-        "tick_id": "new",
-        "seq": 5,
-        "attempt_at": (now - timedelta(minutes=1)).isoformat(),
-        "completed_at": now.isoformat(),
-    }
-    persist._publish_heartbeat_monotonic(tmp_path, newer)
-    older_seq_but_later_wall_clock = {
-        "tick_id": "stale",
-        "seq": 3,
-        "attempt_at": (now + timedelta(hours=2)).isoformat(),
-        "completed_at": (now + timedelta(hours=2, minutes=1)).isoformat(),
-    }
-    persist._publish_heartbeat_monotonic(tmp_path, older_seq_but_later_wall_clock)
-    data = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert data["tick_id"] == "new"
-    assert data["seq"] == 5
-    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
-
-
-def test_mutation_heartbeat_order_key_ignores_seq(
-    tmp_path: Path, monkeypatch
-) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    newer = {
-        "tick_id": "new",
-        "seq": 10,
-        "attempt_at": (now - timedelta(minutes=2)).isoformat(),
-        "completed_at": (now - timedelta(minutes=1)).isoformat(),
-    }
-    older = {
-        "tick_id": "old",
-        "seq": 1,
-        "attempt_at": (now + timedelta(hours=2)).isoformat(),
-        "completed_at": (now + timedelta(hours=2, minutes=1)).isoformat(),
-    }
-    persist._publish_heartbeat_monotonic(tmp_path, newer)
-
-    def wall_clock_only(record: dict) -> tuple[datetime, datetime, str] | None:
-        attempt = persist._parse_utc_iso(record.get("attempt_at"))
-        completed = persist._parse_utc_iso(record.get("completed_at"))
-        tick_id = record.get("tick_id")
-        if attempt is None or completed is None or not isinstance(tick_id, str) or not tick_id:
-            return None
-        return (attempt, completed, tick_id)
-
-    monkeypatch.setattr(persist, "_heartbeat_order_key", wall_clock_only)
-    persist._publish_heartbeat_monotonic(tmp_path, older)
-    broken = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert broken["tick_id"] == "old"
-    broken_verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken_verdict.ok is False
-    assert broken_verdict.reason in {"attempt_stale", "heartbeat_future"}
-
-    monkeypatch.undo()
-    (tmp_path / "heartbeat" / "latest.json").unlink()
-    persist._publish_heartbeat_monotonic(tmp_path, newer)
-    persist._publish_heartbeat_monotonic(tmp_path, older)
-    fixed = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert fixed["tick_id"] == "new"
-    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
-
-
-def test_heartbeat_publish_recovers_from_invalid_utf8_incumbent(
-    tmp_path: Path,
-) -> None:
-    hb = tmp_path / "heartbeat"
-    hb.mkdir(parents=True)
-    (hb / "latest.json").write_bytes(b"\xff\xfe")
-    run_tick(tmp_path, tick_id="recover", noop=True)
-    data = json.loads((hb / "latest.json").read_text(encoding="utf-8"))
-    assert data["tick_id"] == "recover"
-    assert isinstance(data["seq"], int)
-
-
-def test_heartbeat_publish_seq_tiebreaks_on_tick_id(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = (now - timedelta(minutes=1)).isoformat()
-    first = {"tick_id": "aaa", "seq": 3, "attempt_at": at, "completed_at": at}
-    second = {"tick_id": "bbb", "seq": 3, "attempt_at": at, "completed_at": at}
-    persist._publish_heartbeat_monotonic(tmp_path, first)
-    persist._publish_heartbeat_monotonic(tmp_path, second)
-    data = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert data["tick_id"] == "bbb"
-
-
-def test_run_tick_delayed_older_heartbeat_publish_preserves_newer(
-    tmp_path: Path, monkeypatch
-) -> None:
-    newer_published = threading.Event()
-    old_at_publish_gate = threading.Event()
-    real_publish = persist._publish_heartbeat_monotonic
-
-    def gated_publish(state_dir: Path, payload: dict) -> None:
-        if payload.get("tick_id") == "old":
-            old_at_publish_gate.set()
-            assert newer_published.wait(timeout=2.0)
-            real_publish(state_dir, payload)
+    conn = db.connect(state_dir)
+    try:
+        if duration_ms is None:
+            conn.execute(
+                "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
+                (tick_id, started_at.isoformat()),
+            )
         else:
-            real_publish(state_dir, payload)
-            newer_published.set()
-
-    monkeypatch.setattr(persist, "_publish_heartbeat_monotonic", gated_publish)
-
-    errors: list[BaseException] = []
-
-    def slow_old_tick() -> None:
-        try:
-            run_tick(tmp_path, tick_id="old", noop=True)
-        except BaseException as exc:  # pragma: no cover - surfaced below
-            errors.append(exc)
-
-    worker = threading.Thread(target=slow_old_tick, name="slow-old-tick")
-    worker.start()
-    assert old_at_publish_gate.wait(timeout=2.0)
-    newer = run_tick(tmp_path, tick_id="new", noop=True)
-    worker.join(timeout=5.0)
-    assert not worker.is_alive()
-    assert not errors
-
-    completed = persist._parse_utc_iso(
-        json.loads(newer.path.read_text(encoding="utf-8"))["completed_at"]
-    )
-    assert completed is not None
-    data = json.loads(
-        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    )
-    assert data["tick_id"] == "new"
-    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=completed).ok is True
+            conn.execute(
+                "INSERT INTO ticks "
+                "(tick_id, started_at, duration_ms, outcome, noop, overlap, last_alert_ok) "
+                "VALUES (?, ?, ?, 'completed', 0, 0, ?)",
+                (tick_id, started_at.isoformat(), duration_ms, last_alert_ok),
+            )
+    finally:
+        conn.close()
 
 
-def test_run_tick_tick_write_failure_leaves_heartbeat_unchanged(
-    tmp_path: Path, monkeypatch
-) -> None:
-    at = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(tmp_path, tick_id="prev", attempt_at=at, completed_at=at)
-    before = (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    real_write = persist._write_tick_atomically
-
-    def fail_tick_write(final: Path, payload: dict) -> None:
-        if "heartbeat" not in str(final):
-            raise OSError("simulated tick write failure")
-        real_write(final, payload)
-
-    monkeypatch.setattr(persist, "_write_tick_atomically", fail_tick_write)
-    with pytest.raises(OSError, match="simulated tick write failure"):
-        run_tick(tmp_path, tick_id="fail", noop=False)
-    assert (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8") == before
-
-
-def test_run_tick_heartbeat_write_failure_leaves_heartbeat_unchanged(
-    tmp_path: Path, monkeypatch
-) -> None:
-    at = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(tmp_path, tick_id="prev", attempt_at=at, completed_at=at)
-    before = (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
-    real_write = persist._write_tick_atomically
-
-    def fail_heartbeat_write(final: Path, payload: dict) -> None:
-        if "heartbeat" in str(final) and final.name == "latest.json":
-            raise OSError("simulated heartbeat write failure")
-        real_write(final, payload)
-
-    monkeypatch.setattr(persist, "_write_tick_atomically", fail_heartbeat_write)
-    with pytest.raises(OSError, match="simulated heartbeat write failure"):
-        run_tick(tmp_path, tick_id="fail", noop=False)
-    assert (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8") == before
-
-
-def test_deadman_missing_last_alert_ok_ok(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    _write_heartbeat(tmp_path, attempt_at=at, completed_at=at, last_alert_ok=None)
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.ok is True
-
-
-def test_deadman_fresh_heartbeat_ok(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    _write_heartbeat(tmp_path, attempt_at=at, completed_at=at)
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+def test_run_tick_row_is_read_as_ok(tmp_path: Path) -> None:
+    persist.run_tick(tmp_path, tick_id="v1", noop=False)
+    row = persist.read_latest_tick(tmp_path)
+    assert row is not None
+    assert row["tick_id"] == "v1"
+    assert row["outcome"] == "completed"
+    verdict = deadman.evaluate_deadman(tmp_path)
     assert verdict.ok is True
     assert verdict.reason == "ok"
 
 
-def test_deadman_missing_heartbeat_unreadable(tmp_path: Path) -> None:
+def test_missing_store_unreadable(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is False
     assert verdict.reason == "heartbeat_unreadable"
 
 
-def test_mutation_deadman_missing_heartbeat_ok(tmp_path: Path, monkeypatch) -> None:
+def test_fresh_completed_row_ok(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-
-    def fake_load(_sd: Path) -> dict:
-        return {
-            "tick_id": "fake",
-            "attempt_at": at.isoformat(),
-            "completed_at": at.isoformat(),
-            "last_alert_ok": True,
-        }
-
-    monkeypatch.setattr(deadman, "_load_heartbeat", fake_load)
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.ok is True
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.ok is False
-
-
-def test_deadman_garbage_json_unreadable(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    (path / "latest.json").write_text("{not json\n", encoding="utf-8")
+    _plant(tmp_path, "hb", now - timedelta(minutes=1), duration_ms=1000)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "heartbeat_unreadable"
+    assert verdict.ok is True
+    assert verdict.reason == "ok"
 
 
-def test_mutation_deadman_accepts_garbage_json(tmp_path: Path, monkeypatch) -> None:
+def test_running_row_past_limit_attempt_stale(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    (path / "latest.json").write_text("{not json\n", encoding="utf-8")
-
-    def fake_load(_sd: Path) -> dict:
-        return {
-            "tick_id": "x",
-            "attempt_at": at.isoformat(),
-            "completed_at": at.isoformat(),
-            "last_alert_ok": True,
-        }
-
-    monkeypatch.setattr(deadman, "_load_heartbeat", fake_load)
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.ok is True
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.reason == "heartbeat_unreadable"
-
-
-def test_deadman_oversized_heartbeat_unreadable(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    (path / "latest.json").write_bytes(b"x" * (deadman.HEARTBEAT_FILE_MAX_BYTES + 1))
+    _plant(tmp_path, "hb", now - timedelta(minutes=41))
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "heartbeat_unreadable"
+    assert verdict.reason == "attempt_stale"
 
 
-def test_mutation_deadman_oversized_read_allowed(tmp_path: Path, monkeypatch) -> None:
+def test_abandoned_row_attempt_stale(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    huge = {
-        "tick_id": "big",
-        "attempt_at": at.isoformat(),
-        "completed_at": at.isoformat(),
-        "last_alert_ok": True,
-        "pad": "z" * (deadman.HEARTBEAT_FILE_MAX_BYTES - 120),
-    }
-    body = json.dumps(huge) + "\n"
-    assert len(body.encode()) > deadman.HEARTBEAT_FILE_MAX_BYTES
-    (path / "latest.json").write_text(body, encoding="utf-8")
-
-    monkeypatch.setattr(deadman, "HEARTBEAT_FILE_MAX_BYTES", 10**9)
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.ok is True
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.reason == "heartbeat_unreadable"
+    old = (now - timedelta(minutes=41)).isoformat()
+    conn = db.connect(tmp_path)
+    try:
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, outcome, overlap) "
+            "VALUES ('killed', ?, 'abandoned', 0)",
+            (old,),
+        )
+    finally:
+        conn.close()
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.reason == "attempt_stale"
 
 
-def test_deadman_future_attempt_at_alerts(tmp_path: Path) -> None:
+def test_completed_stale_41m(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
+    _plant(tmp_path, "hb", now - timedelta(minutes=41), duration_ms=0)
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.reason == "completed_stale"
+
+
+def test_completed_uses_completion_not_start(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
         tmp_path,
-        attempt_at=now + timedelta(minutes=6),
-        completed_at=now - timedelta(minutes=1),
+        "hb",
+        now - timedelta(minutes=80),
+        duration_ms=79 * 60 * 1000,
     )
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is True
+
+
+def test_future_started_at_alerts(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(tmp_path, "hb", now + timedelta(minutes=6))
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.reason == "heartbeat_future"
+
+
+def test_future_completed_at_alerts(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(tmp_path, "hb", now - timedelta(minutes=1), duration_ms=7 * 60 * 1000)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.reason == "heartbeat_future"
 
@@ -442,15 +133,11 @@ def test_deadman_future_attempt_at_alerts(tmp_path: Path) -> None:
         (timedelta(minutes=5, seconds=1), True),
     ],
 )
-def test_deadman_future_slack_boundary_on_attempt_at(
+def test_future_slack_boundary_on_started_at(
     tmp_path: Path, offset: timedelta, expect_future: bool
 ) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now + offset,
-        completed_at=now - timedelta(minutes=1),
-    )
+    _plant(tmp_path, "hb", now + offset, duration_ms=0)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     if expect_future:
         assert verdict.reason == "heartbeat_future"
@@ -458,444 +145,143 @@ def test_deadman_future_slack_boundary_on_attempt_at(
         assert verdict.ok is True
 
 
-def test_mutation_deadman_zero_future_slack_alerts(tmp_path: Path, monkeypatch) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now + timedelta(seconds=1),
-        completed_at=now - timedelta(minutes=1),
-    )
-    monkeypatch.setattr(deadman, "_FUTURE_SLACK", timedelta(0))
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.reason == "heartbeat_future"
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.ok is True
-
-
-def test_deadman_future_completed_at_alerts(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=at,
-        completed_at=now + timedelta(minutes=6),
-    )
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "heartbeat_future"
-
-
-def test_mutation_deadman_ignores_future_attempt(tmp_path: Path, monkeypatch) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now + timedelta(minutes=6),
-        completed_at=now - timedelta(minutes=1),
-    )
-    monkeypatch.setattr(deadman, "_is_future", lambda _ts, _ref: False)
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.ok is True
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.reason == "heartbeat_future"
-
-
-def test_deadman_attempt_stale_41m(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now - timedelta(minutes=41),
-        completed_at=now - timedelta(minutes=1),
-    )
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "attempt_stale"
-
-
-def test_mutation_deadman_attempt_stale_uses_gte(tmp_path: Path, monkeypatch) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now - timedelta(seconds=40 * 60),
-        completed_at=now - timedelta(minutes=1),
-    )
-
-    def stale_gte(age: timedelta, limit: timedelta) -> bool:
-        return age >= limit
-
-    monkeypatch.setattr(deadman, "_is_stale", stale_gte)
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.reason == "attempt_stale"
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.ok is True
-
-
-def test_deadman_completed_stale_41m(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    _write_heartbeat(tmp_path, attempt_at=at, completed_at=now - timedelta(minutes=41))
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "completed_stale"
-
-
-def test_mutation_deadman_completed_stale_uses_gte(tmp_path: Path, monkeypatch) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    _write_heartbeat(
-        tmp_path, attempt_at=at, completed_at=now - timedelta(seconds=40 * 60)
-    )
-
-    real = deadman._is_stale
-
-    def stale_completed_only(age: timedelta, limit: timedelta) -> bool:
-        return age >= limit
-
-    monkeypatch.setattr(deadman, "_is_stale", stale_completed_only)
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.reason == "completed_stale"
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.ok is True
-
-
 @pytest.mark.parametrize(
-    ("field", "age_seconds", "expect_ok"),
+    ("kind", "age_seconds", "expect_ok"),
     [
-        ("attempt_at", 40 * 60 - 1, True),
-        ("attempt_at", 40 * 60, True),
-        ("attempt_at", 40 * 60 + 1, False),
-        ("completed_at", 40 * 60 - 1, True),
-        ("completed_at", 40 * 60, True),
-        ("completed_at", 40 * 60 + 1, False),
+        ("running", 40 * 60 - 1, True),
+        ("running", 40 * 60, True),
+        ("running", 40 * 60 + 1, False),
+        ("completed", 40 * 60 - 1, True),
+        ("completed", 40 * 60, True),
+        ("completed", 40 * 60 + 1, False),
     ],
 )
-def test_deadman_age_boundary_seconds(
-    tmp_path: Path, field: str, age_seconds: int, expect_ok: bool
+def test_age_boundary_seconds(
+    tmp_path: Path, kind: str, age_seconds: int, expect_ok: bool
 ) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    fresh = now - timedelta(minutes=1)
-    edge = now - timedelta(seconds=age_seconds)
-    if field == "attempt_at":
-        _write_heartbeat(tmp_path, attempt_at=edge, completed_at=fresh)
-    else:
-        _write_heartbeat(tmp_path, attempt_at=fresh, completed_at=edge)
+    started = now - timedelta(seconds=age_seconds)
+    _plant(tmp_path, "hb", started, duration_ms=0 if kind == "completed" else None)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is expect_ok
 
 
-@pytest.mark.parametrize(
-    ("flag",),
-    [("false",), ("zero",), ("null",), ("missing_type",)],
-)
-def test_deadman_last_alert_failed(tmp_path: Path, flag: str) -> None:
+def test_last_alert_failed_alerts(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    payload: dict = {
-        "tick_id": "flag",
-        "attempt_at": at.isoformat(),
-        "completed_at": at.isoformat(),
-    }
-    if flag == "false":
-        payload["last_alert_ok"] = False
-    elif flag == "zero":
-        payload["last_alert_ok"] = 0  # type: ignore[assignment]
-    elif flag == "null":
-        payload["last_alert_ok"] = None  # type: ignore[assignment]
-    else:
-        payload["last_alert_ok"] = "no"  # type: ignore[assignment]
-    _write_tick_atomically(path / "latest.json", payload)
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    if flag == "false":
-        assert verdict.reason == "last_alert_failed"
-    else:
-        assert verdict.reason == "heartbeat_unreadable"
-
-
-def test_mutation_deadman_last_alert_truthy_ok(tmp_path: Path, monkeypatch) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    _write_tick_atomically(
-        path / "latest.json",
-        {
-            "tick_id": "x",
-            "attempt_at": at.isoformat(),
-            "completed_at": at.isoformat(),
-            "last_alert_ok": 1,  # invalid type, unreadable
-        },
+    _plant(
+        tmp_path,
+        "hb",
+        now - timedelta(minutes=1),
+        duration_ms=0,
+        last_alert_ok=0,
     )
-
-    real_parse = deadman._parse_heartbeat_record
-
-    def coerce_bool(raw: object) -> dict | None:
-        if isinstance(raw, dict):
-            raw = dict(raw)
-            if not isinstance(raw.get("last_alert_ok"), bool):
-                raw["last_alert_ok"] = bool(raw.get("last_alert_ok"))
-        return real_parse(raw)
-
-    monkeypatch.setattr(deadman, "_parse_heartbeat_record", coerce_bool)
-    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.ok is True
-
-    monkeypatch.undo()
-    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert fixed.reason == "heartbeat_unreadable"
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.reason == "last_alert_failed"
 
 
-def test_deadman_cli_unexpected_error_exit_3(tmp_path: Path, monkeypatch) -> None:
+def test_last_alert_ok_true_is_ok(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
+        tmp_path,
+        "hb",
+        now - timedelta(minutes=1),
+        duration_ms=0,
+        last_alert_ok=1,
+    )
+    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
+
+
+def test_corrupt_store_unreadable_not_crash(tmp_path: Path) -> None:
+    db.db_path(tmp_path).write_text("not a database", encoding="utf-8")
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is False
+    assert verdict.reason == "heartbeat_unreadable"
+
+
+def test_reader_sees_newest_by_seq_not_completion_order(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(tmp_path, "early", now - timedelta(minutes=5), duration_ms=0)
+    # A later tick that started later but reported first still owns the newest seq.
+    _plant(tmp_path, "late", now - timedelta(minutes=1))
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is True
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "late"
+
+
+def test_second_process_reader_sees_committed_state(tmp_path: Path) -> None:
+    persist.run_tick(tmp_path, tick_id="committed", noop=True)
+    assert _run_reader(tmp_path) == "ok"
+
+
+def test_second_process_reader_reports_stale(tmp_path: Path) -> None:
+    now = datetime.now(timezone.utc)
+    _plant(tmp_path, "stuck", now - timedelta(minutes=41))
+    assert _run_reader(tmp_path, max_age_minutes=40) == "attempt_stale"
+
+
+def _run_reader(state_dir: Path, *, max_age_minutes: int = 40) -> str:
+    code = (
+        "from pathlib import Path\n"
+        "from tools.review_orchestrator.deadman import evaluate_deadman\n"
+        f"print(evaluate_deadman(Path({str(state_dir)!r}), "
+        f"max_age_minutes={max_age_minutes}).reason)\n"
+    )
+    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(_REPO_ROOT),
+        check=True,
+    )
+    return out.stdout.strip()
+
+
+def test_library_default_max_age_is_40(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(tmp_path, "hb", now - timedelta(minutes=41))
+    assert deadman.evaluate_deadman(tmp_path, now=now).reason == "attempt_stale"
+
+
+def test_cli_ok_exit_and_reason(tmp_path: Path, capsys) -> None:
+    persist.run_tick(tmp_path, tick_id="cli", noop=True)
+    code = deadman.main(["--state-dir", str(tmp_path)])
+    assert code == 0
+    assert capsys.readouterr().out.strip() == "ok"
+
+
+def test_cli_default_max_age_40(tmp_path: Path) -> None:
+    now = datetime.now(timezone.utc)
+    _plant(tmp_path, "hb", now - timedelta(minutes=41))
+    assert deadman.main(["--state-dir", str(tmp_path)]) == 1
+
+
+def test_cli_unexpected_error_exit_3(tmp_path: Path, monkeypatch, capsys) -> None:
     def boom(*_a, **_k):
         raise RuntimeError("simulated")
 
     monkeypatch.setattr(deadman, "evaluate_deadman", boom)
-    import io
-
-    cap = io.StringIO()
-    monkeypatch.setattr(sys, "stdout", cap)
     code = deadman.main(["--state-dir", str(tmp_path)])
     assert code == 3
-    assert cap.getvalue().strip() == "deadman_error:RuntimeError"
+    assert capsys.readouterr().out.strip() == "deadman_error:RuntimeError"
 
 
-@pytest.mark.parametrize(
-    "bad_payload",
-    [
-        {"attempt_at": "2026-01-01T00:00:00+00:00", "completed_at": "2026-01-01T00:00:00+00:00"},
-        {"tick_id": "", "attempt_at": "2026-01-01T00:00:00+00:00", "completed_at": "2026-01-01T00:00:00+00:00"},
-    ],
-)
-def test_deadman_heartbeat_unreadable_missing_tick_id(
-    tmp_path: Path, bad_payload: dict
-) -> None:
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    _write_tick_atomically(path / "latest.json", bad_payload)
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "heartbeat_unreadable"
-
-
-def test_deadman_heartbeat_unreadable_non_object_root(tmp_path: Path) -> None:
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    (path / "latest.json").write_text("[1, 2, 3]\n", encoding="utf-8")
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "heartbeat_unreadable"
-
-
-def test_deadman_heartbeat_unreadable_bad_attempt_at_timestamp(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    _write_tick_atomically(
-        path / "latest.json",
-        {
-            "tick_id": "bad-ts",
-            "attempt_at": "not-a-timestamp",
-            "completed_at": (now - timedelta(minutes=1)).isoformat(),
-        },
-    )
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.reason == "heartbeat_unreadable"
-
-
-def test_mutation_deadman_parse_drops_tick_id_check(
+def test_mutation_reader_treating_running_as_completed_misreports(
     tmp_path: Path, monkeypatch
 ) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    at = now - timedelta(minutes=1)
-    path = tmp_path / "heartbeat"
-    path.mkdir(parents=True)
-    _write_tick_atomically(
-        path / "latest.json",
-        {"attempt_at": at.isoformat(), "completed_at": at.isoformat()},
-    )
+    _plant(tmp_path, "stuck", now - timedelta(minutes=41))
+    real = deadman._derived_completed_at
 
-    real_parse = deadman._parse_heartbeat_record
+    def always_completed(started_at, duration_ms):
+        return started_at + timedelta(milliseconds=int(duration_ms or 0))
 
-    def lax_parse(raw: object) -> dict | None:
-        if isinstance(raw, dict) and raw.get("attempt_at") and raw.get("completed_at"):
-            return dict(raw, tick_id="invented")
-        return real_parse(raw)
-
-    monkeypatch.setattr(deadman, "_parse_heartbeat_record", lax_parse)
+    monkeypatch.setattr(deadman, "_derived_completed_at", always_completed)
     broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert broken.ok is True
+    assert broken.reason == "completed_stale"
 
-    monkeypatch.undo()
-    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).reason == (
-        "heartbeat_unreadable"
-    )
-
-
-def test_deadman_library_default_max_age_is_40_minutes(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now - timedelta(minutes=41),
-        completed_at=now - timedelta(minutes=1),
-    )
-    assert deadman.evaluate_deadman(tmp_path, now=now).reason == "attempt_stale"
-
-
-def test_mutation_deadman_library_default_max_age(tmp_path: Path, monkeypatch) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now - timedelta(minutes=15),
-        completed_at=now - timedelta(minutes=1),
-    )
-
-    real = deadman.evaluate_deadman
-
-    def broken_eval(
-        state_dir: Path,
-        *,
-        max_age_minutes: int = 10,
-        now: datetime | None = None,
-    ) -> deadman.DeadmanVerdict:
-        return real(state_dir, max_age_minutes=max_age_minutes, now=now)
-
-    monkeypatch.setattr(deadman, "evaluate_deadman", broken_eval)
-    assert deadman.evaluate_deadman(tmp_path, now=now).reason == "attempt_stale"
-
-    monkeypatch.undo()
-    assert deadman.evaluate_deadman(tmp_path, now=now).ok is True
-
-
-def test_deadman_cli_default_max_age_40_minutes(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now - timedelta(minutes=41),
-        completed_at=now - timedelta(minutes=1),
-    )
-    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
-    proc = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "tools.review_orchestrator.deadman",
-            "--state-dir",
-            str(tmp_path),
-            "--now",
-            now.isoformat(),
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=str(_REPO_ROOT),
-    )
-    assert proc.returncode == 1
-    assert proc.stdout.strip() == "attempt_stale"
-
-
-def test_deadman_cli_rejects_max_age_min_zero(tmp_path: Path) -> None:
-    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
-    proc = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "tools.review_orchestrator.deadman",
-            "--state-dir",
-            str(tmp_path),
-            "--max-age-min",
-            "0",
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=str(_REPO_ROOT),
-    )
-    assert proc.returncode == 2
-
-
-def test_deadman_cli_max_age_min_10_boundary(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(
-        tmp_path,
-        attempt_at=now - timedelta(minutes=1),
-        completed_at=now - timedelta(seconds=10 * 60 + 1),
-    )
-    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
-    proc = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "tools.review_orchestrator.deadman",
-            "--state-dir",
-            str(tmp_path),
-            "--max-age-min",
-            "10",
-            "--now",
-            now.isoformat(),
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=str(_REPO_ROOT),
-    )
-    assert proc.returncode == 1
-    assert proc.stdout.strip() == "completed_stale"
-
-
-def test_deadman_ignores_tick_files_in_store(tmp_path: Path) -> None:
-    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _write_heartbeat(tmp_path, attempt_at=now - timedelta(minutes=1), completed_at=now - timedelta(minutes=1))
-    ticks = tmp_path / "ticks"
-    ticks.mkdir(parents=True)
-    (ticks / "tick-forged.json").write_text(
-        json.dumps(
-            {
-                "tick_id": "forged",
-                "seq": 999,
-                "status": "completed",
-                "completed_at": (now - timedelta(hours=9)).isoformat(),
-                "started_at": (now - timedelta(hours=9)).isoformat(),
-                "last_alert_ok": True,
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
-    assert verdict.ok is True
-
-
-def test_exam_v1a_state_dir_parent_is_rerunnable(tmp_path: Path) -> None:
-    parent = tmp_path / "real-store"
-    parent.mkdir()
-    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
-    cmd = [
-        sys.executable,
-        "-m",
-        "tools.review_orchestrator.exam_v1a",
-        "--state-dir",
-        str(parent),
-    ]
-    for _ in range(2):
-        subprocess.run(cmd, check=True, env=env, cwd=str(_REPO_ROOT))
-    assert list(parent.iterdir()) == []
-
-
-def test_exam_v1a_under_python_O(tmp_path: Path) -> None:
-    parent = tmp_path / "store-o"
-    parent.mkdir()
-    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
-    cmd = [
-        sys.executable,
-        "-O",
-        "-m",
-        "tools.review_orchestrator.exam_v1a",
-        "--state-dir",
-        str(parent),
-    ]
-    subprocess.run(cmd, check=True, env=env, cwd=str(_REPO_ROOT))
+    monkeypatch.setattr(deadman, "_derived_completed_at", real)
+    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert fixed.reason == "attempt_stale"
