@@ -490,7 +490,7 @@ def rebalance_council_weights(
 
     return {
         "ok": saved_ok,
-        "saved": bool(save),
+        "saved": saved_ok if save else False,
         "trail_emitted": trail_emitted if save else None,
         "warnings": warnings,
         "replay_share": replay_share,
@@ -518,10 +518,9 @@ def repair_stale_contrarian_weights(
         predictions_path = os.path.join(base, "predictions.json")
     weights = replay_weights_from_predictions(predictions_path)
     raw_weights = _council_weight_snapshot(data)
-    save_weights(
+    return save_weights(
         weights, path, expected_weights=normalize_council_weights(raw_weights or {})
     )
-    return True
 
 
 def load_weights(path: Optional[str] = None) -> Dict[str, float]:

@@ -56,7 +56,7 @@ def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) ->
         blob["judge_weights"] = rounded
 
     result = write_soul_map(_mutate, path=path or SOUL_MAP_PATH)
-    return result.outcome is WriteOutcome.APPLIED
+    return result.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
 
 
 def nudge_judge(

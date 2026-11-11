@@ -201,6 +201,8 @@ def test_save_raw_refused_returns_false(tmp_path, monkeypatch):
 
 
 def test_rebalance_refused_write_returns_not_ok(tmp_path, monkeypatch):
+    import internal.store.soul_map_io as smio
+
     from internal.council.weights import rebalance_council_weights
 
     soul = tmp_path / "soul_map.json"
@@ -214,17 +216,19 @@ def test_rebalance_refused_write_returns_not_ok(tmp_path, monkeypatch):
     emits: list[str] = []
 
     monkeypatch.setattr(
-        "internal.council.weights.save_weights",
-        lambda *_a, **_k: False,
-    )
-    monkeypatch.setattr(
         "internal.learning.trail_bus.emit_weight_change",
         lambda name, **_k: emits.append(name),
     )
+
+    def _refuse_write(mutator, path=None, **kwargs):
+        return smio.WriteResult(smio.WriteOutcome.UNREADABLE_BLOB, None, detail="test")
+
+    monkeypatch.setattr(smio, "write_soul_map", _refuse_write)
     result = rebalance_council_weights(
         predictions_path=str(preds),
         soul_map_path=str(soul),
         save=True,
     )
     assert result["ok"] is False
+    assert result["saved"] is False
     assert emits == []

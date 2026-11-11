@@ -296,7 +296,10 @@ def test_epoch_archive_uses_alternate_predictions_path(tmp_path, monkeypatch):
 def test_heal_append_unreadable(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     daily = tmp_path / "daily_picks.json"
-    preds.write_text("corrupt", encoding="utf-8")
+    _write_json(
+        preds,
+        {"predictions": [], "resolved": [], "stats": {"pending": 0, "total": 0}},
+    )
     daily.write_text(
         json.dumps(
             [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}]
@@ -306,7 +309,15 @@ def test_heal_append_unreadable(tmp_path, monkeypatch):
     before = preds.read_bytes()
     monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
 
-    from internal.learning import predictions_store
+    from internal.learning.predictions_store import PredictionsLedgerUnreadable
+
+    def _append_raises_unreadable(*_a, **_k):
+        raise PredictionsLedgerUnreadable("unreadable", error="simulated after initial read")
+
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.append_prediction",
+        _append_raises_unreadable,
+    )
 
     summary = heal_daily_pick_ledger(
         dry_run=False,
@@ -316,4 +327,3 @@ def test_heal_append_unreadable(tmp_path, monkeypatch):
     assert summary["ok"] is False
     assert summary["reason"] == "ledger_unreadable"
     assert preds.read_bytes() == before
-    assert predictions_store.has_pending_duplicate(15, "day", path=str(preds)) is False

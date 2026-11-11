@@ -142,14 +142,23 @@ def heal_daily_pick_ledger(
         }
 
     from internal.learning.prediction_loop import record_pick_prediction
+    from internal.learning.predictions_store import PredictionsLedgerUnreadable
 
     market_context = today_rec.get("market_context") if isinstance(today_rec, dict) else {}
-    stored = record_pick_prediction(
-        stored_pick,
-        subnet_row,
-        horizon_type="day",
-        market_context=market_context if isinstance(market_context, dict) else {},
-    )
+    try:
+        stored = record_pick_prediction(
+            stored_pick,
+            subnet_row,
+            horizon_type="day",
+            market_context=market_context if isinstance(market_context, dict) else {},
+        )
+    except PredictionsLedgerUnreadable as exc:
+        return {
+            "ok": False,
+            "healed": False,
+            "reason": "ledger_unreadable",
+            "error": str(exc),
+        }
     if stored:
         logger.info("ledger heal: backfilled day row for SN%s", netuid)
         return {
