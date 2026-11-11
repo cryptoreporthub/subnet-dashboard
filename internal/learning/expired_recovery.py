@@ -15,6 +15,7 @@ by hydrate memo so repeated sweeps are cheap).
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -34,12 +35,15 @@ def recover_expired_predictions(
     max_rows: int = _MAX_RECOVER,
 ) -> Dict[str, Any]:
     """Re-resolve retired rows whose price may now be available. Idempotent."""
-    from internal.learning.predictions_store import load_predictions, save_predictions, update_stats
+    from internal.learning.predictions_store import (
+        PersistOutcome, load_predictions, merge_ledger_changes, update_stats,
+    )
     from internal.council.price_reference import price_at_resolve_at
     from internal.council import resolver
     from internal.council.grading import compute_actual_pct, grade_prediction, is_price_unit_mismatch
 
-    data = load_predictions()
+    data = load_predictions(fail_closed=True)
+    before = deepcopy(data)
     resolved = data.get("resolved", []) or []
     recovered, skipped = 0, 0
     details: List[Dict[str, Any]] = []
@@ -145,7 +149,12 @@ def recover_expired_predictions(
 
     if not dry_run and recovered:
         update_stats(data)
-        save_predictions(data)
+        result = merge_ledger_changes(
+            before, data, caller="expired_recovery", trigger="expired_recovery"
+        )
+        if result.outcome is not PersistOutcome.APPLIED:
+            return {"ok": False, "reason": str(result.reason), "recovered": 0}
+        recovered = len(result.committed_keys)
         logger.info("expired recovery: recovered=%s skipped=%s", recovered, skipped)
 
     return {

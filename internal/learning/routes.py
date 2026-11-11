@@ -31,7 +31,6 @@ from internal.council.resolver_scheduler import (
 from internal.learning.predictions_store import (
     count_unclassified,
     load_predictions,
-    save_predictions,
     update_stats,
 )
 

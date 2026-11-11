@@ -12,7 +12,7 @@ from internal.council.resolver import (
     PREDICTIONS_PATH,
     _compute_stats,
     _load_json,
-    _save_json,
+    _commit_ledger_changes,
     replay_mode,
     resolve_prediction_at_horizon,
 )
@@ -133,7 +133,10 @@ def replay_predictions(
         out["replay"]["after_stats"] = dict(out["stats"])
 
         if persist:
-            _save_json(predictions_path, out)
+            result = _commit_ledger_changes(
+                data, out, path=predictions_path, caller="replay", trigger="replay"
+            )
+            out["persist_outcome"] = result.outcome.value
         return out
 
 

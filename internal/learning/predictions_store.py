@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import fcntl
+import hashlib
 import json
 import logging
 import os
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -54,6 +58,32 @@ class PredictionsLedgerUnreadable(Exception):
 class LedgerSchemaError(PredictionsLedgerUnreadable):
     def __init__(self, error: str) -> None:
         super().__init__("schema_invalid", error=error)
+
+
+class PersistOutcome(Enum):
+    APPLIED = "applied"
+    SKIPPED_ABANDONED = "skipped_abandoned"
+    REFUSED = "refused"
+    FAILED = "failed"
+    INDETERMINATE = "indeterminate"
+
+
+class PersistReason(Enum):
+    SCHEMA_INVALID = "schema_invalid"
+    UNREADABLE = "unreadable"
+    LOCK_TIMEOUT = "lock_timeout"
+    IO_ERROR = "io_error"
+    POST_REPLACE_ERROR = "post_replace_error"
+    REVOKED = "revoked"
+    CONFLICT_ONLY = "conflict_only"
+
+
+@dataclass(frozen=True)
+class PersistResult:
+    outcome: PersistOutcome
+    reason: Optional[PersistReason] = None
+    committed_keys: tuple = ()
+    conflicts: tuple = ()
 
 
 def parse_predictions_ledger(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -167,6 +197,12 @@ def _migrate_evidence(data: Dict[str, Any]) -> bool:
     return changed
 
 
+def canonicalize_ledger(data: Dict[str, Any]) -> bool:
+    changed = _migrate_phases(data)
+    changed = _migrate_expert_labels(data) or changed
+    return _migrate_evidence(data) or changed
+
+
 def load_predictions(
     *,
     persist: bool = False,
@@ -201,12 +237,167 @@ def load_predictions(
         data.setdefault("predictions", [])
         data.setdefault("resolved", [])
         data.setdefault("stats", _default_data()["stats"])
-    changed = _migrate_phases(data)
-    changed = _migrate_expert_labels(data) or changed
-    changed = _migrate_evidence(data) or changed
+    changed = canonicalize_ledger(data)
     if changed and persist:
-        save_predictions(data, path=path)
+        result = mutate_predictions(
+            lambda fresh, _raw: (fresh, ["migrations"], []),
+            path=path, caller="load_predictions", trigger="migration",
+        )
+        if result.outcome is not PersistOutcome.APPLIED:
+            raise PredictionsLedgerUnreadable("persist_refused", error=str(result.reason))
     return data
+
+
+def mutate_predictions(fn, *, path=None, caller, trigger) -> PersistResult:
+    ledger_path = _resolved_predictions_path(path)
+    try:
+        with locked_predictions_file(timeout_seconds=5.0, path=ledger_path):
+            try:
+                with open(ledger_path, "rb") as handle:
+                    raw = handle.read()
+            except FileNotFoundError:
+                raw = b""
+            except OSError:
+                return PersistResult(PersistOutcome.REFUSED, PersistReason.UNREADABLE)
+            try:
+                data = load_predictions(fail_closed=True, path=path)
+                raw_data = json.loads(raw) if raw else {}
+                unidentified = {}
+                for bucket in ("predictions", "resolved"):
+                    unidentified[bucket] = [
+                        (copy.deepcopy(canonical), original)
+                        for canonical, original in zip(data[bucket], raw_data.get(bucket, []))
+                        if _row_key(canonical) is None
+                    ]
+                updated, keys, conflicts = fn(data, raw)
+                updated = parse_predictions_ledger(updated)
+                canonicalize_ledger(updated)
+                for bucket, rows in unidentified.items():
+                    used = set()
+                    for canonical, original in rows:
+                        match = next(
+                            (i for i, row in enumerate(updated[bucket])
+                             if i not in used and row == canonical),
+                            None,
+                        )
+                        if match is None:
+                            return PersistResult(
+                                PersistOutcome.REFUSED, PersistReason.CONFLICT_ONLY,
+                                (), (("unidentified", bucket),),
+                            )
+                        used.add(match)
+                        updated[bucket][match] = original
+            except LedgerSchemaError:
+                return PersistResult(PersistOutcome.REFUSED, PersistReason.SCHEMA_INVALID)
+            except PredictionsLedgerUnreadable:
+                return PersistResult(PersistOutcome.REFUSED, PersistReason.UNREADABLE)
+            if conflicts and not keys:
+                return PersistResult(
+                    PersistOutcome.REFUSED, PersistReason.CONFLICT_ONLY, (), tuple(conflicts)
+                )
+            if not keys:
+                return PersistResult(PersistOutcome.APPLIED)
+            replaced = False
+
+            def mark_replaced():
+                nonlocal replaced
+                replaced = True
+
+            try:
+                _write_predictions_unlocked(
+                    updated, path=path, writer_function=caller, trigger=trigger,
+                    on_replaced=mark_replaced,
+                )
+            except Exception:
+                if not replaced:
+                    return PersistResult(PersistOutcome.FAILED, PersistReason.IO_ERROR)
+                try:
+                    actual = load_predictions(fail_closed=True, path=path)
+                except (PredictionsLedgerUnreadable, OSError):
+                    return PersistResult(PersistOutcome.INDETERMINATE, PersistReason.POST_REPLACE_ERROR)
+                expected = copy.deepcopy(updated)
+                canonicalize_ledger(expected)
+                if actual != expected:
+                    return PersistResult(PersistOutcome.FAILED, PersistReason.POST_REPLACE_ERROR)
+            return PersistResult(PersistOutcome.APPLIED, None, tuple(keys), tuple(conflicts))
+    except FileLockTimeout:
+        return PersistResult(PersistOutcome.FAILED, PersistReason.LOCK_TIMEOUT)
+    except OSError:
+        return PersistResult(PersistOutcome.FAILED, PersistReason.IO_ERROR)
+
+
+def _row_key(row):
+    if row.get("id") is not None:
+        return ("id", str(row["id"]))
+    values = (row.get("netuid"), row.get("created_at"), row.get("horizon_type"))
+    return ("legacy", *values) if all(value is not None for value in values) else None
+
+
+def _fingerprint(row):
+    return hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def merge_ledger_changes(
+    before, after, *, path=None, caller, trigger, commit=mutate_predictions, stats_fn=None,
+):
+    before = copy.deepcopy(before)
+    canonicalize_ledger(before)
+    after = copy.deepcopy(after)
+    canonicalize_ledger(after)
+
+    def indexed(data):
+        result = {}
+        for bucket in ("predictions", "resolved"):
+            for row in data.get(bucket, []):
+                key = _row_key(row)
+                if key is not None:
+                    result.setdefault(key, []).append((bucket, row))
+        return result
+
+    original, desired = indexed(before), indexed(after)
+
+    def apply(fresh, _raw):
+        current = indexed(fresh)
+        keys, conflicts = [], []
+        for bucket in ("predictions", "resolved"):
+            old_unkeyed = [row for row in before.get(bucket, []) if _row_key(row) is None]
+            new_unkeyed = [row for row in after.get(bucket, []) if _row_key(row) is None]
+            if old_unkeyed != new_unkeyed:
+                conflicts.append(("unidentified", bucket))
+        for key in original.keys() | desired.keys():
+            old, new, live = original.get(key, []), desired.get(key, []), current.get(key, [])
+            if old == new:
+                continue
+            if len(old) > 1 or len(new) > 1 or len(live) > 1:
+                conflicts.append(key)
+                continue
+            if old and (not live or _fingerprint(old[0][1]) != _fingerprint(live[0][1])):
+                conflicts.append(key)
+                continue
+            if not old and live:
+                conflicts.append(key)
+                continue
+            if live:
+                fresh[live[0][0]].remove(live[0][1])
+            if new:
+                fresh[new[0][0]].append(new[0][1])
+            keys.append(key)
+        for field in after.keys() - {"predictions", "resolved", "stats"}:
+            if before.get(field) == after[field]:
+                continue
+            if fresh.get(field) != before.get(field):
+                conflicts.append(("metadata", field))
+                continue
+            fresh[field] = copy.deepcopy(after[field])
+            keys.append(("metadata", field))
+        if keys:
+            if stats_fn is None:
+                update_stats(fresh)
+            else:
+                fresh["stats"] = stats_fn(fresh)
+        return fresh, keys, conflicts
+
+    return commit(apply, path=path, caller=caller, trigger=trigger)
 
 
 def save_predictions(
@@ -220,37 +411,14 @@ def save_predictions(
     Uses fcntl.flock to prevent race conditions between web and worker processes.
     Lock acquisition times out after 5 seconds to avoid hanging request handlers.
     """
-    from internal.ops.mutation_log import log_mutation
-
-    ledger_path = _resolved_predictions_path(path)
-    try:
-        with locked_predictions_file(timeout_seconds=5.0, path=path):
-            _write_predictions_unlocked(
-                data,
-                path=path,
-                writer_function="save_predictions",
-                trigger=trigger,
-            )
-    except FileLockTimeout:
-        log_mutation(
-            operation="failed",
-            path=ledger_path,
-            writer_function="save_predictions",
-            trigger=trigger,
-        )
-        logger.error(
-            "Failed to acquire predictions.json lock within 5s - possible deadlock or long-running write"
-        )
-        raise
-    except Exception as exc:
-        log_mutation(
-            operation="failed",
-            path=ledger_path,
-            writer_function="save_predictions",
-            trigger=trigger,
-        )
-        logger.warning("Failed to persist predictions.json: %s", exc)
-        raise
+    result = mutate_predictions(
+        lambda _fresh, _raw: (data, ["replacement"], []),
+        path=path, caller="save_predictions", trigger=trigger,
+    )
+    if result.reason is PersistReason.LOCK_TIMEOUT:
+        raise FileLockTimeout("Timed out waiting for predictions ledger")
+    if result.outcome is not PersistOutcome.APPLIED:
+        raise PredictionsLedgerUnreadable("persist_refused", error=str(result.reason))
 
 
 def _write_predictions_unlocked(
@@ -259,6 +427,7 @@ def _write_predictions_unlocked(
     path: Optional[str] = None,
     writer_function: str = "_write_predictions_unlocked",
     trigger: str = "save_predictions",
+    on_replaced=None,
 ) -> None:
     """Atomically write predictions.json while the caller owns the file lock."""
     from internal.ops.mutation_log import log_mutation
@@ -288,6 +457,8 @@ def _write_predictions_unlocked(
             trigger=trigger,
         )
         os.replace(tmp, ledger_path)
+        if on_replaced is not None:
+            on_replaced()
         log_mutation(
             operation="completed",
             path=ledger_path,
@@ -350,8 +521,7 @@ def append_prediction(
         return False
     shadow = bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
-    with locked_predictions_file(timeout_seconds=5.0, path=path):
-        data = load_predictions(fail_closed=True, path=path)
+    def append(data, _raw):
         pending = data.get("predictions", [])
         for existing in pending:
             if (
@@ -360,18 +530,19 @@ def append_prediction(
                 and existing.get("status") == "pending"
                 and bool(existing.get("shadow") or existing.get("counterfactual")) == shadow
             ):
-                return False
+                return data, [], []
 
         pending.append(prediction)
         data["predictions"] = pending
         update_stats(data)
-        _write_predictions_unlocked(
-            data,
-            path=path,
-            writer_function="append_prediction",
-            trigger=trigger,
-        )
-    return True
+        return data, [str(prediction.get("id") or netuid)], []
+
+    result = mutate_predictions(append, path=path, caller="append_prediction", trigger=trigger)
+    if result.reason is PersistReason.LOCK_TIMEOUT:
+        raise FileLockTimeout("Timed out waiting for predictions ledger")
+    if result.outcome is not PersistOutcome.APPLIED:
+        raise PredictionsLedgerUnreadable("persist_refused", error=str(result.reason))
+    return bool(result.committed_keys)
 
 
 def update_stats(data: Dict[str, Any]) -> None:

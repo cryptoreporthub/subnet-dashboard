@@ -32,6 +32,8 @@ on:
       - "tests/test_resolver_soul_map_read_wedge.py"
       - "tests/test_1578_plan_v31_weights_ledger.py"
       - "tests/test_1578_ci_lists_in_sync.py"
+      - "tests/test_1578_ledger_single_writer.py"
+      - "tests/test_1578_single_ledger_writer_boundary.py"
       - ".github/workflows/unit1-slice.yml"
       - ".github/workflows/ci-smoke.yml"
   push:
@@ -75,4 +77,6 @@ jobs:
             tests/test_resolver_persist_honesty_outcomes.py \
             tests/test_resolver_soul_map_read_wedge.py \
             tests/test_1578_plan_v31_weights_ledger.py \
-            tests/test_1578_ci_lists_in_sync.py
+            tests/test_1578_ci_lists_in_sync.py \
+            tests/test_1578_ledger_single_writer.py \
+            tests/test_1578_single_ledger_writer_boundary.py

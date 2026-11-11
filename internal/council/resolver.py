@@ -12,6 +12,7 @@ import json
 import logging
 import math
 import os
+from copy import deepcopy
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -329,6 +330,26 @@ def _cycle_persist_guard_safe():
         return cycle_persist_guard()
     except Exception:
         return nullcontext()
+
+
+def _commit_predictions_mutation(fn, *, path, caller, trigger):
+    from internal.learning.predictions_store import (
+        PersistOutcome, PersistReason, PersistResult, mutate_predictions,
+    )
+
+    with _cycle_persist_guard_safe():
+        if _cycle_writes_revoked_safe():
+            return PersistResult(PersistOutcome.SKIPPED_ABANDONED, PersistReason.REVOKED)
+        return mutate_predictions(fn, path=path, caller=caller, trigger=trigger)
+
+
+def _commit_ledger_changes(before, after, *, path, caller, trigger):
+    from internal.learning.predictions_store import merge_ledger_changes
+
+    return merge_ledger_changes(
+        before, after, path=path, caller=caller, trigger=trigger,
+        commit=_commit_predictions_mutation, stats_fn=_compute_stats,
+    )
 
 
 def _save_json(
@@ -1416,6 +1437,7 @@ def expire_stale_predictions(
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
         fail_closed=True,
     )
+    before = copy.deepcopy(data)
     predictions: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     now = datetime.now(timezone.utc)
@@ -1438,7 +1460,9 @@ def expire_stale_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
-    _save_json(PREDICTIONS_PATH, data, caller="resolver")
+    _commit_ledger_changes(
+        before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="expire"
+    )
 
     return {
         "expired_now": expired_now,
@@ -1494,12 +1518,16 @@ def _resolve_due_predictions(
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
         fail_closed=True,
     )
+    before = copy.deepcopy(data)
     now = datetime.now(timezone.utc)
     restored_now = _restore_recently_expired_predictions(data, now=now)
     if restored_now:
         # ``regrade_expired_predictions`` reads the ledger independently, so
         # make the repair visible to that pass before it runs.
-        _save_json(PREDICTIONS_PATH, data, caller="resolver")
+        _commit_ledger_changes(
+            before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="restore"
+        )
+        before = copy.deepcopy(data)
     raw_pending: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     pending, duplicate_rows = dedupe_predictions(raw_pending)
@@ -1639,7 +1667,9 @@ def _resolve_due_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
-    _save_json(PREDICTIONS_PATH, data, caller="resolver")
+    _commit_ledger_changes(
+        before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="resolve"
+    )
 
     # Cold-cache spike alert — log at WARNING level so operators see it without
     # log diving.  Emitted once per resolver run when the ratio exceeds threshold.
@@ -1694,6 +1724,7 @@ def regrade_expired_predictions(
         {"predictions": [], "resolved": [], "stats": {}},
         fail_closed=True,
     )
+    before = deepcopy(data)
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     regraded: List[Dict[str, Any]] = []
     attempted = 0
@@ -1790,7 +1821,9 @@ def regrade_expired_predictions(
     if needs_save:
         data["resolved"] = resolved
         data["stats"] = _compute_stats(data)
-        _save_json(PREDICTIONS_PATH, data, caller="resolver")
+        _commit_ledger_changes(
+            before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="regrade"
+        )
 
     return {
         "attempted": attempted,

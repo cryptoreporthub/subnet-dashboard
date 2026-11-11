@@ -12,6 +12,7 @@ missing_horizon_candles even when a live fetch would cover them.
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -390,9 +391,15 @@ def recover_overdue_pump_leads(
 ) -> Dict[str, Any]:
     """Move overdue pending pump_lead → resolved/ungradeable with candle grades."""
     resolved_path = path or PREDICTIONS_PATH
-    data = safe_read_json(resolved_path, default={})
-    if not isinstance(data, dict):
-        data = {}
+    from internal.learning.predictions_store import (
+        PersistOutcome, PredictionsLedgerUnreadable, load_predictions, merge_ledger_changes,
+    )
+
+    try:
+        data = load_predictions(path=resolved_path, fail_closed=True)
+    except PredictionsLedgerUnreadable as exc:
+        return {"ok": False, "reason": "ledger_unreadable", "error": str(exc)}
+    before = deepcopy(data)
     pending: List[Dict[str, Any]] = list(data.get("predictions") or [])
     resolved: List[Dict[str, Any]] = list(data.get("resolved") or [])
     now = _utcnow()
@@ -507,10 +514,11 @@ def recover_overdue_pump_leads(
         data["stats"] = _compute_stats(data)
     except Exception:
         pass
-    from internal.learning.predictions_store import locked_predictions_file
-
-    with locked_predictions_file():
-        safe_write_json(resolved_path, data)
+    persisted = merge_ledger_changes(
+        before, data, path=resolved_path, caller="pump_lead_recover", trigger="recover"
+    )
+    if persisted.outcome is not PersistOutcome.APPLIED:
+        return {"ok": False, "reason": "persist_refused", "persist_outcome": persisted.outcome.value}
     logger.info(
         "pump_lead recover graded=%s rejected=%s hits=%s misses=%s",
         summary["graded"],

@@ -232,7 +232,19 @@ def archive_predictions_epoch(
         },
         "epoch_reset_at": _utcnow().isoformat().replace("+00:00", "Z"),
     }
-    predictions_store.save_predictions(empty, path=src)
+    expected = predictions_store.parse_predictions_ledger(old)
+    predictions_store.canonicalize_ledger(expected)
+
+    def clear_epoch(fresh, _raw):
+        if fresh != expected:
+            return fresh, [], ["ledger_changed_during_archive"]
+        return empty, ["epoch"], []
+
+    persisted = predictions_store.mutate_predictions(
+        clear_epoch, path=src, caller="archive_predictions_epoch", trigger="archive"
+    )
+    if persisted.outcome is not predictions_store.PersistOutcome.APPLIED:
+        return {"ok": False, "reason": "persist_refused", "heal": {"skipped": True}}
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:
