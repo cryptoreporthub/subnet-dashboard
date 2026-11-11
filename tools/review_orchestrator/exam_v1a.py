@@ -22,6 +22,14 @@ V1A_RULES = (
 )
 
 
+def _plant_seq_claim(state_dir: Path, seq: int) -> None:
+    seq_dir = state_dir / "seq"
+    seq_dir.mkdir(parents=True, exist_ok=True)
+    (seq_dir / f"{seq}.json").write_text(
+        json.dumps({"seq": seq}, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
 def _plant_completed_tick(
     state_dir: Path,
     *,
@@ -47,6 +55,7 @@ def _plant_completed_tick(
         json.dumps(payload, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    _plant_seq_claim(state_dir, seq)
 
 
 def _check_stale_tick_41m_alerts(state_dir: Path) -> bool:

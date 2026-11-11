@@ -19,6 +19,7 @@ Run the one-command exam (optionally under a parent `--state-dir`; each run uses
 ```bash
 .venv/bin/python -m tools.review_orchestrator.exam_v0
 .venv/bin/python -m tools.review_orchestrator.exam_v0 --state-dir /path/to/store
+```
 
 ## v1a dead-man
 
@@ -27,5 +28,4 @@ Run the one-command exam (optionally under a parent `--state-dir`; each run uses
 .venv/bin/python -m tools.review_orchestrator.deadman --state-dir /path/to/store --max-age-min 40
 .venv/bin/python -m tools.review_orchestrator.exam_v1a
 .venv/bin/python -m tools.review_orchestrator.exam_v1a --state-dir /path/to/store
-```
 ```
