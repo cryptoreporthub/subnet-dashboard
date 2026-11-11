@@ -340,9 +340,9 @@ def _fingerprint(row):
 def merge_ledger_changes(
     before, after, *, path=None, caller, trigger, commit=mutate_predictions, stats_fn=None,
 ):
-    before = copy.deepcopy(before)
+    before = parse_predictions_ledger(copy.deepcopy(before))
     canonicalize_ledger(before)
-    after = copy.deepcopy(after)
+    after = parse_predictions_ledger(copy.deepcopy(after))
     canonicalize_ledger(after)
 
     def indexed(data):

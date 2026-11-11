@@ -603,6 +603,15 @@ def cycle_persist_guard() -> ContextManager[Any]:
     return sched._release_guard if sched is not None else nullcontext()
 
 
+def _cycle_ok(result: Dict[str, Any]) -> bool:
+    return (
+        result.get("ledger_persist_outcome") == "applied"
+        and result.get("summary_persist_outcome") in ("applied", "declined")
+        and not result.get("skipped")
+        and not result.get("error")
+    )
+
+
 class PredictionResolverScheduler:
     """Background scheduler that periodically grades pending predictions."""
 
@@ -1367,6 +1376,7 @@ class PredictionResolverScheduler:
             "expired_now": 0,
             "pending": 0,
             "error": None,
+            "ledger_persist_outcome": "applied",
         }
         if cycle_ctx is not None:
             self._stamp_owned_cycle_context(result, cycle_ctx)
@@ -1414,7 +1424,7 @@ class PredictionResolverScheduler:
 
                 try:
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
-                    load_predictions(fail_closed=True)
+                    load_predictions(path=resolver.PREDICTIONS_PATH, fail_closed=True)
                     raw_heal = heal_daily_pick_ledger(dry_run=False)
                     heal_summary = (
                         raw_heal if isinstance(raw_heal, dict) else _neutral_heal_summary()
@@ -1437,6 +1447,8 @@ class PredictionResolverScheduler:
             if ledger_unreadable:
                 result["ok"] = False
                 result["error"] = "ledger_unreadable"
+                result["ledger_persist_outcome"] = "refused"
+                result["ledger_persist_reason"] = "unreadable"
 
             with timing.stage("subnet_provider", persist_partial):
                 subnets = self._subnet_provider() or []
@@ -1507,24 +1519,37 @@ class PredictionResolverScheduler:
 
                 # B1b t7: immediately before ok=True.
                 timing.mark_checkpoint("t7")
-                result["ok"] = True
+                result["ok"] = not bool(result.get("skipped"))
+                if result.get("skipped"):
+                    result["ledger_persist_outcome"] = "skipped_abandoned"
                 result["stats"] = expired.get("stats", resolved.get("stats", {}))
 
                 # N3: optional env-gated auto-retrain after resolver (non-blocking).
-                with timing.stage("auto_retrain", persist_partial):
-                    try:
-                        from internal.calibration.scheduler import (
-                            maybe_trigger_auto_retrain,
-                        )
+                if not result.get("skipped"):
+                    with timing.stage("auto_retrain", persist_partial):
+                        try:
+                            from internal.calibration.scheduler import (
+                                maybe_trigger_auto_retrain,
+                            )
 
-                        result["auto_retrain"] = maybe_trigger_auto_retrain(
-                            resolved_now=result.get("resolved_now", 0)
-                        )
-                    except Exception as exc:
-                        result["auto_retrain"] = {
-                            "triggered": False,
-                            "error": str(exc),
-                        }
+                            result["auto_retrain"] = maybe_trigger_auto_retrain(
+                                resolved_now=result.get("resolved_now", 0)
+                            )
+                        except Exception as exc:
+                            result["auto_retrain"] = {
+                                "triggered": False,
+                                "error": str(exc),
+                            }
+        except resolver.LedgerPersistSkipped as exc:
+            result["ok"] = False
+            result["skipped"] = "abandoned_cycle_persist"
+            result["ledger_persist_outcome"] = exc.result.outcome.value
+            result["ledger_persist_reason"] = exc.result.reason.value if exc.result.reason else None
+        except resolver.LedgerPersistFailure as exc:
+            result["ok"] = False
+            result["ledger_persist_outcome"] = exc.result.outcome.value
+            result["ledger_persist_reason"] = exc.result.reason.value if exc.result.reason else None
+            result["error"] = str(exc)
         except Exception as exc:
             result["error"] = str(exc)
         finally:
@@ -1546,6 +1571,7 @@ class PredictionResolverScheduler:
                     self._stamp_owned_cycle_context(result, cycle_ctx)
                 persist = self._persist_cycle_summary(result, owner_gen=owner)
                 self._apply_persist_honesty(result, persist)
+                result["ok"] = _cycle_ok(result)
         return result
 
     def _persist_cycle_summary(
@@ -1868,6 +1894,7 @@ class PredictionResolverScheduler:
         had_cycle_error = bool(result.get("error"))
         if persist.skipped_not_owner:
             result["persist_outcome"] = "skipped_not_owner"
+            result["summary_persist_outcome"] = "skipped_not_owner"
             result["skipped"] = result.get("skipped") or "persist_skipped"
             result["ok"] = False
             if not had_cycle_error:
@@ -1875,17 +1902,16 @@ class PredictionResolverScheduler:
             return
         if persist.outcome is WriteOutcome.DECLINED:
             result["persist_outcome"] = persist.outcome.value
-            result["skipped"] = result.get("skipped") or "persist_declined"
-            result["ok"] = False
-            if not had_cycle_error:
-                result.pop("error", None)
+            result["summary_persist_outcome"] = persist.outcome.value
             return
         if persist.outcome is WriteOutcome.APPLIED:
             result["persist_outcome"] = persist.outcome.value
+            result["summary_persist_outcome"] = persist.outcome.value
             return
         if persist.outcome is None:
             return
         result["persist_outcome"] = persist.outcome.value
+        result["summary_persist_outcome"] = persist.outcome.value
         result["ok"] = False
         if not had_cycle_error:
             msg = f"persist_refused:{persist.outcome.value}"

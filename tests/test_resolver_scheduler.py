@@ -235,8 +235,9 @@ def test_resolve_due_restores_recently_expired_malformed_timestamp():
     assert all(row.get("outcome") != "expired" for row in result["pending"])
 
 
-def test_expire_skips_non_dict_records():
-    """A corrupt non-dict entry must not crash the loop."""
+def test_expire_refuses_non_dict_records():
+    """Malformed ledger rows are refused without overwriting the ledger."""
+    from internal.learning.predictions_store import PredictionsLedgerUnreadable
     now = datetime.now(timezone.utc)
     _write_predictions({
         "predictions": [
@@ -253,9 +254,10 @@ def test_expire_skips_non_dict_records():
         "resolved": [],
     })
 
-    result = resolver.expire_stale_predictions()
-    assert len(result["expired_now"]) == 1
-    assert result["stats"]["pending"] == 0
+    before = Path(resolver.PREDICTIONS_PATH).read_bytes()
+    with pytest.raises(PredictionsLedgerUnreadable):
+        resolver.expire_stale_predictions()
+    assert Path(resolver.PREDICTIONS_PATH).read_bytes() == before
 
 
 def test_expire_does_not_nudge_weights(nudge_spy):
@@ -455,6 +457,7 @@ def test_scheduler_run_once_expires_stale_predictions(fresh_scheduler):
     _write_predictions({
         "predictions": [
             {
+                "id": "expired-scheduler-row",
                 "netuid": 999,
                 "horizon_hours": horizon,
                 "expert": "quant",
@@ -578,6 +581,7 @@ def test_scheduler_persists_cycle_summary(fresh_scheduler):
     _write_predictions({
         "predictions": [
             {
+                "id": "summary-scheduler-row",
                 "netuid": 1,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,

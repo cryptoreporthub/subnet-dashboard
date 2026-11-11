@@ -343,13 +343,30 @@ def _commit_predictions_mutation(fn, *, path, caller, trigger):
         return mutate_predictions(fn, path=path, caller=caller, trigger=trigger)
 
 
-def _commit_ledger_changes(before, after, *, path, caller, trigger):
-    from internal.learning.predictions_store import merge_ledger_changes
+class LedgerPersistFailure(Exception):
+    def __init__(self, result):
+        self.result = result
+        super().__init__(f"ledger_persist_{result.outcome.value}:{result.reason}")
 
-    return merge_ledger_changes(
+
+class LedgerPersistSkipped(LedgerPersistFailure):
+    pass
+
+
+def _commit_ledger_changes(before, after, *, path, caller, trigger):
+    from internal.learning.predictions_store import PersistOutcome, merge_ledger_changes
+
+    result = merge_ledger_changes(
         before, after, path=path, caller=caller, trigger=trigger,
         commit=_commit_predictions_mutation, stats_fn=_compute_stats,
     )
+    if result.conflicts:
+        logger.warning("ledger commit conflicts trigger=%s keys=%s", trigger, result.conflicts)
+    if result.outcome is PersistOutcome.SKIPPED_ABANDONED:
+        raise LedgerPersistSkipped(result)
+    if result.outcome is not PersistOutcome.APPLIED:
+        raise LedgerPersistFailure(result)
+    return result
 
 
 def _save_json(

@@ -34,9 +34,9 @@ def _sched(refresh_minutes: int = 15) -> resolver_scheduler.PredictionResolverSc
         ),
         pytest.param(
             resolver_scheduler.PersistResult(outcome=WriteOutcome.DECLINED),
-            False,
+            True,
             None,
-            "persist_declined",
+            None,
             "declined",
             id="declined",
         ),
@@ -194,3 +194,154 @@ def test_tick_skipped_not_owner_records_skip_and_refresh_backoff(monkeypatch):
     assert cycle.get("persist_outcome") == "skipped_not_owner"
     assert sched._backoff_minutes == 15
     assert sched._consecutive_failures == 0
+
+
+def _ledger_failure_scheduler(tmp_path, monkeypatch):
+    import json
+    import os
+    from internal.council import resolver
+    from internal.learning import predictions_store
+
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({
+        "predictions": [{"id": "old", "netuid": 1, "status": "pending", "horizon_type": "hour"}],
+        "resolved": [], "stats": {},
+    }))
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(ledger))
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(ledger))
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.DAILY_PICKS_PATH", str(tmp_path / "daily.json")
+    )
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda **_kw: {"triggered": False},
+    )
+    real_replace = os.replace
+
+    def replace(src, dst):
+        if str(dst) == str(ledger):
+            raise OSError("injected ledger write failure")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", replace)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        soul_map_path=str(soul), refresh_minutes=15, subnet_provider=lambda: [],
+    )
+    sched._first_tick_pending = False
+    monkeypatch.setattr(
+        sched, "_resolve_with_timing",
+        lambda *_args: {"resolved_now": [], "expired_now": [], "stats": {}},
+    )
+    monkeypatch.setattr(sched, "_schedule_next", lambda *_a, **_kw: None)
+    return sched, ledger, soul
+
+
+def test_run_once_ledger_failure_not_hidden_by_summary(tmp_path, monkeypatch):
+    import json
+
+    sched, ledger, soul = _ledger_failure_scheduler(tmp_path, monkeypatch)
+    before = ledger.read_bytes()
+    result = sched.run_once()
+    assert result["ok"] is False
+    assert result.get("ledger_persist_outcome") == "failed"
+    assert result.get("summary_persist_outcome") == "applied"
+    assert result.get("error")
+    assert sched._last_run_error == result["error"]
+    assert sched._consecutive_failures == 1
+    assert sched._backoff_minutes > sched.refresh_minutes
+    assert ledger.read_bytes() == before
+    assert json.loads(soul.read_text())["prediction_resolver_scheduler"]["last_cycle"]["error"]
+
+
+def test_run_once_summary_failure_keeps_ledger_error(tmp_path, monkeypatch):
+    sched, _ledger, _soul = _ledger_failure_scheduler(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        sched, "_persist_cycle_summary",
+        lambda *_a, **_kw: resolver_scheduler.PersistResult(
+            outcome=WriteOutcome.REPLACE_FAILED, detail="summary failure",
+        ),
+    )
+    result = sched.run_once()
+    assert result["ok"] is False
+    assert "ledger" in result["error"]
+    assert result.get("ledger_persist_outcome") == "failed"
+    assert result.get("summary_persist_outcome") == "replace_failed"
+
+
+def test_run_once_abandoned_cycle_is_skip_not_success(tmp_path, monkeypatch):
+    sched, _ledger, _soul = _ledger_failure_scheduler(tmp_path, monkeypatch)
+    calls = {"success": 0, "skip": 0}
+    retrains = []
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda **_kw: retrains.append(True),
+    )
+    monkeypatch.setattr(
+        sched.liveness, "record_success",
+        lambda **_kw: calls.__setitem__("success", calls["success"] + 1),
+    )
+    monkeypatch.setattr(
+        sched.liveness, "record_skip",
+        lambda **_kw: calls.__setitem__("skip", calls["skip"] + 1),
+    )
+
+    def abandon(_subnets, timing):
+        timing.mark_abandoned()
+        return {"resolved_now": [], "expired_now": [], "stats": {}}
+
+    monkeypatch.setattr(sched, "_resolve_with_timing", abandon)
+    result = sched.run_once()
+    assert result["ok"] is False
+    assert result.get("skipped") == "cycle_abandoned"
+    assert calls == {"success": 0, "skip": 1}
+    assert retrains == []
+
+
+def test_run_once_revoked_persist_is_skip_not_failure(tmp_path, monkeypatch):
+    from internal.council import resolver
+
+    sched, ledger, _soul = _ledger_failure_scheduler(tmp_path, monkeypatch)
+    before = ledger.read_bytes()
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: True)
+    result = sched.run_once()
+    assert result["ok"] is False
+    assert result.get("skipped") == "abandoned_cycle_persist"
+    assert result.get("error") is None
+    assert result.get("ledger_persist_outcome") == "skipped_abandoned"
+    assert sched._consecutive_failures == 0
+    assert ledger.read_bytes() == before
+
+
+def test_declined_summary_is_success_for_applied_ledger():
+    sched = _sched()
+    result = _fresh_cycle()
+    result["ledger_persist_outcome"] = "applied"
+    sched._apply_persist_honesty(
+        result, resolver_scheduler.PersistResult(outcome=WriteOutcome.DECLINED)
+    )
+    assert result["ok"] is True
+    assert result.get("skipped") is None
+
+
+@pytest.mark.parametrize(
+    "ledger,summary,skipped,expected",
+    [
+        ("applied", "applied", None, True),
+        ("applied", "declined", None, True),
+        ("failed", "applied", None, False),
+        ("refused", "applied", None, False),
+        ("skipped_abandoned", "applied", "cycle_abandoned", False),
+        ("applied", "replace_failed", None, False),
+        ("applied", "applied", "cycle_abandoned", False),
+    ],
+)
+def test_cycle_ok_requires_successful_ledger_and_summary(ledger, summary, skipped, expected):
+    result = {
+        "ledger_persist_outcome": ledger,
+        "summary_persist_outcome": summary,
+        "skipped": skipped,
+        "error": None,
+    }
+    assert resolver_scheduler._cycle_ok(result) is expected

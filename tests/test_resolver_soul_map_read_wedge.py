@@ -28,14 +28,14 @@ def test_load_json_degrades_unreadable_to_empty_dict(tmp_path):
     assert resolver_scheduler._load_json(str(soul)) == {}
 
 
-def test_declined_persist_tick_records_skip_and_refresh_backoff(monkeypatch):
+def test_declined_persist_tick_records_success_and_refresh_backoff(monkeypatch):
     sched = resolver_scheduler.PredictionResolverScheduler(refresh_minutes=15)
     sched._active = True
     sched._backoff_minutes = 240
     sched._consecutive_failures = 3
-    skips: list[str] = []
-    monkeypatch.setattr(sched.liveness, "record_skip", lambda reason: skips.append(reason))
-    monkeypatch.setattr(sched.liveness, "record_success", lambda **_: pytest.fail("success"))
+    successes: list[dict] = []
+    monkeypatch.setattr(sched.liveness, "record_skip", lambda reason: pytest.fail(reason))
+    monkeypatch.setattr(sched.liveness, "record_success", lambda **kwargs: successes.append(kwargs))
     monkeypatch.setattr(sched.liveness, "record_failure", lambda **_: pytest.fail("failure"))
 
     cycle = {"ok": True, "resolved_now": 2, "expired_now": 0, "pending": 0}
@@ -52,7 +52,7 @@ def test_declined_persist_tick_records_skip_and_refresh_backoff(monkeypatch):
 
     sched._tick(sync_manual=True)
 
-    assert skips == ["persist_declined"]
+    assert len(successes) == 1
     assert cycle.get("persist_outcome") == "declined"
     assert sched._backoff_minutes == 15
     assert sched._consecutive_failures == 0
