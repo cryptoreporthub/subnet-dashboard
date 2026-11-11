@@ -1,0 +1,68 @@
+{
+  "_comment": "Hand-written before generator code. Wilson z=1.96; values rounded to 6 decimals where applicable.",
+  "design_wilson_table": [
+    {"successes": 3, "n": 3, "lb": 0.438494},
+    {"successes": 5, "n": 5, "lb": 0.565509},
+    {"successes": 10, "n": 10, "lb": 0.72246},
+    {"successes": 9, "n": 10, "lb": 0.595844},
+    {"successes": 20, "n": 20, "lb": 0.8388698745050667},
+    {"successes": 18, "n": 20, "lb": 0.6989617935882066}
+  ],
+  "reviewers": {
+    "rubber": {
+      "heads_reviewed": 1,
+      "clean_pass_n": 1,
+      "correct_clean_passes": 0,
+      "pass_precision_lb": 0.0,
+      "false_passes": 1,
+      "false_pass_denominator": 1,
+      "degraded_pass_count": 0,
+      "serious_caught_blind": 0,
+      "serious_at_risk_blind": 0,
+      "at_risk_bugs_reviewed": 2,
+      "repo_at_risk_bugs": 3
+    },
+    "catcher": {
+      "heads_reviewed": 2,
+      "clean_pass_n": 1,
+      "correct_clean_passes": 0,
+      "pass_precision_lb": 0.0,
+      "false_passes": 1,
+      "false_pass_denominator": 1,
+      "serious_caught": 1,
+      "serious_caught_blind": 0,
+      "at_risk_bugs_reviewed": 1,
+      "catching_lb": null
+    },
+    "unknown_cov": {
+      "heads_reviewed": 1,
+      "clean_pass_n": 0,
+      "coverage_class": "non_counting",
+      "non_counting_share": 1.0
+    },
+    "degraded_r": {
+      "heads_reviewed": 1,
+      "clean_pass_n": 0,
+      "degraded_pass_count": 1,
+      "pass_precision_lb": null
+    },
+    "dead_r": {
+      "heads_reviewed": 1,
+      "coverage_class": "incomplete",
+      "counting": false
+    },
+    "blind_a": {
+      "per_head_blind": {"syn_h0006": "no"}
+    },
+    "blind_b": {
+      "per_head_blind": {"syn_h0006": "yes"}
+    }
+  },
+  "scenario_checks": {
+    "two_s1_one_head": "syn_h0001 has s1_alpha and s1_beta present+diff",
+    "bug_three_heads_one_catch": "bug_cross present syn_h0002-3; catcher credit once",
+    "unknown_non_counting": "unknown_cov syn_h0004",
+    "dead_incomplete": "dead_r syn_h0005",
+    "degraded_excluded_from_precision": "degraded_r syn_h0005"
+  }
+}

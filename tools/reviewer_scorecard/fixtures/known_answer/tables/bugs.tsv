@@ -1,0 +1,4 @@
+bug_id	pr	first_head_sha	fixed_head_sha	status	confirmed_by	severity	stage
+s1_alpha	9001	syn_h0001	syn_h9999	real	joshua	S1 Critical	code
+s1_beta	9001	syn_h0001	syn_h9999	real	joshua	S1 Critical	code
+bug_cross	9001	syn_h0002	syn_h0004	real	joshua	S1 Critical	code

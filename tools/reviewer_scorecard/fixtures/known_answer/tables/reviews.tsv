@@ -1,0 +1,9 @@
+reviewer_id	pr	head_sha	stage	claimed_verdict	coverage_class	counting	files_reviewed	files_changed	confidence	requested_at	verdict_at	blind	caught_bug_ids	false_alarm_ids	false_alarm_denominator	block_overturned	block_trial	source_url
+rubber	9001	syn_h0001	code	pass	clean	yes	5	5	high	2026-01-02T08:00:00Z	2026-01-02T09:00:00Z	no	-	-	no	no	no	https://example.invalid/rubber-h1
+catcher	9001	syn_h0002	code	modify	clean	yes	src/a.py;src/b.py;src/c.py	3	high	2026-01-02T10:00:00Z	2026-01-02T11:00:00Z	no	bug_cross	-	no	no	no	https://example.invalid/catcher-h2
+catcher	9001	syn_h0003	code	pass	clean	yes	src/a.py;src/b.py;src/c.py	3	high	2026-01-03T10:00:00Z	2026-01-03T11:00:00Z	no	-	-	no	no	no	https://example.invalid/catcher-h3
+unknown_cov	9001	syn_h0004	code	pass	non_counting	no	not_adjudicated	4	not_stated	2026-01-04T10:00:00Z	2026-01-04T11:00:00Z	no	-	-	no	no	no	https://example.invalid/unknown-h4
+degraded_r	9001	syn_h0005	code	pass	degraded	yes	src/only.py	4	med	2026-01-05T08:00:00Z	2026-01-05T09:00:00Z	no	-	-	no	no	no	https://example.invalid/degraded-h5
+dead_r	9001	syn_h0005	code	pass	incomplete	no	0	4	not_stated	2026-01-05T08:05:00Z	2026-01-05T08:06:00Z	no	-	-	no	no	no	https://example.invalid/dead-h5
+blind_b	9001	syn_h0006	code	pass	clean	yes	2	2	high	2026-01-05T10:00:00Z	2026-01-05T11:00:00Z	no	-	-	no	no	no	https://example.invalid/blind-b
+blind_a	9001	syn_h0006	code	pass	clean	yes	2	2	high	2026-01-05T11:00:00Z	2026-01-05T12:00:00Z	no	-	-	no	no	no	https://example.invalid/blind-a
