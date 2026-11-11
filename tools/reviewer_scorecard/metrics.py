@@ -105,6 +105,7 @@ def compute_reviewer_metrics(tables: ScorecardTables, reviewer_id: str) -> Score
 
     false_pass_pr_seen: set[int] = set()
     caught_bugs: set[str] = set()
+    caught_bugs_blind: set[str] = set()
     at_risk_bugs_reviewed: set[str] = set()
     at_risk_bugs_blind: set[str] = set()
     clean_pass_n = 0
@@ -150,8 +151,9 @@ def compute_reviewer_metrics(tables: ScorecardTables, reviewer_id: str) -> Score
             if bid not in caught_bugs:
                 caught_bugs.add(bid)
                 headlines.serious_caught += 1
-                if blind == "yes" and counting:
-                    headlines.serious_caught_blind += 1
+            if blind == "yes" and counting and bid not in caught_bugs_blind:
+                caught_bugs_blind.add(bid)
+                headlines.serious_caught_blind += 1
 
         for bid in at_risk:
             at_risk_bugs_reviewed.add(bid)

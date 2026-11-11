@@ -50,7 +50,7 @@ def _read_tsv(path: Path) -> list[dict[str, str]]:
     if size == 0:
         raise ValueError(f"{path.name}: zero-byte TSV")
     with path.open(newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh, delimiter="\t")
+        reader = csv.DictReader(fh, delimiter="\t", restval="")
         if reader.fieldnames is None:
             raise ValueError(f"{path.name}: not a valid TSV")
         rows = [dict(row) for row in reader]

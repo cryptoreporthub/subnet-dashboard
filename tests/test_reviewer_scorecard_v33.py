@@ -282,3 +282,57 @@ def test_blind_same_head_peer_citation_is_informed() -> None:
 
 def test_blind_uses_stored_when_requested_at_missing() -> None:
     assert compute_blind("r", "h", "", [], stored_blind="yes") == "yes"
+
+
+def test_blind_catch_credit_not_lost_when_informed_row_first() -> None:
+    tables = ScorecardTables(
+        bugs=[{"bug_id": "s1_x", "status": "real", "severity": "S1 Critical"}],
+        presence=[
+            {"bug_id": "s1_x", "head_sha": "head_informed", "state": "present", "scope": "diff"},
+            {"bug_id": "s1_x", "head_sha": "head_blind", "state": "present", "scope": "diff"},
+        ],
+        reviews=[
+            {
+                "reviewer_id": "split",
+                "pr": "70",
+                "head_sha": "head_informed",
+                "stage": "code",
+                "claimed_verdict": "modify",
+                "coverage_class": "clean",
+                "counting": "yes",
+                "requested_at": "2026-01-06T12:00:00Z",
+                "verdict_at": "2026-01-06T13:00:00Z",
+                "caught_bug_ids": "s1_x",
+            },
+            {
+                "reviewer_id": "peer",
+                "pr": "70",
+                "head_sha": "head_blind",
+                "stage": "code",
+                "claimed_verdict": "pass",
+                "coverage_class": "clean",
+                "counting": "yes",
+                "requested_at": "2026-01-07T08:00:00Z",
+                "verdict_at": "2026-01-07T09:00:00Z",
+            },
+            {
+                "reviewer_id": "split",
+                "pr": "70",
+                "head_sha": "head_blind",
+                "stage": "code",
+                "claimed_verdict": "modify",
+                "coverage_class": "clean",
+                "counting": "yes",
+                "requested_at": "2026-01-07T08:30:00Z",
+                "verdict_at": "2026-01-07T10:00:00Z",
+                "caught_bug_ids": "s1_x",
+            },
+        ],
+        registry=[{"reviewer_id": "split"}, {"reviewer_id": "peer"}],
+        confirms=[],
+        root=TABLE_DIR,
+    )
+    m = compute_reviewer_metrics(tables, "split")
+    assert m.headlines.serious_caught == 1
+    assert m.headlines.serious_caught_blind == 1
+    assert m.headlines.serious_at_risk_blind == 1
