@@ -22,11 +22,13 @@ V1A_RULES = (
 )
 
 
-def _plant_seq_claim(state_dir: Path, seq: int) -> None:
+def _plant_seq_claim(state_dir: Path, seq: int, *, claimed_at: datetime | None = None) -> None:
     seq_dir = state_dir / "seq"
     seq_dir.mkdir(parents=True, exist_ok=True)
+    when = claimed_at or datetime.now(timezone.utc)
     (seq_dir / f"{seq}.json").write_text(
-        json.dumps({"seq": seq}, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps({"seq": seq, "claimed_at": when.isoformat()}, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
 
 

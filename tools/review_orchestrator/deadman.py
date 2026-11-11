@@ -27,8 +27,40 @@ class DeadmanVerdict:
     reason: str
 
 
+def _seq_dir(state_dir: Path) -> Path:
+    return Path(state_dir) / "seq"
+
+
 def _seq_claim_exists(state_dir: Path, seq: int) -> bool:
-    return (state_dir / "seq" / f"{seq}.json").is_file()
+    return (_seq_dir(state_dir) / f"{seq}.json").is_file()
+
+
+def _highest_seq_claimed_at(state_dir: Path) -> datetime | None:
+    seq_root = _seq_dir(state_dir)
+    if not seq_root.is_dir():
+        return None
+    best_seq: int | None = None
+    best_at: datetime | None = None
+    for path in seq_root.iterdir():
+        if not path.is_file() or not path.name.endswith(".json"):
+            continue
+        try:
+            seq = int(path.stem)
+        except ValueError:
+            continue
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except _READ_ERRORS:
+            continue
+        if not isinstance(raw, dict):
+            continue
+        claimed_at = _parse_utc_iso(raw.get("claimed_at"))
+        if claimed_at is None:
+            continue
+        if best_seq is None or seq > best_seq:
+            best_seq = seq
+            best_at = claimed_at
+    return best_at
 
 
 def _collect_valid_ticks_for_deadman(
@@ -94,6 +126,17 @@ def evaluate_deadman(
     now: datetime | None = None,
 ) -> DeadmanVerdict:
     reference = now if now is not None else _utc_now()
+    limit = timedelta(minutes=max_age_minutes)
+    last_attempt_at = _highest_seq_claimed_at(state_dir)
+    if last_attempt_at is not None:
+        attempt_age = reference - last_attempt_at
+        if _age_exceeds_limit(attempt_age, limit):
+            age_min = int(attempt_age.total_seconds() // 60)
+            return DeadmanVerdict(
+                ok=False,
+                reason=f"last_attempt_stale_{age_min}m_gt_{max_age_minutes}m",
+            )
+
     valid, _skipped = _collect_valid_ticks_for_deadman(state_dir, now=reference)
     latest = _select_latest_tick_by_completed_at(valid)
     if latest is None:
@@ -107,12 +150,27 @@ def evaluate_deadman(
         return DeadmanVerdict(ok=False, reason="no_valid_completed_tick")
 
     age = reference - completed_at
-    limit = timedelta(minutes=max_age_minutes)
     if _age_exceeds_limit(age, limit):
         age_min = int(age.total_seconds() // 60)
         return DeadmanVerdict(ok=False, reason=f"tick_stale_{age_min}m_gt_{max_age_minutes}m")
 
     return DeadmanVerdict(ok=True, reason="ok")
+
+
+def _parse_max_age_min(value: str) -> int:
+    try:
+        minutes = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid max-age-min: {value!r}") from exc
+    if minutes == 400:
+        raise argparse.ArgumentTypeError(
+            "max-age-min 400 is not allowed (likely typo for 40)"
+        )
+    if not 1 <= minutes <= 1440:
+        raise argparse.ArgumentTypeError(
+            f"max-age-min must be between 1 and 1440, got {minutes}"
+        )
+    return minutes
 
 
 def _parse_cli_now(value: str) -> datetime:
@@ -126,7 +184,7 @@ def _parse_cli_now(value: str) -> datetime:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Review orchestrator v1a dead-man check")
     parser.add_argument("--state-dir", type=Path, required=True)
-    parser.add_argument("--max-age-min", type=int, default=40)
+    parser.add_argument("--max-age-min", type=_parse_max_age_min, default=40)
     parser.add_argument(
         "--now",
         type=_parse_cli_now,

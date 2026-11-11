@@ -17,11 +17,20 @@ from tools.review_orchestrator.persist import run_tick
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _plant_seq_claim(state_dir: Path, seq: int) -> None:
+def _plant_seq_claim(
+    state_dir: Path,
+    seq: int,
+    *,
+    claimed_at: datetime | None = None,
+) -> None:
     seq_dir = state_dir / "seq"
     seq_dir.mkdir(parents=True, exist_ok=True)
     claim = seq_dir / f"{seq}.json"
-    claim.write_text(json.dumps({"seq": seq}, sort_keys=True) + "\n", encoding="utf-8")
+    when = claimed_at or datetime.now(timezone.utc)
+    claim.write_text(
+        json.dumps({"seq": seq, "claimed_at": when.isoformat()}, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _plant_completed_tick(
@@ -32,6 +41,7 @@ def _plant_completed_tick(
     last_alert_ok: bool | None = True,
     seq: int = 1,
     write_seq_claim: bool = True,
+    claimed_at: datetime | None = None,
 ) -> None:
     started = completed_at - timedelta(minutes=1)
     payload: dict = {
@@ -52,7 +62,7 @@ def _plant_completed_tick(
         encoding="utf-8",
     )
     if write_seq_claim:
-        _plant_seq_claim(state_dir, seq)
+        _plant_seq_claim(state_dir, seq, claimed_at=claimed_at or completed_at)
 
 
 def test_tick_write_includes_last_alert_ok_true(tmp_path: Path) -> None:
@@ -297,6 +307,7 @@ def test_deadman_higher_seq_older_tick_no_false_alarm(tmp_path: Path) -> None:
         tick_id="stale-high-seq",
         completed_at=now - timedelta(days=3),
         seq=6,
+        claimed_at=now - timedelta(minutes=1),
     )
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is True
@@ -339,6 +350,7 @@ def test_mutation_deadman_picks_highest_seq_not_latest_completed(
         tick_id="stale-high-seq",
         completed_at=now - timedelta(days=3),
         seq=6,
+        claimed_at=now - timedelta(minutes=1),
     )
 
     def by_seq(ticks: list[dict]) -> dict | None:
@@ -433,6 +445,63 @@ def test_exam_v1a_state_dir_parent_is_rerunnable(tmp_path: Path) -> None:
     for _ in range(2):
         subprocess.run(cmd, check=True, env=env, cwd=str(_REPO_ROOT))
     assert list(parent.iterdir()) == []
+
+
+def test_deadman_corrupt_newest_tick_alerts_despite_older_valid(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant_completed_tick(
+        tmp_path,
+        tick_id="old_ok",
+        completed_at=now - timedelta(minutes=30),
+        seq=1,
+    )
+    _plant_seq_claim(tmp_path, 2, claimed_at=now - timedelta(minutes=50))
+    ticks = tmp_path / "ticks"
+    (ticks / "tick-new_bad.json").write_bytes(b"\xff\xfe not utf8\n")
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is False
+    assert "attempt" in verdict.reason or "stale" in verdict.reason
+
+
+def test_deadman_cli_rejects_max_age_min_zero(tmp_path: Path) -> None:
+    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.review_orchestrator.deadman",
+            "--state-dir",
+            str(tmp_path),
+            "--max-age-min",
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(_REPO_ROOT),
+    )
+    assert proc.returncode == 2
+    assert "max-age-min" in proc.stderr.lower() or "0" in proc.stderr
+
+
+def test_deadman_cli_rejects_max_age_min_400(tmp_path: Path) -> None:
+    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.review_orchestrator.deadman",
+            "--state-dir",
+            str(tmp_path),
+            "--max-age-min",
+            "400",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(_REPO_ROOT),
+    )
+    assert proc.returncode == 2
 
 
 def test_exam_v1a_under_python_O(tmp_path: Path) -> None:
