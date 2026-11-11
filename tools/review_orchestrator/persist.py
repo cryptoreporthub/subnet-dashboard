@@ -237,15 +237,16 @@ def run_tick(
     seq = _allocate_seq(state_dir)
     owner_token = secrets.token_hex(8)
 
-    final = _tick_path(state_dir, tick_id)
-    if final.is_file():
-        raise DuplicateTickIdError(tick_id)
-
     reserve = _tick_reserve_path(state_dir, tick_id)
     if not create_if_absent(
         reserve,
         {"tick_id": tick_id, "owner_token": owner_token, "started_at": started_at},
     ):
+        raise DuplicateTickIdError(tick_id)
+
+    final = _tick_path(state_dir, tick_id)
+    if final.is_file():
+        _release_tick_reserve(state_dir, owner_token)
         raise DuplicateTickIdError(tick_id)
 
     in_flight_payload = {

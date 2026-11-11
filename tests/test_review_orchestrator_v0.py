@@ -287,6 +287,32 @@ def test_overlap_against_planted_in_flight_holder(tmp_path: Path) -> None:
     assert result.overlap_with == "holder"
 
 
+def test_concurrent_duplicate_tick_id_stress_1500_rounds(tmp_path: Path) -> None:
+    failures = 0
+    for _ in range(1500):
+        round_dir = tmp_path / secrets.token_hex(4)
+        round_dir.mkdir()
+        barrier = threading.Barrier(2)
+        successes: list = []
+        rejected: list = []
+
+        def worker() -> None:
+            barrier.wait(timeout=3)
+            try:
+                successes.append(run_tick(round_dir, tick_id="dup-id", noop=True))
+            except DuplicateTickIdError:
+                rejected.append(1)
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+        if len(successes) != 1 or len(rejected) != 1:
+            failures += 1
+    assert failures == 0, f"{failures} double-winner rounds in 1500"
+
+
 def test_concurrent_duplicate_tick_id_rejects_loser(tmp_path: Path) -> None:
     barrier = threading.Barrier(2)
     successes: list = []
