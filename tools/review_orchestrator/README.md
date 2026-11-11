@@ -6,6 +6,8 @@ Release of the in-flight marker runs in a `finally` after the tick write, matchi
 
 Seq numbers are reserved under `seq/<n>.json` via create-if-absent; the reader orders valid ticks by `(seq, completed_at)` and ignores `completed_at` values more than five minutes ahead of wall clock.
 
+A caller-supplied `tick_id` must be unique: an existing `tick-<id>.json` or an in-flight reservation for that id raises `DuplicateTickIdError`.
+
 Run the contract tests:
 
 ```bash

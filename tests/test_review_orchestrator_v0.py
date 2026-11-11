@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import multiprocessing as mp
 import os
+import secrets
 import subprocess
 import sys
 import threading
@@ -14,6 +16,7 @@ import pytest
 
 import tools.review_orchestrator.persist as persist
 from tools.review_orchestrator.persist import (
+    DuplicateTickIdError,
     NewestTickRead,
     _validate_tick_file,
     create_if_absent,
@@ -55,6 +58,16 @@ def test_run_tick_publishes_via_os_replace_from_tmp(tmp_path: Path, monkeypatch)
     assert any(src.endswith(".tmp") and dst.endswith("tick-rename.json") for src, dst in pairs)
 
 
+def test_os_replace_failure_leaves_no_completed_tick_file(tmp_path: Path, monkeypatch) -> None:
+    def fail_replace(_src: os.PathLike | str, _dst: os.PathLike | str) -> None:
+        raise OSError("simulated rename failure")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated rename"):
+        run_tick(tmp_path, tick_id="no-final", noop=False)
+    assert not (tmp_path / "ticks" / "tick-no-final.json").is_file()
+
+
 def test_mutation_run_tick_without_os_replace_fails_publish(tmp_path: Path, monkeypatch) -> None:
     def broken_write(final_path: Path, payload: dict) -> None:
         side = final_path.with_name(f"{final_path.name}.partial.tmp")
@@ -78,7 +91,7 @@ def test_reader_hammer_while_tick_writes_never_see_bad_json(tmp_path: Path) -> N
     def writer() -> None:
         n = 0
         while not stop.is_set():
-            run_tick(tmp_path, tick_id=f"hammer-{n % 5}", noop=True)
+            run_tick(tmp_path, tick_id=f"hammer-{n}", noop=True)
             n += 1
 
     def reader() -> None:
@@ -87,6 +100,8 @@ def test_reader_hammer_while_tick_writes_never_see_bad_json(tmp_path: Path) -> N
             if not ticks.is_dir():
                 continue
             for path in ticks.glob("tick-*.json"):
+                if path.name.endswith(".reserve.json"):
+                    continue
                 try:
                     json.loads(path.read_text(encoding="utf-8"))
                 except json.JSONDecodeError:
@@ -130,6 +145,29 @@ def test_create_if_absent_barrier_race_never_double_winner(tmp_path: Path) -> No
         for thread in threads:
             thread.join(timeout=10)
         assert wins.count(True) == 1, f"round {round_idx}"
+
+
+def _barrier_seq_worker(store: str, barrier: mp.Barrier, out: mp.Queue) -> None:
+    barrier.wait(timeout=5)
+    result = run_tick(Path(store), tick_id=secrets.token_hex(4), noop=True)
+    out.put(result.seq)
+
+
+def test_allocate_seq_unique_under_barrier_processes(tmp_path: Path) -> None:
+    ctx = mp.get_context("spawn")
+    barrier = ctx.Barrier(4)
+    out: mp.Queue = ctx.Queue()
+    store = str(tmp_path)
+    procs = [
+        ctx.Process(target=_barrier_seq_worker, args=(store, barrier, out))
+        for _ in range(4)
+    ]
+    for proc in procs:
+        proc.start()
+    for proc in procs:
+        proc.join(timeout=15)
+    seqs = [out.get_nowait() for _ in range(4)]
+    assert len(set(seqs)) == 4
 
 
 def test_allocate_seq_unique_under_parallel_ticks(tmp_path: Path) -> None:
@@ -247,6 +285,28 @@ def test_overlap_against_planted_in_flight_holder(tmp_path: Path) -> None:
     result = run_tick(tmp_path, tick_id="challenger", noop=True)
     assert result.overlap is True
     assert result.overlap_with == "holder"
+
+
+def test_concurrent_duplicate_tick_id_rejects_loser(tmp_path: Path) -> None:
+    barrier = threading.Barrier(2)
+    successes: list = []
+    rejected: list[DuplicateTickIdError] = []
+
+    def worker() -> None:
+        barrier.wait(timeout=3)
+        try:
+            successes.append(run_tick(tmp_path, tick_id="dup-id", noop=True))
+        except DuplicateTickIdError as exc:
+            rejected.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    assert len(successes) == 1
+    assert len(rejected) == 1
+    assert (tmp_path / "ticks" / "tick-dup-id.json").is_file()
 
 
 def test_in_flight_release_requires_owner_token_not_tick_id(tmp_path: Path) -> None:

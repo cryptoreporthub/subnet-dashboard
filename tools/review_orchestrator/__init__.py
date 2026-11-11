@@ -1,6 +1,7 @@
 """Review orchestrator v0: tick persistence only."""
 
 from tools.review_orchestrator.persist import (
+    DuplicateTickIdError,
     NewestTickRead,
     TickResult,
     create_if_absent,
@@ -10,6 +11,7 @@ from tools.review_orchestrator.persist import (
 )
 
 __all__ = [
+    "DuplicateTickIdError",
     "NewestTickRead",
     "TickResult",
     "create_if_absent",

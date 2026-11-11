@@ -14,6 +14,7 @@ _TICKS_DIR = "ticks"
 _ACTIVE_DIR = "active"
 _ACTIVE_NAME = "in-flight.json"
 _SEQ_DIR = "seq"
+_RESERVE_SUFFIX = ".reserve.json"
 _TICK_PREFIX = "tick-"
 _TICK_SUFFIX = ".json"
 _COMPLETION_FUTURE_SLACK = timedelta(minutes=5)
@@ -57,7 +58,7 @@ def _seq_dir(state_dir: Path) -> Path:
 def _tick_id_from_filename(name: str) -> str | None:
     if not name.startswith(_TICK_PREFIX) or not name.endswith(_TICK_SUFFIX):
         return None
-    if name.endswith(".json.tmp") or ".tmp" in name:
+    if name.endswith(_RESERVE_SUFFIX) or name.endswith(".json.tmp") or ".tmp" in name:
         return None
     return name[len(_TICK_PREFIX) : -len(_TICK_SUFFIX)]
 
@@ -195,6 +196,34 @@ class NewestTickRead:
     skipped: tuple[str, ...]
 
 
+class DuplicateTickIdError(ValueError):
+    """Caller-supplied tick_id is already reserved or completed in this store."""
+
+
+def _tick_path(state_dir: Path, tick_id: str) -> Path:
+    return _ticks_dir(state_dir) / f"{_TICK_PREFIX}{tick_id}{_TICK_SUFFIX}"
+
+
+def _tick_reserve_path(state_dir: Path, tick_id: str) -> Path:
+    return _ticks_dir(state_dir) / f"{_TICK_PREFIX}{tick_id}{_RESERVE_SUFFIX}"
+
+
+def _release_tick_reserve(state_dir: Path, owner_token: str) -> None:
+    reserve_dir = _ticks_dir(state_dir)
+    if not reserve_dir.is_dir():
+        return
+    for path in reserve_dir.glob(f"{_TICK_PREFIX}*{_RESERVE_SUFFIX}"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("owner_token") == owner_token:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
 def run_tick(
     state_dir: Path,
     *,
@@ -207,6 +236,17 @@ def run_tick(
     started_at = _utc_now_iso()
     seq = _allocate_seq(state_dir)
     owner_token = secrets.token_hex(8)
+
+    final = _tick_path(state_dir, tick_id)
+    if final.is_file():
+        raise DuplicateTickIdError(tick_id)
+
+    reserve = _tick_reserve_path(state_dir, tick_id)
+    if not create_if_absent(
+        reserve,
+        {"tick_id": tick_id, "owner_token": owner_token, "started_at": started_at},
+    ):
+        raise DuplicateTickIdError(tick_id)
 
     in_flight_payload = {
         "tick_id": tick_id,
@@ -235,11 +275,11 @@ def run_tick(
     }
     if overlap_with is not None:
         tick_payload["overlap_with"] = overlap_with
-    final = _ticks_dir(state_dir) / f"tick-{tick_id}.json"
     try:
         _write_tick_atomically(final, tick_payload)
     finally:
         _release_in_flight(state_dir, owner_token)
+        _release_tick_reserve(state_dir, owner_token)
 
     return TickResult(
         tick_id=tick_id,
