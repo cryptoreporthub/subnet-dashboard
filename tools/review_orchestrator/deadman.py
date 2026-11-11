@@ -19,6 +19,8 @@ from tools.review_orchestrator.persist import (
 )
 
 _READ_ERRORS = (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError, RecursionError)
+TICK_FILE_MAX_BYTES = 64 * 1024
+CLAIM_FILE_MAX_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True)
@@ -31,8 +33,36 @@ def _seq_dir(state_dir: Path) -> Path:
     return Path(state_dir) / "seq"
 
 
-def _seq_claim_exists(state_dir: Path, seq: int) -> bool:
-    return (_seq_dir(state_dir) / f"{seq}.json").is_file()
+def _read_bounded_text(path: Path, max_bytes: int) -> str:
+    size = path.stat().st_size
+    if size > max_bytes:
+        raise OSError("file_too_large")
+    return path.read_text(encoding="utf-8")
+
+
+def _read_tick_file_text(path: Path) -> str:
+    return _read_bounded_text(path, TICK_FILE_MAX_BYTES)
+
+
+def _load_seq_claim(state_dir: Path, seq: int) -> dict[str, Any] | None:
+    path = _seq_dir(state_dir) / f"{seq}.json"
+    if not path.is_file():
+        return None
+    try:
+        raw = json.loads(_read_bounded_text(path, CLAIM_FILE_MAX_BYTES))
+    except _READ_ERRORS:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    if raw.get("seq") != seq:
+        return None
+    if _parse_utc_iso(raw.get("claimed_at")) is None:
+        return None
+    return raw
+
+
+def _seq_claim_valid(state_dir: Path, seq: int) -> bool:
+    return _load_seq_claim(state_dir, seq) is not None
 
 
 def _highest_seq_claimed_at(state_dir: Path) -> datetime | None:
@@ -48,13 +78,10 @@ def _highest_seq_claimed_at(state_dir: Path) -> datetime | None:
             seq = int(path.stem)
         except ValueError:
             continue
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except _READ_ERRORS:
+        claim = _load_seq_claim(state_dir, seq)
+        if claim is None:
             continue
-        if not isinstance(raw, dict):
-            continue
-        claimed_at = _parse_utc_iso(raw.get("claimed_at"))
+        claimed_at = _parse_utc_iso(claim.get("claimed_at"))
         if claimed_at is None:
             continue
         if best_seq is None or seq > best_seq:
@@ -81,7 +108,7 @@ def _collect_valid_ticks_for_deadman(
             skipped.append(f"{path.name}:bad_filename")
             continue
         try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
+            raw = json.loads(_read_tick_file_text(path))
         except _READ_ERRORS:
             skipped.append(f"{path.name}:read_error")
             continue
@@ -90,7 +117,7 @@ def _collect_valid_ticks_for_deadman(
             skipped.append(err or f"{path.name}:invalid")
             continue
         seq = record.get("seq")
-        if not isinstance(seq, int) or not _seq_claim_exists(state_dir, seq):
+        if not isinstance(seq, int) or not _seq_claim_valid(state_dir, seq):
             skipped.append(f"{path.name}:no_seq_claim")
             continue
         valid.append(record)
@@ -99,7 +126,6 @@ def _collect_valid_ticks_for_deadman(
 
 
 def _select_latest_tick_by_completed_at(ticks: list[dict[str, Any]]) -> dict[str, Any] | None:
-    best: dict[str, Any] | None = None
     best_at: datetime | None = None
     for tick in ticks:
         completed_at = _parse_utc_iso(tick.get("completed_at"))
@@ -107,8 +133,18 @@ def _select_latest_tick_by_completed_at(ticks: list[dict[str, Any]]) -> dict[str
             continue
         if best_at is None or completed_at > best_at:
             best_at = completed_at
-            best = tick
-    return best
+    if best_at is None:
+        return None
+
+    tied = [
+        tick
+        for tick in ticks
+        if _parse_utc_iso(tick.get("completed_at")) == best_at
+    ]
+    for tick in tied:
+        if not _last_alert_ok_passes(tick):
+            return tick
+    return tied[0]
 
 
 def _last_alert_ok_passes(latest: dict[str, Any]) -> bool:

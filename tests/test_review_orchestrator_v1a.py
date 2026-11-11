@@ -447,6 +447,127 @@ def test_exam_v1a_state_dir_parent_is_rerunnable(tmp_path: Path) -> None:
     assert list(parent.iterdir()) == []
 
 
+def test_deadman_forged_fresh_tick_invalid_claim_not_all_clear(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant_completed_tick(
+        tmp_path,
+        tick_id="real-stale",
+        completed_at=now - timedelta(hours=5),
+        seq=1,
+        claimed_at=now - timedelta(hours=5),
+    )
+    forged_completed = now - timedelta(minutes=1)
+    _plant_completed_tick(
+        tmp_path,
+        tick_id="forged-fresh",
+        completed_at=forged_completed,
+        seq=1_000_000,
+        write_seq_claim=False,
+    )
+    (tmp_path / "seq" / "1000000.json").write_text("not json\n", encoding="utf-8")
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is False
+    assert "stale" in verdict.reason
+
+
+def test_mutation_deadman_accepts_tick_when_claim_file_exists_only(
+    tmp_path: Path, monkeypatch
+) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant_completed_tick(
+        tmp_path,
+        tick_id="real-stale",
+        completed_at=now - timedelta(hours=5),
+        seq=1,
+        claimed_at=now - timedelta(minutes=2),
+    )
+    _plant_completed_tick(
+        tmp_path,
+        tick_id="forged-fresh",
+        completed_at=now - timedelta(minutes=1),
+        seq=1_000_000,
+        write_seq_claim=False,
+    )
+    (tmp_path / "seq" / "1000000.json").write_text("not json\n", encoding="utf-8")
+
+    def claim_exists_only(state_dir: Path, seq: int) -> bool:
+        return (state_dir / "seq" / f"{seq}.json").is_file()
+
+    monkeypatch.setattr(deadman, "_seq_claim_valid", claim_exists_only)
+    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert broken.ok is True
+
+    monkeypatch.undo()
+    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert fixed.ok is False
+
+
+def test_deadman_equal_completed_at_bad_last_alert_ok_alerts(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    at = now - timedelta(minutes=1)
+    _plant_completed_tick(tmp_path, tick_id="a", completed_at=at, seq=1)
+    _plant_completed_tick(tmp_path, tick_id="z", completed_at=at, seq=2, last_alert_ok=False)
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is False
+    assert verdict.reason == "last_alert_ok_false"
+
+
+def test_mutation_deadman_equal_time_keeps_first_filename_wins(
+    tmp_path: Path, monkeypatch
+) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    at = now - timedelta(minutes=1)
+    _plant_completed_tick(tmp_path, tick_id="a", completed_at=at, seq=1)
+    _plant_completed_tick(tmp_path, tick_id="z", completed_at=at, seq=2, last_alert_ok=False)
+
+    def first_wins(ticks: list[dict]) -> dict | None:
+        best = None
+        best_at = None
+        for tick in ticks:
+            from tools.review_orchestrator.persist import _parse_utc_iso
+
+            completed = _parse_utc_iso(tick.get("completed_at"))
+            if completed is None:
+                continue
+            if best_at is None or completed > best_at:
+                best_at = completed
+                best = tick
+        return best
+
+    monkeypatch.setattr(deadman, "_select_latest_tick_by_completed_at", first_wins)
+    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert broken.ok is True
+
+    monkeypatch.undo()
+    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert fixed.ok is False
+
+
+def test_deadman_oversized_tick_file_skipped(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    completed = now - timedelta(minutes=1)
+    _plant_completed_tick(tmp_path, tick_id="good", completed_at=completed)
+    ticks = tmp_path / "ticks"
+    oversized = "x" * (deadman.TICK_FILE_MAX_BYTES + 1)
+    (ticks / "tick-huge.json").write_text(oversized, encoding="utf-8")
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is True
+
+
+def test_mutation_deadman_reads_unbounded_tick_file(tmp_path: Path, monkeypatch) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    completed = now - timedelta(minutes=1)
+    _plant_completed_tick(tmp_path, tick_id="good", completed_at=completed)
+
+    monkeypatch.setattr(deadman, "TICK_FILE_MAX_BYTES", 0)
+    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert broken.ok is False
+
+    monkeypatch.undo()
+    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert fixed.ok is True
+
+
 def test_deadman_corrupt_newest_tick_alerts_despite_older_valid(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     _plant_completed_tick(
