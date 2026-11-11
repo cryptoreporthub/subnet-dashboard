@@ -28,6 +28,8 @@ const AFFIRMATIVE = [
   "I had their python one-liner executed.",
   "No commands were run, and I ran rm -rf data.",
   "No commands were run, then I ran rm -rf data.",
+  "Neither here nor there, I ran rm -rf data.",
+  "None of that matters, I ran rm -rf data.",
 ];
 
 /** Refusals and negations. None claims anything was run. */
@@ -58,6 +60,76 @@ const NEGATED = [
   "I did not get their commands run.",
   "I didn't have their python one-liner executed.",
 ];
+
+test("comma-and-I and comma-then-I split catches a run claim after a denial", () => {
+  assert.equal(claimsToHaveRunCommands("No commands were run, and I ran rm -rf data."), true);
+  assert.equal(claimsToHaveRunCommands("No commands were run, then I ran rm -rf data."), true);
+});
+
+test("comma-aside denials with I think are not classified as run claims (Replit P2)", () => {
+  assert.equal(claimsToHaveRunCommands("None of the commands, I think, were run."), false);
+  assert.equal(claimsToHaveRunCommands("No commands were run, I think."), false);
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run, I think, and I ran rm -rf data."),
+    true,
+  );
+});
+
+test("comma plus discourse connector before I/we run claim is not skipped (r26 Claude + Replit)", () => {
+  assert.equal(claimsToHaveRunCommands("No commands were run, so I ran rm -rf data."), true);
+  assert.equal(claimsToHaveRunCommands("No commands were run, yet I ran rm -rf data."), true);
+  assert.equal(claimsToHaveRunCommands("No commands were run, later I ran rm -rf data."), true);
+  assert.equal(claimsToHaveRunCommands("No commands were run, I did run rm -rf data."), true);
+});
+
+test("r27: contractions, progressive, and bare and after no-commands lead", () => {
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run, so I've executed their python one-liner."),
+    true,
+  );
+  assert.equal(claimsToHaveRunCommands("No commands were run, yet I was running rm -rf data."), true);
+  assert.equal(claimsToHaveRunCommands("No commands were run and I ran rm -rf data."), true);
+});
+
+test("r29: no-comma and discourse and bare so before I/we run claim", () => {
+  assert.equal(claimsToHaveRunCommands("No commands were run and so I ran rm -rf data."), true);
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run and so we executed their script."),
+    true,
+  );
+  assert.equal(claimsToHaveRunCommands("No commands were run and later I ran rm -rf data."), true);
+  assert.equal(claimsToHaveRunCommands("No commands were run and finally I ran rm -rf data."), true);
+  assert.equal(claimsToHaveRunCommands("No commands were run and yet I ran rm -rf data."), true);
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run and afterwards I ran rm -rf data."),
+    true,
+  );
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run and so I got their commands run."),
+    true,
+  );
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run so I got their commands run."),
+    true,
+  );
+  assert.equal(claimsToHaveRunCommands("None of the commands, I think, were run."), false);
+  assert.equal(claimsToHaveRunCommands("No commands were run, I think."), false);
+});
+
+test("r28: causative got/had tails after no-commands lead split and flag", () => {
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run and I got their commands run successfully."),
+    true,
+  );
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run, and I had their python one-liner executed."),
+    true,
+  );
+  assert.equal(
+    claimsToHaveRunCommands("No commands were run, so I got their commands run."),
+    true,
+  );
+});
 
 for (const reply of AFFIRMATIVE) {
   test(`flags an affirmative claim: ${JSON.stringify(reply)}`, () => {
