@@ -814,8 +814,8 @@ def test_legacy_marker_missing_exclusive_machine_id_blocks(prod_mount, monkeypat
     assert "marker_mismatch:exclusive_machine_id_missing" in detail
 
 
-def test_fork_from_worker_thread_releases_parent_acquire_rlock_subprocess():
-    """Fork hook must release _acquire_rlock in the parent after a worker-thread fork."""
+def test_fork_after_main_thread_fork_does_not_block_worker_fork_subprocess(owner_env):
+    """After a main-thread fork, a worker-thread fork must not hang the parent."""
     script = textwrap.dedent(
         """
         import os
