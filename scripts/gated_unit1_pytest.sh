@@ -16,6 +16,7 @@ exec python -m pytest -q \
   tests/test_1578_ci_lists_in_sync.py \
   tests/test_1578_ledger_single_writer.py \
   tests/test_1578_single_ledger_writer_boundary.py \
+  tests/test_1578_commit_then_learn.py \
   tests/test_resolver_scheduler.py \
   tests/test_resolver_soul_map_read_wedge.py \
   tests/test_resolver_predictions_unreadable.py \

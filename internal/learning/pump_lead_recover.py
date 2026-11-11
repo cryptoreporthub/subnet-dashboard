@@ -12,6 +12,7 @@ missing_horizon_candles even when a live fetch would cover them.
 from __future__ import annotations
 
 import logging
+import uuid
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -392,12 +393,19 @@ def recover_overdue_pump_leads(
     """Move overdue pending pump_lead → resolved/ungradeable with candle grades."""
     resolved_path = path or PREDICTIONS_PATH
     from internal.learning.predictions_store import (
-        PersistOutcome, PredictionsLedgerUnreadable, load_predictions, merge_ledger_changes,
+        PersistOutcome, PredictionsLedgerUnreadable, _row_key, load_predictions,
+        merge_ledger_changes,
     )
+    from internal.council.learning_effects import pending_pump_learning, reconcile_pump_learning
 
     try:
+        cycle_run_id = str(uuid.uuid4())
+        learning_before = (
+            reconcile_pump_learning(resolved_path, cycle_run_id=cycle_run_id)
+            if not dry_run else {"applied": 0, "recovered": 0, "indeterminate": 0, "failed": 0, "busy": 0}
+        )
         data = load_predictions(path=resolved_path, fail_closed=True)
-    except PredictionsLedgerUnreadable as exc:
+    except (PredictionsLedgerUnreadable, OSError) as exc:
         return {"ok": False, "reason": "ledger_unreadable", "error": str(exc)}
     before = deepcopy(data)
     pending: List[Dict[str, Any]] = list(data.get("predictions") or [])
@@ -468,14 +476,9 @@ def recover_overdue_pump_leads(
             still.append(result)
             kept_pending += 1
         elif status == "resolved":
+            result["learning"] = pending_pump_learning(result)
             graded.append(result)
             resolved.append(result)
-            try:
-                from internal.learning.pump_calibration import maybe_adapt_after_resolve
-
-                maybe_adapt_after_resolve(prediction=result)
-            except Exception:
-                logger.exception("pump calibration online update failed")
         else:
             rejected.append(result)
             resolved.append(result)
@@ -519,6 +522,30 @@ def recover_overdue_pump_leads(
     )
     if persisted.outcome is not PersistOutcome.APPLIED:
         return {"ok": False, "reason": "persist_refused", "persist_outcome": persisted.outcome.value}
+    committed = set(persisted.committed_keys)
+    committed_grades = [row for row in graded if _row_key(row) in committed]
+    summary["graded"] = len(committed_grades)
+    summary["graded_netuids"] = [row.get("netuid") for row in committed_grades]
+    summary["hits"] = sum(row.get("correct") is True for row in committed_grades)
+    summary["misses"] = sum(row.get("correct") is False for row in committed_grades)
+    if persisted.conflicts:
+        summary["ok"] = False
+        summary["reason"] = "ledger_conflicts"
+        summary["conflicts"] = list(persisted.conflicts)
+    try:
+        learning_after = reconcile_pump_learning(
+            resolved_path, cycle_run_id=cycle_run_id, recovered=False
+        )
+    except (PredictionsLedgerUnreadable, OSError) as exc:
+        return {"ok": False, "reason": "learning_reconcile_failed", "error": str(exc)}
+    for name in ("applied", "recovered", "indeterminate", "failed", "busy"):
+        summary[f"learning_{name}"] = (
+            max(learning_before[name], learning_after[name]) if name == "indeterminate"
+            else learning_before[name] + learning_after[name]
+        )
+    if summary["learning_indeterminate"] or summary["learning_failed"] or summary["learning_busy"]:
+        summary["ok"] = False
+        summary.setdefault("reason", "learning_incomplete")
     logger.info(
         "pump_lead recover graded=%s rejected=%s hits=%s misses=%s",
         summary["graded"],
