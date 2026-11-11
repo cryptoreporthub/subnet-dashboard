@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from tools.reviewer_scorecard.blind import compute_blind
-from tools.reviewer_scorecard.generator import generate_from_directory, generate_scorecard
+from tools.reviewer_scorecard.generator import _blocking_display, generate_from_directory, generate_scorecard
 from tools.reviewer_scorecard.metrics import compute_reviewer_metrics
 from tools.reviewer_scorecard.tables import ScorecardTables
 from tools.reviewer_scorecard.wilson import wilson_lower_bound
@@ -91,6 +91,19 @@ def test_generator_deterministic_bytes_stable(tables: ScorecardTables, tmp_path:
     assert first.scorecard_json["inputs_hash"] == tables.inputs_hash()
     assert any(k.startswith("rubber_") for k in first.reviewer_comments)
     assert any(k.startswith("catcher_") for k in first.peer_comments)
+
+
+def test_blocking_display_matches_metrics_parser() -> None:
+    bugs = {
+        "1515_horizon_overflow": {"bug_id": "1515_horizon_overflow", "severity": "S2 High"},
+        "note_only": {"bug_id": "note_only", "severity": "S4 Low"},
+    }
+    assert _blocking_display({"caught_bug_ids": "none"}, bugs) == "0 found"
+    assert _blocking_display({"caught_bug_ids": "1515_horizon_overflow;1515_horizon_overflow"}, bugs) == "1 found"
+    assert _blocking_display({"caught_bug_ids": "note_only"}, bugs) == "0 found"
+    assert (
+        _blocking_display({"blocking_result": "custom", "caught_bug_ids": "note_only"}, bugs) == "custom"
+    )
 
 
 def test_backfill_production_tables_load_and_generate(tmp_path: Path) -> None:
