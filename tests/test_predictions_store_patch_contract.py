@@ -210,5 +210,6 @@ def test_save_predictions_signature_locked_save_compatibility():
         p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
         for p in params[1:]
     )
-    assert params[-1].name == "trigger"
-    assert params[-1].default == "save_predictions"
+    by_name = {p.name: p for p in params}
+    assert by_name["trigger"].default == "save_predictions"
+    assert by_name["path"].default is None

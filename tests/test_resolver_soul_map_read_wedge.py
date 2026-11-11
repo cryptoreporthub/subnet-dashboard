@@ -19,7 +19,7 @@ def test_corrupt_soul_map_does_not_wedge_cycle_generation_seed(tmp_path, monkeyp
         soul_map_path=str(soul), refresh_minutes=15
     )
     sched._ensure_cycle_generation_seeded()
-    assert sched._cycle_generation_seeded is True
+    assert sched._cycle_generation_seeded is False
 
 
 def test_load_json_degrades_unreadable_to_empty_dict(tmp_path):

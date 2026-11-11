@@ -142,3 +142,25 @@ def test_tick_corrupt_ledger_hold_twice_no_predictions_write(tmp_path, monkeypat
         assert resolve_calls == []
         assert expire_calls == []
     assert preds.read_bytes() == before
+
+
+def test_unreadable_or_transient_soul_map_does_not_mark_cycle_generation_seeded(
+    tmp_path,
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("not-json", encoding="utf-8")
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        soul_map_path=str(soul), refresh_minutes=15, subnet_provider=lambda: []
+    )
+    sched._ensure_cycle_generation_seeded()
+    assert sched._cycle_generation_seeded is False
+
+    good = {
+        "prediction_resolver_scheduler": {
+            "last_cycle": {"cycle_generation": 9},
+        }
+    }
+    soul.write_text(json.dumps(good), encoding="utf-8")
+    sched._ensure_cycle_generation_seeded()
+    assert sched._cycle_generation_seeded is True
+    assert sched._cycle_generation >= 9

@@ -369,7 +369,16 @@ def record_pick_prediction(
     except Exception as exc:
         logger.warning("Judge on_prediction_created failed: %s", exc)
 
+    pred_id = prediction.get("id")
     if not append_prediction(prediction):
+        if pred_id is not None:
+            try:
+                from internal.judges.judges import all_judges
+
+                for judge in all_judges():
+                    judge.discard_open_position(pred_id)
+            except Exception as exc:
+                logger.warning("Judge portfolio rollback failed: %s", exc)
         return None
 
     _append_mindmap_trail(pick, prediction, horizon_type)
@@ -511,7 +520,8 @@ def _mirror_pick_to_soul_map(
             "prediction_id": prediction.get("id"),
             "updated_at": prediction.get("created_at"),
         }
-        _save_raw(data)
+        if not _save_raw(data):
+            logger.warning("Soul-map pick mirror refused write")
     except Exception as exc:
         logger.warning("Soul-map pick mirror failed: %s", exc)
 
@@ -582,7 +592,8 @@ def record_hold_decision(
         }
         sms[f"last_{horizon_type}_pick"] = entry
         sms[f"last_{horizon_type}_hold"] = entry
-        _save_raw(data)
+        if not _save_raw(data):
+            logger.warning("HOLD soul-map mirror refused write")
     except Exception as exc:
         logger.warning("HOLD soul-map mirror failed: %s", exc)
 

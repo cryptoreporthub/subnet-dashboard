@@ -46,8 +46,8 @@ def load_judge_weights(path: Optional[str] = None) -> Dict[str, float]:
     return normalize_judge_weights(data.get("judge_weights"))
 
 
-def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:
-    from internal.store.soul_map_io import write_soul_map
+def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) -> bool:
+    from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
     canonical = normalize_judge_weights(weights)
     rounded = {k: round(float(v), 4) for k, v in canonical.items()}
@@ -55,7 +55,8 @@ def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) ->
     def _mutate(blob: Dict[str, Any]) -> None:
         blob["judge_weights"] = rounded
 
-    write_soul_map(_mutate, path=path or SOUL_MAP_PATH)
+    result = write_soul_map(_mutate, path=path or SOUL_MAP_PATH)
+    return result.outcome is WriteOutcome.APPLIED
 
 
 def nudge_judge(
@@ -86,7 +87,8 @@ def nudge_judge(
         4,
     )
     weights[judge_name] = after
-    save_judge_weights(weights, resolved_path)
+    if not save_judge_weights(weights, resolved_path):
+        return None
     if after != before:
         try:
             from internal.learning.trail_bus import emit_weight_change

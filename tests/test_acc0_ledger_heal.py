@@ -258,3 +258,62 @@ def test_epoch_reset_reheals_or_downgrades(tmp_path, monkeypatch):
         soul_path=str(tmp_path / "missing_soul.json"),
     )
     assert report["ledger"]["gap"] is False
+
+
+def test_epoch_archive_uses_alternate_predictions_path(tmp_path, monkeypatch):
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "alt_predictions.json"
+    archive = tmp_path / "archive"
+    _write_json(
+        daily,
+        [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}],
+    )
+    _write_json(
+        preds,
+        {
+            "predictions": [],
+            "resolved": [{"id": "old", "correct": True}],
+            "stats": {"correct": 1, "wrong": 0, "pending": 0, "total": 1, "accuracy": 1.0},
+        },
+    )
+    monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {"running": True, "last_run_at": datetime.now(timezone.utc).isoformat()},
+    )
+
+    summary = archive_predictions_epoch(
+        predictions_path=str(preds),
+        archive_dir=str(archive),
+        re_heal_daily=False,
+    )
+    assert summary["ok"] is True
+    data = json.loads(preds.read_text(encoding="utf-8"))
+    assert data.get("resolved") == []
+    assert "epoch_reset_at" in data
+
+
+def test_heal_append_unreadable(tmp_path, monkeypatch):
+    preds = tmp_path / "predictions.json"
+    daily = tmp_path / "daily_picks.json"
+    preds.write_text("corrupt", encoding="utf-8")
+    daily.write_text(
+        json.dumps(
+            [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}]
+        ),
+        encoding="utf-8",
+    )
+    before = preds.read_bytes()
+    monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
+
+    from internal.learning import predictions_store
+
+    summary = heal_daily_pick_ledger(
+        dry_run=False,
+        daily_picks_path=str(daily),
+        predictions_path=str(preds),
+    )
+    assert summary["ok"] is False
+    assert summary["reason"] == "ledger_unreadable"
+    assert preds.read_bytes() == before
+    assert predictions_store.has_pending_duplicate(15, "day", path=str(preds)) is False

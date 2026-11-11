@@ -19,6 +19,9 @@ on:
       - "tests/test_soul_map_io.py"
       - "tests/test_soul_map_io_failure.py"
       - "tests/test_soul_map_write_honesty.py"
+      - "tests/test_judge_weight_write_honesty.py"
+      - "tests/test_prediction_loop_judge_rollback.py"
+      - "tests/test_mindmap_pending_declined.py"
       - ".github/workflows/unit1-slice.yml"
       - ".github/workflows/ci-smoke.yml"
   push:
@@ -54,4 +57,7 @@ jobs:
             tests/test_compact_soul_map.py \
             tests/test_soul_map_io.py \
             tests/test_soul_map_io_failure.py \
-            tests/test_soul_map_write_honesty.py
+            tests/test_soul_map_write_honesty.py \
+            tests/test_judge_weight_write_honesty.py \
+            tests/test_prediction_loop_judge_rollback.py \
+            tests/test_mindmap_pending_declined.py

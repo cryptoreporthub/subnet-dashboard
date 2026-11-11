@@ -222,7 +222,7 @@ def archive_predictions_epoch(
         },
         "epoch_reset_at": _utcnow().isoformat().replace("+00:00", "Z"),
     }
-    predictions_store.save_predictions(empty)
+    predictions_store.save_predictions(empty, path=src)
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:

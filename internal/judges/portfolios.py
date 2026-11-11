@@ -148,6 +148,22 @@ def open_position(
     _save(data)
     return position
 
+def discard_open_position(judge_name: str, prediction_id: Any) -> bool:
+    """Remove an open paper position without closing it to the ledger."""
+    if prediction_id is None:
+        return False
+    data = _load()
+    judge = _get_judge(data, judge_name)
+    open_positions = judge.get("open_positions", [])
+    remaining = [pos for pos in open_positions if pos.get("id") != prediction_id]
+    if len(remaining) == len(open_positions):
+        return False
+    judge["open_positions"] = remaining
+    _recompute_summary(judge)
+    _save(data)
+    return True
+
+
 def close_position(
     judge_name: str,
     prediction: Dict[str, Any],

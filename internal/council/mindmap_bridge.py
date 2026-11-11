@@ -13,7 +13,12 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from internal.store.soul_map_io import read_soul_map, write_soul_map_committed
+from internal.store.soul_map_io import (
+    WriteOutcome,
+    read_soul_map,
+    write_soul_map,
+    write_soul_map_committed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -224,19 +229,20 @@ class MindmapBridge:
             _record_resolved_ids(state, resolved)
             _replay_trail_rows(state, rows)
 
-        committed, result = write_soul_map_committed(_apply, self.persistence_path)
-        if committed:
-            # The disk write landed. Drop only the rows this commit carried, then sync the rows
-            # and ledger to the merged on-disk state, so rows other bridges appended since this
-            # bridge loaded are visible here too.
+        result = write_soul_map(
+            _apply, self.persistence_path, raise_on_lock_timeout=False
+        )
+        if result.outcome is WriteOutcome.APPLIED:
             _drop_pending_through(key, flushed["through"])
-            committed_state = result.get("soul_map_state")
+            committed_state = (result.blob or {}).get("soul_map_state")
             committed_state = committed_state if isinstance(committed_state, dict) else {}
             for field in ("learning_trail", "resolved_prediction_ids"):
                 if field in committed_state:
                     self.soul_map_state[field] = committed_state[field]
                 else:
                     self.soul_map_state.pop(field, None)
+        elif result.outcome is WriteOutcome.DECLINED:
+            _drop_pending_through(key, flushed["through"])
         else:
             # The disk write failed. Keep this row in memory; the returned blob is the
             # pre-append snapshot and would drop it. Earlier failed rows are already in

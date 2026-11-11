@@ -79,7 +79,8 @@ def _save_calibration_state(
     if isinstance(event, dict):
         history = (history + [event])[-5:]
         cal["history"] = history
-    _save_raw(data, soul_map_path)
+    if not _save_raw(data, soul_map_path):
+        raise RuntimeError("calibration state write refused")
 
 
 def _gradeable_row(row: Dict[str, Any]) -> bool:

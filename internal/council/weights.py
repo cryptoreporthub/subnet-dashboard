@@ -95,24 +95,20 @@ def _load_raw(path: str = SOUL_MAP_PATH, *, copy_blob: bool = True) -> Dict[str,
     return read_soul_map(path, copy_blob=copy_blob)
 
 
-def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
+def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> bool:
     """Replace the serialized blob; callers intentionally provide full-blob state."""
-    from internal.store.soul_map_io import write_soul_map
+    from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
-    write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
+    result = write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
+    return result.outcome is WriteOutcome.APPLIED
 
 
-def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> Optional[Dict[str, Any]]:
+def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> bool:
     """Apply a mutation to the latest serialized blob under the store lock."""
     from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
     result = write_soul_map(mutator, path)
-    if (
-        result.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
-        and result.blob is not None
-    ):
-        return result.blob
-    return None
+    return result.outcome is WriteOutcome.APPLIED
 
 
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
@@ -460,6 +456,7 @@ def rebalance_council_weights(
 
     trail_emitted = True
     warnings: List[str] = []
+    saved_ok = not save
     if save:
         if os.environ.get("GRADING_REBASE", "").strip().lower() in {
             "1",
@@ -468,28 +465,31 @@ def rebalance_council_weights(
             "on",
         }:
             blended = apply_rebase_guards(blended, merged_rows)
-        save_weights(blended, soul, expected_weights=before)
-        try:
-            from internal.learning.trail_bus import emit_weight_change
-
-            for name in DEFAULT_WEIGHTS:
-                if (
-                    abs(float(blended.get(name, 0)) - float(before.get(name, 0)))
-                    > 0.001
-                ):
-                    emit_weight_change(
-                        name,
-                        before=float(before.get(name, 1.0)),
-                        after=float(blended.get(name, 1.0)),
-                        reason="council_rebalance",
-                    )
-        except Exception:
-            logger.exception("rebalance_council_weights: emit_weight_change failed")
+        saved_ok = save_weights(blended, soul, expected_weights=before)
+        if not saved_ok:
             trail_emitted = False
-            warnings.append("emit_weight_change")
+        else:
+            try:
+                from internal.learning.trail_bus import emit_weight_change
+
+                for name in DEFAULT_WEIGHTS:
+                    if (
+                        abs(float(blended.get(name, 0)) - float(before.get(name, 0)))
+                        > 0.001
+                    ):
+                        emit_weight_change(
+                            name,
+                            before=float(before.get(name, 1.0)),
+                            after=float(blended.get(name, 1.0)),
+                            reason="council_rebalance",
+                        )
+            except Exception:
+                logger.exception("rebalance_council_weights: emit_weight_change failed")
+                trail_emitted = False
+                warnings.append("emit_weight_change")
 
     return {
-        "ok": True,
+        "ok": saved_ok,
         "saved": bool(save),
         "trail_emitted": trail_emitted if save else None,
         "warnings": warnings,
@@ -633,7 +633,7 @@ def save_weights(
     path: Optional[str] = None,
     *,
     expected_weights: Optional[Dict[str, float]] = None,
-) -> None:
+) -> bool:
     """Replace the full council weight map and mirror it to the root compatibility map.
 
     The replacement is applied to the latest locked blob, so unrelated keys are
@@ -664,7 +664,7 @@ def save_weights(
         # Mirror to root expert_weights so legacy readers always see learned values.
         data["expert_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
 
-    _mutate_raw(replace_weights, path)
+    return _mutate_raw(replace_weights, path)
 
 
 def nudge_expert(
@@ -723,18 +723,10 @@ def nudge_expert(
         adv["last_weight_update"] = _now_iso()
         data["expert_weights"] = dict(canonical)
 
-    persisted = _mutate_raw(apply_delta, path)
-    if persisted is None:
+    if not _mutate_raw(apply_delta, path):
         logger.warning("council weight nudge skipped: soul_map write did not apply")
         return None
-    root_weights = persisted.get("expert_weights")
-    return (
-        desired
-        if desired is not None
-        and isinstance(root_weights, dict)
-        and root_weights.get(expert) == desired
-        else None
-    )
+    return desired
 
 
 def detect_regime(market_data: Optional[Dict[str, Any]] = None) -> str:
@@ -933,22 +925,8 @@ def nudge_signal_weight(
             for raw_horizon, raw_weights in signal_weights.items()
         }
 
-    persisted = _mutate_raw(apply_signal_delta, path)
-    if persisted is None:
+    if not _mutate_raw(apply_signal_delta, path):
         logger.warning("signal weight nudge skipped: soul_map write did not apply")
-        return None
-    persisted_adv = persisted.get("adversarial_state")
-    persisted_signal = (
-        persisted_adv.get("signal_weights") if isinstance(persisted_adv, dict) else None
-    )
-    persisted_horizon = (
-        persisted_signal.get(horizon_type)
-        if isinstance(persisted_signal, dict)
-        else None
-    )
-    if not isinstance(persisted_horizon, dict) or persisted_horizon.get(
-        signal_name
-    ) != round(new_val, 4):
         return None
     try:
         from internal.learning.trail_bus import emit_weight_change
@@ -1100,16 +1078,10 @@ def nudge_impact_strength(
         target["impact_strength"] = round(new_value, 4)
         target["last_impact_strength_update"] = _now_iso()
 
-    persisted = _mutate_raw(apply_impact_delta, path)
-    if persisted is None:
+    if not _mutate_raw(apply_impact_delta, path):
         logger.warning("impact strength nudge skipped: soul_map write did not apply")
         return load_impact_strength(path)
-    persisted_adv = persisted.get("adversarial_state")
-    if isinstance(persisted_adv, dict) and persisted_adv.get(
-        "impact_strength"
-    ) == round(new_value, 4):
-        return new_value
-    return load_impact_strength(path)
+    return new_value
 
 
 def compute_weighted_signal_score(

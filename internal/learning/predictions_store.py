@@ -16,6 +16,17 @@ logger = logging.getLogger(__name__)
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PREDICTIONS_LOCK_PATH = os.path.join("data", "predictions.json.lock")
 
+
+def _resolved_predictions_path(path: Optional[str] = None) -> str:
+    return path or PREDICTIONS_PATH
+
+
+def _predictions_lock_path(path: Optional[str] = None) -> str:
+    ledger = _resolved_predictions_path(path)
+    if path is None and ledger == PREDICTIONS_PATH:
+        return PREDICTIONS_LOCK_PATH
+    return ledger + ".lock"
+
 _V1_TO_V2_PHASE = {
     "ACCUMULATION": "EARLY",
     "MARKUP": "EARLY",
@@ -41,14 +52,15 @@ class PredictionsLedgerUnreadable(Exception):
 
 
 @contextlib.contextmanager
-def locked_predictions_file(timeout_seconds: float = 5.0):
+def locked_predictions_file(timeout_seconds: float = 5.0, *, path: Optional[str] = None):
     """Cross-process advisory lock with bounded wait.
 
     Uses fcntl.flock for cross-process safety between web and worker processes.
     Waits up to timeout_seconds (default 5s) before raising FileLockTimeout.
     """
-    os.makedirs(os.path.dirname(PREDICTIONS_LOCK_PATH) or ".", exist_ok=True)
-    with open(PREDICTIONS_LOCK_PATH, "a+", encoding="utf-8") as lock_file:
+    lock_path = _predictions_lock_path(path)
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
         deadline = time.monotonic() + timeout_seconds
         acquired = False
         while time.monotonic() < deadline:
@@ -60,7 +72,7 @@ def locked_predictions_file(timeout_seconds: float = 5.0):
                 time.sleep(0.05)
         if not acquired:
             raise FileLockTimeout(
-                f"Timed out after {timeout_seconds}s waiting for {PREDICTIONS_LOCK_PATH}"
+                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
             )
         try:
             yield
@@ -136,11 +148,17 @@ def _migrate_evidence(data: Dict[str, Any]) -> bool:
     return changed
 
 
-def load_predictions(*, persist: bool = False, fail_closed: bool = False) -> Dict[str, Any]:
+def load_predictions(
+    *,
+    persist: bool = False,
+    fail_closed: bool = False,
+    path: Optional[str] = None,
+) -> Dict[str, Any]:
     """Load predictions.json. Read-only callers may degrade; writers use ``fail_closed=True``."""
     from internal.store.soul_map_io import read_blob_checked
 
-    checked = read_blob_checked(PREDICTIONS_PATH)
+    ledger_path = _resolved_predictions_path(path)
+    checked = read_blob_checked(ledger_path)
     if checked.kind in ("unreadable", "transient"):
         if fail_closed:
             raise PredictionsLedgerUnreadable(checked.kind, error=checked.error or "")
@@ -165,11 +183,16 @@ def load_predictions(*, persist: bool = False, fail_closed: bool = False) -> Dic
     changed = _migrate_expert_labels(data) or changed
     changed = _migrate_evidence(data) or changed
     if changed and persist:
-        save_predictions(data)
+        save_predictions(data, path=path)
     return data
 
 
-def save_predictions(data: Dict[str, Any], *, trigger: str = "save_predictions") -> None:
+def save_predictions(
+    data: Dict[str, Any],
+    *,
+    trigger: str = "save_predictions",
+    path: Optional[str] = None,
+) -> None:
     """Write predictions.json atomically with cross-process file locking.
 
     Uses fcntl.flock to prevent race conditions between web and worker processes.
@@ -177,15 +200,19 @@ def save_predictions(data: Dict[str, Any], *, trigger: str = "save_predictions")
     """
     from internal.ops.mutation_log import log_mutation
 
+    ledger_path = _resolved_predictions_path(path)
     try:
-        with locked_predictions_file(timeout_seconds=5.0):
+        with locked_predictions_file(timeout_seconds=5.0, path=path):
             _write_predictions_unlocked(
-                data, writer_function="save_predictions", trigger=trigger
+                data,
+                path=path,
+                writer_function="save_predictions",
+                trigger=trigger,
             )
     except FileLockTimeout:
         log_mutation(
             operation="failed",
-            path=PREDICTIONS_PATH,
+            path=ledger_path,
             writer_function="save_predictions",
             trigger=trigger,
         )
@@ -196,7 +223,7 @@ def save_predictions(data: Dict[str, Any], *, trigger: str = "save_predictions")
     except Exception as exc:
         log_mutation(
             operation="failed",
-            path=PREDICTIONS_PATH,
+            path=ledger_path,
             writer_function="save_predictions",
             trigger=trigger,
         )
@@ -207,25 +234,26 @@ def save_predictions(data: Dict[str, Any], *, trigger: str = "save_predictions")
 def _write_predictions_unlocked(
     data: Dict[str, Any],
     *,
+    path: Optional[str] = None,
     writer_function: str = "_write_predictions_unlocked",
     trigger: str = "save_predictions",
 ) -> None:
     """Atomically write predictions.json while the caller owns the file lock."""
     from internal.ops.mutation_log import log_mutation
 
-    path = PREDICTIONS_PATH
+    ledger_path = _resolved_predictions_path(path)
     log_mutation(
         operation="start",
-        path=path,
+        path=ledger_path,
         writer_function=writer_function,
         trigger=trigger,
     )
     try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        tmp = path + ".tmp"
+        os.makedirs(os.path.dirname(ledger_path) or ".", exist_ok=True)
+        tmp = ledger_path + ".tmp"
         log_mutation(
             operation="temp-write",
-            path=path,
+            path=ledger_path,
             writer_function=writer_function,
             trigger=trigger,
         )
@@ -233,33 +261,39 @@ def _write_predictions_unlocked(
             json.dump(data, handle, indent=2)
         log_mutation(
             operation="rename",
-            path=path,
+            path=ledger_path,
             writer_function=writer_function,
             trigger=trigger,
         )
-        os.replace(tmp, path)
+        os.replace(tmp, ledger_path)
         log_mutation(
             operation="completed",
-            path=path,
+            path=ledger_path,
             writer_function=writer_function,
             trigger=trigger,
         )
     except Exception:
         log_mutation(
             operation="failed",
-            path=path,
+            path=ledger_path,
             writer_function=writer_function,
             trigger=trigger,
         )
         raise
 
 
-def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bool = False) -> bool:
+def has_pending_duplicate(
+    netuid: Any,
+    horizon_type: str = "hour",
+    *,
+    shadow: bool = False,
+    path: Optional[str] = None,
+) -> bool:
     """True when a pending row already exists for netuid + horizon (+ shadow flag)."""
     if netuid is None:
         return False
     want_shadow = bool(shadow)
-    for existing in load_predictions().get("predictions", []) or []:
+    for existing in load_predictions(path=path).get("predictions", []) or []:
         if (
             existing.get("netuid") == netuid
             and existing.get("horizon_type", "hour") == horizon_type
@@ -270,7 +304,12 @@ def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bo
     return False
 
 
-def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_prediction") -> bool:
+def append_prediction(
+    prediction: Dict[str, Any],
+    *,
+    trigger: str = "append_prediction",
+    path: Optional[str] = None,
+) -> bool:
     """Append a pending prediction if no duplicate is already pending.
 
     Duplicate key: same ``netuid`` + ``horizon_type`` + shadow flag while pending.
@@ -289,8 +328,8 @@ def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_pred
         return False
     shadow = bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
-    with locked_predictions_file(timeout_seconds=5.0):
-        data = load_predictions(fail_closed=True)
+    with locked_predictions_file(timeout_seconds=5.0, path=path):
+        data = load_predictions(fail_closed=True, path=path)
         pending = data.get("predictions", [])
         for existing in pending:
             if (
@@ -305,7 +344,10 @@ def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_pred
         data["predictions"] = pending
         update_stats(data)
         _write_predictions_unlocked(
-            data, writer_function="append_prediction", trigger=trigger
+            data,
+            path=path,
+            writer_function="append_prediction",
+            trigger=trigger,
         )
     return True
 

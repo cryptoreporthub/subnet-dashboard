@@ -184,3 +184,47 @@ def test_read_soul_map_does_not_cache_transient_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(soul_map_io, "read_blob_checked", flaky)
     assert read_soul_map(str(soul_path)) == {}
     assert read_soul_map(str(soul_path)) == {"a": 1}
+
+
+def test_save_raw_refused_returns_false(tmp_path, monkeypatch):
+    from internal.council import weights
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text("{}", encoding="utf-8")
+    import internal.store.soul_map_io as smio
+
+    def _refuse(*_a, **_k):
+        return smio.WriteResult(smio.WriteOutcome.REPLACE_FAILED, None)
+
+    monkeypatch.setattr(smio, "write_soul_map", _refuse)
+    assert weights._save_raw({"n": 1}, str(soul_path)) is False
+
+
+def test_rebalance_refused_write_returns_not_ok(tmp_path, monkeypatch):
+    from internal.council.weights import rebalance_council_weights
+
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    soul.write_text(
+        '{"adversarial_state":{"council_weights":{"quant":1,"hype":1,"dark_horse":1,"technical":1}}}',
+        encoding="utf-8",
+    )
+    preds.write_text('{"resolved":[],"predictions":[]}', encoding="utf-8")
+
+    emits: list[str] = []
+
+    monkeypatch.setattr(
+        "internal.council.weights.save_weights",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "internal.learning.trail_bus.emit_weight_change",
+        lambda name, **_k: emits.append(name),
+    )
+    result = rebalance_council_weights(
+        predictions_path=str(preds),
+        soul_map_path=str(soul),
+        save=True,
+    )
+    assert result["ok"] is False
+    assert emits == []

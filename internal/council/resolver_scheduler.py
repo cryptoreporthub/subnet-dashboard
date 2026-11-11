@@ -307,6 +307,12 @@ def _load_json(path: str) -> Dict[str, Any]:
     return {}
 
 
+def _soul_map_read_kind(path: str) -> str:
+    from internal.store.soul_map_io import read_blob_checked
+
+    return read_blob_checked(path).kind
+
+
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     try:
         from internal.file_utils import ensure_data_dir
@@ -1110,6 +1116,9 @@ class PredictionResolverScheduler:
 
     def _ensure_cycle_generation_seeded(self) -> None:
         if self._cycle_generation_seeded:
+            return
+        kind = _soul_map_read_kind(self.soul_map_path)
+        if kind not in ("loaded", "missing"):
             return
         data = _load_json(self.soul_map_path)
         sched = data.get("prediction_resolver_scheduler", {})
