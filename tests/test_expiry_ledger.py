@@ -60,6 +60,7 @@ def test_epoch_archive_preserves_pending(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(preds))
 
     res = lh.archive_predictions_epoch(
+        reset_request_id="11111111-1111-4111-8111-111111111111",
         predictions_path=str(preds),
         archive_dir=str(tmp_path / "arc"),
         re_heal_daily=False,

@@ -8,9 +8,12 @@ module idempotently backfills via ``record_pick_prediction``.
 from __future__ import annotations
 
 import json
+import fcntl
+import hashlib
 import logging
 import os
-import shutil
+import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -175,8 +178,73 @@ def heal_daily_pick_ledger(
     return {"ok": False, "healed": False, "reason": "record_failed", "netuid": netuid}
 
 
+def _archive_digest(path: str) -> str:
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read()).hexdigest()
+
+
+def _sync_directory(path: str) -> None:
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _publish_epoch_archive(dest_dir: str, receipt: Dict[str, Any]) -> str:
+    final = os.path.join(dest_dir, receipt["archive_name"])
+    stage = os.path.join(dest_dir, f".staging-{receipt['reset_request_id']}.json")
+    with open(os.path.join(dest_dir, ".publish.lock"), "a+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        if os.path.exists(final):
+            if _archive_digest(final) != receipt["archive_sha256"]:
+                raise ValueError("archive_hash_mismatch")
+            if os.path.exists(stage):
+                if _archive_digest(stage) != receipt["archive_sha256"]:
+                    raise ValueError("archive_hash_mismatch")
+                os.unlink(stage)
+        else:
+            if not os.path.exists(stage):
+                raise ValueError("archive_missing")
+            if _archive_digest(stage) != receipt["archive_sha256"]:
+                raise ValueError("archive_hash_mismatch")
+            os.replace(stage, final)
+            _sync_directory(dest_dir)
+        fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    return final
+
+
+def _remove_old_uncommitted_stages(dest_dir: str, history: List[Dict[str, Any]]) -> None:
+    recorded = {str(item.get("reset_request_id")) for item in history}
+    for name in os.listdir(dest_dir):
+        if not name.startswith(".staging-") or not name.endswith(".json"):
+            continue
+        stage_id = name[len(".staging-"):-len(".json")]
+        path = os.path.join(dest_dir, name)
+        if stage_id not in recorded and time.time() - os.path.getmtime(path) > 600:
+            os.unlink(path)
+
+
+def reconcile_epoch_archives(*, predictions_path: Optional[str] = None, archive_dir: Optional[str] = None) -> Dict[str, Any]:
+    src, dest_dir = predictions_path or predictions_store.PREDICTIONS_PATH, archive_dir or ARCHIVE_DIR
+    os.makedirs(dest_dir, exist_ok=True)
+    try:
+        with predictions_store.locked_predictions_file(path=src):
+            data = predictions_store.load_predictions(path=src, fail_closed=True)
+            history = data.get("epoch_history") or []
+            _remove_old_uncommitted_stages(dest_dir, history)
+            for receipt in history:
+                _publish_epoch_archive(dest_dir, receipt)
+    except predictions_store.FileLockTimeout:
+        return {"ok": False, "reason": "lock_timeout"}
+    except (OSError, ValueError, KeyError, predictions_store.PredictionsLedgerUnreadable) as exc:
+        return {"ok": False, "reason": str(exc)}
+    return {"ok": True}
+
+
 def archive_predictions_epoch(
     *,
+    reset_request_id: str,
     predictions_path: Optional[str] = None,
     archive_dir: Optional[str] = None,
     re_heal_daily: bool = True,
@@ -185,66 +253,73 @@ def archive_predictions_epoch(
     src = predictions_path or predictions_store.PREDICTIONS_PATH
     dest_dir = archive_dir or ARCHIVE_DIR
     os.makedirs(dest_dir, exist_ok=True)
-    stamp = _utcnow().strftime("pre-epoch-%Y-%m-%dT%H%M%SZ")
-    archive_path = os.path.join(dest_dir, stamp)
-
     try:
-        if os.path.isfile(src):
-            shutil.copy2(src, archive_path)
-        else:
-            archive_path = None
-    except Exception as exc:
-        return {"ok": False, "reason": "archive_failed", "error": str(exc)}
-
-    # Preserve in-flight pending rows across the epoch reset: mid-flight picks
-    # must never vanish into "expired" just because the graded ledger rolled
-    # (root cause of the 69% expired_rate). Toggle off with
-    # PREDICTIONS_ARCHIVE_PRESERVE_PENDING=0 for a true hard reset.
-    from internal.store.soul_map_io import read_blob_checked
-
-    checked = read_blob_checked(src)
-    if checked.kind in ("unreadable", "transient"):
-        return {
-            "ok": False,
-            "reason": "ledger_unreadable",
-            "error": checked.error or checked.kind,
-            "heal": {"skipped": True},
-        }
-
+        request_id = str(uuid.UUID(reset_request_id))
+    except (ValueError, TypeError, AttributeError):
+        return {"ok": False, "reason": "invalid_reset_request_id"}
     preserve_pending = os.environ.get("PREDICTIONS_ARCHIVE_PRESERVE_PENDING", "1") != "0"
-    pending_kept: List[Dict[str, Any]] = []
-    if checked.kind == "loaded" and isinstance(checked.blob, dict):
-        old = checked.blob
-    else:
-        old = {"predictions": [], "resolved": [], "stats": {}}
-    pending_kept = [
-        p for p in (old.get("predictions") or [])
-        if isinstance(p, dict) and p.get("status", "pending") in (None, "pending")
-    ]
-    empty = {
-        "predictions": pending_kept if preserve_pending else [],
-        "resolved": [],
-        "stats": {
-            "correct": 0, "wrong": 0,
-            "pending": len(pending_kept) if preserve_pending else 0,
-            "total": len(pending_kept) if preserve_pending else 0,
-            "accuracy": 0.0,
-        },
-        "epoch_reset_at": _utcnow().isoformat().replace("+00:00", "Z"),
-    }
-    expected = predictions_store.parse_predictions_ledger(old)
-    predictions_store.canonicalize_ledger(expected)
+    selected: Dict[str, Any] = {}
+    retry = False
 
-    def clear_epoch(fresh, _raw):
-        if fresh != expected:
-            return fresh, [], ["ledger_changed_during_archive"]
+    def clear_epoch(fresh, raw):
+        nonlocal retry
+        history = list(fresh.get("epoch_history") or [])
+        _remove_old_uncommitted_stages(dest_dir, history)
+        existing = next((entry for entry in history if entry.get("reset_request_id") == request_id), None)
+        if existing:
+            selected.update(existing)
+            retry = True
+            return fresh, [], []
+        raw = raw or json.dumps(fresh, sort_keys=True).encode()
+        sha = hashlib.sha256(raw).hexdigest()
+        stamp = _utcnow().strftime("pre-epoch-%Y-%m-%dT%H%M%SZ")
+        name = f"{stamp}-{request_id[:8]}.json"
+        from internal.accuracy_lift.measure import ARCHIVE_NAME
+
+        if not ARCHIVE_NAME.fullmatch(name):
+            raise ValueError("invalid_archive_name")
+        final = os.path.join(dest_dir, name)
+        if os.path.exists(final) and _archive_digest(final) != sha:
+            raise ValueError("archive_hash_mismatch")
+        stage = os.path.join(dest_dir, f".staging-{request_id}.json")
+        if os.path.exists(stage) and _archive_digest(stage) != sha:
+            raise ValueError("archive_stage_conflict")
+        if not os.path.exists(stage):
+            with open(stage, "xb") as handle:
+                handle.write(raw)
+                handle.flush()
+                os.fsync(handle.fileno())
+            _sync_directory(dest_dir)
+        selected.update({
+            "reset_request_id": request_id, "archive_name": name,
+            "archive_sha256": sha, "reset_at": _utcnow().isoformat(),
+        })
+        pending = [row for row in fresh["predictions"] if row.get("status", "pending") in (None, "pending")]
+        pending = pending if preserve_pending else []
+        empty = {
+            "predictions": pending, "resolved": [], "epoch_history": history + [dict(selected)],
+            "stats": {"correct": 0, "wrong": 0, "pending": len(pending), "total": len(pending), "accuracy": 0.0},
+        }
         return empty, ["epoch"], []
 
-    persisted = predictions_store.mutate_predictions(
-        clear_epoch, path=src, caller="archive_predictions_epoch", trigger="archive"
-    )
+    try:
+        persisted = predictions_store.mutate_predictions(
+            clear_epoch, path=src, caller="archive_predictions_epoch", trigger="archive"
+        )
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "reason": str(exc), "heal": {"skipped": True}}
     if persisted.outcome is not predictions_store.PersistOutcome.APPLIED:
-        return {"ok": False, "reason": "persist_refused", "heal": {"skipped": True}}
+        reason = "ledger_unreadable" if persisted.reason in (
+            predictions_store.PersistReason.UNREADABLE, predictions_store.PersistReason.SCHEMA_INVALID,
+        ) else "persist_refused"
+        return {"ok": False, "reason": reason, "heal": {"skipped": True}}
+    try:
+        archive_path = _publish_epoch_archive(dest_dir, selected)
+    except (OSError, ValueError, KeyError) as exc:
+        return {"ok": False, "reason": str(exc), "heal": {"skipped": True}}
+
+    if retry:
+        return {"ok": True, "archive_path": archive_path, "idempotent_retry": True, "heal": {"skipped": True}}
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:

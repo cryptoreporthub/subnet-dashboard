@@ -236,7 +236,10 @@ def _archive_replay_rows(archive_dir: Optional[str] = None) -> List[Dict[str, An
         from scripts.measure_accuracy_archive import load_archive
 
         blob = load_archive(root)
+        for error in blob.get("archive_errors", []):
+            logger.warning("archive replay skipped %s: %s", error.get("file"), error.get("error"))
     except Exception:
+        logger.exception("archive replay could not load %s", root)
         return []
     return _replay_rows_from_blob(blob)
 

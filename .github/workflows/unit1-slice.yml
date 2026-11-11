@@ -35,6 +35,7 @@ on:
       - "tests/test_1578_ledger_single_writer.py"
       - "tests/test_1578_single_ledger_writer_boundary.py"
       - "tests/test_1578_commit_then_learn.py"
+      - "tests/test_1578_archive_readers.py"
       - ".github/workflows/unit1-slice.yml"
       - ".github/workflows/ci-smoke.yml"
   push:
@@ -81,4 +82,5 @@ jobs:
             tests/test_1578_ci_lists_in_sync.py \
             tests/test_1578_ledger_single_writer.py \
             tests/test_1578_single_ledger_writer_boundary.py \
-            tests/test_1578_commit_then_learn.py
+            tests/test_1578_commit_then_learn.py \
+            tests/test_1578_archive_readers.py
