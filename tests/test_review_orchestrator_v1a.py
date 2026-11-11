@@ -43,6 +43,7 @@ def test_run_tick_writes_heartbeat(tmp_path: Path) -> None:
     assert hb_path.is_file()
     data = json.loads(hb_path.read_text(encoding="utf-8"))
     assert data["tick_id"] == "v1"
+    assert data["seq"] == result.seq
     assert "last_alert_ok" not in data
     tick = json.loads(result.path.read_text(encoding="utf-8"))
     assert data["attempt_at"] == tick["started_at"]
@@ -54,11 +55,13 @@ def test_heartbeat_monotonic_publish_rejects_older_after_newer(tmp_path: Path) -
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     newer = {
         "tick_id": "new",
+        "seq": 2,
         "attempt_at": (now - timedelta(minutes=2)).isoformat(),
         "completed_at": (now - timedelta(minutes=1)).isoformat(),
     }
     older = {
         "tick_id": "old",
+        "seq": 1,
         "attempt_at": (now - timedelta(minutes=50)).isoformat(),
         "completed_at": (now - timedelta(minutes=49)).isoformat(),
     }
@@ -76,11 +79,13 @@ def test_mutation_heartbeat_beats_guard_removed(tmp_path: Path, monkeypatch) -> 
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     newer = {
         "tick_id": "new",
+        "seq": 2,
         "attempt_at": (now - timedelta(minutes=2)).isoformat(),
         "completed_at": (now - timedelta(minutes=1)).isoformat(),
     }
     older = {
         "tick_id": "old",
+        "seq": 1,
         "attempt_at": (now - timedelta(minutes=50)).isoformat(),
         "completed_at": (now - timedelta(minutes=49)).isoformat(),
     }
@@ -106,14 +111,134 @@ def test_mutation_heartbeat_beats_guard_removed(tmp_path: Path, monkeypatch) -> 
     assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
 
 
+def test_heartbeat_future_incumbent_replaced_by_normal_tick(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    bootstrap = run_tick(tmp_path, tick_id="bootstrap", noop=True)
+    future_incumbent = {
+        "tick_id": "future",
+        "seq": bootstrap.seq,
+        "attempt_at": (now + timedelta(hours=1)).isoformat(),
+        "completed_at": (now + timedelta(hours=1, minutes=1)).isoformat(),
+    }
+    persist._publish_heartbeat_monotonic(tmp_path, future_incumbent)
+    result = run_tick(tmp_path, tick_id="normal", noop=True)
+    data = json.loads(
+        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
+    )
+    assert data["tick_id"] == "normal"
+    assert data["seq"] == result.seq
+    assert data["seq"] > bootstrap.seq
+    completed = persist._parse_utc_iso(data["completed_at"])
+    assert completed is not None
+    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=completed).ok is True
+
+
+def test_heartbeat_clock_step_cannot_drop_newer_seq(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    newer = {
+        "tick_id": "new",
+        "seq": 5,
+        "attempt_at": (now - timedelta(minutes=1)).isoformat(),
+        "completed_at": now.isoformat(),
+    }
+    persist._publish_heartbeat_monotonic(tmp_path, newer)
+    older_seq_but_later_wall_clock = {
+        "tick_id": "stale",
+        "seq": 3,
+        "attempt_at": (now + timedelta(hours=2)).isoformat(),
+        "completed_at": (now + timedelta(hours=2, minutes=1)).isoformat(),
+    }
+    persist._publish_heartbeat_monotonic(tmp_path, older_seq_but_later_wall_clock)
+    data = json.loads(
+        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
+    )
+    assert data["tick_id"] == "new"
+    assert data["seq"] == 5
+    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
+
+
+def test_mutation_heartbeat_order_key_ignores_seq(
+    tmp_path: Path, monkeypatch
+) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    newer = {
+        "tick_id": "new",
+        "seq": 10,
+        "attempt_at": (now - timedelta(minutes=2)).isoformat(),
+        "completed_at": (now - timedelta(minutes=1)).isoformat(),
+    }
+    older = {
+        "tick_id": "old",
+        "seq": 1,
+        "attempt_at": (now + timedelta(hours=2)).isoformat(),
+        "completed_at": (now + timedelta(hours=2, minutes=1)).isoformat(),
+    }
+    persist._publish_heartbeat_monotonic(tmp_path, newer)
+
+    def wall_clock_only(record: dict) -> tuple[datetime, datetime, str] | None:
+        attempt = persist._parse_utc_iso(record.get("attempt_at"))
+        completed = persist._parse_utc_iso(record.get("completed_at"))
+        tick_id = record.get("tick_id")
+        if attempt is None or completed is None or not isinstance(tick_id, str) or not tick_id:
+            return None
+        return (attempt, completed, tick_id)
+
+    monkeypatch.setattr(persist, "_heartbeat_order_key", wall_clock_only)
+    persist._publish_heartbeat_monotonic(tmp_path, older)
+    broken = json.loads(
+        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
+    )
+    assert broken["tick_id"] == "old"
+    broken_verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert broken_verdict.ok is False
+    assert broken_verdict.reason in {"attempt_stale", "heartbeat_future"}
+
+    monkeypatch.undo()
+    (tmp_path / "heartbeat" / "latest.json").unlink()
+    persist._publish_heartbeat_monotonic(tmp_path, newer)
+    persist._publish_heartbeat_monotonic(tmp_path, older)
+    fixed = json.loads(
+        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
+    )
+    assert fixed["tick_id"] == "new"
+    assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
+
+
+def test_heartbeat_publish_recovers_from_invalid_utf8_incumbent(
+    tmp_path: Path,
+) -> None:
+    hb = tmp_path / "heartbeat"
+    hb.mkdir(parents=True)
+    (hb / "latest.json").write_bytes(b"\xff\xfe")
+    run_tick(tmp_path, tick_id="recover", noop=True)
+    data = json.loads((hb / "latest.json").read_text(encoding="utf-8"))
+    assert data["tick_id"] == "recover"
+    assert isinstance(data["seq"], int)
+
+
+def test_heartbeat_publish_seq_tiebreaks_on_tick_id(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    at = (now - timedelta(minutes=1)).isoformat()
+    first = {"tick_id": "aaa", "seq": 3, "attempt_at": at, "completed_at": at}
+    second = {"tick_id": "bbb", "seq": 3, "attempt_at": at, "completed_at": at}
+    persist._publish_heartbeat_monotonic(tmp_path, first)
+    persist._publish_heartbeat_monotonic(tmp_path, second)
+    data = json.loads(
+        (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
+    )
+    assert data["tick_id"] == "bbb"
+
+
 def test_run_tick_delayed_older_heartbeat_publish_preserves_newer(
     tmp_path: Path, monkeypatch
 ) -> None:
     newer_published = threading.Event()
+    old_at_publish_gate = threading.Event()
     real_publish = persist._publish_heartbeat_monotonic
 
     def gated_publish(state_dir: Path, payload: dict) -> None:
         if payload.get("tick_id") == "old":
+            old_at_publish_gate.set()
             assert newer_published.wait(timeout=2.0)
             real_publish(state_dir, payload)
         else:
@@ -132,6 +257,7 @@ def test_run_tick_delayed_older_heartbeat_publish_preserves_newer(
 
     worker = threading.Thread(target=slow_old_tick, name="slow-old-tick")
     worker.start()
+    assert old_at_publish_gate.wait(timeout=2.0)
     newer = run_tick(tmp_path, tick_id="new", noop=True)
     worker.join(timeout=5.0)
     assert not worker.is_alive()

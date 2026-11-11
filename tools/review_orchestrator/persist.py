@@ -103,13 +103,12 @@ def create_if_absent(path: Path, payload: dict[str, Any]) -> bool:
                 pass
 
 
-def _heartbeat_order_key(record: dict[str, Any]) -> tuple[datetime, datetime, str] | None:
-    attempt = _parse_utc_iso(record.get("attempt_at"))
-    completed = _parse_utc_iso(record.get("completed_at"))
+def _heartbeat_order_key(record: dict[str, Any]) -> tuple[int, str] | None:
+    seq = record.get("seq")
     tick_id = record.get("tick_id")
-    if attempt is None or completed is None or not isinstance(tick_id, str) or not tick_id:
+    if not isinstance(seq, int) or not isinstance(tick_id, str) or not tick_id:
         return None
-    return (attempt, completed, tick_id)
+    return (seq, tick_id)
 
 
 def _heartbeat_beats(incumbent: dict[str, Any] | None, candidate: dict[str, Any]) -> bool:
@@ -130,7 +129,7 @@ def _read_heartbeat_dict(path: Path) -> dict[str, Any] | None:
         return None
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return None
     if not isinstance(raw, dict):
         return None
@@ -289,8 +288,8 @@ def run_tick(
     """Run one orchestrator tick: claim in-flight slot, persist completed tick file."""
     state_dir = Path(state_dir)
     tick_id = tick_id or secrets.token_hex(8)
-    started_at = _utc_now_iso()
     seq = _allocate_seq(state_dir)
+    started_at = _utc_now_iso()
     owner_token = secrets.token_hex(8)
 
     reserve = _tick_reserve_path(state_dir, tick_id)
@@ -339,6 +338,7 @@ def run_tick(
             state_dir,
             {
                 "tick_id": tick_id,
+                "seq": seq,
                 "attempt_at": started_at,
                 "completed_at": completed_at,
             },
