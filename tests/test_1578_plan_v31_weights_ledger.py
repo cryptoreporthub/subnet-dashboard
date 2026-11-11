@@ -105,7 +105,7 @@ def test_rebalance_declined_no_trail_state_unchanged(tmp_path, monkeypatch):
         save=True,
     )
     assert result["ok"] is True
-    assert result["trail_emitted"] is True
+    assert result["trail_emitted"] is False
     assert emitted == []
     assert soul.read_bytes() == before_bytes
 

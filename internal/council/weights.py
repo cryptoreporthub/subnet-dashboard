@@ -476,7 +476,8 @@ def rebalance_council_weights(
 
     rows_replayed = sum(1 for row in merged_rows if expert_for_replay_row(row))
 
-    trail_emitted = True
+    trail_emit_planned = 0
+    trail_emit_committed = 0
     warnings: List[str] = []
     saved_ok = not save
     if save:
@@ -490,32 +491,33 @@ def rebalance_council_weights(
         saved_ok, saved_applied = save_weights(
             blended, soul, expected_weights=before, return_outcome=True
         )
-        if not saved_ok:
-            trail_emitted = False
-        elif saved_applied:
-            try:
-                from internal.learning.trail_bus import emit_weight_change
+        if saved_ok and saved_applied:
+            from internal.learning.trail_bus import emit_weight_change
 
-                for name in DEFAULT_WEIGHTS:
-                    if (
-                        abs(float(blended.get(name, 0)) - float(before.get(name, 0)))
-                        > 0.001
-                    ):
-                        emit_weight_change(
+            for name in DEFAULT_WEIGHTS:
+                if abs(float(blended.get(name, 0)) - float(before.get(name, 0))) > 0.001:
+                    trail_emit_planned += 1
+                    try:
+                        outcome = emit_weight_change(
                             name,
                             before=float(before.get(name, 1.0)),
                             after=float(blended.get(name, 1.0)),
                             reason="council_rebalance",
                         )
-            except Exception:
-                logger.exception("rebalance_council_weights: emit_weight_change failed")
-                trail_emitted = False
-                warnings.append("emit_weight_change")
+                        if getattr(outcome, "kind", None) == "committed":
+                            trail_emit_committed += 1
+                        else:
+                            warnings.append("emit_weight_change")
+                    except Exception:
+                        logger.exception("rebalance_council_weights: emit_weight_change failed")
+                        warnings.append("emit_weight_change")
 
     return {
-        "ok": saved_ok,
+        "ok": saved_ok and trail_emit_committed == trail_emit_planned,
         "saved": saved_ok if save else False,
-        "trail_emitted": trail_emitted if save else None,
+        "trail_emitted": trail_emit_committed > 0,
+        "trail_emit_planned": trail_emit_planned,
+        "trail_emit_committed": trail_emit_committed,
         "warnings": warnings,
         "replay_share": replay_share,
         "rows_replayed": len(merged_rows),
