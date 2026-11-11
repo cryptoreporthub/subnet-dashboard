@@ -7,8 +7,6 @@ import threading
 import time
 from pathlib import Path
 
-import pytest
-
 from tools.review_orchestrator.persist import (
     create_if_absent,
     read_newest_completed_tick,
