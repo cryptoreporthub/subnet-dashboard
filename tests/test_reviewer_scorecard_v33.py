@@ -104,7 +104,9 @@ def test_backfill_production_tables_load_and_generate(tmp_path: Path) -> None:
     assert "cursor_auto" in generated.scorecard_json["reviewers"]
     assert "mc_github" in generated.scorecard_json["reviewers"]
     mc = compute_reviewer_metrics(loaded, "mc_github")
-    assert mc.headlines.serious_caught >= 1
+    assert mc.headlines.serious_caught == 1
+    body = generate_scorecard(loaded).reviewer_comments["mc_github_e4eae96b5ae45b7807abf440d162c21f322f4ae0"]
+    assert "1 found" in body
 
 
 def test_golden_deterministic_payload(tables: ScorecardTables) -> None:

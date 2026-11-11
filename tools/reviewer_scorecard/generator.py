@@ -86,6 +86,10 @@ def _reviewer_comment(row: dict[str, str], inputs_hash: str) -> str:
     head = row["head_sha"]
     verdict = row["claimed_verdict"]
     reviewer = row.get("display_name") or row["reviewer_id"]
+    blocking = row.get("blocking_result", "").strip()
+    if not blocking:
+        caught = [p for p in (row.get("caught_bug_ids") or "").split(";") if p.strip() and p.strip() != "-"]
+        blocking = f"{len(caught)} found" if caught else "0 found"
     lines = [
         f"**{verdict} | PR #{row['pr']} | head `{_sha7(head)}` | {reviewer} | "
         f"{row.get('verdict_at', 'unknown')} UTC | confidence: {row.get('confidence', 'not_stated')}**",
@@ -94,7 +98,7 @@ def _reviewer_comment(row: dict[str, str], inputs_hash: str) -> str:
         "",
         "| Check | Result | Evidence |",
         "|---|---|---|",
-        f"| Blocking (S1/S2) | {row.get('blocking_result', '0 found')} | - |",
+        f"| Blocking (S1/S2) | {blocking} | - |",
         f"| Follow-ups (S3/S4) | {row.get('followups', '0')} | - |",
         f"| Tests / CI at this head | {row.get('ci_result', 'not run')} | - |",
         f"| Prod risk / rollback | {row.get('prod_risk', 'not stated')} | - |",
