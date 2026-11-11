@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 import pathlib
 import textwrap
+
+import pytest
 
 from internal.learning import predictions_store
 
@@ -213,3 +216,68 @@ def test_save_predictions_signature_locked_save_compatibility():
     by_name = {p.name: p for p in params}
     assert by_name["trigger"].default == "save_predictions"
     assert by_name["path"].default is None
+
+
+@pytest.mark.parametrize(
+    "ledger",
+    [
+        {"predictions": None, "resolved": [], "stats": {}},
+        {"predictions": [None], "resolved": [], "stats": {}},
+        {"predictions": [], "resolved": [], "stats": None},
+    ],
+    ids=["null-predictions", "non-dict-row", "null-stats"],
+)
+def test_fail_closed_rejects_invalid_ledger_without_writing(tmp_path, ledger):
+    path = tmp_path / "predictions.json"
+    path.write_text(json.dumps(ledger), encoding="utf-8")
+    before = path.read_bytes()
+
+    with pytest.raises(predictions_store.PredictionsLedgerUnreadable):
+        predictions_store.load_predictions(path=str(path), fail_closed=True)
+
+    assert path.read_bytes() == before
+
+
+def test_fail_closed_allows_missing_buckets(tmp_path):
+    path = tmp_path / "predictions.json"
+    path.write_text("{}", encoding="utf-8")
+    ledger = predictions_store.load_predictions(path=str(path), fail_closed=True)
+    assert ledger["predictions"] == []
+    assert ledger["resolved"] == []
+    assert isinstance(ledger["stats"], dict)
+
+
+def test_scheduler_tick_does_not_grade_invalid_ledger(tmp_path, monkeypatch):
+    from internal.council import resolver, resolver_scheduler
+
+    path = tmp_path / "predictions.json"
+    path.write_text('{"predictions": null, "resolved": [], "stats": {}}')
+    before = path.read_bytes()
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.DAILY_PICKS_PATH",
+        str(tmp_path / "daily_picks.json"),
+    )
+    graded = []
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda _subnets: graded.append("resolve") or {},
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: graded.append("expire") or {},
+    )
+    scheduler = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=15, subnet_provider=lambda: []
+    )
+    scheduler._active = True
+    scheduler._first_tick_pending = False
+
+    result = scheduler._run_refresh_cycle_with_timeout()
+
+    assert result.get("ok") is not True
+    assert graded == []
+    assert path.read_bytes() == before

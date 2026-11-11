@@ -1407,13 +1407,24 @@ class PredictionResolverScheduler:
 
             heal_summary: Dict[str, Any] = _neutral_heal_summary()
             with timing.stage("ledger_heal", _persist_after_ledger):
+                from internal.learning.predictions_store import (
+                    PredictionsLedgerUnreadable,
+                    load_predictions,
+                )
+
                 try:
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
-
+                    load_predictions(fail_closed=True)
                     raw_heal = heal_daily_pick_ledger(dry_run=False)
                     heal_summary = (
                         raw_heal if isinstance(raw_heal, dict) else _neutral_heal_summary()
                     )
+                except PredictionsLedgerUnreadable as heal_exc:
+                    heal_summary = {
+                        "ok": False,
+                        "reason": "ledger_unreadable",
+                        "error": str(heal_exc),
+                    }
                 except Exception as heal_exc:
                     import logging
                     logging.getLogger(__name__).warning(

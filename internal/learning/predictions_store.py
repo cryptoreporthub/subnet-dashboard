@@ -51,6 +51,25 @@ class PredictionsLedgerUnreadable(Exception):
         self.error = error
 
 
+class LedgerSchemaError(PredictionsLedgerUnreadable):
+    def __init__(self, error: str) -> None:
+        super().__init__("schema_invalid", error=error)
+
+
+def parse_predictions_ledger(data: Dict[str, Any]) -> Dict[str, Any]:
+    result = dict(data)
+    for bucket in ("predictions", "resolved"):
+        rows = result.get(bucket, [])
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise LedgerSchemaError(f"{bucket} must be a list of objects")
+        result[bucket] = rows
+    stats = result.get("stats", _default_data()["stats"])
+    if not isinstance(stats, dict):
+        raise LedgerSchemaError("stats must be an object")
+    result["stats"] = stats
+    return result
+
+
 @contextlib.contextmanager
 def locked_predictions_file(timeout_seconds: float = 5.0, *, path: Optional[str] = None):
     """Cross-process advisory lock with bounded wait.
@@ -176,9 +195,12 @@ def load_predictions(
         data = _default_data()
     if not isinstance(data, dict):
         data = _default_data()
-    data.setdefault("predictions", [])
-    data.setdefault("resolved", [])
-    data.setdefault("stats", _default_data()["stats"])
+    if fail_closed:
+        data = parse_predictions_ledger(data)
+    else:
+        data.setdefault("predictions", [])
+        data.setdefault("resolved", [])
+        data.setdefault("stats", _default_data()["stats"])
     changed = _migrate_phases(data)
     changed = _migrate_expert_labels(data) or changed
     changed = _migrate_evidence(data) or changed
