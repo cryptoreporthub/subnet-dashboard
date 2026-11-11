@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import secrets
@@ -16,6 +17,7 @@ _ACTIVE_NAME = "in-flight.json"
 _SEQ_DIR = "seq"
 _HEARTBEAT_DIR = "heartbeat"
 _HEARTBEAT_NAME = "latest.json"
+_HEARTBEAT_LOCK_NAME = ".publish.lock"
 _RESERVE_SUFFIX = ".reserve.json"
 _TICK_PREFIX = "tick-"
 _TICK_SUFFIX = ".json"
@@ -99,6 +101,54 @@ def create_if_absent(path: Path, payload: dict[str, Any]) -> bool:
                 tmp.unlink()
             except OSError:
                 pass
+
+
+def _heartbeat_order_key(record: dict[str, Any]) -> tuple[datetime, datetime, str] | None:
+    attempt = _parse_utc_iso(record.get("attempt_at"))
+    completed = _parse_utc_iso(record.get("completed_at"))
+    tick_id = record.get("tick_id")
+    if attempt is None or completed is None or not isinstance(tick_id, str) or not tick_id:
+        return None
+    return (attempt, completed, tick_id)
+
+
+def _heartbeat_beats(incumbent: dict[str, Any] | None, candidate: dict[str, Any]) -> bool:
+    """True when candidate should replace incumbent (strictly newer)."""
+    candidate_key = _heartbeat_order_key(candidate)
+    if candidate_key is None:
+        return False
+    if incumbent is None:
+        return True
+    incumbent_key = _heartbeat_order_key(incumbent)
+    if incumbent_key is None:
+        return True
+    return candidate_key > incumbent_key
+
+
+def _read_heartbeat_dict(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    return raw
+
+
+def _publish_heartbeat_monotonic(state_dir: Path, payload: dict[str, Any]) -> None:
+    """Replace heartbeat/latest.json only when payload is newer than the current file."""
+    hb_dir = state_dir / _HEARTBEAT_DIR
+    hb_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = hb_dir / _HEARTBEAT_LOCK_NAME
+    hb_path = _heartbeat_path(state_dir)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        incumbent = _read_heartbeat_dict(hb_path)
+        if not _heartbeat_beats(incumbent, payload):
+            return
+        _write_tick_atomically(hb_path, payload)
 
 
 def _write_tick_atomically(final_path: Path, payload: dict[str, Any]) -> None:
@@ -285,8 +335,8 @@ def run_tick(
     completed_at = tick_payload["completed_at"]
     try:
         _write_tick_atomically(final, tick_payload)
-        _write_tick_atomically(
-            _heartbeat_path(state_dir),
+        _publish_heartbeat_monotonic(
+            state_dir,
             {
                 "tick_id": tick_id,
                 "attempt_at": started_at,

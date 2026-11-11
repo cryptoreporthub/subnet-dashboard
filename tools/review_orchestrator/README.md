@@ -23,7 +23,7 @@ Run the one-command exam (optionally under a parent `--state-dir`; each run uses
 
 ## v1a dead-man
 
-Each completed tick atomically replaces `heartbeat/latest.json` (`tick_id`, `attempt_at`, `completed_at`, optional `last_alert_ok` when v1b alerts exist). The tick file is written first, then the heartbeat. The dead-man reads only that file (4 KiB cap). Per-tick files remain history and are not used by the dead-man.
+Each completed tick writes its tick file, then publishes `heartbeat/latest.json` under an exclusive lock, replacing the file only when the new record is strictly newer (`attempt_at`, then `completed_at`, then `tick_id`). Overlapping ticks therefore cannot roll the heartbeat back to an older attempt. Fields: `tick_id`, `attempt_at`, `completed_at`, optional `last_alert_ok` when v1b alerts exist. The dead-man reads only that file (4 KiB cap). Per-tick files remain history and are not used by the dead-man.
 
 The state directory is a **trusted store**: only the bot writes it; nothing is signed. If the tick write succeeds but the heartbeat write fails, the run raises and the previous heartbeat stays in place until the next successful tick.
 
