@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 import tools.review_orchestrator.deadman as deadman
+import tools.review_orchestrator.persist as persist
 from tools.review_orchestrator.persist import _write_tick_atomically, run_tick
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -23,17 +24,16 @@ def _write_heartbeat(
     tick_id: str = "hb",
     attempt_at: datetime,
     completed_at: datetime,
-    last_alert_ok: bool = True,
+    last_alert_ok: bool | None = None,
 ) -> None:
-    _write_tick_atomically(
-        state_dir / "heartbeat" / "latest.json",
-        {
-            "tick_id": tick_id,
-            "attempt_at": attempt_at.isoformat(),
-            "completed_at": completed_at.isoformat(),
-            "last_alert_ok": last_alert_ok,
-        },
-    )
+    payload: dict = {
+        "tick_id": tick_id,
+        "attempt_at": attempt_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+    }
+    if last_alert_ok is not None:
+        payload["last_alert_ok"] = last_alert_ok
+    _write_tick_atomically(state_dir / "heartbeat" / "latest.json", payload)
 
 
 def test_run_tick_writes_heartbeat(tmp_path: Path) -> None:
@@ -42,9 +42,38 @@ def test_run_tick_writes_heartbeat(tmp_path: Path) -> None:
     assert hb_path.is_file()
     data = json.loads(hb_path.read_text(encoding="utf-8"))
     assert data["tick_id"] == "v1"
-    assert data.get("last_alert_ok") is True
+    assert "last_alert_ok" not in data
     tick = json.loads(result.path.read_text(encoding="utf-8"))
+    assert data["attempt_at"] == tick["started_at"]
     assert data["completed_at"] == tick["completed_at"]
+    assert "last_alert_ok" not in tick
+
+
+def test_run_tick_tick_write_failure_leaves_heartbeat_unchanged(
+    tmp_path: Path, monkeypatch
+) -> None:
+    at = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _write_heartbeat(tmp_path, tick_id="prev", attempt_at=at, completed_at=at)
+    before = (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8")
+    real_write = persist._write_tick_atomically
+
+    def fail_tick_write(final: Path, payload: dict) -> None:
+        if "heartbeat" not in str(final):
+            raise OSError("simulated tick write failure")
+        real_write(final, payload)
+
+    monkeypatch.setattr(persist, "_write_tick_atomically", fail_tick_write)
+    with pytest.raises(OSError, match="simulated tick write failure"):
+        run_tick(tmp_path, tick_id="fail", noop=False)
+    assert (tmp_path / "heartbeat" / "latest.json").read_text(encoding="utf-8") == before
+
+
+def test_deadman_missing_last_alert_ok_ok(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    at = now - timedelta(minutes=1)
+    _write_heartbeat(tmp_path, attempt_at=at, completed_at=at, last_alert_ok=None)
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is True
 
 
 def test_deadman_fresh_heartbeat_ok(tmp_path: Path) -> None:
@@ -160,6 +189,45 @@ def test_deadman_future_attempt_at_alerts(tmp_path: Path) -> None:
     )
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.reason == "heartbeat_future"
+
+
+@pytest.mark.parametrize(
+    ("offset", "expect_future"),
+    [
+        (timedelta(minutes=5), False),
+        (timedelta(minutes=5, seconds=1), True),
+    ],
+)
+def test_deadman_future_slack_boundary_on_attempt_at(
+    tmp_path: Path, offset: timedelta, expect_future: bool
+) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _write_heartbeat(
+        tmp_path,
+        attempt_at=now + offset,
+        completed_at=now - timedelta(minutes=1),
+    )
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    if expect_future:
+        assert verdict.reason == "heartbeat_future"
+    else:
+        assert verdict.ok is True
+
+
+def test_mutation_deadman_zero_future_slack_alerts(tmp_path: Path, monkeypatch) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _write_heartbeat(
+        tmp_path,
+        attempt_at=now + timedelta(seconds=1),
+        completed_at=now - timedelta(minutes=1),
+    )
+    monkeypatch.setattr(deadman, "_FUTURE_SLACK", timedelta(0))
+    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert broken.reason == "heartbeat_future"
+
+    monkeypatch.undo()
+    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert fixed.ok is True
 
 
 def test_deadman_future_completed_at_alerts(tmp_path: Path) -> None:

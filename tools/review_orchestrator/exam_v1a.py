@@ -27,17 +27,16 @@ def _write_heartbeat(
     *,
     attempt_at: datetime,
     completed_at: datetime,
-    last_alert_ok: bool = True,
+    last_alert_ok: bool | None = None,
 ) -> None:
-    _write_tick_atomically(
-        state_dir / "heartbeat" / "latest.json",
-        {
-            "tick_id": "exam",
-            "attempt_at": attempt_at.isoformat(),
-            "completed_at": completed_at.isoformat(),
-            "last_alert_ok": last_alert_ok,
-        },
-    )
+    payload: dict = {
+        "tick_id": "exam",
+        "attempt_at": attempt_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+    }
+    if last_alert_ok is not None:
+        payload["last_alert_ok"] = last_alert_ok
+    _write_tick_atomically(state_dir / "heartbeat" / "latest.json", payload)
 
 
 def _check_stale_tick_41m_alerts(state_dir: Path) -> bool:

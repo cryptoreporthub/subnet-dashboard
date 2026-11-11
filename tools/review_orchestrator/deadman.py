@@ -40,12 +40,11 @@ def _parse_heartbeat_record(raw: Any) -> dict[str, Any] | None:
     tick_id = raw.get("tick_id")
     attempt_at = raw.get("attempt_at")
     completed_at = raw.get("completed_at")
-    last_alert_ok = raw.get("last_alert_ok")
     if not isinstance(tick_id, str) or not tick_id:
         return None
     if not isinstance(attempt_at, str) or not isinstance(completed_at, str):
         return None
-    if not isinstance(last_alert_ok, bool):
+    if "last_alert_ok" in raw and not isinstance(raw["last_alert_ok"], bool):
         return None
     if _parse_utc_iso(attempt_at) is None or _parse_utc_iso(completed_at) is None:
         return None
@@ -99,7 +98,7 @@ def evaluate_deadman(
     if _is_stale(completed_age, limit):
         return DeadmanVerdict(ok=False, reason="completed_stale")
 
-    if record.get("last_alert_ok") is not True:
+    if record.get("last_alert_ok") is False:
         return DeadmanVerdict(ok=False, reason="last_alert_failed")
 
     return DeadmanVerdict(ok=True, reason="ok")
