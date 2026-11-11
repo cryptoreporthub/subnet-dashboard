@@ -19,6 +19,7 @@ V1A_RULES = (
     "stale_attempt_alerts",
     "completed_stale_alerts",
     "future_started_at_alerts",
+    "failing_tick_alerts",
 )
 
 
@@ -89,6 +90,23 @@ def _check_future_started_at_alerts(state_dir: Path) -> bool:
     return verdict.ok is False and verdict.reason == "heartbeat_future"
 
 
+def _check_failing_tick_alerts(state_dir: Path) -> bool:
+    case = state_dir / "case_failed"
+    case.mkdir(parents=True)
+    reference = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    conn = db.connect(case)
+    try:
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome, noop, overlap) "
+            "VALUES ('failing', ?, 5, 'failed', 0, 0)",
+            ((reference - timedelta(minutes=1)).isoformat(),),
+        )
+    finally:
+        conn.close()
+    verdict = evaluate_deadman(case, max_age_minutes=40, now=reference)
+    return verdict.ok is False and verdict.reason == "tick_failed"
+
+
 def run_exam(state_dir: Path) -> int:
     checks = {
         V1A_RULES[0]: _check_fresh_tick_ok(state_dir),
@@ -96,6 +114,7 @@ def run_exam(state_dir: Path) -> int:
         V1A_RULES[2]: _check_stale_attempt_alerts(state_dir),
         V1A_RULES[3]: _check_completed_stale_alerts(state_dir),
         V1A_RULES[4]: _check_future_started_at_alerts(state_dir),
+        V1A_RULES[5]: _check_failing_tick_alerts(state_dir),
     }
 
     all_ok = True

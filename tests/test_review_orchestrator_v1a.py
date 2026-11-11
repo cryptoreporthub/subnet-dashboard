@@ -24,21 +24,23 @@ def _plant(
     started_at: datetime,
     *,
     duration_ms: int | None = None,
+    outcome: str = "completed",
     last_alert_ok: int | None = None,
 ) -> None:
     conn = db.connect(state_dir)
     try:
         if duration_ms is None:
             conn.execute(
-                "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
+                "INSERT INTO ticks (tick_id, started_at, outcome, overlap) "
+                "VALUES (?, ?, 'running', 0)",
                 (tick_id, started_at.isoformat()),
             )
         else:
             conn.execute(
                 "INSERT INTO ticks "
                 "(tick_id, started_at, duration_ms, outcome, noop, overlap, last_alert_ok) "
-                "VALUES (?, ?, ?, 'completed', 0, 0, ?)",
-                (tick_id, started_at.isoformat(), duration_ms, last_alert_ok),
+                "VALUES (?, ?, ?, ?, 0, 0, ?)",
+                (tick_id, started_at.isoformat(), duration_ms, outcome, last_alert_ok),
             )
     finally:
         conn.close()
@@ -285,3 +287,73 @@ def test_mutation_reader_treating_running_as_completed_misreports(
     monkeypatch.setattr(deadman, "_derived_completed_at", real)
     fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert fixed.reason == "attempt_stale"
+
+
+def test_finished_failed_tick_alerts(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
+        tmp_path, "failing", now - timedelta(minutes=1), duration_ms=5, outcome="failed"
+    )
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is False
+    assert verdict.reason == "tick_failed"
+
+
+def test_running_row_defers_tick_failed(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
+        tmp_path, "failed", now - timedelta(minutes=3), duration_ms=5, outcome="failed"
+    )
+    _plant(tmp_path, "retry", now - timedelta(minutes=1))
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is True
+    assert verdict.reason == "ok"
+
+
+@pytest.mark.parametrize(
+    ("age_seconds", "expected"),
+    [(40 * 60, "tick_failed"), (40 * 60 + 1, "completed_stale")],
+)
+def test_staleness_outranks_tick_failed(
+    tmp_path: Path, age_seconds: int, expected: str
+) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
+        tmp_path,
+        "failing",
+        now - timedelta(seconds=age_seconds),
+        duration_ms=0,
+        outcome="failed",
+    )
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.reason == expected
+
+
+def test_tick_failed_outranks_last_alert_failed(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
+        tmp_path,
+        "failing",
+        now - timedelta(minutes=1),
+        duration_ms=5,
+        outcome="failed",
+        last_alert_ok=0,
+    )
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.reason == "tick_failed"
+
+
+def test_mutation_reader_ignoring_failed_outcome_misreports(
+    tmp_path: Path, monkeypatch
+) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
+        tmp_path, "failing", now - timedelta(minutes=1), duration_ms=5, outcome="failed"
+    )
+    monkeypatch.setattr(deadman, "_is_failed", lambda _row: False)
+    broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert broken.ok is True
+
+    monkeypatch.undo()
+    fixed = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert fixed.reason == "tick_failed"

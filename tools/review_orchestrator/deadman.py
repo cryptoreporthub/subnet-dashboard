@@ -45,6 +45,15 @@ def _load_latest(state_dir: Path):
         conn.close()
 
 
+def _is_failed(row) -> bool:
+    """The latest row is a finished tick that failed.
+
+    Only the finishing attempt counts: a newer running row defers the verdict to
+    its own outcome, so a retry in flight is never reported as failing.
+    """
+    return row["outcome"] == "failed"
+
+
 def evaluate_deadman(
     state_dir: Path,
     *,
@@ -77,6 +86,9 @@ def evaluate_deadman(
             return DeadmanVerdict(ok=False, reason="attempt_stale")
     elif reference - completed_at > limit:
         return DeadmanVerdict(ok=False, reason="completed_stale")
+
+    if _is_failed(row):
+        return DeadmanVerdict(ok=False, reason="tick_failed")
 
     if row["last_alert_ok"] == 0:
         return DeadmanVerdict(ok=False, reason="last_alert_failed")

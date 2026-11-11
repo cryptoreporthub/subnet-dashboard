@@ -67,8 +67,12 @@ row and returns one reason:
 - `heartbeat_future` — `started_at` or the derived completion more than five minutes ahead;
 - `attempt_stale` — started and never finished past the limit (a running or swept row);
 - `completed_stale` — completion past the limit;
+- `tick_failed` — the latest row is a finished tick with `outcome = 'failed'`; a newer
+  running row defers the verdict to that attempt, so a retry in flight is not reported;
 - `last_alert_failed` — `last_alert_ok = 0`;
 - `ok`.
+
+The staleness reasons outrank `tick_failed`, which outranks `last_alert_failed`.
 
 The completion time is derived as `started_at + duration_ms`; there is no separate
 heartbeat file. The CLI prints the reason and exits 0/1, or 3 on an unexpected error.
