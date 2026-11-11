@@ -15,10 +15,10 @@ jobs:
           curl -L https://fly.io/install.sh | sh
           echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
       - name: Machine config
-        run: flyctl machine show 7841024b3712e8
+        run: flyctl machine status 7841024b3712e8 -a subnet-dashboard
       - name: Secret names (redacted)
         run: flyctl secrets list --app subnet-dashboard | awk '{print $1}'
       - name: Machine inventory
         run: flyctl machines list --app subnet-dashboard
       - name: Boot probe
-        run: flyctl logs --app subnet-dashboard -n 200 | grep -iE "skip|inline|worker" || echo "boot line outside window"
+        run: flyctl logs --app subnet-dashboard --no-tail | grep -iE "skip|inline|worker" || echo "boot line outside window"
