@@ -8,7 +8,7 @@ The review-orchestrator tick store is SQLite in WAL mode, one writer. Three beha
 - DROP-then-CREATE of a view (the `latest` reader view) is two statements, so two writers racing on a fresh store both pass a "view is missing" check and one gets "view already exists". Re-check inside `BEGIN IMMEDIATE` before rewriting, or use a single idempotent statement.
 - `PRAGMA journal_mode=WAL` on every connect makes every read a write. Keep the schema/PRAGMA work conditional so concurrent readers do not serialise.
 
-`connect` separates transient contention (locked/busy -> re-raise) from corruption (anything else -> `StoreCorruptError`); do not wrap both in one handler or a busy store looks corrupt.
+`connect` separates transient contention (locked/busy -> re-raise) from a store that will not open; only "not a database"/"malformed" is `StoreCorruptError`, every other open failure (read-only directory or filesystem, missing permission) is `StoreUnavailableError`. Both share the base `StoreError`. Do not fold contention into the same handler, or a busy store looks unavailable.
 
 **Why:** the parallel-tick stress tests exposed each of these in turn while migrating tick persistence off the per-tick file store.
 

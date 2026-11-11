@@ -3,6 +3,7 @@
 from tools.review_orchestrator.db import (
     DuplicateTickIdError,
     StoreCorruptError,
+    StoreError,
     StoreUnavailableError,
 )
 from tools.review_orchestrator.persist import (
@@ -15,6 +16,7 @@ from tools.review_orchestrator.persist import (
 __all__ = [
     "DuplicateTickIdError",
     "StoreCorruptError",
+    "StoreError",
     "StoreUnavailableError",
     "TickResult",
     "read_latest_tick",

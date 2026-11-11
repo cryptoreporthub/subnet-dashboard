@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import errno
 import multiprocessing as mp
 import os
 import secrets
@@ -366,17 +368,54 @@ def test_corrupt_markers_still_map_to_corruption(tmp_path: Path, monkeypatch) ->
 def test_unavailable_and_corrupt_are_distinct_types() -> None:
     assert not issubclass(StoreUnavailableError, StoreCorruptError)
     assert not issubclass(StoreCorruptError, StoreUnavailableError)
+    # Siblings, but one base: a reader can name a single type in its except
+    # clause and cannot miss a third store error added later.
+    assert issubclass(StoreUnavailableError, db.StoreError)
+    assert issubclass(StoreCorruptError, db.StoreError)
 
 
-def test_repair_in_unwritable_directory_raises_unavailable(
+def _require_unprivileged() -> None:
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root bypasses directory permissions")
+
+
+@contextlib.contextmanager
+def _read_only(path: Path):
+    """Make a directory unwritable for the body, then restore it for cleanup."""
+    mode = path.stat().st_mode
+    os.chmod(path, 0o555)
+    try:
+        yield path
+    finally:
+        os.chmod(path, mode)
+
+
+def test_repair_in_read_only_directory_raises_unavailable(tmp_path: Path) -> None:
+    """A real read-only directory: repair cannot move the store, and says so."""
+    _require_unprivileged()
+    state = tmp_path / "store"
+    state.mkdir()
+    store = db.db_path(state)
+    store.write_text("not a database", encoding="utf-8")
+
+    with _read_only(state):
+        with pytest.raises(StoreUnavailableError):
+            persist.repair_store(state)
+        # Nothing happened: the corrupt store is still sitting there, unnamed.
+        assert list(state.iterdir()) == [store]
+
+
+def test_repair_maps_a_read_only_filesystem_to_unavailable(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """EROFS needs a privileged read-only mount, so fail the rename the way the
+    kernel would: an OSError from the move must not escape as a traceback."""
     db.db_path(tmp_path).write_text("not a database", encoding="utf-8")
 
-    def denied(self, target):
-        raise PermissionError(13, "Permission denied")
+    def read_only_filesystem(self, target):
+        raise OSError(errno.EROFS, "Read-only file system")
 
-    monkeypatch.setattr(Path, "replace", denied)
+    monkeypatch.setattr(Path, "replace", read_only_filesystem)
     with pytest.raises(StoreUnavailableError):
         persist.repair_store(tmp_path)
 

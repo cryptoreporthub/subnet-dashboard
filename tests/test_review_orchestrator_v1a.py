@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import errno
 import os
+import sqlite3
 import subprocess
 import sys
 import threading
@@ -198,6 +201,83 @@ def test_corrupt_store_unreadable_not_crash(tmp_path: Path) -> None:
     db.db_path(tmp_path).write_text("not a database", encoding="utf-8")
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    assert verdict.ok is False
+    assert verdict.reason == "heartbeat_unreadable"
+
+
+def _require_unprivileged() -> None:
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root bypasses directory permissions")
+
+
+@contextlib.contextmanager
+def _read_only(path: Path):
+    """Make a directory unwritable for the body, then restore it for cleanup."""
+    mode = path.stat().st_mode
+    os.chmod(path, 0o555)
+    try:
+        yield path
+    finally:
+        os.chmod(path, mode)
+
+
+def _run_deadman_cli(state_dir: Path) -> subprocess.CompletedProcess:
+    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tools.review_orchestrator.deadman",
+            "--state-dir",
+            str(state_dir),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(_REPO_ROOT),
+        check=False,
+    )
+
+
+def test_read_only_store_reports_unreadable_end_to_end(tmp_path: Path) -> None:
+    """A store the reader cannot open is an alert, not a dead-man error.
+
+    The reader needs write access to the state directory for the WAL wal-index
+    (`-shm`), so an unwritable store is reachable in production. The README
+    promises heartbeat_unreadable and exit 1 for it; deadman_error and exit 3
+    would only reach the log, and the watchdog would never alert.
+    """
+    _require_unprivileged()
+    state = tmp_path / "store"
+    state.mkdir()
+    persist.run_tick(state, tick_id="seeded", noop=True)
+
+    with _read_only(state):
+        result = _run_deadman_cli(state)
+
+    assert result.stdout.strip() == "heartbeat_unreadable"
+    assert result.returncode == 1
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        db.StoreCorruptError("not a database"),
+        db.StoreUnavailableError("read-only directory"),
+        sqlite3.OperationalError("database is locked"),
+        OSError(errno.EROFS, "Read-only file system"),
+    ],
+)
+def test_every_store_open_failure_is_heartbeat_unreadable(
+    tmp_path: Path, monkeypatch, error: BaseException
+) -> None:
+    """Every way the store can refuse to open is one alert reason."""
+
+    def boom(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(deadman.db, "connect", boom)
+    verdict = deadman.evaluate_deadman(tmp_path)
     assert verdict.ok is False
     assert verdict.reason == "heartbeat_unreadable"
 

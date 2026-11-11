@@ -54,14 +54,23 @@ CREATE VIEW latest AS
 """
 
 
-class StoreCorruptError(RuntimeError):
+class StoreError(RuntimeError):
+    """Base for a store that refuses to open in the caller's environment.
+
+    `repair` helps only the corrupt branch; the rest need the access fixed. Any
+    reader that wants every open failure names this one type, so a store error
+    added later cannot slip past its except clause.
+    """
+
+
+class StoreCorruptError(StoreError):
     """The state directory holds something that is not a usable store.
 
     Recover with `tools.review_orchestrator.persist repair --state-dir <dir>`.
     """
 
 
-class StoreUnavailableError(RuntimeError):
+class StoreUnavailableError(StoreError):
     """The store cannot be opened, but its bytes may be perfectly fine.
 
     A missing permission, a read-only directory, or a filesystem that cannot do

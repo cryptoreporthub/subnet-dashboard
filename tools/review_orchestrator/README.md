@@ -47,8 +47,13 @@ them as corruption sends the operator down the wrong path. A lock is neither:
 ```
 
 This moves the corrupt store aside as `orchestrator.sqlite.corrupt-<stamp>` and the
-next tick creates a fresh one. In an unwritable directory `repair` raises
-`StoreUnavailableError` instead of letting a `PermissionError` escape.
+next tick creates a fresh one. In an unwritable directory, or on a read-only
+filesystem, `repair` raises `StoreUnavailableError` instead of letting the
+`OSError` escape as a traceback.
+
+`StoreCorruptError` and `StoreUnavailableError` share the base `StoreError`, so a
+reader that wants every open failure catches one type and cannot miss a third one
+added later.
 
 The store is WAL, so a reader needs write access to the state directory (to create
 or write the `-shm` wal-index beside the database). Run the dead-man with the same

@@ -64,7 +64,7 @@ def evaluate_deadman(
     limit = timedelta(minutes=max_age_minutes)
     try:
         row = _load_latest(Path(state_dir))
-    except (db.StoreCorruptError, sqlite3.Error, OSError):
+    except (db.StoreError, sqlite3.Error, OSError):
         return DeadmanVerdict(ok=False, reason="heartbeat_unreadable")
     if row is None:
         return DeadmanVerdict(ok=False, reason="heartbeat_unreadable")

@@ -136,9 +136,10 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
     moved = path.with_name(f"{path.name}.corrupt-{stamp}")
     try:
         path.replace(moved)
-    except PermissionError as exc:
-        # A read-only directory is not a corrupt store: `repair` itself cannot
-        # run. Name the real problem instead of letting a traceback escape.
+    except OSError as exc:
+        # A read-only directory or filesystem is not a corrupt store: `repair`
+        # itself cannot run. Name the real problem instead of letting the OS
+        # error escape as a traceback.
         raise StoreUnavailableError(f"{path}: {exc}") from exc
     return moved
 
