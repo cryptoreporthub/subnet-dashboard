@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import shutil
 import sys
 import tempfile
@@ -65,7 +66,7 @@ def _check_reader_ignores_invalid(state_dir: Path, expected_tick_id: str) -> boo
     )
     (ticks / "planted.json").write_text(
         '{"tick_id": "planted", "seq": 999999, "status": "completed", '
-        '"started_at": "2020-01-01T00:00:00+00:00", "completed_at": "2020-01-02T00:00:00+00:00"}\n',
+        '"started_at": "2020-01-01T00:00:00+00:00", "completed_at": "2030-01-01T00:00:00+00:00"}\n',
         encoding="utf-8",
     )
     (ticks / "tick-bad.json").write_text(
@@ -87,7 +88,12 @@ def _check_overlap_against_holder(state_dir: Path) -> bool:
     shutil.rmtree(probe, ignore_errors=True)
     probe.mkdir(parents=True)
     active = _active_path(probe)
-    assert create_if_absent(active, {"tick_id": "holder", "started_at": "2020-01-01T00:00:00+00:00"})
+    holder_created = create_if_absent(
+        active,
+        {"tick_id": "holder", "started_at": "2020-01-01T00:00:00+00:00"},
+    )
+    if not holder_created:
+        return False
     second = run_tick(probe, tick_id="challenger", noop=True)
     return second.overlap is True and second.overlap_with == "holder"
 
@@ -128,14 +134,19 @@ def main() -> None:
         "--state-dir",
         type=Path,
         default=None,
-        help="Store directory (default: fresh temp dir, removed after exam)",
+        help="Parent store directory; exam runs in a disposable exam-<token>/ subdir",
     )
     args = parser.parse_args()
 
     if args.state_dir is not None:
-        state_dir = args.state_dir.resolve()
-        state_dir.mkdir(parents=True, exist_ok=True)
-        sys.exit(run_exam(state_dir))
+        parent = args.state_dir.resolve()
+        parent.mkdir(parents=True, exist_ok=True)
+        exam_root = parent / f"exam-{secrets.token_hex(8)}"
+        exam_root.mkdir(parents=True)
+        try:
+            sys.exit(run_exam(exam_root))
+        finally:
+            shutil.rmtree(exam_root, ignore_errors=True)
 
     state_dir = Path(tempfile.mkdtemp(prefix="review-orchestrator-v0-exam-"))
     try:

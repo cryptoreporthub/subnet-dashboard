@@ -6,19 +6,27 @@ import json
 import os
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 _TICKS_DIR = "ticks"
 _ACTIVE_DIR = "active"
 _ACTIVE_NAME = "in-flight.json"
+_SEQ_DIR = "seq"
 _TICK_PREFIX = "tick-"
 _TICK_SUFFIX = ".json"
+_COMPLETION_FUTURE_SLACK = timedelta(minutes=5)
+
+# ponytail: kill -9 mid-tick can leave active/in-flight.json; staleness eviction is v1.
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _parse_utc_iso(value: Any) -> datetime | None:
@@ -40,6 +48,10 @@ def _ticks_dir(state_dir: Path) -> Path:
 
 def _active_path(state_dir: Path) -> Path:
     return state_dir / _ACTIVE_DIR / _ACTIVE_NAME
+
+
+def _seq_dir(state_dir: Path) -> Path:
+    return state_dir / _SEQ_DIR
 
 
 def _tick_id_from_filename(name: str) -> str | None:
@@ -93,7 +105,7 @@ def _write_tick_atomically(final_path: Path, payload: dict[str, Any]) -> None:
     os.replace(tmp, final_path)
 
 
-def _release_in_flight(state_dir: Path, tick_id: str) -> None:
+def _release_in_flight(state_dir: Path, owner_token: str) -> None:
     active = _active_path(state_dir)
     if not active.is_file():
         return
@@ -101,14 +113,19 @@ def _release_in_flight(state_dir: Path, tick_id: str) -> None:
         data = json.loads(active.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return
-    if data.get("tick_id") == tick_id:
+    if data.get("owner_token") == owner_token:
         try:
             active.unlink()
         except OSError:
             pass
 
 
-def _validate_tick_file(path: Path, data: Any) -> tuple[dict[str, Any] | None, str | None]:
+def _validate_tick_file(
+    path: Path,
+    data: Any,
+    *,
+    now: datetime | None = None,
+) -> tuple[dict[str, Any] | None, str | None]:
     if not isinstance(data, dict):
         return None, f"{path.name}:not_a_dict"
     filename_id = _tick_id_from_filename(path.name)
@@ -130,26 +147,36 @@ def _validate_tick_file(path: Path, data: Any) -> tuple[dict[str, Any] | None, s
         return None, f"{path.name}:bad_completed_at"
     if started_at > completed_at:
         return None, f"{path.name}:start_after_end"
+    reference = now if now is not None else _utc_now()
+    if completed_at > reference + _COMPLETION_FUTURE_SLACK:
+        return None, f"{path.name}:completed_at_in_future"
     return data, None
 
 
+def _highest_claimed_seq(state_dir: Path) -> int:
+    seq_root = _seq_dir(state_dir)
+    if not seq_root.is_dir():
+        return 0
+    best = 0
+    for path in seq_root.iterdir():
+        if not path.is_file() or not path.name.endswith(".json"):
+            continue
+        try:
+            value = int(path.stem)
+        except ValueError:
+            continue
+        best = max(best, value)
+    return best
+
+
 def _allocate_seq(state_dir: Path) -> int:
-    """Durable monotonic seq from completed tick files in this store."""
-    max_seq = 0
-    ticks = _ticks_dir(state_dir)
-    if ticks.is_dir():
-        for path in ticks.iterdir():
-            if _tick_id_from_filename(path.name) is None:
-                continue
-            try:
-                raw = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            record, err = _validate_tick_file(path, raw)
-            if err is not None or record is None:
-                continue
-            max_seq = max(max_seq, int(record["seq"]))
-    return max_seq + 1
+    """Claim the next seq with create-if-absent on seq/<n>.json; retry on collision."""
+    for _ in range(10_000):
+        candidate = _highest_claimed_seq(state_dir) + 1
+        claim = _seq_dir(state_dir) / f"{candidate}.json"
+        if create_if_absent(claim, {"seq": candidate, "claimed_at": _utc_now_iso()}):
+            return candidate
+    raise RuntimeError("seq claim retries exhausted")
 
 
 @dataclass(frozen=True)
@@ -179,8 +206,13 @@ def run_tick(
     tick_id = tick_id or secrets.token_hex(8)
     started_at = _utc_now_iso()
     seq = _allocate_seq(state_dir)
+    owner_token = secrets.token_hex(8)
 
-    in_flight_payload = {"tick_id": tick_id, "started_at": started_at}
+    in_flight_payload = {
+        "tick_id": tick_id,
+        "started_at": started_at,
+        "owner_token": owner_token,
+    }
     active = _active_path(state_dir)
     created = create_if_absent(active, in_flight_payload)
     overlap_with: str | None = None
@@ -191,38 +223,45 @@ def run_tick(
         except (OSError, json.JSONDecodeError):
             overlap_with = "unknown"
 
+    overlap = overlap_with is not None
     tick_payload: dict[str, Any] = {
         "tick_id": tick_id,
         "seq": seq,
         "status": "completed",
         "noop": noop,
-        "overlap": overlap_with is not None,
-        "overlap_with": overlap_with,
+        "overlap": overlap,
         "started_at": started_at,
         "completed_at": _utc_now_iso(),
     }
+    if overlap_with is not None:
+        tick_payload["overlap_with"] = overlap_with
     final = _ticks_dir(state_dir) / f"tick-{tick_id}.json"
     try:
         _write_tick_atomically(final, tick_payload)
     finally:
-        _release_in_flight(state_dir, tick_id)
+        _release_in_flight(state_dir, owner_token)
 
     return TickResult(
         tick_id=tick_id,
         path=final,
-        overlap=overlap_with is not None,
+        overlap=overlap,
         overlap_with=overlap_with,
         noop=noop,
         seq=seq,
     )
 
 
-def read_newest_completed_tick_report(state_dir: Path) -> NewestTickRead:
+def read_newest_completed_tick_report(
+    state_dir: Path,
+    *,
+    now: datetime | None = None,
+) -> NewestTickRead:
     """Return newest valid completed tick; invalid files are skipped with reasons."""
     state_dir = Path(state_dir)
+    reference = now if now is not None else _utc_now()
     skipped: list[str] = []
     best: dict[str, Any] | None = None
-    best_key: tuple[datetime, int] | None = None
+    best_key: tuple[int, datetime] | None = None
     ticks = _ticks_dir(state_dir)
     if not ticks.is_dir():
         return NewestTickRead(tick=None, skipped=tuple(skipped))
@@ -238,13 +277,13 @@ def read_newest_completed_tick_report(state_dir: Path) -> NewestTickRead:
         except (OSError, json.JSONDecodeError):
             skipped.append(f"{path.name}:json_error")
             continue
-        record, err = _validate_tick_file(path, raw)
+        record, err = _validate_tick_file(path, raw, now=reference)
         if err is not None or record is None:
             skipped.append(err or f"{path.name}:invalid")
             continue
         completed_at = _parse_utc_iso(record["completed_at"])
         assert completed_at is not None
-        key = (completed_at, int(record["seq"]))
+        key = (int(record["seq"]), completed_at)
         if best_key is None or key > best_key:
             best_key = key
             best = record
