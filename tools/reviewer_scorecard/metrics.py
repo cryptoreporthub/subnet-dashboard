@@ -116,16 +116,26 @@ def compute_reviewer_metrics(tables: ScorecardTables, reviewer_id: str) -> Score
         head = row["head_sha"]
         pr = int(row["pr"])
         all_at_head = [r for r in tables.reviews if r["head_sha"] == head]
-        blind = compute_blind(reviewer_id, head, row.get("requested_at", ""), all_at_head, row.get("blind"))
+        blind = compute_blind(
+            reviewer_id,
+            head,
+            row.get("requested_at", ""),
+            all_at_head,
+            row.get("blind"),
+            row.get("same_head_peer_citation"),
+        )
         counting = derive_counting(row["coverage_class"], row.get("stage", "code"), row.get("counting", "yes"))
         at_risk = _at_risk_on_head(tables, head, bugs_by_id, presence_index)
 
         if row["coverage_class"] == "degraded" and row["claimed_verdict"].lower() == "pass":
             headlines.degraded_pass_count += 1
 
+        caught_here = _parse_caught_bug_ids(row.get("caught_bug_ids", ""))
+        at_risk_set = set(at_risk)
+
         if counting and is_clean_pass(row["claimed_verdict"], row["coverage_class"]):
             clean_pass_n += 1
-            missed = [b for b in at_risk if b in at_risk]  # all blocking present
+            missed = [b for b in at_risk if b not in caught_here]
             is_fp = bool(missed)
             if is_fp and pr not in false_pass_pr_seen:
                 headlines.false_passes += 1
@@ -134,12 +144,13 @@ def compute_reviewer_metrics(tables: ScorecardTables, reviewer_id: str) -> Score
             if not is_fp:
                 correct_clean_passes += 1
 
-        caught_here = _parse_caught_bug_ids(row.get("caught_bug_ids", ""))
         for bid in caught_here:
+            if bid not in at_risk_set:
+                continue
             if bid not in caught_bugs:
                 caught_bugs.add(bid)
                 headlines.serious_caught += 1
-                if blind == "yes":
+                if blind == "yes" and counting:
                     headlines.serious_caught_blind += 1
 
         for bid in at_risk:

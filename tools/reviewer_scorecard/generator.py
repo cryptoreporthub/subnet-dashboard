@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,14 +45,41 @@ def _sha7(head_sha: str) -> str:
     return head_sha.strip()[:7]
 
 
-def _strip_clocks(text: str) -> str:
-    """Remove clock fields for CI byte-compare."""
-    text = re.sub(r"\| <verdict_at[^|]*\|", "| <verdict_at> |", text)
-    text = re.sub(r"generated [^\n]+", "generated <clock-stripped>", text)
-    text = re.sub(r"<verdict_at UTC>", "<verdict_at>", text)
-    text = re.sub(r'"generated_at"\s*:\s*"[^"]*"', '"generated_at": null', text)
-    text = re.sub(r'"computed_at"\s*:\s*"[^"]*"', '"computed_at": null', text)
-    return text
+def _deterministic_reviewer_body(body: str) -> str:
+    lines = body.splitlines()
+    if not lines:
+        return body
+    first = lines[0]
+    if " UTC |" in first:
+        before, after = first.split(" UTC |", 1)
+        before = before.rsplit(" | ", 1)[0] + " | <verdict_at>"
+        lines[0] = before + " UTC |" + after
+    return "\n".join(lines) + ("\n" if body.endswith("\n") else "")
+
+
+def _deterministic_peer_body(body: str) -> str:
+    lines = body.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("_Peer view | generated "):
+            lines[i] = line.split("generated ", 1)[0] + "generated <clock-stripped>"
+    return "\n".join(lines) + ("\n" if body.endswith("\n") else "")
+
+
+def _deterministic_bundle(
+    scorecard_md: str,
+    scorecard_json: dict[str, Any],
+    reviewer_comments: dict[str, str],
+    peer_comments: dict[str, str],
+) -> bytes:
+    det_json = dict(scorecard_json)
+    det_json["generated_at"] = None
+    bundle = {
+        "md": scorecard_md,
+        "json": det_json,
+        "reviewer_comments": {k: _deterministic_reviewer_body(v) for k, v in reviewer_comments.items()},
+        "peer_comments": {k: _deterministic_peer_body(v) for k, v in peer_comments.items()},
+    }
+    return json.dumps(bundle, sort_keys=True).encode("utf-8")
 
 
 def _reviewer_comment(row: dict[str, str], inputs_hash: str) -> str:
@@ -154,20 +180,20 @@ def generate_scorecard(tables: ScorecardTables) -> GeneratedScorecard:
     for row in tables.reviews:
         row = dict(row)
         row["display_name"] = registry.get(row["reviewer_id"], {}).get("display_name", row["reviewer_id"])
-        key = f"{row['reviewer_id']}_{row['head_sha'][:7]}"
+        key = f"{row['reviewer_id']}_{row['head_sha']}"
         reviewer_comments[key] = _reviewer_comment(row, inputs_hash)
         peers = [r for r in tables.reviews if r["head_sha"] == row["head_sha"]]
-        blind = compute_blind(row["reviewer_id"], row["head_sha"], row.get("requested_at", ""), peers, row.get("blind"))
+        blind = compute_blind(
+            row["reviewer_id"],
+            row["head_sha"],
+            row.get("requested_at", ""),
+            peers,
+            row.get("blind"),
+            row.get("same_head_peer_citation"),
+        )
         peer_comments[key] = _peer_comment(row, inputs_hash, blind, peers)
 
-    bundle = {
-        "md": scorecard_md,
-        "json": scorecard_json,
-        "reviewer_comments": reviewer_comments,
-        "peer_comments": peer_comments,
-    }
-    raw = json.dumps(bundle, sort_keys=True)
-    deterministic = _strip_clocks(raw).encode("utf-8")
+    deterministic = _deterministic_bundle(scorecard_md, scorecard_json, reviewer_comments, peer_comments)
 
     return GeneratedScorecard(
         scorecard_md=scorecard_md,

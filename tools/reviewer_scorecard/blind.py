@@ -26,11 +26,16 @@ def compute_blind(
     requested_at: str,
     reviews_at_head: list[dict[str, str]],
     stored_blind: str | None = None,
+    same_head_peer_citation: str | None = None,
 ) -> str:
-    """Return 'yes' or 'no'. Respect adjudicator override only when stored matches rule inputs."""
+    """Return blind ('yes') or informed ('no') from timing; design §1 overrides."""
+    if (same_head_peer_citation or "").strip().lower() in {"yes", "true", "1"}:
+        return "no"
+
     req = _parse_ts(requested_at)
     if req is None:
-        return (stored_blind or "no").strip().lower()
+        stored = (stored_blind or "no").strip().lower()
+        return stored if stored in {"yes", "no"} else "no"
 
     peer_times: list[datetime] = []
     for row in reviews_at_head:
