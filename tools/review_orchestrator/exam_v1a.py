@@ -1,9 +1,8 @@
-"""One-command v1a exam: stale tick, fresh tick, empty dir, last_alert_ok false."""
+"""One-command v1a exam: heartbeat-only dead-man rules."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import secrets
 import shutil
 import sys
@@ -12,62 +11,43 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tools.review_orchestrator.deadman import evaluate_deadman
-from tools.review_orchestrator.persist import run_tick
+from tools.review_orchestrator.persist import _write_tick_atomically, run_tick
 
 V1A_RULES = (
     "stale_tick_41m_alerts",
     "fresh_tick_ok",
-    "empty_dir_alerts",
+    "missing_heartbeat_alerts",
     "last_alert_ok_false_alerts",
+    "future_heartbeat_alerts",
 )
 
 
-def _plant_seq_claim(state_dir: Path, seq: int, *, claimed_at: datetime | None = None) -> None:
-    seq_dir = state_dir / "seq"
-    seq_dir.mkdir(parents=True, exist_ok=True)
-    when = claimed_at or datetime.now(timezone.utc)
-    (seq_dir / f"{seq}.json").write_text(
-        json.dumps({"seq": seq, "claimed_at": when.isoformat()}, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _plant_completed_tick(
+def _write_heartbeat(
     state_dir: Path,
     *,
-    tick_id: str,
+    attempt_at: datetime,
     completed_at: datetime,
     last_alert_ok: bool = True,
-    seq: int = 1,
 ) -> None:
-    started = completed_at - timedelta(minutes=1)
-    payload = {
-        "tick_id": tick_id,
-        "seq": seq,
-        "status": "completed",
-        "noop": False,
-        "overlap": False,
-        "started_at": started.isoformat(),
-        "completed_at": completed_at.isoformat(),
-        "last_alert_ok": last_alert_ok,
-    }
-    ticks = state_dir / "ticks"
-    ticks.mkdir(parents=True, exist_ok=True)
-    (ticks / f"tick-{tick_id}.json").write_text(
-        json.dumps(payload, sort_keys=True) + "\n",
-        encoding="utf-8",
+    _write_tick_atomically(
+        state_dir / "heartbeat" / "latest.json",
+        {
+            "tick_id": "exam",
+            "attempt_at": attempt_at.isoformat(),
+            "completed_at": completed_at.isoformat(),
+            "last_alert_ok": last_alert_ok,
+        },
     )
-    _plant_seq_claim(state_dir, seq)
 
 
 def _check_stale_tick_41m_alerts(state_dir: Path) -> bool:
     reference = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
     stale_dir = state_dir / "case_stale"
     stale_dir.mkdir(parents=True)
-    completed = reference - timedelta(minutes=41)
-    _plant_completed_tick(stale_dir, tick_id="stale", completed_at=completed)
+    old = reference - timedelta(minutes=41)
+    _write_heartbeat(stale_dir, attempt_at=old, completed_at=old)
     verdict = evaluate_deadman(stale_dir, max_age_minutes=40, now=reference)
-    return verdict.ok is False and "stale" in verdict.reason
+    return verdict.ok is False and verdict.reason in {"attempt_stale", "completed_stale"}
 
 
 def _check_fresh_tick_ok(state_dir: Path) -> bool:
@@ -78,32 +58,45 @@ def _check_fresh_tick_ok(state_dir: Path) -> bool:
     return verdict.ok is True and verdict.reason == "ok"
 
 
-def _check_empty_dir_alerts(state_dir: Path) -> bool:
+def _check_missing_heartbeat_alerts(state_dir: Path) -> bool:
     empty_dir = state_dir / "case_empty"
     empty_dir.mkdir(parents=True)
     reference = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
     verdict = evaluate_deadman(empty_dir, max_age_minutes=40, now=reference)
-    return verdict.ok is False and verdict.reason == "no_valid_completed_tick"
+    return verdict.ok is False and verdict.reason == "heartbeat_unreadable"
 
 
 def _check_last_alert_ok_false_alerts(state_dir: Path) -> bool:
     bad_dir = state_dir / "case_alert_flag"
     bad_dir.mkdir(parents=True)
     reference = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
-    completed = reference - timedelta(minutes=1)
-    _plant_completed_tick(
-        bad_dir, tick_id="flagged", completed_at=completed, last_alert_ok=False
-    )
+    recent = reference - timedelta(minutes=1)
+    _write_heartbeat(bad_dir, attempt_at=recent, completed_at=recent, last_alert_ok=False)
     verdict = evaluate_deadman(bad_dir, max_age_minutes=40, now=reference)
-    return verdict.ok is False and verdict.reason == "last_alert_ok_false"
+    return verdict.ok is False and verdict.reason == "last_alert_failed"
+
+
+def _check_future_heartbeat_alerts(state_dir: Path) -> bool:
+    future_dir = state_dir / "case_future"
+    future_dir.mkdir(parents=True)
+    reference = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    recent = reference - timedelta(minutes=1)
+    _write_heartbeat(
+        future_dir,
+        attempt_at=reference + timedelta(minutes=6),
+        completed_at=recent,
+    )
+    verdict = evaluate_deadman(future_dir, max_age_minutes=40, now=reference)
+    return verdict.ok is False and verdict.reason == "heartbeat_future"
 
 
 def run_exam(state_dir: Path) -> int:
     checks = {
         V1A_RULES[0]: _check_stale_tick_41m_alerts(state_dir),
         V1A_RULES[1]: _check_fresh_tick_ok(state_dir),
-        V1A_RULES[2]: _check_empty_dir_alerts(state_dir),
+        V1A_RULES[2]: _check_missing_heartbeat_alerts(state_dir),
         V1A_RULES[3]: _check_last_alert_ok_false_alerts(state_dir),
+        V1A_RULES[4]: _check_future_heartbeat_alerts(state_dir),
     }
 
     all_ok = True

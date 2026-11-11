@@ -14,6 +14,8 @@ _TICKS_DIR = "ticks"
 _ACTIVE_DIR = "active"
 _ACTIVE_NAME = "in-flight.json"
 _SEQ_DIR = "seq"
+_HEARTBEAT_DIR = "heartbeat"
+_HEARTBEAT_NAME = "latest.json"
 _RESERVE_SUFFIX = ".reserve.json"
 _TICK_PREFIX = "tick-"
 _TICK_SUFFIX = ".json"
@@ -53,6 +55,10 @@ def _active_path(state_dir: Path) -> Path:
 
 def _seq_dir(state_dir: Path) -> Path:
     return state_dir / _SEQ_DIR
+
+
+def _heartbeat_path(state_dir: Path) -> Path:
+    return state_dir / _HEARTBEAT_DIR / _HEARTBEAT_NAME
 
 
 def _tick_id_from_filename(name: str) -> str | None:
@@ -277,8 +283,18 @@ def run_tick(
     }
     if overlap_with is not None:
         tick_payload["overlap_with"] = overlap_with
+    completed_at = tick_payload["completed_at"]
     try:
         _write_tick_atomically(final, tick_payload)
+        _write_tick_atomically(
+            _heartbeat_path(state_dir),
+            {
+                "tick_id": tick_id,
+                "attempt_at": started_at,
+                "completed_at": completed_at,
+                "last_alert_ok": True,
+            },
+        )
     finally:
         _release_in_flight(state_dir, owner_token)
         _release_tick_reserve(state_dir, owner_token)
