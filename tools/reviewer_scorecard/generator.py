@@ -181,6 +181,11 @@ def generate_scorecard(tables: ScorecardTables) -> GeneratedScorecard:
         row = dict(row)
         row["display_name"] = registry.get(row["reviewer_id"], {}).get("display_name", row["reviewer_id"])
         key = f"{row['reviewer_id']}_{row['head_sha']}"
+        if key in reviewer_comments:
+            raise ValueError(
+                f"duplicate review row for reviewer={row['reviewer_id']} "
+                f"head={row['head_sha']} pr={row.get('pr', '?')} stage={row.get('stage', 'code')}"
+            )
         reviewer_comments[key] = _reviewer_comment(row, inputs_hash)
         peers = [r for r in tables.reviews if r["head_sha"] == row["head_sha"]]
         blind = compute_blind(

@@ -188,6 +188,32 @@ def test_serious_caught_only_at_risk_and_counting_blind() -> None:
     assert m.headlines.serious_caught_blind == 0
 
 
+def test_generate_rejects_duplicate_reviewer_head_rows() -> None:
+    base = {
+        "reviewer_id": "r1",
+        "pr": "1",
+        "head_sha": "abcdef0",
+        "claimed_verdict": "pass",
+        "coverage_class": "clean",
+        "counting": "yes",
+        "requested_at": "",
+        "verdict_at": "",
+    }
+    tables = ScorecardTables(
+        bugs=[],
+        reviews=[
+            {**base, "stage": "code"},
+            {**base, "stage": "plan", "pr": "2"},
+        ],
+        presence=[],
+        registry=[{"reviewer_id": "r1", "display_name": "R1"}],
+        confirms=[],
+        root=TABLE_DIR,
+    )
+    with pytest.raises(ValueError, match="duplicate review row"):
+        generate_scorecard(tables)
+
+
 def test_comment_keys_unique_per_reviewer_and_full_head() -> None:
     tables = ScorecardTables(
         bugs=[],
