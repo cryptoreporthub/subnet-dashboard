@@ -1,0 +1,8 @@
+reviewer_id	display_name	system	model_version	model_known	notes
+rubber	Rubber Stamp	synthetic	v1	yes	fixture
+catcher	Catcher	synthetic	v1	yes	fixture
+unknown_cov	Unknown Cov	synthetic	v1	yes	fixture
+degraded_r	Degraded Rev	synthetic	v1	yes	fixture
+dead_r	Dead Run	synthetic	v1	yes	fixture
+blind_a	Blind First	synthetic	v1	yes	fixture
+blind_b	Blind Second	synthetic	v1	yes	fixture
