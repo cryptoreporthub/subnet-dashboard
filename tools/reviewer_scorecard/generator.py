@@ -10,10 +10,10 @@ from typing import Any
 
 from tools.reviewer_scorecard.blind import compute_blind
 from tools.reviewer_scorecard.coverage import derive_counting
-from tools.reviewer_scorecard.metrics import compute_reviewer_metrics
+from tools.reviewer_scorecard.metrics import BLOCKING_SEVERITIES, compute_reviewer_metrics, parse_caught_bug_ids
 from tools.reviewer_scorecard.tables import ScorecardTables
 
-GENERATOR_VERSION = "reviewer-scorecard/3.3.0-phase1"
+GENERATOR_VERSION = "reviewer-scorecard/3.3.0-phase2"
 SCHEMA_VERSION = "scorecard.json/3.3.0"
 
 
@@ -82,10 +82,26 @@ def _deterministic_bundle(
     return json.dumps(bundle, sort_keys=True).encode("utf-8")
 
 
-def _reviewer_comment(row: dict[str, str], inputs_hash: str) -> str:
+def _blocking_display(row: dict[str, str], bugs_by_id: dict[str, dict[str, str]]) -> str:
+    """Format Blocking (S1/S2) cell; explicit blocking_result wins over caught_bug_ids lookup."""
+    blocking = row.get("blocking_result", "").strip()
+    if blocking:
+        return blocking
+    caught = parse_caught_bug_ids(row.get("caught_bug_ids", ""))
+    serious = [bid for bid in caught if bugs_by_id.get(bid, {}).get("severity") in BLOCKING_SEVERITIES]
+    return f"{len(serious)} found" if serious else "0 found"
+
+
+def _reviewer_comment(
+    row: dict[str, str],
+    inputs_hash: str,
+    bugs_by_id: dict[str, dict[str, str]],
+) -> str:
+    """Build immutable reviewer comment markdown for one review row."""
     head = row["head_sha"]
     verdict = row["claimed_verdict"]
     reviewer = row.get("display_name") or row["reviewer_id"]
+    blocking = _blocking_display(row, bugs_by_id)
     lines = [
         f"**{verdict} | PR #{row['pr']} | head `{_sha7(head)}` | {reviewer} | "
         f"{row.get('verdict_at', 'unknown')} UTC | confidence: {row.get('confidence', 'not_stated')}**",
@@ -94,7 +110,7 @@ def _reviewer_comment(row: dict[str, str], inputs_hash: str) -> str:
         "",
         "| Check | Result | Evidence |",
         "|---|---|---|",
-        f"| Blocking (S1/S2) | {row.get('blocking_result', '0 found')} | - |",
+        f"| Blocking (S1/S2) | {blocking} | - |",
         f"| Follow-ups (S3/S4) | {row.get('followups', '0')} | - |",
         f"| Tests / CI at this head | {row.get('ci_result', 'not run')} | - |",
         f"| Prod risk / rollback | {row.get('prod_risk', 'not stated')} | - |",
@@ -127,6 +143,7 @@ def _peer_comment(
 def generate_scorecard(tables: ScorecardTables) -> GeneratedScorecard:
     inputs_hash = tables.inputs_hash()
     registry = {r["reviewer_id"]: r for r in tables.registry}
+    bugs_by_id = {b["bug_id"]: b for b in tables.bugs}
 
     reviewer_metrics: dict[str, Any] = {}
     for reg in tables.registry:
@@ -186,7 +203,7 @@ def generate_scorecard(tables: ScorecardTables) -> GeneratedScorecard:
                 f"duplicate review row for reviewer={row['reviewer_id']} "
                 f"head={row['head_sha']} pr={row.get('pr', '?')} stage={row.get('stage', 'code')}"
             )
-        reviewer_comments[key] = _reviewer_comment(row, inputs_hash)
+        reviewer_comments[key] = _reviewer_comment(row, inputs_hash, bugs_by_id)
         peers = [r for r in tables.reviews if r["head_sha"] == row["head_sha"]]
         blind = compute_blind(
             row["reviewer_id"],

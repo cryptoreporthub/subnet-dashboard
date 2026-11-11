@@ -10,13 +10,14 @@ from pathlib import Path
 import pytest
 
 from tools.reviewer_scorecard.blind import compute_blind
-from tools.reviewer_scorecard.generator import generate_from_directory, generate_scorecard
+from tools.reviewer_scorecard.generator import _blocking_display, generate_from_directory, generate_scorecard
 from tools.reviewer_scorecard.metrics import compute_reviewer_metrics
 from tools.reviewer_scorecard.tables import ScorecardTables
 from tools.reviewer_scorecard.wilson import wilson_lower_bound
 
 FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "tools/reviewer_scorecard/fixtures/known_answer"
 TABLE_DIR = FIXTURE_ROOT / "tables"
+BACKFILL_TABLE_DIR = Path(__file__).resolve().parents[1] / "tools/reviewer_scorecard/tables"
 EXPECTED_PATH = FIXTURE_ROOT / "expected_metrics.json"
 GOLDEN_DET = FIXTURE_ROOT / "golden_scorecard.det.json"
 
@@ -90,6 +91,35 @@ def test_generator_deterministic_bytes_stable(tables: ScorecardTables, tmp_path:
     assert first.scorecard_json["inputs_hash"] == tables.inputs_hash()
     assert any(k.startswith("rubber_") for k in first.reviewer_comments)
     assert any(k.startswith("catcher_") for k in first.peer_comments)
+
+
+def test_blocking_display_matches_metrics_parser() -> None:
+    bugs = {
+        "1515_horizon_overflow": {"bug_id": "1515_horizon_overflow", "severity": "S2 High"},
+        "note_only": {"bug_id": "note_only", "severity": "S4 Low"},
+    }
+    assert _blocking_display({"caught_bug_ids": "none"}, bugs) == "0 found"
+    assert _blocking_display({"caught_bug_ids": "1515_horizon_overflow;1515_horizon_overflow"}, bugs) == "1 found"
+    assert _blocking_display({"caught_bug_ids": "note_only"}, bugs) == "0 found"
+    assert (
+        _blocking_display({"blocking_result": "custom", "caught_bug_ids": "note_only"}, bugs) == "custom"
+    )
+
+
+def test_backfill_production_tables_load_and_generate(tmp_path: Path) -> None:
+    """Phase 2: real GitHub-sourced TSVs load and produce scorecard.json with reviewer metrics."""
+    loaded = ScorecardTables.load(BACKFILL_TABLE_DIR)
+    assert len(loaded.reviews) >= 10
+    assert any(b["status"] == "real" for b in loaded.bugs)
+    generated = generate_from_directory(BACKFILL_TABLE_DIR, tmp_path / "out")
+    assert (tmp_path / "out" / "scorecard.json").is_file()
+    assert generated.scorecard_json["inputs_hash"] == loaded.inputs_hash()
+    assert "cursor_auto" in generated.scorecard_json["reviewers"]
+    assert "mc_github" in generated.scorecard_json["reviewers"]
+    mc = compute_reviewer_metrics(loaded, "mc_github")
+    assert mc.headlines.serious_caught == 1
+    body = generate_scorecard(loaded).reviewer_comments["mc_github_e4eae96b5ae45b7807abf440d162c21f322f4ae0"]
+    assert "1 found" in body
 
 
 def test_golden_deterministic_payload(tables: ScorecardTables) -> None:

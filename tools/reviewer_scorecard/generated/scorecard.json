@@ -1,0 +1,68 @@
+{
+  "generated_at": "2026-11-11T06:33:47.524656+00:00",
+  "generator_version": "reviewer-scorecard/3.3.0-phase2",
+  "inputs_hash": "cb42c498a17cf8e7",
+  "reviewers": {
+    "coderabbit": {
+      "at_risk_bugs_reviewed": 0,
+      "blocks_overturned": "0 of 0",
+      "catching_display": "not eligible",
+      "catching_lb": null,
+      "degraded_pass_count": 0,
+      "false_alarms": "0 of 0",
+      "false_passes": "0 of 0",
+      "heads_reviewed": 1,
+      "non_counting_share": 1.0,
+      "pass_precision_display": "not eligible",
+      "pass_precision_lb": null,
+      "repo_at_risk_bugs": 1,
+      "serious_caught_blind": "0 of 0"
+    },
+    "cursor_auto": {
+      "at_risk_bugs_reviewed": 1,
+      "blocks_overturned": "0 of 0",
+      "catching_display": "not eligible",
+      "catching_lb": null,
+      "degraded_pass_count": 0,
+      "false_alarms": "0 of 0",
+      "false_passes": "0 of 0",
+      "heads_reviewed": 8,
+      "non_counting_share": 1.0,
+      "pass_precision_display": "not eligible",
+      "pass_precision_lb": null,
+      "repo_at_risk_bugs": 1,
+      "serious_caught_blind": "0 of 0"
+    },
+    "ditto": {
+      "at_risk_bugs_reviewed": 0,
+      "blocks_overturned": "0 of 0",
+      "catching_display": "not eligible",
+      "catching_lb": null,
+      "degraded_pass_count": 0,
+      "false_alarms": "0 of 0",
+      "false_passes": "0 of 0",
+      "heads_reviewed": 7,
+      "non_counting_share": 0.857143,
+      "pass_precision_display": "not eligible",
+      "pass_precision_lb": null,
+      "repo_at_risk_bugs": 1,
+      "serious_caught_blind": "0 of 0"
+    },
+    "mc_github": {
+      "at_risk_bugs_reviewed": 1,
+      "blocks_overturned": "0 of 0",
+      "catching_display": "not eligible",
+      "catching_lb": null,
+      "degraded_pass_count": 0,
+      "false_alarms": "0 of 0",
+      "false_passes": "0 of 0",
+      "heads_reviewed": 1,
+      "non_counting_share": 1.0,
+      "pass_precision_display": "not eligible",
+      "pass_precision_lb": null,
+      "repo_at_risk_bugs": 1,
+      "serious_caught_blind": "0 of 0"
+    }
+  },
+  "schema_version": "scorecard.json/3.3.0"
+}

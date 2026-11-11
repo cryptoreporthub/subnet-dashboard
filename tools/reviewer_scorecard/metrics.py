@@ -79,10 +79,15 @@ def _at_risk_on_head(
     return ids
 
 
-def _parse_caught_bug_ids(raw: str) -> set[str]:
-    if not raw or raw.strip() in {"-", "none", ""}:
+def parse_caught_bug_ids(raw: str) -> set[str]:
+    """Normalize caught_bug_ids TSV field to a distinct-id set (matches metrics denominators)."""
+    if not raw or raw.strip().lower() in {"-", "none", ""}:
         return set()
     return {p.strip() for p in raw.split(";") if p.strip()}
+
+
+def _parse_caught_bug_ids(raw: str) -> set[str]:
+    return parse_caught_bug_ids(raw)
 
 
 def compute_reviewer_metrics(tables: ScorecardTables, reviewer_id: str) -> ScorecardMetrics:
