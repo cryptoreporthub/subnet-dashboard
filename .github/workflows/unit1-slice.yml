@@ -9,7 +9,12 @@ on:
       - "internal/learning/**"
       - "internal/store/**"
       - "internal/council/**"
+      - "internal/judges/**"
+      - "internal/accuracy_lift/**"
+      - "internal/background_boot.py"
       - "scripts/compact_soul_map.py"
+      - "scripts/reset_accuracy_epoch.py"
+      - "scripts/measure_accuracy_archive.py"
       - "tests/test_predictions_store_patch_contract.py"
       - "tests/test_predictions_store_contract.py"
       - "tests/test_expiry_ledger.py"
@@ -26,6 +31,7 @@ on:
       - "tests/test_resolver_persist_honesty_outcomes.py"
       - "tests/test_resolver_soul_map_read_wedge.py"
       - "tests/test_1578_plan_v31_weights_ledger.py"
+      - "tests/test_1578_ci_lists_in_sync.py"
       - ".github/workflows/unit1-slice.yml"
       - ".github/workflows/ci-smoke.yml"
   push:
@@ -68,4 +74,5 @@ jobs:
             tests/test_resolver_predictions_unreadable.py \
             tests/test_resolver_persist_honesty_outcomes.py \
             tests/test_resolver_soul_map_read_wedge.py \
-            tests/test_1578_plan_v31_weights_ledger.py
+            tests/test_1578_plan_v31_weights_ledger.py \
+            tests/test_1578_ci_lists_in_sync.py
