@@ -273,6 +273,7 @@ def run_tick(
         "overlap": overlap,
         "started_at": started_at,
         "completed_at": _utc_now_iso(),
+        "last_alert_ok": True,
     }
     if overlap_with is not None:
         tick_payload["overlap_with"] = overlap_with
