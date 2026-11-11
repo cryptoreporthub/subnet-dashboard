@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -355,8 +356,10 @@ def test_heal_record_failed_not_fooled_by_global_decoy(tmp_path, monkeypatch):
     )
     monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
     monkeypatch.setattr(
-        "internal.learning.prediction_loop.record_pick_prediction",
-        lambda *a, **k: None,
+        "internal.learning.prediction_loop.record_pick",
+        lambda *a, **k: SimpleNamespace(
+            kind="skipped", reason="duplicate", prediction=None
+        ),
     )
 
     summary = ledger_heal.heal_daily_pick_ledger(

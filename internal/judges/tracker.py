@@ -41,16 +41,26 @@ def on_prediction_created(
 
     Returns the judge scores so callers can store them on the prediction.
     """
-    scores = {
+    scores = evaluate_prediction(
+        prediction, signal_impact=signal_impact, subnet=subnet, expert_weights=expert_weights
+    )
+    from internal.judges.portfolios import open_positions_for_prediction
+
+    open_positions_for_prediction(prediction, scores)
+    return scores
+
+
+def evaluate_prediction(
+    prediction: Dict[str, Any],
+    signal_impact: Optional[Dict[str, Any]] = None,
+    subnet: Optional[Dict[str, Any]] = None,
+    expert_weights: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    return {
         "oracle": oracle_judge.evaluate(prediction, signal_impact=signal_impact, subnet=subnet),
         "echo": echo_judge.evaluate(prediction, signal_impact=signal_impact, expert_weights=expert_weights),
         "pulse": pulse_judge.evaluate(prediction, signal_impact=signal_impact, subnet=subnet),
     }
-    for judge in all_judges():
-        block = scores.get(judge.name) or {}
-        conf = float(block.get("confidence", 0.5) or 0.5)
-        judge.open_position(prediction, size=0.5 + 0.5 * conf)
-    return scores
 
 
 def on_prediction_resolved(

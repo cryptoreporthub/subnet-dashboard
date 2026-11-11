@@ -15,11 +15,16 @@ Each judge has a different risk profile:
 from __future__ import annotations
 
 import json
+import fcntl
 import os
-from datetime import datetime, timezone
+import threading
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from functools import wraps
 from typing import Any, Dict, List, Optional
 
 PORTFOLIOS_PATH = os.path.join("data", "judge_portfolios.json")
+_PORTFOLIOS_MUTEX = threading.RLock()
 
 # Per-judge risk multipliers — each judge trades with different conviction sizing
 _JUDGE_RISK_MULTIPLIER = {
@@ -52,6 +57,51 @@ def _load() -> Dict[str, Any]:
             return json.load(f)
     except Exception:
         return {}
+
+def _load_checked() -> Dict[str, Any]:
+    try:
+        with open(PORTFOLIOS_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError("portfolios root must be an object")
+    for judge in data.values():
+        if not isinstance(judge, dict) or any(
+            not isinstance(judge.get(key, []), list) for key in ("open_positions", "closed_positions")
+        ) or not isinstance(judge.get("closed_prediction_ids", {}), dict):
+            raise ValueError("invalid judge portfolio")
+    return data
+
+@contextmanager
+def _portfolios_lock():
+    with _PORTFOLIOS_MUTEX:
+        os.makedirs(os.path.dirname(PORTFOLIOS_PATH) or ".", exist_ok=True)
+        with open(PORTFOLIOS_PATH + ".lock", "a+", encoding="utf-8") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+def _portfolio_transaction(fn):
+    @wraps(fn)
+    def run(*args, **kwargs):
+        with _portfolios_lock():
+            return fn(*args, **kwargs)
+    return run
+
+def _prune_tombstones(judge: Dict[str, Any]) -> None:
+    from internal.learning.pick_horizon import day_horizon_hours
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=day_horizon_hours() + 49)
+    tombstones = judge.setdefault("closed_prediction_ids", {})
+    for key, value in list(tombstones.items()):
+        try:
+            if datetime.fromisoformat(value.replace("Z", "+00:00")) < cutoff:
+                del tombstones[key]
+        except (ValueError, AttributeError, TypeError):
+            continue
 
 def _save(data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(PORTFOLIOS_PATH) or ".", exist_ok=True)
@@ -115,44 +165,61 @@ def _recompute_summary(judge_data: Dict[str, Any]) -> None:
         "daily": _bucket_stats(daily_closed),
     }
 
+def _open_position(data, judge_name, prediction, size):
+    judge = _get_judge(data, judge_name)
+    _prune_tombstones(judge)
+    pred_id = prediction.get("id")
+    if pred_id is not None and (
+        str(pred_id) in judge["closed_prediction_ids"]
+        or any(pos.get("id") == pred_id for pos in judge.get("open_positions", []))
+    ):
+        return None
+    name_lower = judge_name.lower()
+    risk_mult = _JUDGE_RISK_MULTIPLIER.get(name_lower, 1.0)
+    horizon = prediction.get("horizon_hours")
+    position = {
+        "id": pred_id, "netuid": prediction.get("netuid"), "name": prediction.get("name"),
+        "direction": prediction.get("direction", "up"),
+        "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
+        "reference_price": float(prediction.get("reference_price", 0) or 0),
+        "size": round(float(size) * risk_mult, 4), "risk_multiplier": risk_mult,
+        "bucket": _bucket(horizon), "horizon_hours": horizon, "entered_at": _utcnow(),
+    }
+    judge.setdefault("open_positions", []).append(position)
+    _recompute_summary(judge)
+    return position
+
+
+@_portfolio_transaction
+def open_positions_for_prediction(prediction: Dict[str, Any], scores: Dict[str, Any]) -> None:
+    data = _load_checked()
+    changed = False
+    for name in ("oracle", "echo", "pulse"):
+        confidence = float((scores.get(name) or {}).get("confidence", 0.5) or 0.5)
+        changed |= _open_position(data, name, prediction, 0.5 + 0.5 * confidence) is not None
+    if changed:
+        _save(data)
+
+
+@_portfolio_transaction
 def open_position(
     judge_name: str,
     prediction: Dict[str, Any],
     size: float = 1.0,
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     """Open a paper position for a judge when a prediction is created."""
-    data = _load()
-    judge = _get_judge(data, judge_name)
-    name_lower = judge_name.lower()
-    
-    # Scale position size by judge's risk multiplier
-    risk_mult = _JUDGE_RISK_MULTIPLIER.get(name_lower, 1.0)
-    adjusted_size = round(float(size) * risk_mult, 4)
-
-    horizon = prediction.get("horizon_hours")
-    position = {
-        "id": prediction.get("id"),
-        "netuid": prediction.get("netuid"),
-        "name": prediction.get("name"),
-        "direction": prediction.get("direction", "up"),
-        "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
-        "reference_price": float(prediction.get("reference_price", 0) or 0),
-        "size": adjusted_size,
-        "risk_multiplier": risk_mult,
-        "bucket": _bucket(horizon),
-        "horizon_hours": horizon,
-        "entered_at": _utcnow(),
-    }
-    judge.setdefault("open_positions", []).append(position)
-    _recompute_summary(judge)
-    _save(data)
+    data = _load_checked()
+    position = _open_position(data, judge_name, prediction, size)
+    if position is not None:
+        _save(data)
     return position
 
+@_portfolio_transaction
 def discard_open_position(judge_name: str, prediction_id: Any) -> bool:
     """Remove an open paper position without closing it to the ledger."""
     if prediction_id is None:
         return False
-    data = _load()
+    data = _load_checked()
     judge = _get_judge(data, judge_name)
     open_positions = judge.get("open_positions", [])
     remaining = [pos for pos in open_positions if pos.get("id") != prediction_id]
@@ -164,6 +231,7 @@ def discard_open_position(judge_name: str, prediction_id: Any) -> bool:
     return True
 
 
+@_portfolio_transaction
 def close_position(
     judge_name: str,
     prediction: Dict[str, Any],
@@ -171,11 +239,14 @@ def close_position(
     outcome: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Close an open paper position and move it to the closed ledger."""
-    data = _load()
+    data = _load_checked()
     judge = _get_judge(data, judge_name)
     open_positions = judge.get("open_positions", [])
     pred_id = prediction.get("id")
     netuid = prediction.get("netuid")
+    _prune_tombstones(judge)
+    if pred_id is not None:
+        judge["closed_prediction_ids"][str(pred_id)] = _utcnow()
 
     # A replayed resolution must not append a second closed entry or nudge the judge again.
     if pred_id is not None and any(
@@ -185,7 +256,7 @@ def close_position(
         if len(remaining) != len(open_positions):
             judge["open_positions"] = remaining
             _recompute_summary(judge)
-            _save(data)
+        _save(data)
         return None
 
     idx = next(

@@ -144,12 +144,12 @@ def heal_daily_pick_ledger(
             "reference_price": subnet_row.get("price"),
         }
 
-    from internal.learning.prediction_loop import record_pick_prediction
+    from internal.learning.prediction_loop import record_pick
     from internal.learning.predictions_store import PredictionsLedgerUnreadable
 
     market_context = today_rec.get("market_context") if isinstance(today_rec, dict) else {}
     try:
-        stored = record_pick_prediction(
+        stored = record_pick(
             stored_pick,
             subnet_row,
             horizon_type="day",
@@ -163,14 +163,17 @@ def heal_daily_pick_ledger(
             "reason": "ledger_unreadable",
             "error": str(exc),
         }
-    if stored:
+    if stored.kind == "committed":
         logger.info("ledger heal: backfilled day row for SN%s", netuid)
         return {
             "ok": True,
             "healed": True,
             "netuid": netuid,
-            "prediction_id": stored.get("id"),
+            "prediction_id": stored.prediction.get("id"),
         }
+
+    if stored.kind == "indeterminate":
+        return {"ok": False, "healed": False, "reason": "record_indeterminate"}
 
     if _day_ledger_present(netuid, predictions_path=pred_path):
         return {"ok": True, "healed": False, "reason": "duplicate_skipped", "netuid": netuid}

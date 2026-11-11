@@ -497,12 +497,12 @@ def has_pending_duplicate(
     return False
 
 
-def append_prediction(
+def append_prediction_result(
     prediction: Dict[str, Any],
     *,
     trigger: str = "append_prediction",
     path: Optional[str] = None,
-) -> bool:
+) -> PersistResult:
     """Append a pending prediction if no duplicate is already pending.
 
     Duplicate key: same ``netuid`` + ``horizon_type`` + shadow flag while pending.
@@ -510,7 +510,7 @@ def append_prediction(
     Uses cross-process file locking to prevent concurrent write races.
     """
     if not isinstance(prediction, dict):
-        return False
+        return PersistResult(PersistOutcome.APPLIED)
     from internal.learning.evidence import stamp_evidence
 
     _normalize_prediction_timestamps(prediction)
@@ -518,7 +518,7 @@ def append_prediction(
     netuid = prediction.get("netuid")
     horizon_type = prediction.get("horizon_type", "hour")
     if netuid is None:
-        return False
+        return PersistResult(PersistOutcome.APPLIED)
     shadow = bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
     def append(data, _raw):
@@ -537,7 +537,13 @@ def append_prediction(
         update_stats(data)
         return data, [str(prediction.get("id") or netuid)], []
 
-    result = mutate_predictions(append, path=path, caller="append_prediction", trigger=trigger)
+    return mutate_predictions(append, path=path, caller="append_prediction", trigger=trigger)
+
+
+def append_prediction(
+    prediction: Dict[str, Any], *, trigger: str = "append_prediction", path: Optional[str] = None,
+) -> bool:
+    result = append_prediction_result(prediction, trigger=trigger, path=path)
     if result.reason is PersistReason.LOCK_TIMEOUT:
         raise FileLockTimeout("Timed out waiting for predictions ledger")
     if result.outcome is not PersistOutcome.APPLIED:

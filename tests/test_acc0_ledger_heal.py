@@ -522,7 +522,7 @@ def test_heal_append_unreadable(tmp_path, monkeypatch):
         raise PredictionsLedgerUnreadable("unreadable", error="simulated after initial read")
 
     monkeypatch.setattr(
-        "internal.learning.prediction_loop.append_prediction",
+        "internal.learning.prediction_loop.append_prediction_result",
         _append_raises_unreadable,
     )
 

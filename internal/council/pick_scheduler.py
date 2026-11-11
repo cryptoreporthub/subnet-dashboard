@@ -179,12 +179,12 @@ def _market_context(subnets: Any) -> Dict[str, Any]:
         return {}
 
 
-def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[str, Any]) -> None:
+def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[str, Any]) -> Optional[str]:
     if not pick:
         return
     try:
         from internal.council import pick_history
-        from internal.learning.prediction_loop import record_hold_decision, record_pick_prediction
+        from internal.learning.prediction_loop import record_hold_decision, record_pick
 
         netuid = None
         sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
@@ -211,21 +211,29 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
 
         if float(subnet_row.get("price", 0) or 0) <= 0:
             return
-        stored = record_pick_prediction(
+        stored = record_pick(
             pick,
             subnet_row,
             horizon_type="hour",
             market_context=market_context,
         )
-        if stored:
+        if stored.kind == "committed":
             try:
                 pick_history.record_hour_pick(
-                    pick, subnet_row, prediction_id=stored.get("id")
+                    pick, subnet_row, prediction_id=stored.prediction.get("id")
                 )
             except Exception as exc:
                 logger.warning("pick_history record failed: %s", exc)
+        if stored.kind == "indeterminate":
+            logger.warning("hour pick record indeterminate: %s", stored.reason)
+        if stored.kind == "skipped" and (
+            stored.reason == "judge_evaluation_failed" or str(stored.reason).startswith("ledger_")
+        ):
+            return "failed"
+        return stored.kind
     except Exception as exc:
         logger.warning("hour pick learning record failed: %s", exc)
+        return "indeterminate"
 
 
 def _record_ab_benchmark(subnets: Any, market_context: Dict[str, Any], source: str) -> Optional[str]:
@@ -326,6 +334,9 @@ class DailyPickScheduler:
         today_ready = False
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
+            from internal.learning.prediction_loop import reconcile_judge_positions
+
+            reconcile_judge_positions()
 
             with _rss_bookend("daily_pick_scheduler:load_subnets"):
                 subnets = _load_subnets()
@@ -523,7 +534,13 @@ class HourPickScheduler:
                     subnets, ctx, "hour-pick-scheduler"
                 )
                 pick = select_hourly_pick(subnets, ctx)
-                _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
+                from internal.learning.prediction_loop import reconcile_judge_positions
+
+                reconcile_judge_positions()
+                pick_outcome = _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
+                result["pick_record_outcome"] = pick_outcome
+                if pick_outcome in ("indeterminate", "failed"):
+                    raise RuntimeError(f"pick_record_{pick_outcome}")
                 result["ok"] = True
                 sn = (pick or {}).get("subnet") if isinstance(pick, dict) else {}
                 if isinstance(sn, dict):
