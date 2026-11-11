@@ -95,20 +95,39 @@ def _load_raw(path: str = SOUL_MAP_PATH, *, copy_blob: bool = True) -> Dict[str,
     return read_soul_map(path, copy_blob=copy_blob)
 
 
+def _persist_ok(outcome: Any) -> bool:
+    """True when the serialized blob now matches intent (applied or canonical no-op)."""
+    from internal.store.soul_map_io import WriteOutcome
+
+    return outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
+
+
+def _persist_applied(outcome: Any) -> bool:
+    """True only when bytes on disk changed."""
+    from internal.store.soul_map_io import WriteOutcome
+
+    return outcome is WriteOutcome.APPLIED
+
+
+def _write_mutate(mutator: Any, path: str) -> tuple[bool, bool]:
+    from internal.store.soul_map_io import write_soul_map
+
+    result = write_soul_map(mutator, path)
+    return _persist_ok(result.outcome), _persist_applied(result.outcome)
+
+
 def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> bool:
     """Replace the serialized blob; callers intentionally provide full-blob state."""
-    from internal.store.soul_map_io import WriteOutcome, write_soul_map
+    from internal.store.soul_map_io import write_soul_map
 
     result = write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
-    return result.outcome is WriteOutcome.APPLIED
+    return _persist_ok(result.outcome)
 
 
 def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> bool:
     """Apply a mutation to the latest serialized blob under the store lock."""
-    from internal.store.soul_map_io import WriteOutcome, write_soul_map
-
-    result = write_soul_map(mutator, path)
-    return result.outcome is WriteOutcome.APPLIED
+    ok, _ = _write_mutate(mutator, path)
+    return ok
 
 
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
@@ -876,7 +895,8 @@ def save_signal_weights(
             for horizon, weights in signal_weights.items()
         }
 
-    _mutate_raw(replace_signal_weights, path)
+    if not _mutate_raw(replace_signal_weights, path):
+        raise RuntimeError("signal weight persist refused")
 
 
 def nudge_signal_weight(
@@ -924,25 +944,27 @@ def nudge_signal_weight(
             for raw_horizon, raw_weights in signal_weights.items()
         }
 
-    if not _mutate_raw(apply_signal_delta, path):
+    ok, applied = _write_mutate(apply_signal_delta, path)
+    if not ok:
         logger.warning("signal weight nudge skipped: soul_map write did not apply")
         return None
-    try:
-        from internal.learning.trail_bus import emit_weight_change
+    if applied and abs(float(new_val) - before) > 0.0001:
+        try:
+            from internal.learning.trail_bus import emit_weight_change
 
-        payload = {"horizon_type": horizon_type, "signal_name": signal_name}
-        if extra:
-            payload.update(extra)
-        emit_weight_change(
-            f"{horizon_type}:{signal_name}",
-            before=before,
-            after=float(new_val),
-            reason="signal_resolve",
-            correct=correct,
-            extra=payload,
-        )
-    except Exception:
-        pass
+            payload = {"horizon_type": horizon_type, "signal_name": signal_name}
+            if extra:
+                payload.update(extra)
+            emit_weight_change(
+                f"{horizon_type}:{signal_name}",
+                before=before,
+                after=float(new_val),
+                reason="signal_resolve",
+                correct=correct,
+                extra=payload,
+            )
+        except Exception:
+            pass
     return float(new_val)
 
 
@@ -1029,7 +1051,8 @@ def save_impact_strength(strength: float, path: Optional[str] = None) -> float:
         adv["impact_strength"] = round(clamped, 4)
         adv["last_impact_strength_update"] = _now_iso()
 
-    _mutate_raw(replace_impact_strength, path)
+    if not _mutate_raw(replace_impact_strength, path):
+        raise RuntimeError("impact strength persist refused")
     return clamped
 
 

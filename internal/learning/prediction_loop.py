@@ -198,6 +198,7 @@ def record_pick_prediction(
     horizon_type: str = "hour",
     market_context: Optional[Dict[str, Any]] = None,
     shadow: bool = False,
+    predictions_path: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Persist a Council pick as a pending prediction and open judge positions.
 
@@ -227,7 +228,7 @@ def record_pick_prediction(
         if int(netuid) <= 0:
             return None
 
-    if has_pending_duplicate(netuid, horizon_type, shadow=shadow):
+    if has_pending_duplicate(netuid, horizon_type, shadow=shadow, path=predictions_path):
         return None
 
     ref_price = float(subnet.get("price", 0) or 0)
@@ -370,7 +371,7 @@ def record_pick_prediction(
         logger.warning("Judge on_prediction_created failed: %s", exc)
 
     pred_id = prediction.get("id")
-    if not append_prediction(prediction):
+    if not append_prediction(prediction, path=predictions_path):
         if pred_id is not None:
             try:
                 from internal.judges.judges import all_judges

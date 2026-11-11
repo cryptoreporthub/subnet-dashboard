@@ -1117,18 +1117,31 @@ class PredictionResolverScheduler:
     def _ensure_cycle_generation_seeded(self) -> None:
         if self._cycle_generation_seeded:
             return
-        kind = _soul_map_read_kind(self.soul_map_path)
-        if kind not in ("loaded", "missing"):
+        from internal.store.soul_map_io import read_blob_checked
+
+        checked = read_blob_checked(self.soul_map_path)
+        kind = checked.kind
+        if kind in ("unreadable", "transient"):
             return
-        data = _load_json(self.soul_map_path)
-        sched = data.get("prediction_resolver_scheduler", {})
-        last = sched.get("last_cycle") if isinstance(sched.get("last_cycle"), dict) else {}
+        if kind == "missing":
+            self._cycle_generation_seeded = True
+            return
+        if kind != "loaded" or not isinstance(checked.blob, dict):
+            return
+        data = checked.blob
+        sched = data.get("prediction_resolver_scheduler")
+        if not isinstance(sched, dict):
+            return
+        last = sched.get("last_cycle")
+        if not isinstance(last, dict):
+            self._cycle_generation_seeded = True
+            return
         persisted = last.get("cycle_generation")
         if persisted is not None:
             try:
                 self._cycle_generation = max(self._cycle_generation, int(persisted))
             except (TypeError, ValueError):
-                pass
+                return
         self._cycle_generation_seeded = True
 
     def _stamp_owned_cycle_context(
