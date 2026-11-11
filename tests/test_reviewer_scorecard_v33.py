@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 from pathlib import Path
@@ -232,6 +233,40 @@ def test_deterministic_bytes_use_structural_clock_strip(tables: ScorecardTables)
     assert "<clock-stripped>" in next(iter(payload["peer_comments"].values()))
     assert "<verdict_at> UTC" in next(iter(payload["reviewer_comments"].values()))
     assert "2026-01-" not in generated.deterministic_bytes.decode("utf-8")
+
+
+def test_ragged_reviews_tsv_missing_trailing_cells(tmp_path: Path) -> None:
+    """Fail mode: default DictReader restval=None → metrics AttributeError; fixed loader uses restval=''."""
+    sample = tmp_path / "mini.tsv"
+    sample.write_text("reviewer_id\tcounting\tfalse_alarm_denominator\nrubber\tyes\n", encoding="utf-8")
+    with sample.open(newline="", encoding="utf-8") as fh:
+        bad_row = next(csv.DictReader(fh, delimiter="\t"))
+    assert bad_row["false_alarm_denominator"] is None
+
+    with pytest.raises(AttributeError):
+        bad_row.get("false_alarm_denominator", "").strip()
+
+    root = tmp_path / "tables"
+    root.mkdir()
+    for name in (
+        "bugs.tsv",
+        "bug_head_presence.tsv",
+        "reviewers.registry.tsv",
+        "confirms.tsv",
+    ):
+        (root / name).write_text((TABLE_DIR / name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    lines = (TABLE_DIR / "reviews.tsv").read_text(encoding="utf-8").splitlines()
+    ragged_data = "\t".join(lines[1].split("\t")[:13]) + "\n"
+    (root / "reviews.tsv").write_text(lines[0] + "\n" + ragged_data, encoding="utf-8")
+
+    tables = ScorecardTables.load(root)
+    row = next(r for r in tables.reviews if r["reviewer_id"] == "rubber")
+    assert row["false_alarm_denominator"] == ""
+    assert row["caught_bug_ids"] == ""
+
+    m = compute_reviewer_metrics(tables, "rubber")
+    assert m.headlines.false_passes == 1
 
 
 def test_tsv_zero_byte_error_and_header_only_ok(tmp_path: Path) -> None:
