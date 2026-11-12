@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -176,29 +178,38 @@ def test_repair_moves_store_missing_required_columns(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("seq_declaration", "table_suffix"),
+    ("shape", "seq_declaration", "table_suffix"),
     [
-        ("TEXT PRIMARY KEY", ""),
-        ("INTEGER PRIMARY KEY DESC", ""),
-        ("INTEGER PRIMARY KEY", " WITHOUT ROWID"),
+        ("text-primary-key", "TEXT PRIMARY KEY", ""),
+        ("integer-primary-key-desc", "INTEGER PRIMARY KEY DESC", ""),
+        ("without-rowid", "INTEGER PRIMARY KEY", " WITHOUT ROWID"),
+        ("real-primary-key", "REAL PRIMARY KEY", ""),
+        ("text-unique", "TEXT UNIQUE", ""),
+        ("missing-seq", None, ""),
+        ("ticks-view", None, ""),
     ],
 )
-def test_repair_moves_seq_keys_that_are_not_rowid_aliases(
-    tmp_path: Path, seq_declaration: str, table_suffix: str
+def test_repair_moves_structurally_untrusted_ticks(
+    tmp_path: Path, shape: str, seq_declaration: str | None, table_suffix: str
 ) -> None:
     store = db.db_path(tmp_path)
     conn = sqlite3.connect(str(store))
-    conn.execute(
-        "CREATE TABLE ticks ("
-        f"seq {seq_declaration}, "
-        "tick_id TEXT NOT NULL UNIQUE, "
-        "started_at TEXT NOT NULL, "
-        "duration_ms INTEGER, "
-        "outcome TEXT NOT NULL DEFAULT 'running', "
-        "noop INTEGER NOT NULL DEFAULT 0, "
-        "overlap INTEGER NOT NULL DEFAULT 0, "
-        f"last_alert_ok INTEGER){table_suffix}"
-    )
+    columns = [
+        f"seq {seq_declaration}" if seq_declaration is not None else None,
+        "tick_id TEXT NOT NULL UNIQUE",
+        "started_at TEXT NOT NULL",
+        "duration_ms INTEGER",
+        "outcome TEXT NOT NULL DEFAULT 'running'",
+        "noop INTEGER NOT NULL DEFAULT 0",
+        "overlap INTEGER NOT NULL DEFAULT 0",
+        "last_alert_ok INTEGER",
+    ]
+    column_sql = ", ".join(column for column in columns if column is not None)
+    if shape == "ticks-view":
+        conn.execute(f"CREATE TABLE ticks_source ({column_sql})")
+        conn.execute("CREATE VIEW ticks AS SELECT * FROM ticks_source")
+    else:
+        conn.execute(f"CREATE TABLE ticks ({column_sql}){table_suffix}")
     conn.close()
 
     moved = persist.repair_store(tmp_path, stamp="bad-seq")
@@ -211,6 +222,217 @@ def test_repair_moves_seq_keys_that_are_not_rowid_aliases(
     assert row["seq"] == 1
     assert row["outcome"] == "completed"
     assert row["duration_ms"] is not None
+
+
+def test_repair_rejects_composite_seq_primary_key_with_matching_probe_values(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    conn.execute(
+        "CREATE TABLE ticks ("
+        "seq INTEGER DEFAULT 2, "
+        "tick_id TEXT NOT NULL UNIQUE, "
+        "started_at TEXT NOT NULL, "
+        "duration_ms INTEGER, "
+        "outcome TEXT NOT NULL DEFAULT 'running', "
+        "noop INTEGER NOT NULL DEFAULT 0, "
+        "overlap INTEGER NOT NULL DEFAULT 0, "
+        "last_alert_ok INTEGER, "
+        "PRIMARY KEY(seq, tick_id))"
+    )
+    conn.execute(
+        "INSERT INTO ticks(rowid, seq, tick_id, started_at, duration_ms, outcome) "
+        "VALUES (1, 1, 'seed', ?, 0, 'completed')",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
+    conn.commit()
+    conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="composite")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-composite"
+    assert moved.is_file()
+    assert not store.exists()
+
+
+def test_repair_rejects_empty_integer_primary_key_desc_with_matching_default(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    conn.execute(
+        "CREATE TABLE ticks ("
+        "seq INTEGER PRIMARY KEY DESC DEFAULT 1, "
+        "tick_id TEXT NOT NULL UNIQUE, "
+        "started_at TEXT NOT NULL, "
+        "duration_ms INTEGER, "
+        "outcome TEXT NOT NULL DEFAULT 'running', "
+        "noop INTEGER NOT NULL DEFAULT 0, "
+        "overlap INTEGER NOT NULL DEFAULT 0, "
+        "last_alert_ok INTEGER)"
+    )
+    conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="descending")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-descending"
+    assert moved.is_file()
+    assert not store.exists()
+
+
+def test_repair_keeps_valid_autoincrement_seq_when_rowid_is_shadowed(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    conn.execute(
+        "CREATE TABLE ticks ("
+        "seq INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "rowid TEXT, "
+        "tick_id TEXT NOT NULL UNIQUE, "
+        "started_at TEXT NOT NULL, "
+        "duration_ms INTEGER, "
+        "outcome TEXT NOT NULL DEFAULT 'running', "
+        "noop INTEGER NOT NULL DEFAULT 0, "
+        "overlap INTEGER NOT NULL DEFAULT 0, "
+        "last_alert_ok INTEGER)"
+    )
+    conn.execute(
+        "INSERT INTO ticks(tick_id, started_at, duration_ms, outcome) "
+        "VALUES ('healthy', ?, 0, 'completed')",
+        (datetime.now(timezone.utc).isoformat(),),
+    )
+    conn.commit()
+    conn.close()
+
+    result = persist.repair_store(tmp_path, stamp="shadowed-rowid")
+
+    assert result == store
+    assert store.is_file()
+    assert not (tmp_path / "orchestrator.sqlite.corrupt-shadowed-rowid").exists()
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "healthy"
+
+
+def test_repair_moves_untrusted_store_with_rollback_trigger(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    conn.execute(
+        "CREATE TABLE ticks ("
+        "seq INTEGER PRIMARY KEY DESC DEFAULT 1, "
+        "tick_id TEXT NOT NULL UNIQUE, "
+        "started_at TEXT NOT NULL, "
+        "duration_ms INTEGER, "
+        "outcome TEXT NOT NULL DEFAULT 'running', "
+        "noop INTEGER NOT NULL DEFAULT 0, "
+        "overlap INTEGER NOT NULL DEFAULT 0, "
+        "last_alert_ok INTEGER)"
+    )
+    conn.execute(
+        "CREATE TRIGGER abort_repair_probe BEFORE INSERT ON ticks "
+        "BEGIN SELECT RAISE(ROLLBACK, 'abort repair probe'); END"
+    )
+    conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="rollback-trigger")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-rollback-trigger"
+    assert moved.is_file()
+    assert not store.exists()
+
+
+def test_repair_completes_intent_when_wal_and_shm_are_absent(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "missing-sidecars"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    for suffix in ("-wal", "-shm"):
+        Path(f"{store}{suffix}").unlink(missing_ok=True)
+    moved = state_dir / "orchestrator.sqlite.corrupt-stale"
+    db._repair_intent_path(state_dir).write_text(
+        json.dumps({"version": 1, "target": moved.name, "files": ["main", "wal", "shm"]}),
+        encoding="utf-8",
+    )
+
+    result = persist.repair_store(state_dir, stamp="stale-intent")
+
+    assert result == store
+    assert moved.is_file()
+    assert not store.exists()
+    assert not db._repair_intent_path(state_dir).exists()
+
+
+def test_repair_moves_untrusted_store_past_ambiguous_repair_intent(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "ambiguous-intent"
+    state_dir.mkdir()
+    store = db.db_path(state_dir)
+    conn = sqlite3.connect(str(store))
+    conn.execute(
+        "CREATE TABLE ticks ("
+        "seq INTEGER PRIMARY KEY DESC DEFAULT 1, "
+        "tick_id TEXT NOT NULL UNIQUE, "
+        "started_at TEXT NOT NULL, "
+        "duration_ms INTEGER, "
+        "outcome TEXT NOT NULL DEFAULT 'running', "
+        "noop INTEGER NOT NULL DEFAULT 0, "
+        "overlap INTEGER NOT NULL DEFAULT 0, "
+        "last_alert_ok INTEGER)"
+    )
+    conn.close()
+    old_target = state_dir / "orchestrator.sqlite.corrupt-after-ambiguous"
+    shutil.copy2(store, old_target)
+    db._repair_intent_path(state_dir).write_text(
+        json.dumps({"version": 1, "target": old_target.name, "files": ["main"]}),
+        encoding="utf-8",
+    )
+
+    moved = persist.repair_store(state_dir, stamp="after-ambiguous")
+
+    assert moved != old_target
+    assert moved.name.startswith("orchestrator.sqlite.corrupt-after-ambiguous-")
+    assert moved.is_file()
+    assert old_target.is_file()
+    assert not store.exists()
+    assert not db._repair_intent_path(state_dir).exists()
+    assert len(list(state_dir.glob(".orchestrator-repair-intent.json.orphan-*"))) == 1
+
+
+def test_repair_moves_untrusted_store_past_corrupt_repair_intent(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "corrupt-intent"
+    state_dir.mkdir()
+    store = db.db_path(state_dir)
+    conn = sqlite3.connect(str(store))
+    conn.execute(
+        "CREATE TABLE ticks ("
+        "seq INTEGER PRIMARY KEY DESC DEFAULT 1, "
+        "tick_id TEXT NOT NULL UNIQUE, "
+        "started_at TEXT NOT NULL, "
+        "duration_ms INTEGER, "
+        "outcome TEXT NOT NULL DEFAULT 'running', "
+        "noop INTEGER NOT NULL DEFAULT 0, "
+        "overlap INTEGER NOT NULL DEFAULT 0, "
+        "last_alert_ok INTEGER)"
+    )
+    conn.close()
+    db._repair_intent_path(state_dir).write_text(
+        "{\"version\":1,\"target\":",
+        encoding="utf-8",
+    )
+
+    moved = persist.repair_store(state_dir, stamp="after-corrupt-intent")
+
+    assert moved == state_dir / "orchestrator.sqlite.corrupt-after-corrupt-intent"
+    assert moved.is_file()
+    assert not store.exists()
+    assert not db._repair_intent_path(state_dir).exists()
+    assert len(list(state_dir.glob(".orchestrator-repair-intent.json.orphan-*"))) == 1
 
 
 def test_repair_cli_reports_healthy_store_as_unchanged(

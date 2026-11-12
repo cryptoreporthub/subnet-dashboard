@@ -124,24 +124,45 @@ def read_latest_tick(state_dir: Path) -> dict[str, Any] | None:
 
 
 def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
-    probe_id = f"__repair_probe_{secrets.token_hex(8)}"
-    conn.execute("SAVEPOINT repair_seq_probe")
-    try:
-        conn.execute(
-            "INSERT INTO ticks "
-            "(tick_id, started_at, duration_ms, outcome, noop, overlap, last_alert_ok) "
-            "VALUES (?, ?, 0, 'completed', 0, 0, NULL)",
-            (probe_id, utc_now().isoformat()),
-        )
-        row = conn.execute(
-            "SELECT seq, rowid FROM ticks WHERE tick_id = ?", (probe_id,)
-        ).fetchone()
-        return row is not None and row[0] is not None and row[0] == row[1]
-    except sqlite3.DatabaseError:
+    object_type = conn.execute(
+        "SELECT type FROM sqlite_master WHERE name = 'ticks'"
+    ).fetchone()
+    if object_type is None or object_type[0] != "table":
         return False
-    finally:
-        conn.execute("ROLLBACK TO repair_seq_probe")
-        conn.execute("RELEASE repair_seq_probe")
+
+    table = next(
+        (
+            row
+            for row in conn.execute("PRAGMA table_list").fetchall()
+            if row[1] == "ticks"
+        ),
+        None,
+    )
+    if table is None or table[2] != "table" or bool(table[4]):
+        return False
+
+    columns = conn.execute("PRAGMA table_info(ticks)").fetchall()
+    primary_key = [row for row in columns if row[5]]
+    if (
+        len(primary_key) != 1
+        or primary_key[0][1] != "seq"
+        or str(primary_key[0][2]).strip().upper() != "INTEGER"
+    ):
+        return False
+
+    indexes = conn.execute("PRAGMA index_list('ticks')").fetchall()
+    return not any(row[3] == "pk" for row in indexes)
+
+
+def _available_repair_target(path: Path, stamp: str) -> Path:
+    target = path.with_name(f"{path.name}.corrupt-{stamp}")
+    while any(
+        Path(f"{target}{suffix}").exists() for suffix in ("", "-wal", "-shm")
+    ):
+        target = path.with_name(
+            f"{path.name}.corrupt-{stamp}-{secrets.token_hex(6)}"
+        )
+    return target
 
 
 def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
@@ -154,9 +175,9 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
     if not state_dir.exists():
         return path
     stamp = stamp or utc_now().strftime("%Y%m%dT%H%M%SZ")
-    moved = path.with_name(f"{path.name}.corrupt-{stamp}")
     try:
-        with db.store_lock(state_dir, exclusive=True):
+        with db.store_lock(state_dir, exclusive=True, recover_intent=False):
+            db._recover_or_quarantine_repair_intent_locked(state_dir)
             if not path.exists():
                 return path
 
@@ -176,19 +197,10 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                         "PRAGMA table_info(ticks)"
                     ).fetchall()
                     columns = {row[1] for row in table_columns}
-                    sequence_column = next(
-                        (row for row in table_columns if row[1] == "seq"),
-                        None,
-                    )
                     required_columns = {
                         name.strip() for name in db.COLUMNS.split(",")
                     }
-                    seq_is_rowid_alias = (
-                        sequence_column is not None
-                        and str(sequence_column[2]).strip().upper() == "INTEGER"
-                        and sequence_column[5] == 1
-                        and _seq_is_rowid_alias(conn)
-                    )
+                    seq_is_rowid_alias = _seq_is_rowid_alias(conn)
                     if (
                         check is None
                         or str(check[0]).lower() != "ok"
@@ -224,7 +236,10 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                         conn.execute("ROLLBACK")
                     conn.close()
                     conn = None
-                return db.move_store_aside(path, moved)
+                return db.move_store_aside(
+                    path,
+                    _available_repair_target(path, stamp),
+                )
             finally:
                 if conn is not None:
                     conn.close()

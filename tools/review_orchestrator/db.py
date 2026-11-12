@@ -86,6 +86,10 @@ class StoreUnavailableError(StoreError):
     """
 
 
+class _RepairIntentStateError(StoreUnavailableError):
+    """A stale or ambiguous intent that the explicit repair path can quarantine."""
+
+
 #: sqlite messages that mean the bytes on disk are not a database. Everything
 #: else is access, contention, or I/O, and must not be reported as corruption.
 _CORRUPT_MARKERS = ("not a database", "malformed")
@@ -131,10 +135,12 @@ def _recover_repair_intent_locked(state_dir: Path) -> None:
     try:
         document = json.loads(intent.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise StoreUnavailableError(f"invalid repair intent {intent}: {exc}") from exc
+        raise _RepairIntentStateError(
+            f"invalid repair intent {intent}: {exc}"
+        ) from exc
 
     if not isinstance(document, dict):
-        raise StoreUnavailableError(f"invalid repair intent {intent}")
+        raise _RepairIntentStateError(f"invalid repair intent {intent}")
     target_name = document.get("target")
     files = document.get("files")
     if (
@@ -150,7 +156,7 @@ def _recover_repair_intent_locked(state_dir: Path) -> None:
         )
         or len(files) != len(set(files))
     ):
-        raise StoreUnavailableError(f"invalid repair intent {intent}")
+        raise _RepairIntentStateError(f"invalid repair intent {intent}")
 
     main = db_path(state_dir)
     moved = Path(state_dir) / target_name
@@ -164,29 +170,54 @@ def _recover_repair_intent_locked(state_dir: Path) -> None:
         "wal": Path(f"{moved}-wal"),
         "shm": Path(f"{moved}-shm"),
     }
+    moves = []
+    for name in ("main", "wal", "shm"):
+        if name not in files:
+            continue
+        original = source[name]
+        target = destination[name]
+        if original.exists() and target.exists():
+            raise _RepairIntentStateError(
+                f"ambiguous repair state: both {original} and {target} exist"
+            )
+        if original.exists():
+            moves.append((original, target))
+        # If neither exists, the file was already checkpointed or removed.
+        # Treat its move as complete so recovery is safe to retry.
+
     try:
-        for name in ("main", "wal", "shm"):
-            if name not in files:
-                continue
-            original = source[name]
-            target = destination[name]
-            if original.exists() and target.exists():
-                raise StoreUnavailableError(
-                    f"ambiguous repair state: both {original} and {target} exist"
-                )
-            if original.exists():
-                original.replace(target)
-                _fsync_directory(Path(state_dir))
-            elif not target.exists():
-                raise StoreUnavailableError(
-                    f"repair data missing from both {original} and {target}"
-                )
+        for original, target in moves:
+            original.replace(target)
+            _fsync_directory(Path(state_dir))
         intent.unlink()
         _fsync_directory(Path(state_dir))
-    except StoreUnavailableError:
-        raise
     except OSError as exc:
         raise StoreUnavailableError(f"repair recovery {intent}: {exc}") from exc
+
+
+def _quarantine_repair_intent_locked(state_dir: Path) -> Path | None:
+    """Preserve an unusable intent without blocking explicit store repair."""
+    intent = _repair_intent_path(state_dir)
+    if not intent.exists():
+        return None
+    quarantined = intent.with_name(
+        f"{intent.name}.orphan-{secrets.token_hex(8)}"
+    )
+    try:
+        os.replace(intent, quarantined)
+        _fsync_directory(Path(state_dir))
+    except OSError as exc:
+        raise StoreUnavailableError(f"cannot quarantine repair intent {intent}: {exc}") from exc
+    return quarantined
+
+
+def _recover_or_quarantine_repair_intent_locked(state_dir: Path) -> Path | None:
+    """Recover a valid move, or preserve a stale/ambiguous intent for repair."""
+    try:
+        _recover_repair_intent_locked(state_dir)
+    except _RepairIntentStateError:
+        return _quarantine_repair_intent_locked(state_dir)
+    return None
 
 
 def _write_repair_intent(
@@ -244,11 +275,11 @@ def move_store_aside(path: Path, moved: Path) -> Path:
 
 
 def _acquire_store_lock(
-    descriptor: int, state_dir: Path, mode: int
+    descriptor: int, state_dir: Path, mode: int, *, recover_intent: bool = True
 ) -> None:
     fcntl.flock(descriptor, mode)
     try:
-        if _repair_intent_path(state_dir).exists():
+        if recover_intent and _repair_intent_path(state_dir).exists():
             if mode == fcntl.LOCK_SH:
                 fcntl.flock(descriptor, fcntl.LOCK_UN)
                 fcntl.flock(descriptor, fcntl.LOCK_EX)
@@ -261,7 +292,9 @@ def _acquire_store_lock(
 
 
 @contextmanager
-def store_lock(state_dir: Path, *, exclusive: bool = False) -> Iterator[None]:
+def store_lock(
+    state_dir: Path, *, exclusive: bool = False, recover_intent: bool = True
+) -> Iterator[None]:
     """Coordinate production store users and repair through the directory inode."""
     descriptor = os.open(Path(state_dir), os.O_RDONLY)
     locked = False
@@ -270,6 +303,7 @@ def store_lock(state_dir: Path, *, exclusive: bool = False) -> Iterator[None]:
             descriptor,
             Path(state_dir),
             fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH,
+            recover_intent=recover_intent,
         )
         locked = True
         yield
