@@ -5,6 +5,7 @@ import threading
 import pytest
 
 from internal.council import price_reference
+from internal.council import learning_effects
 from internal.learning import predictions_store, pump_calibration, pump_lead_recover
 
 
@@ -153,3 +154,56 @@ def test_concurrent_pump_reconcile_does_not_steal_live_claim(tmp_path, monkeypat
     assert second_finished
     assert not errors
     assert calls == [1]
+
+
+def test_stale_learning_owner_cannot_finish_replacement_claim(tmp_path):
+    path = tmp_path / "predictions.json"
+    path.write_text(json.dumps({
+        "predictions": [],
+        "resolved": [{
+            "id": "pump-1",
+            "learning": {
+                "key": "learning-key", "kind": "pump", "state": "claimed",
+                "owner": {"boot_id": "new-boot", "cycle_run_id": "new-cycle"},
+                "done": [], "warnings": [],
+            },
+        }],
+        "stats": {},
+    }))
+
+    result = learning_effects._change_learning(
+        str(path), "learning-key",
+        lambda item: item.get("state") == "claimed" and item.get("owner") == {
+            "boot_id": "old-boot", "cycle_run_id": "old-cycle",
+        },
+        lambda item: item.update(state="applied"),
+    )
+    assert result.outcome is predictions_store.PersistOutcome.REFUSED
+    assert json.loads(path.read_text())["resolved"][0]["learning"]["state"] == "claimed"
+
+
+def test_worker_replaced_while_effect_runs_cannot_mark_new_owner_applied(tmp_path, monkeypatch):
+    path = _pump_ledger(tmp_path, monkeypatch)
+    original_change = learning_effects._change_learning
+    calls = 0
+
+    def replace_owner_before_finish(ledger_path, key, expected, change):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            def replace(data, _raw):
+                data["resolved"][0]["learning"]["owner"] = {
+                    "boot_id": "replacement-boot", "cycle_run_id": "replacement-cycle",
+                }
+                return data, [key], []
+            predictions_store.mutate_predictions(
+                replace, path=ledger_path, caller="test-replace-owner", trigger="race",
+            )
+        return original_change(ledger_path, key, expected, change)
+
+    monkeypatch.setattr(learning_effects, "_change_learning", replace_owner_before_finish)
+    result = pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
+    row = json.loads(path.read_text())["resolved"][0]
+    assert row["learning"]["state"] == "claimed"
+    assert row["learning"]["owner"]["boot_id"] == "replacement-boot"
+    assert result["learning_failed"] == 1

@@ -1,4 +1,5 @@
 import json
+import threading
 from contextlib import contextmanager
 
 from internal.council import replay
@@ -65,6 +66,63 @@ def test_replay_preserves_concurrent_append(tmp_path, monkeypatch):
     monkeypatch.setattr(replay, "rebuild_judge_portfolios_from_stream", lambda *_a, **_kw: {})
     replay.replay_predictions(predictions_path=str(path), portfolios_path=str(tmp_path / "portfolios.json"))
     _assert_concurrent_survives(path)
+
+
+def test_ledger_lock_covers_fresh_read_through_replace(tmp_path, monkeypatch):
+    path = tmp_path / "predictions.json"
+    _write_ledger(path, pending=[{"id": "existing", "netuid": 1, "status": "pending"}])
+    read_mutation = threading.Event()
+    append_done = threading.Event()
+    lock_waiting = threading.Event()
+    release_mutation = threading.Event()
+    original_write = predictions_store._write_predictions_unlocked
+    original_flock = predictions_store.fcntl.flock
+
+    def pause_after_fresh_read(data, **kwargs):
+        if kwargs.get("writer_function") == "resolver_race":
+            read_mutation.set()
+            assert release_mutation.wait(5)
+        return original_write(data, **kwargs)
+
+    def observe_lock_attempt(fd, operation):
+        try:
+            return original_flock(fd, operation)
+        except BlockingIOError:
+            lock_waiting.set()
+            raise
+
+    monkeypatch.setattr(predictions_store, "_write_predictions_unlocked", pause_after_fresh_read)
+    monkeypatch.setattr(predictions_store.fcntl, "flock", observe_lock_attempt)
+
+    def resolver_write():
+        result = predictions_store.mutate_predictions(
+            lambda data, _raw: (dict(data, resolver_marker=True), ["resolver"], []),
+            path=str(path), caller="resolver_race", trigger="race",
+        )
+        assert result.outcome is predictions_store.PersistOutcome.APPLIED
+
+    def append():
+        try:
+            _append_concurrent(path)
+        finally:
+            append_done.set()
+
+    resolver = threading.Thread(target=resolver_write)
+    resolver.start()
+    assert read_mutation.wait(3)
+    writer = threading.Thread(target=append)
+    writer.start()
+    try:
+        saw_lock = lock_waiting.wait(1)
+        if not saw_lock:
+            assert append_done.wait(3)
+    finally:
+        release_mutation.set()
+    resolver.join(5)
+    writer.join(5)
+    data = json.loads(path.read_text())
+    assert data.get("resolver_marker") is True
+    assert any(row.get("id") == "concurrent" for row in data["predictions"])
 
 
 def test_expired_recovery_preserves_concurrent_append(tmp_path, monkeypatch):
@@ -178,6 +236,21 @@ def test_backfill_on_unmigrated_legacy_row_applies(tmp_path, monkeypatch):
     expert_backfill.backfill_expert_attribution(dry_run=False)
     data = json.loads(path.read_text())
     assert data["predictions"][0]["expert"] == "dark_horse"
+
+
+def test_mutation_fingerprints_canonicalized_legacy_rows(tmp_path):
+    path = tmp_path / "predictions.json"
+    legacy = {"id": "legacy-phase", "netuid": 4, "phase_at_prediction": "ACCUMULATION"}
+    _write_ledger(path, pending=[legacy])
+    before = {"predictions": [dict(legacy)], "resolved": [], "stats": {}}
+    after = {"predictions": [{**legacy, "expert": "dark_horse"}], "resolved": [], "stats": {}}
+    result = predictions_store.merge_ledger_changes(
+        before, after, path=str(path), caller="test", trigger="legacy",
+    )
+    assert result.outcome is predictions_store.PersistOutcome.APPLIED
+    row = json.loads(path.read_text())["predictions"][0]
+    assert row["phase_at_prediction"] == "EARLY"
+    assert row["expert"] == "dark_horse"
 
 
 def test_backfill_refuses_unidentifiable_legacy_row(tmp_path, monkeypatch):
