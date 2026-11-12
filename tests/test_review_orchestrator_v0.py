@@ -11,6 +11,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -342,7 +343,7 @@ def test_mutation_exam_detects_remapped_tick_ids(tmp_path: Path, monkeypatch) ->
     [
         "unable to open database file",
         "attempt to write a readonly database",
-        "could not enable WAL",
+        "disk I/O error",
     ],
 )
 def test_unavailable_failures_are_not_reported_as_corruption(
@@ -354,6 +355,98 @@ def test_unavailable_failures_are_not_reported_as_corruption(
     monkeypatch.setattr(db.sqlite3, "connect", boom)
     with pytest.raises(StoreUnavailableError):
         persist.run_tick(tmp_path, tick_id="x", noop=True)
+
+
+def test_wal_conversion_preserves_permanent_operational_error() -> None:
+    class Cursor:
+        def fetchone(self):
+            return ("delete",)
+
+    class Connection:
+        attempts = 0
+
+        def execute(self, sql):
+            if sql == "PRAGMA journal_mode":
+                return Cursor()
+            self.attempts += 1
+            raise sqlite3.OperationalError("disk I/O error")
+
+    conn = Connection()
+    with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+        db._ensure_wal(conn, attempts=3)
+    assert conn.attempts == 1
+
+
+def test_connect_closes_connection_when_setup_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    real_connect = sqlite3.connect
+    opened: list[sqlite3.Connection] = []
+
+    def tracked_connect(*_args, **_kwargs):
+        conn = real_connect(":memory:")
+        opened.append(conn)
+        return conn
+
+    def fail_wal_setup(*_args, **_kwargs):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(db.sqlite3, "connect", tracked_connect)
+    monkeypatch.setattr(db, "_ensure_wal", fail_wal_setup)
+
+    with pytest.raises(StoreUnavailableError):
+        db.connect(tmp_path)
+
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        opened[0].execute("SELECT 1")
+
+
+def test_locked_rollback_journal_wal_conversion_is_bounded(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    raw = sqlite3.connect(str(store), isolation_level=None)
+    try:
+        raw.execute("CREATE TABLE lock_probe (value INTEGER)")
+        raw.execute("BEGIN")
+        raw.execute("SELECT * FROM lock_probe").fetchall()
+
+        code = (
+            "import sqlite3, sys\n"
+            "from pathlib import Path\n"
+            "from tools.review_orchestrator import db\n"
+            "db.BUSY_TIMEOUT_MS = 1\n"
+            "try:\n"
+            "    db.connect(Path(sys.argv[1]))\n"
+            "except sqlite3.OperationalError as exc:\n"
+            "    print(type(exc).__name__ + ':' + str(exc))\n"
+            "else:\n"
+            "    raise SystemExit(2)\n"
+        )
+        env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT)}
+        started = time.monotonic()
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", code, str(tmp_path)],
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=str(_REPO_ROOT),
+                timeout=0.9,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            pytest.fail("WAL conversion exceeded the bounded wait")
+        elapsed = time.monotonic() - started
+    finally:
+        raw.rollback()
+        raw.close()
+
+    assert result.returncode == 0
+    assert result.stdout.startswith("OperationalError:")
+    assert "locked" in result.stdout.lower() or "busy" in result.stdout.lower()
+    assert elapsed < 0.9
 
 
 def test_corrupt_markers_still_map_to_corruption(tmp_path: Path, monkeypatch) -> None:
@@ -499,8 +592,8 @@ def test_latest_is_newest_seq_even_when_a_later_tick_starts_earlier(
     recovered_verdict = deadman.evaluate_deadman(
         tmp_path, max_age_minutes=40, now=base
     )
-    assert recovered_verdict.ok is True
-    assert recovered_verdict.reason == "ok"
+    assert recovered_verdict.ok is False
+    assert recovered_verdict.reason == "last_alert_unknown"
     assert persist.read_latest_tick(tmp_path)["tick_id"] == "recovered"
 
 

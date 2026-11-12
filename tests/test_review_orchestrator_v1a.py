@@ -29,15 +29,18 @@ def _plant(
     *,
     duration_ms: int | None = None,
     outcome: str = "completed",
-    last_alert_ok: int | None = None,
+    last_alert_ok: int | str | None = None,
 ) -> None:
     conn = db.connect(state_dir)
     try:
+        if last_alert_ok == "":
+            conn.execute("PRAGMA ignore_check_constraints = ON")
         if duration_ms is None:
             conn.execute(
-                "INSERT INTO ticks (tick_id, started_at, outcome, overlap) "
-                "VALUES (?, ?, 'running', 0)",
-                (tick_id, started_at.isoformat()),
+                "INSERT INTO ticks "
+                "(tick_id, started_at, outcome, overlap, last_alert_ok) "
+                "VALUES (?, ?, 'running', 0, ?)",
+                (tick_id, started_at.isoformat(), last_alert_ok),
             )
         else:
             conn.execute(
@@ -50,15 +53,17 @@ def _plant(
         conn.close()
 
 
-def test_run_tick_row_is_read_as_ok(tmp_path: Path) -> None:
+def test_v1a_tick_without_sender_reports_alert_unknown(tmp_path: Path, capsys) -> None:
     persist.run_tick(tmp_path, tick_id="v1", noop=False)
     row = persist.read_latest_tick(tmp_path)
     assert row is not None
     assert row["tick_id"] == "v1"
     assert row["outcome"] == "completed"
     verdict = deadman.evaluate_deadman(tmp_path)
-    assert verdict.ok is True
-    assert verdict.reason == "ok"
+    assert verdict.ok is False
+    assert verdict.reason == "last_alert_unknown"
+    assert deadman.main(["--state-dir", str(tmp_path)]) == 1
+    assert capsys.readouterr().out.strip() == "last_alert_unknown"
 
 
 def test_missing_store_unreadable(tmp_path: Path) -> None:
@@ -70,6 +75,30 @@ def test_missing_store_unreadable(tmp_path: Path) -> None:
     assert verdict.ok is False
     assert verdict.reason == "heartbeat_unreadable"
     assert not state_dir.exists()
+
+
+def test_deadman_reads_a_store_created_during_the_check(
+    tmp_path: Path, monkeypatch
+) -> None:
+    state_dir = tmp_path / "created-during-check"
+    state_dir.mkdir()
+    real_load_latest = deadman._load_latest
+    called = False
+
+    def create_before_read(path: Path):
+        nonlocal called
+        called = True
+        persist.run_tick(path, tick_id="created", noop=True)
+        return real_load_latest(path)
+
+    monkeypatch.setattr(deadman, "_load_latest", create_before_read)
+
+    verdict = deadman.evaluate_deadman(state_dir)
+
+    assert called
+    assert verdict.ok is False
+    assert verdict.reason == "last_alert_unknown"
+
 
 def test_missing_store_cli_does_not_create_state_directory(tmp_path: Path) -> None:
     state_dir = tmp_path / "cli-missing-store"
@@ -119,9 +148,159 @@ def test_run_tick_creates_missing_state_directory(tmp_path: Path) -> None:
     assert db.db_path(state_dir).is_file()
 
 
+def test_repair_refuses_a_healthy_store(tmp_path: Path) -> None:
+    persist.run_tick(tmp_path, tick_id="healthy", noop=True)
+    store = db.db_path(tmp_path)
+
+    result = persist.repair_store(tmp_path, stamp="healthy")
+
+    assert result == store
+    assert store.is_file()
+    assert list(tmp_path.glob("orchestrator.sqlite.corrupt-*")) == []
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "healthy"
+
+
+def test_repair_moves_store_missing_required_columns(tmp_path: Path) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    conn.execute("CREATE TABLE ticks (seq INTEGER PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="missing-columns")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-missing-columns"
+    assert moved.is_file()
+    assert not store.exists()
+    assert persist.run_tick(tmp_path, tick_id="recovered", noop=True).seq == 1
+
+
+def test_repair_cli_reports_healthy_store_as_unchanged(
+    tmp_path: Path, capsys
+) -> None:
+    persist.run_tick(tmp_path, tick_id="healthy", noop=True)
+
+    assert persist.main(["repair", "--state-dir", str(tmp_path)]) == 0
+
+    assert capsys.readouterr().out.strip() == "repair: healthy store; nothing moved"
+
+
+def test_repair_moves_wal_sidecars_and_preserves_committed_rows(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "repair"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    wal_keeper = sqlite3.connect(str(store), isolation_level=None)
+    wal_keeper.execute("PRAGMA wal_autocheckpoint = 0")
+    wal_keeper.execute(
+        "INSERT INTO ticks "
+        "(seq, tick_id, started_at, duration_ms, outcome, noop, overlap) "
+        "VALUES (?, 'wal-only-corruption', ?, 0, 'completed', 0, 0)",
+        (db.MAX_TRUSTED_SEQ + 1, datetime.now(timezone.utc).isoformat()),
+    )
+    wal_path = Path(f"{store}-wal")
+    assert wal_path.is_file()
+    assert wal_path.stat().st_size > 0
+    immutable = sqlite3.connect(f"{store.as_uri()}?immutable=1", uri=True)
+    try:
+        assert immutable.execute(
+            "SELECT COUNT(*) FROM ticks WHERE tick_id = 'wal-only-corruption'"
+        ).fetchone()[0] == 0
+    finally:
+        immutable.close()
+
+    moved = persist.repair_store(state_dir, stamp="wal")
+
+    assert moved == state_dir / "orchestrator.sqlite.corrupt-wal"
+    assert Path(f"{moved}-wal").is_file()
+    assert Path(f"{moved}-shm").is_file()
+    assert not store.exists()
+    assert not wal_path.exists()
+    assert not Path(f"{store}-shm").exists()
+    wal_keeper.close()
+
+    moved_conn = sqlite3.connect(str(moved))
+    try:
+        moved_ids = {
+            row[0] for row in moved_conn.execute("SELECT tick_id FROM ticks")
+        }
+    finally:
+        moved_conn.close()
+    assert {"seed", "wal-only-corruption"} <= moved_ids
+
+    fresh = persist.run_tick(state_dir, tick_id="fresh", noop=True)
+    assert fresh.seq == 1
+    fresh_conn = sqlite3.connect(str(store))
+    try:
+        assert fresh_conn.execute(
+            "SELECT seq, tick_id FROM ticks"
+        ).fetchall() == [(1, "fresh")]
+    finally:
+        fresh_conn.close()
+
+
+def test_repair_waits_for_live_tick_before_checking_store(tmp_path: Path) -> None:
+    state_dir = tmp_path / "active-tick"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    tick_started = threading.Event()
+    finish_tick = threading.Event()
+    tick_errors: list[BaseException] = []
+
+    def work() -> None:
+        tick_started.set()
+        if not finish_tick.wait(timeout=5):
+            raise TimeoutError("test did not release the tick")
+
+    def run_tick() -> None:
+        try:
+            persist.run_tick(state_dir, tick_id="live", work=work)
+        except BaseException as exc:
+            tick_errors.append(exc)
+
+    tick_thread = threading.Thread(target=run_tick)
+    tick_thread.start()
+    assert tick_started.wait(timeout=3)
+    repair_done = threading.Event()
+    repair_result: dict[str, Path] = {}
+    repair_errors: list[BaseException] = []
+
+    def repair() -> None:
+        try:
+            repair_result["path"] = persist.repair_store(state_dir, stamp="active")
+        except BaseException as exc:
+            repair_errors.append(exc)
+        finally:
+            repair_done.set()
+
+    repair_thread = threading.Thread(target=repair)
+    repair_thread.start()
+    waited_for_tick = not repair_done.wait(timeout=0.1)
+    finish_tick.set()
+    tick_thread.join(timeout=3)
+    repair_thread.join(timeout=3)
+
+    assert waited_for_tick
+    assert not tick_thread.is_alive()
+    assert not repair_thread.is_alive()
+    assert not tick_errors
+    assert not repair_errors
+    assert repair_result["path"] == db.db_path(state_dir)
+    row = persist.read_latest_tick(state_dir)
+    assert row is not None
+    assert row["tick_id"] == "live"
+    assert row["outcome"] == "completed"
+
+
 def test_fresh_completed_row_ok(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _plant(tmp_path, "hb", now - timedelta(minutes=1), duration_ms=1000)
+    _plant(
+        tmp_path,
+        "hb",
+        now - timedelta(minutes=1),
+        duration_ms=1000,
+        last_alert_ok=1,
+    )
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is True
     assert verdict.reason == "ok"
@@ -164,6 +343,7 @@ def test_completed_uses_completion_not_start(tmp_path: Path) -> None:
         "hb",
         now - timedelta(minutes=80),
         duration_ms=79 * 60 * 1000,
+        last_alert_ok=1,
     )
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is True
@@ -194,7 +374,7 @@ def test_future_slack_boundary_on_started_at(
     tmp_path: Path, offset: timedelta, expect_future: bool
 ) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    _plant(tmp_path, "hb", now + offset, duration_ms=0)
+    _plant(tmp_path, "hb", now + offset, duration_ms=0, last_alert_ok=1)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     if expect_future:
         assert verdict.reason == "heartbeat_future"
@@ -218,7 +398,13 @@ def test_age_boundary_seconds(
 ) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     started = now - timedelta(seconds=age_seconds)
-    _plant(tmp_path, "hb", started, duration_ms=0 if kind == "completed" else None)
+    _plant(
+        tmp_path,
+        "hb",
+        started,
+        duration_ms=0 if kind == "completed" else None,
+        last_alert_ok=1,
+    )
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is expect_ok
 
@@ -246,6 +432,25 @@ def test_last_alert_ok_true_is_ok(tmp_path: Path) -> None:
         last_alert_ok=1,
     )
     assert deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now).ok is True
+
+
+@pytest.mark.parametrize("last_alert_ok", [None, ""])
+def test_unknown_last_alert_status_is_not_healthy(
+    tmp_path: Path, last_alert_ok: int | str | None
+) -> None:
+    now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    _plant(
+        tmp_path,
+        "unknown-alert",
+        now - timedelta(minutes=1),
+        duration_ms=0,
+        last_alert_ok=last_alert_ok,
+    )
+
+    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+
+    assert verdict.ok is False
+    assert verdict.reason == "last_alert_unknown"
 
 
 def test_corrupt_store_unreadable_not_crash(tmp_path: Path) -> None:
@@ -320,24 +525,30 @@ def test_read_only_store_reports_unreadable_end_to_end(tmp_path: Path) -> None:
     ],
 )
 def test_every_store_open_failure_is_heartbeat_unreadable(
-    tmp_path: Path, monkeypatch, error: BaseException
+    tmp_path: Path, monkeypatch, capsys, error: BaseException
 ) -> None:
     """Every way the store can refuse to open is one alert reason."""
 
+    persist.run_tick(tmp_path, tick_id="seed", noop=True)
+    called = False
+
     def boom(*_args, **_kwargs):
+        nonlocal called
+        called = True
         raise error
 
     monkeypatch.setattr(deadman.db, "connect", boom)
-    verdict = deadman.evaluate_deadman(tmp_path)
-    assert verdict.ok is False
-    assert verdict.reason == "heartbeat_unreadable"
+    code = deadman.main(["--state-dir", str(tmp_path)])
+    assert called
+    assert code == 1
+    assert capsys.readouterr().out.strip() == "heartbeat_unreadable"
 
 
 def test_reader_sees_newest_by_seq_not_completion_order(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     _plant(tmp_path, "early", now - timedelta(minutes=5), duration_ms=0)
     # A later tick that started later but reported first still owns the newest seq.
-    _plant(tmp_path, "late", now - timedelta(minutes=1))
+    _plant(tmp_path, "late", now - timedelta(minutes=1), last_alert_ok=1)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is True
     assert persist.read_latest_tick(tmp_path)["tick_id"] == "late"
@@ -345,7 +556,7 @@ def test_reader_sees_newest_by_seq_not_completion_order(tmp_path: Path) -> None:
 
 def test_second_process_reader_sees_committed_state(tmp_path: Path) -> None:
     persist.run_tick(tmp_path, tick_id="committed", noop=True)
-    assert _run_reader(tmp_path) == "ok"
+    assert _run_reader(tmp_path) == "last_alert_unknown"
 
 
 def test_second_process_reader_reports_stale(tmp_path: Path) -> None:
@@ -380,7 +591,13 @@ def test_library_default_max_age_is_40(tmp_path: Path) -> None:
 
 
 def test_cli_ok_exit_and_reason(tmp_path: Path, capsys) -> None:
-    persist.run_tick(tmp_path, tick_id="cli", noop=True)
+    _plant(
+        tmp_path,
+        "cli",
+        datetime.now(timezone.utc),
+        duration_ms=0,
+        last_alert_ok=1,
+    )
     code = deadman.main(["--state-dir", str(tmp_path)])
     assert code == 0
     assert capsys.readouterr().out.strip() == "ok"
@@ -424,7 +641,12 @@ def test_mutation_reader_treating_running_as_completed_misreports(
 def test_finished_failed_tick_alerts(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     _plant(
-        tmp_path, "failing", now - timedelta(minutes=1), duration_ms=5, outcome="failed"
+        tmp_path,
+        "failing",
+        now - timedelta(minutes=1),
+        duration_ms=5,
+        outcome="failed",
+        last_alert_ok=1,
     )
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is False
@@ -436,7 +658,7 @@ def test_running_row_defers_tick_failed(tmp_path: Path) -> None:
     _plant(
         tmp_path, "failed", now - timedelta(minutes=3), duration_ms=5, outcome="failed"
     )
-    _plant(tmp_path, "retry", now - timedelta(minutes=1))
+    _plant(tmp_path, "retry", now - timedelta(minutes=1), last_alert_ok=1)
     verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
     assert verdict.ok is True
     assert verdict.reason == "ok"
@@ -480,7 +702,12 @@ def test_mutation_reader_ignoring_failed_outcome_misreports(
 ) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
     _plant(
-        tmp_path, "failing", now - timedelta(minutes=1), duration_ms=5, outcome="failed"
+        tmp_path,
+        "failing",
+        now - timedelta(minutes=1),
+        duration_ms=5,
+        outcome="failed",
+        last_alert_ok=1,
     )
     monkeypatch.setattr(deadman, "_is_failed", lambda _row: False)
     broken = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
@@ -516,8 +743,8 @@ def test_deadman_read_while_a_writer_holds_the_lock_returns_at_once(
         started = time.monotonic()
         verdict = deadman.evaluate_deadman(tmp_path)
         elapsed = time.monotonic() - started
-    assert verdict.ok is True
-    assert verdict.reason == "ok"
+    assert verdict.ok is False
+    assert verdict.reason == "last_alert_unknown"
     # The reader must not wait out the writer's busy timeout.
     assert elapsed < 2.0
 
@@ -541,5 +768,5 @@ def test_forward_clock_step_still_reads_the_newest_seq(
     verdict = deadman.evaluate_deadman(
         tmp_path, max_age_minutes=40, now=base + timedelta(hours=1)
     )
-    assert verdict.ok is True
-    assert verdict.reason == "ok"
+    assert verdict.ok is False
+    assert verdict.reason == "last_alert_unknown"
