@@ -18,6 +18,45 @@ from internal.store import soul_map_io
 from internal.store.soul_map_io import BlobRead, WriteOutcome
 
 
+@pytest.mark.parametrize("ok,expected", [(False, "degraded"), (True, "success")])
+def test_pump_recover_route_reports_actual_outcome(monkeypatch, ok, expected):
+    import asyncio
+    import inspect
+    from internal.learning import pump_lead_recover, routes
+
+    monkeypatch.setattr(pump_lead_recover, "recover_overdue_pump_leads", lambda **_kw: {"ok": ok})
+    handler = inspect.unwrap(routes.api_pump_lead_recover)
+    result = asyncio.run(handler(None, dry_run=False, hydrate=False))
+    assert result["status"] == expected
+    assert result["data"]["ok"] is ok
+
+
+def test_pump_recover_boot_warns_on_failure(monkeypatch, caplog):
+    import logging
+    from internal import background_boot
+    from internal.council import resolver_scheduler, weights
+    from internal.learning import ledger_heal, pump_lead_recover
+
+    class ImmediateThread:
+        def __init__(self, target, **_kwargs):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    monkeypatch.setattr(background_boot, "defer_boot", lambda _name, target, **_kw: target())
+    monkeypatch.setattr(background_boot.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(resolver_scheduler, "start_prediction_resolver_scheduler", lambda **_kw: {})
+    monkeypatch.setattr(resolver_scheduler, "maybe_status_aware_resolver_revive_on_boot", lambda: {})
+    monkeypatch.setattr(ledger_heal, "heal_daily_pick_ledger", lambda **_kw: {"ok": True})
+    monkeypatch.setattr(ledger_heal, "reconcile_epoch_archives", lambda: {"ok": True}, raising=False)
+    monkeypatch.setattr(weights, "maybe_rebalance_council_weights_on_boot", lambda: None)
+    monkeypatch.setattr(pump_lead_recover, "recover_overdue_pump_leads", lambda **_kw: {"ok": False})
+    with caplog.at_level(logging.WARNING, logger="internal.background_boot"):
+        background_boot._start_resolver()
+    assert any("pump_lead" in record.message and record.levelno >= logging.WARNING for record in caplog.records)
+
+
 def _declining_write_soul_map(real_write):
     """DECLINED only when mutator leaves canonical blob unchanged."""
 

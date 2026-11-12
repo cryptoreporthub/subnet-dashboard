@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import select
 import subprocess
 import sys
 import threading
@@ -340,8 +341,22 @@ def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(tmp_
 
 
 WRITER_IN_OTHER_PROCESS = """
+import fcntl
+import time
 import sys
 from internal.store.soul_map_io import WriteOutcome, write_soul_map
+original = fcntl.flock
+announced = False
+def observed(fd, operation):
+    global announced
+    try:
+        return original(fd, operation)
+    except BlockingIOError:
+        if not announced:
+            print("LOCK_WAITING", flush=True)
+            announced = True
+        raise
+fcntl.flock = observed
 r = write_soul_map(lambda b: b.update(b=1), path=sys.argv[1])
 if r.outcome is not WriteOutcome.APPLIED:
     raise SystemExit(f"write failed: {r.outcome}")
@@ -353,6 +368,7 @@ def test_a_writer_in_another_process_is_not_starved_by_a_slow_reader(tmp_path):
     soul_path.write_text(json.dumps({"a": 0}), encoding="utf-8")
     started = threading.Event()
     release = threading.Event()
+    parent_waiting = threading.Event()
 
     def hold_flock():
         with _hold_path_flock(str(soul_path), timeout_seconds=10.0):
@@ -363,24 +379,41 @@ def test_a_writer_in_another_process_is_not_starved_by_a_slow_reader(tmp_path):
     holder.start()
     assert started.wait(timeout=5)
 
-    release.set()
+    original_flock = soul_map_io.fcntl.flock
+
+    def observe_parent_attempt(fd, operation):
+        try:
+            return original_flock(fd, operation)
+        except BlockingIOError:
+            parent_waiting.set()
+            raise
+
+    soul_map_io.fcntl.flock = observe_parent_attempt
     writer_a = threading.Thread(
         target=lambda: _applied_blob(
             write_soul_map(lambda blob: blob.update(a=1), path=str(soul_path))
         ),
     )
     writer_a.start()
-    other = subprocess.run(
+    other = subprocess.Popen(
         [sys.executable, "-c", WRITER_IN_OTHER_PROCESS, str(soul_path)],
         cwd=Path(__file__).resolve().parents[1],
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=30,
     )
+    try:
+        assert parent_waiting.wait(timeout=5)
+        ready, _, _ = select.select([other.stdout], [], [], 5)
+        assert ready and other.stdout.readline().strip() == "LOCK_WAITING"
+    finally:
+        release.set()
+        soul_map_io.fcntl.flock = original_flock
+    other_stdout, other_stderr = other.communicate(timeout=30)
     writer_a.join(timeout=15)
     holder.join(timeout=15)
 
-    assert other.returncode == 0, other.stderr
+    assert other.returncode == 0, other_stderr or other_stdout
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"a": 1, "b": 1}
 
 

@@ -67,6 +67,43 @@ def _backup_pair(tmp_path: Path, **kwargs):
     return path, bak
 
 
+def test_real_lock_timeout_exits_six_without_overwriting_live_file(tmp_path, monkeypatch, capsys):
+    from internal.store import soul_map_io
+
+    path, bak = _backup_pair(tmp_path)
+    lock = soul_map_io._lock_for(str(path) + ".writers")
+    entered = threading.Event()
+    done = threading.Event()
+
+    def hold_lock():
+        with lock:
+            entered.set()
+            done.wait(5)
+
+    holder = threading.Thread(target=hold_lock)
+    holder.start()
+    assert entered.wait(2)
+    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.15)
+    original_write = soul_map_io.write_soul_map
+
+    def concurrent_write(*args, **kwargs):
+        current = json.loads(path.read_text())
+        current["newer_writer"] = True
+        path.write_text(json.dumps(current))
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(soul_map_io, "write_soul_map", concurrent_write)
+    monkeypatch.setattr("sys.argv", ["compact_soul_map", "--execute", "--path", str(path), "--backup", str(bak)])
+    try:
+        rc = compact.main()
+    finally:
+        done.set()
+        holder.join(5)
+    assert rc == 6
+    assert "lock_timeout" in capsys.readouterr().out.lower()
+    assert json.loads(path.read_text())["newer_writer"] is True
+
+
 def test_a_compacts_429_to_le_10_all_keys_survive(tmp_path, monkeypatch):
     path, bak = _backup_pair(tmp_path)
     monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
