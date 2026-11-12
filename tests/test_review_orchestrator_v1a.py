@@ -63,9 +63,60 @@ def test_run_tick_row_is_read_as_ok(tmp_path: Path) -> None:
 
 def test_missing_store_unreadable(tmp_path: Path) -> None:
     now = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
-    verdict = deadman.evaluate_deadman(tmp_path, max_age_minutes=40, now=now)
+    state_dir = tmp_path / "missing-store"
+    assert not state_dir.exists()
+
+    verdict = deadman.evaluate_deadman(state_dir, max_age_minutes=40, now=now)
     assert verdict.ok is False
     assert verdict.reason == "heartbeat_unreadable"
+    assert not state_dir.exists()
+
+def test_missing_store_cli_does_not_create_state_directory(tmp_path: Path) -> None:
+    state_dir = tmp_path / "cli-missing-store"
+    result = _run_deadman_cli(state_dir)
+    assert result.stdout.strip() == "heartbeat_unreadable"
+    assert result.returncode == 1
+    assert not state_dir.exists()
+
+
+def test_missing_store_in_existing_directory_does_not_create_database(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "empty-store"
+    state_dir.mkdir()
+
+    verdict = deadman.evaluate_deadman(state_dir)
+
+    assert verdict.ok is False
+    assert verdict.reason == "heartbeat_unreadable"
+    assert list(state_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize("duration_ms", ["not-an-integer", "9" * 100])
+def test_bad_duration_reports_unreadable_from_deadman_cli(
+    tmp_path: Path, duration_ms: str
+) -> None:
+    _plant(
+        tmp_path,
+        "bad-duration",
+        datetime.now(timezone.utc) - timedelta(minutes=1),
+        duration_ms=duration_ms,
+    )
+
+    result = _run_deadman_cli(tmp_path)
+
+    assert result.stdout.strip() == "heartbeat_unreadable"
+    assert result.returncode == 1
+
+
+def test_run_tick_creates_missing_state_directory(tmp_path: Path) -> None:
+    state_dir = tmp_path / "new-state"
+    assert not state_dir.exists()
+
+    result = persist.run_tick(state_dir, tick_id="created", noop=True)
+
+    assert result.seq == 1
+    assert db.db_path(state_dir).is_file()
 
 
 def test_fresh_completed_row_ok(tmp_path: Path) -> None:

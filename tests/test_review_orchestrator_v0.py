@@ -488,6 +488,20 @@ def test_latest_is_newest_seq_even_when_a_later_tick_starts_earlier(
     assert rows[1]["seq"] > rows[0]["seq"]
     assert rows[1]["started_at"] < rows[0]["started_at"]
     assert persist.read_latest_tick(tmp_path)["tick_id"] == "second"
+    backward_verdict = deadman.evaluate_deadman(
+        tmp_path, max_age_minutes=40, now=base
+    )
+    assert backward_verdict.ok is False
+    assert backward_verdict.reason == "completed_stale"
+
+    monkeypatch.setattr(persist, "utc_now", lambda: base)
+    persist.run_tick(tmp_path, tick_id="recovered", noop=True)
+    recovered_verdict = deadman.evaluate_deadman(
+        tmp_path, max_age_minutes=40, now=base
+    )
+    assert recovered_verdict.ok is True
+    assert recovered_verdict.reason == "ok"
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "recovered"
 
 
 def test_stale_view_definition_is_repaired_on_connect(

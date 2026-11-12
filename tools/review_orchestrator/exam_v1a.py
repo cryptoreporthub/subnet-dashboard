@@ -57,10 +57,15 @@ def _check_fresh_tick_ok(state_dir: Path) -> bool:
 
 def _check_missing_store_alerts(state_dir: Path) -> bool:
     case = state_dir / "case_empty"
-    case.mkdir(parents=True)
+    if case.exists():
+        return False
     reference = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
     verdict = evaluate_deadman(case, max_age_minutes=40, now=reference)
-    return verdict.ok is False and verdict.reason == "heartbeat_unreadable"
+    return (
+        verdict.ok is False
+        and verdict.reason == "heartbeat_unreadable"
+        and not case.exists()
+    )
 
 
 def _check_stale_attempt_alerts(state_dir: Path) -> bool:
