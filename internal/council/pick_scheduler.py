@@ -249,6 +249,20 @@ def _record_ab_benchmark(subnets: Any, market_context: Dict[str, Any], source: s
         return None
 
 
+def _reconcile_judge_positions_for_tick(result: Dict[str, Any]) -> None:
+    """Best-effort reconcile; a lock timeout must not drop the pick."""
+    from internal.judges.portfolios import PortfolioLockTimeout
+    from internal.learning.prediction_loop import reconcile_judge_positions
+
+    try:
+        reconcile_judge_positions()
+        result["reconcile_ok"] = True
+    except PortfolioLockTimeout as exc:
+        logger.warning("judge position reconcile timed out: %s", exc)
+        result["reconcile_ok"] = False
+        result["reconcile_error"] = str(exc)
+
+
 class DailyPickScheduler:
     def __init__(self) -> None:
         self._last_result: Dict[str, Any] = {}
@@ -334,9 +348,8 @@ class DailyPickScheduler:
         today_ready = False
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
-            from internal.learning.prediction_loop import reconcile_judge_positions
 
-            reconcile_judge_positions()
+            _reconcile_judge_positions_for_tick(result)
 
             with _rss_bookend("daily_pick_scheduler:load_subnets"):
                 subnets = _load_subnets()
@@ -534,9 +547,7 @@ class HourPickScheduler:
                     subnets, ctx, "hour-pick-scheduler"
                 )
                 pick = select_hourly_pick(subnets, ctx)
-                from internal.learning.prediction_loop import reconcile_judge_positions
-
-                reconcile_judge_positions()
+                _reconcile_judge_positions_for_tick(result)
                 pick_outcome = _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
                 result["pick_record_outcome"] = pick_outcome
                 if pick_outcome in ("indeterminate", "failed"):

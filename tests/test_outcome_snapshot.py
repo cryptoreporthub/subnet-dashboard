@@ -87,3 +87,30 @@ def test_outcome_snapshot_tracker_is_liveness_compliant():
         return sched.OutcomeSnapshotScheduler().liveness
 
     assert_liveness_compliant(factory)
+
+
+
+def test_scheduler_records_recovery_failure_without_failing_snapshot(monkeypatch):
+    """T8: recovery refusal is a separate signal; the snapshot still runs and succeeds."""
+    snapshot_calls = []
+
+    def fake_snapshot(save=True):
+        snapshot_calls.append(save)
+        return {"alert_level": "ok", "council_health": {"health_score": 1.0, "escalation": None}, "path": "x"}
+
+    monkeypatch.setattr(
+        "internal.learning.expired_recovery.recover_expired_predictions",
+        lambda: {"ok": False, "reason": "judge_close_incomplete", "recovered": 1, "skipped": 0},
+    )
+    monkeypatch.setattr("internal.learning.outcome_snapshot.run_snapshot", fake_snapshot)
+    scheduler = sched.OutcomeSnapshotScheduler()
+    result = scheduler.run_once()
+    assert snapshot_calls == [True]
+    assert result["ok"] is True
+    assert result["recovery_ok"] is False
+    assert result["recovery_reason"] == "judge_close_incomplete"
+    assert scheduler.liveness.snapshot().get("consecutive_failures", 0) == 0
+    rec = scheduler.recovery_liveness.snapshot()
+    assert rec.get("consecutive_failures", 0) >= 1
+    state = scheduler.state()
+    assert "recovery_liveness" in state

@@ -18,13 +18,42 @@ import json
 import fcntl
 import os
 import threading
+import time
+import contextvars
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 PORTFOLIOS_PATH = os.path.join("data", "judge_portfolios.json")
 _PORTFOLIOS_MUTEX = threading.RLock()
+PORTFOLIOS_LOCK_TIMEOUT_SECONDS = 5.0
+_operation_deadline: contextvars.ContextVar[Optional[float]] = contextvars.ContextVar(
+    "portfolios_operation_deadline", default=None
+)
+
+
+class PortfolioLockTimeout(TimeoutError):
+    """Raised when the portfolios mutex or flock is not acquired before the deadline."""
+
+
+@contextmanager
+def portfolios_operation_deadline(seconds: Optional[float] = None) -> Iterator[None]:
+    """Set a shared absolute deadline for nested portfolio lock acquisitions.
+
+    If a parent deadline is already set, inherit it (do not reset).
+    ContextVar does not propagate into new threads; share a deadline only
+    in the same thread (the 3-judge close loop is sequential in-thread).
+    """
+    if _operation_deadline.get() is not None:
+        yield
+        return
+    timeout = PORTFOLIOS_LOCK_TIMEOUT_SECONDS if seconds is None else seconds
+    token = _operation_deadline.set(time.monotonic() + float(timeout))
+    try:
+        yield
+    finally:
+        _operation_deadline.reset(token)
 
 # Per-judge risk multipliers — each judge trades with different conviction sizing
 _JUDGE_RISK_MULTIPLIER = {
@@ -74,15 +103,42 @@ def _load_checked() -> Dict[str, Any]:
     return data
 
 @contextmanager
-def _portfolios_lock():
-    with _PORTFOLIOS_MUTEX:
+def _portfolios_lock(*, deadline: Optional[float] = None) -> Iterator[None]:
+    """Acquire the in-process mutex and the on-disk flock, or time out.
+
+    Mutex serializes threads, flock serializes processes; nesting is unsupported.
+    The timeout constant is read inside this function so tests can patch it.
+    """
+    if deadline is None:
+        deadline = _operation_deadline.get()
+        if deadline is None:
+            deadline = time.monotonic() + PORTFOLIOS_LOCK_TIMEOUT_SECONDS
+
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise PortfolioLockTimeout("portfolios lock deadline already passed")
+
+    acquired = _PORTFOLIOS_MUTEX.acquire(timeout=max(0.0, remaining))
+    try:
+        if not acquired:
+            raise PortfolioLockTimeout("timed out waiting for portfolios mutex")
         os.makedirs(os.path.dirname(PORTFOLIOS_PATH) or ".", exist_ok=True)
         with open(PORTFOLIOS_PATH + ".lock", "a+", encoding="utf-8") as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            while time.monotonic() < deadline:
+                try:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(0.05)
+            else:
+                raise PortfolioLockTimeout("timed out waiting for portfolios flock")
             try:
                 yield
             finally:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    finally:
+        if acquired:
+            _PORTFOLIOS_MUTEX.release()
 
 def _portfolio_transaction(fn):
     @wraps(fn)
@@ -245,6 +301,9 @@ def close_position(
     pred_id = prediction.get("id")
     netuid = prediction.get("netuid")
     _prune_tombstones(judge)
+    # Tombstone first so a retried close is a no-op while the stamp lives
+    # (pruned after day_horizon_hours()+49). The closed_positions scan below
+    # is the post-prune fallback; do not delete the tombstone.
     if pred_id is not None:
         judge["closed_prediction_ids"][str(pred_id)] = _utcnow()
 

@@ -36,17 +36,44 @@ def recover_expired_predictions(
 ) -> Dict[str, Any]:
     """Re-resolve retired rows whose price may now be available. Idempotent."""
     from internal.learning.predictions_store import (
-        PersistOutcome, load_predictions, merge_ledger_changes, update_stats,
+        PersistOutcome,
+        PredictionsLedgerUnreadable,
+        load_predictions,
+        merge_ledger_changes,
+        update_stats,
     )
     from internal.council.price_reference import price_at_resolve_at
     from internal.council import resolver
     from internal.council.grading import compute_actual_pct, grade_prediction, is_price_unit_mismatch
 
-    data = load_predictions(fail_closed=True)
-    before = deepcopy(data)
-    resolved = data.get("resolved", []) or []
     recovered, skipped = 0, 0
     details: List[Dict[str, Any]] = []
+    incomplete: List[Any] = []
+
+    def _fail(reason: str, *, error: str = "", recovered: int = 0, **extra: Any) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "ok": False,
+            "reason": reason,
+            "error": error or reason,
+            "dry_run": dry_run,
+            "recovered": recovered,
+            "skipped": skipped,
+            "details": details[:10],
+        }
+        payload.update(extra)
+        return payload
+
+    # OSError is belt-and-braces: load_predictions(fail_closed=True) already maps
+    # OSError to PredictionsLedgerUnreadable(kind="transient").
+    try:
+        data = load_predictions(fail_closed=True)
+    except PredictionsLedgerUnreadable as exc:
+        return _fail("ledger_unreadable", error=str(exc) or exc.kind)
+    except OSError as exc:
+        return _fail("ledger_unreadable", error=str(exc))
+
+    before = deepcopy(data)
+    resolved = data.get("resolved", []) or []
 
     for row in resolved:
         if recovered >= max_rows:
@@ -131,6 +158,8 @@ def recover_expired_predictions(
             price_meta=meta,
             apply_judge_nudge=False,
         )
+        if "on_prediction_resolved" in (row.get("side_effect_warnings") or []):
+            incomplete.append(row.get("id"))
         if not resolver._skip_council_learning(row):
             resolver._record_scenario_outcome(
                 row, actual_pct, new_outcome, bool(correct), expert
@@ -148,14 +177,35 @@ def recover_expired_predictions(
         recovered += 1
 
     if not dry_run and recovered:
-        update_stats(data)
-        result = merge_ledger_changes(
-            before, data, caller="expired_recovery", trigger="expired_recovery"
-        )
+        try:
+            update_stats(data)
+            result = merge_ledger_changes(
+                before, data, caller="expired_recovery", trigger="expired_recovery"
+            )
+        except Exception as exc:
+            return _fail(
+                "persist_failed",
+                error=str(exc),
+                incomplete_ids=incomplete or None,
+            )
         if result.outcome is not PersistOutcome.APPLIED:
-            return {"ok": False, "reason": str(result.reason), "recovered": 0}
+            reason = result.reason.value if result.reason is not None else "persist_refused"
+            return _fail(
+                reason,
+                error=reason,
+                recovered=0,
+                incomplete_ids=incomplete or None,
+            )
         recovered = len(result.committed_keys)
         logger.info("expired recovery: recovered=%s skipped=%s", recovered, skipped)
+
+    if incomplete:
+        return _fail(
+            "judge_close_incomplete",
+            error="judge_close_incomplete",
+            recovered=recovered,
+            incomplete_ids=incomplete,
+        )
 
     return {
         "ok": True,

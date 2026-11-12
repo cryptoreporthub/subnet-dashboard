@@ -109,21 +109,18 @@ def test_parallel_portfolio_updates_do_not_lose_a_judge(tmp_path, monkeypatch):
 
 
 def test_concurrent_open_and_close_preserve_both_changes(tmp_path, monkeypatch):
+    """Both changes persist when open and close run at the same time.
+
+    A barrier inside `_load_checked` would deadlock: each writer holds the
+    portfolios lock while waiting for the other. This test runs both writers
+    concurrently and requires both results, with a join timeout so a
+    deadlock fails the suite.
+    """
     port_path = tmp_path / "judge_portfolios.json"
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
     existing = {"id": "old", "netuid": 3, "horizon_hours": 1}
     portfolios.open_position("echo", existing)
-    barrier = threading.Barrier(2)
-    original = portfolios._load
     errors = []
-
-    def read_together():
-        data = original()
-        try:
-            barrier.wait(timeout=1)
-        except threading.BrokenBarrierError:
-            pass
-        return data
 
     def run(action):
         try:
@@ -131,7 +128,6 @@ def test_concurrent_open_and_close_preserve_both_changes(tmp_path, monkeypatch):
         except Exception as exc:
             errors.append(exc)
 
-    monkeypatch.setattr(portfolios, "_load", read_together)
     threads = [
         threading.Thread(target=run, args=(lambda: portfolios.open_position("oracle", {"id": "new", "netuid": 4}),)),
         threading.Thread(target=run, args=(lambda: portfolios.close_position("echo", existing, actual_pct=1),)),
@@ -140,6 +136,7 @@ def test_concurrent_open_and_close_preserve_both_changes(tmp_path, monkeypatch):
         thread.start()
     for thread in threads:
         thread.join(5)
+        assert not thread.is_alive(), "portfolio writer deadlocked"
     assert not errors
     data = json.loads(port_path.read_text())
     assert [row["id"] for row in data["oracle"]["open_positions"]] == ["new"]
@@ -325,3 +322,166 @@ def test_daily_pick_tick_reconciles_judge_positions(monkeypatch):
     })
     pick_scheduler.DailyPickScheduler().run_once()
     assert calls == [True]
+
+
+
+def _gradeable_row(pred_id="partial-1", *, outcome="miss", actual_pct=-3.0, include_correct=True):
+    row = {
+        "id": pred_id,
+        "netuid": 7,
+        "name": "Seven",
+        "direction": "up",
+        "predicted_pct": 5.0,
+        "reference_price": 100.0,
+        "horizon_hours": 1,
+        "outcome": outcome,
+        "actual_pct": actual_pct,
+        "resolved_at": datetime.now(timezone.utc).isoformat(),
+        "status": "resolved",
+    }
+    if include_correct:
+        row["correct"] = outcome == "hit"
+    return row
+
+
+def _open_all_judges(row):
+    for name in ("oracle", "echo", "pulse"):
+        portfolios.open_position(name, row)
+
+
+def test_reconcile_completes_partial_judge_close(tmp_path, monkeypatch):
+    """T3: after the second judge close raises, reconcile finishes all three once."""
+    from internal.judges import postmortems, tracker
+
+    port_path = tmp_path / "portfolios.json"
+    ledger = tmp_path / "predictions.json"
+    pm_dir = tmp_path / "postmortems"
+    pm_dir.mkdir()
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
+    row = _gradeable_row()
+    _open_all_judges(row)
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+
+    real_close = portfolios.close_position
+    state = {"echo_calls": 0}
+
+    def close_echo_fails(judge_name, prediction, *args, **kwargs):
+        if judge_name == "echo":
+            state["echo_calls"] += 1
+            if state["echo_calls"] == 1:
+                raise OSError("echo close failed")
+        return real_close(judge_name, prediction, *args, **kwargs)
+
+    monkeypatch.setattr(portfolios, "close_position", close_echo_fails)
+    try:
+        tracker.on_prediction_resolved(row, apply_judge_nudge=False)
+    except OSError:
+        pass
+
+    data = json.loads(port_path.read_text())
+    assert len(data["oracle"]["closed_positions"]) == 1
+    assert data["echo"]["open_positions"]
+    closed = prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+    assert closed >= 1
+    data = json.loads(port_path.read_text())
+    assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
+    assert len(data["oracle"]["closed_positions"]) == 1
+    assert len(data["echo"]["closed_positions"]) == 1
+    assert len(data["pulse"]["closed_positions"]) == 1
+    if (pm_dir / "oracle.json").exists():
+        oracle_pm = json.loads((pm_dir / "oracle.json").read_text())
+        assert len(oracle_pm) == 1
+
+    # T10: second pass is a no-op
+    prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+    data = json.loads(port_path.read_text())
+    assert len(data["oracle"]["closed_positions"]) == 1
+    if (pm_dir / "oracle.json").exists():
+        oracle_pm = json.loads((pm_dir / "oracle.json").read_text())
+        assert len(oracle_pm) == 1
+
+
+def test_reconcile_does_not_close_ungradeable_open_position(tmp_path, monkeypatch):
+    """T9 GUARD: an ungradeable resolved row with an open position stays open."""
+    from internal.judges import postmortems
+
+    port_path = tmp_path / "portfolios.json"
+    ledger = tmp_path / "predictions.json"
+    pm_dir = tmp_path / "postmortems"
+    pm_dir.mkdir()
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
+    row = _gradeable_row(pred_id="ungrade-1", outcome="ungradeable", actual_pct=None, include_correct=True)
+    row["correct"] = None
+    _open_all_judges(row)
+    before = json.loads(port_path.read_text())
+    loss_before = before["oracle"]["summary"]["loss_count"]
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+    prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+    data = json.loads(port_path.read_text())
+    assert all(len(data[name]["open_positions"]) == 1 for name in ("oracle", "echo", "pulse"))
+    assert data["oracle"]["closed_positions"] == []
+    assert data["oracle"]["summary"]["loss_count"] == loss_before
+    assert not (pm_dir / "oracle.json").exists()
+
+
+def test_reconcile_closes_legacy_row_without_stored_correct(tmp_path, monkeypatch):
+    """T9b: a legacy hit with actual_pct and no correct key is closed."""
+    from internal.judges import postmortems
+
+    port_path = tmp_path / "portfolios.json"
+    ledger = tmp_path / "predictions.json"
+    pm_dir = tmp_path / "postmortems"
+    pm_dir.mkdir()
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
+    row = _gradeable_row(pred_id="legacy-hit", outcome="hit", actual_pct=4.0, include_correct=False)
+    assert "correct" not in row
+    _open_all_judges(row)
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+    prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+    data = json.loads(port_path.read_text())
+    assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
+    assert all(len(data[name]["closed_positions"]) == 1 for name in ("oracle", "echo", "pulse"))
+
+
+def test_hour_tick_records_pick_when_reconcile_times_out(monkeypatch):
+    """T12: a portfolios lock timeout must not drop the hour's pick."""
+    from internal.council import hourly_pick, pick_scheduler
+
+    def boom(**_kw):
+        raise portfolios.PortfolioLockTimeout("portfolios lock held")
+
+    monkeypatch.setattr(prediction_loop, "reconcile_judge_positions", boom, raising=False)
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 7, "price": 12}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _rows: {})
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a: None)
+    monkeypatch.setattr(hourly_pick, "select_hourly_pick", lambda *_a: {"action": "long", "subnet": {"netuid": 7, "price": 12}})
+    monkeypatch.setattr(pick_scheduler, "_record_hour_pick", lambda *_a, **_kw: "applied")
+    result = pick_scheduler.HourPickScheduler(refresh_minutes=15).run_once()
+    assert result["ok"] is True
+    assert result.get("reconcile_ok") is False
+    assert "reconcile_error" in result
+    assert result.get("pick_record_outcome") == "applied"
+
+
+def test_daily_tick_still_picks_when_reconcile_times_out(monkeypatch):
+    """T12: a portfolios lock timeout must not write a daily scheduler_hold."""
+    from internal.council import daily_pick_engine, pick_scheduler
+
+    def boom(**_kw):
+        raise portfolios.PortfolioLockTimeout("portfolios lock held")
+
+    monkeypatch.setattr(prediction_loop, "reconcile_judge_positions", boom, raising=False)
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _rows: {})
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a: None)
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
+    monkeypatch.setattr(daily_pick_engine, "get_or_create_today_pick", lambda *_a, **_kw: {
+        "action": "HOLD", "date": "2026-01-01",
+    })
+    result = pick_scheduler.DailyPickScheduler().run_once()
+    assert result["ok"] is True
+    assert result.get("reconcile_ok") is False
+    assert not result.get("scheduler_hold")

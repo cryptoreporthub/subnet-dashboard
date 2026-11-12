@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import fcntl
+import json
+import threading
+import time
+
 from fastapi.testclient import TestClient
 
 from internal.portfolio.engine import build_portfolio_status
@@ -147,3 +152,99 @@ def test_legacy_paper_portfolio_exposes_canonical_ledger_scope():
     assert body["source"] == "legacy_judge_portfolios"
     assert body["canonical_source"] == "data/predictions.json"
     assert "canonical" in body
+
+
+
+def test_open_position_times_out_when_flock_held(tmp_path, monkeypatch):
+    """T1: a held flock makes open_position fail fast; the write lands after release."""
+    from internal.judges import portfolios
+
+    port_path = tmp_path / "judge_portfolios.json"
+    port_path.write_text("{}")
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_LOCK_TIMEOUT_SECONDS", 0.3, raising=False)
+    before = port_path.read_bytes()
+    lock_path = str(port_path) + ".lock"
+    holder = open(lock_path, "a+")
+    try:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        errors = []
+
+        def run():
+            try:
+                portfolios.open_position("oracle", {"id": "p1", "netuid": 1})
+            except Exception as exc:
+                errors.append(exc)
+
+        thread = threading.Thread(target=run, daemon=True)
+        started = time.monotonic()
+        thread.start()
+        thread.join(3)
+        elapsed = time.monotonic() - started
+        assert not thread.is_alive(), "open_position hung on a held flock"
+        assert elapsed < 2
+        assert errors and type(errors[0]).__name__ == "PortfolioLockTimeout"
+        assert port_path.read_bytes() == before
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
+    portfolios.open_position("oracle", {"id": "p1", "netuid": 1})
+    data = json.loads(port_path.read_text())
+    assert data["oracle"]["open_positions"][0]["id"] == "p1"
+
+
+def test_past_deadline_fails_fast_and_releases_mutex(tmp_path, monkeypatch):
+    """T2: a deadline already in the past must not hang at remaining ~= -1.0."""
+    from internal.judges import portfolios
+
+    port_path = tmp_path / "judge_portfolios.json"
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    errors = []
+
+    def run():
+        try:
+            with portfolios._portfolios_lock(deadline=time.monotonic() - 1.0):
+                errors.append("entered")
+        except Exception as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(2)
+    assert not thread.is_alive(), "past-deadline acquire hung (RLock timeout=-1?)"
+    assert errors and type(errors[0]).__name__ == "PortfolioLockTimeout"
+    with portfolios._portfolios_lock():
+        pass
+
+
+def test_patched_lock_timeout_constant_is_honored(tmp_path, monkeypatch):
+    """T11: PORTFOLIOS_LOCK_TIMEOUT_SECONDS is read inside the lock function."""
+    from internal.judges import portfolios
+
+    port_path = tmp_path / "judge_portfolios.json"
+    port_path.write_text("{}")
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_LOCK_TIMEOUT_SECONDS", 0.3, raising=False)
+    lock_path = str(port_path) + ".lock"
+    holder = open(lock_path, "a+")
+    try:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        errors = []
+        started = time.monotonic()
+
+        def run():
+            try:
+                portfolios.open_position("oracle", {"id": "t11", "netuid": 2})
+            except Exception as exc:
+                errors.append(exc)
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(3)
+        elapsed = time.monotonic() - started
+        assert not thread.is_alive(), "patched timeout was ignored and the call hung"
+        assert elapsed < 2
+        assert errors and type(errors[0]).__name__ == "PortfolioLockTimeout"
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
