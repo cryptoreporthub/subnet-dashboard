@@ -72,6 +72,14 @@ def record_hour_pick(
         return None
 
     store = _load()
+    active = store.get("active")
+    if (
+        isinstance(active, dict)
+        and not active.get("finalized")
+        and prediction_id is not None
+        and active.get("prediction_id") == prediction_id
+    ):
+        return active
     _retire_active(store, reason="replaced")
 
     row = {

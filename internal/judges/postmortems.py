@@ -130,6 +130,11 @@ def record(
 ) -> Dict[str, Any]:
     """Record a new postmortem for a wrong pick."""
     entries = _load(judge_name)
+    pred_id = prediction.get("id")
+    if pred_id is not None:
+        for existing in entries:
+            if existing.get("prediction_id") == pred_id:
+                return existing
     diagnosis = _diagnosis(prediction, actual_pct)
     entry = {
         "judge": judge_name.lower(),

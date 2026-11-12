@@ -448,6 +448,14 @@ def _gradeable_for_judge_close(row: Dict[str, Any]) -> bool:
     return outcome in {"hit", "miss"} and row.get("actual_pct") is not None
 
 
+def _is_wrong_pick(row: Dict[str, Any]) -> bool:
+    """Match tracker: missing or null `correct` falls back to outcome == hit."""
+    stored = row.get("correct")
+    if stored is None:
+        stored = str(row.get("outcome") or "").lower() == "hit"
+    return not stored
+
+
 def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
     from internal.judges.portfolios import get_portfolio, open_positions_for_prediction
     from internal.judges.tracker import on_prediction_resolved
@@ -483,17 +491,35 @@ def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
         reconciled += 1
 
     open_ids = set()
+    retry_ids = set()
     for name in ("oracle", "echo", "pulse"):
-        for pos in get_portfolio(name).get("open_positions") or []:
+        portfolio = get_portfolio(name)
+        for pos in portfolio.get("open_positions") or []:
             pred_id = pos.get("id")
             if pred_id is not None:
                 open_ids.add(pred_id)
-    if not open_ids:
+        for pred_id in (portfolio.get("closed_prediction_ids") or {}):
+            retry_ids.add(pred_id)
+            try:
+                retry_ids.add(int(pred_id))
+            except (TypeError, ValueError):
+                pass
+        for closed in portfolio.get("closed_positions") or []:
+            pred_id = closed.get("id")
+            if pred_id is not None:
+                retry_ids.add(pred_id)
+                retry_ids.add(str(pred_id))
+    if not open_ids and not retry_ids:
         return reconciled
     for row in list(data.get("predictions") or []) + list(data.get("resolved") or []):
-        if not isinstance(row, dict) or row.get("id") not in open_ids:
+        if not isinstance(row, dict):
+            continue
+        pred_id = row.get("id")
+        if pred_id not in open_ids and pred_id not in retry_ids and str(pred_id) not in retry_ids:
             continue
         if not _gradeable_for_judge_close(row):
+            continue
+        if pred_id not in open_ids and not _is_wrong_pick(row):
             continue
         on_prediction_resolved(row, apply_judge_nudge=False)
         reconciled += 1

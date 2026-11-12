@@ -217,7 +217,12 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
             horizon_type="hour",
             market_context=market_context,
         )
-        if stored.kind == "committed":
+        ledger_committed = stored.kind == "committed" or (
+            stored.kind == "indeterminate"
+            and stored.reason == "positions_incomplete"
+            and stored.prediction is not None
+        )
+        if ledger_committed:
             try:
                 pick_history.record_hour_pick(
                     pick, subnet_row, prediction_id=stored.prediction.get("id")
@@ -257,8 +262,9 @@ def _reconcile_judge_positions_for_tick(result: Dict[str, Any]) -> None:
     try:
         reconcile_judge_positions()
         result["reconcile_ok"] = True
-    except PortfolioLockTimeout as exc:
-        logger.warning("judge position reconcile timed out: %s", exc)
+    except Exception as exc:
+        kind = "timed out" if isinstance(exc, PortfolioLockTimeout) else "failed"
+        logger.warning("judge position reconcile %s: %s", kind, exc)
         result["reconcile_ok"] = False
         result["reconcile_error"] = str(exc)
 

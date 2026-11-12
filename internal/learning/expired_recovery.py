@@ -29,6 +29,22 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+
+def _prediction_still_open(pred_id: object) -> bool:
+    """True when any judge still holds an open position for this prediction id."""
+    if pred_id is None:
+        return False
+    try:
+        from internal.judges.portfolios import get_portfolio
+
+        for name in ("oracle", "echo", "pulse"):
+            for pos in get_portfolio(name).get("open_positions") or []:
+                if pos.get("id") == pred_id:
+                    return True
+    except Exception:
+        return True
+    return False
+
 def recover_expired_predictions(
     *,
     dry_run: bool = False,
@@ -148,6 +164,7 @@ def recover_expired_predictions(
         resolver._ensure_subnet_snapshot(row)
         if not resolver._skip_council_learning(row):
             resolver._nudge_impact_strength(row, bool(correct))
+        warnings_before = list(row.get("side_effect_warnings") or [])
         resolver.atomic_finalize_resolution(
             row,
             actual_pct=actual_pct,
@@ -158,7 +175,13 @@ def recover_expired_predictions(
             price_meta=meta,
             apply_judge_nudge=False,
         )
-        if "on_prediction_resolved" in (row.get("side_effect_warnings") or []):
+        warnings_after = list(row.get("side_effect_warnings") or [])
+        fresh_close_warning = (
+            "on_prediction_resolved" in warnings_after
+            and "on_prediction_resolved" not in warnings_before
+        )
+        still_open = _prediction_still_open(row.get("id"))
+        if fresh_close_warning or still_open:
             incomplete.append(row.get("id"))
         if not resolver._skip_council_learning(row):
             resolver._record_scenario_outcome(

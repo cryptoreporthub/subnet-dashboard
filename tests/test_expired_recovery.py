@@ -233,3 +233,82 @@ def test_recovery_close_deadline_does_not_include_price_hydration(tmp_path, monk
     assert result.get("ok") is not False or result.get("reason") != "judge_close_incomplete"
     assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
     assert all(len(data[name]["closed_positions"]) == 1 for name in ("oracle", "echo", "pulse"))
+
+
+def test_revoked_finalize_is_not_a_successful_recovery(tmp_path, monkeypatch):
+    """A revoked cycle that skips judge closes must not be reported as recovery_ok."""
+    from internal.council import resolver
+    from internal.council import price_reference
+    from internal.judges import portfolios
+    from internal.learning import expired_recovery, predictions_store
+
+    path = tmp_path / "predictions.json"
+    port_path = tmp_path / "portfolios.json"
+    row = _expired_row("revoked-1")
+    path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    pending = {
+        "id": "revoked-1",
+        "netuid": 7,
+        "direction": "up",
+        "predicted_pct": 5.0,
+        "reference_price": 100.0,
+        "horizon_hours": 1,
+    }
+    for name in ("oracle", "echo", "pulse"):
+        portfolios.open_position(name, pending)
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: True)
+    result = expired_recovery.recover_expired_predictions()
+    data = json.loads(port_path.read_text())
+    assert result["ok"] is False
+    assert result["reason"] == "judge_close_incomplete"
+    assert "revoked-1" in (result.get("incomplete_ids") or [])
+    assert all(len(data[name]["open_positions"]) == 1 for name in ("oracle", "echo", "pulse"))
+
+
+def test_stale_close_warning_does_not_fail_recovery_when_positions_closed(tmp_path, monkeypatch):
+    """A leftover side_effect_warning is not a fresh close failure if judges are closed."""
+    from internal.council import resolver
+    from internal.council import price_reference
+    from internal.judges import portfolios
+    from internal.learning import expired_recovery, predictions_store
+
+    path = tmp_path / "predictions.json"
+    port_path = tmp_path / "portfolios.json"
+    row = _expired_row("stale-1")
+    row["side_effect_warnings"] = ["on_prediction_resolved"]
+    path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    pending = {
+        "id": "stale-1",
+        "netuid": 7,
+        "direction": "up",
+        "predicted_pct": 5.0,
+        "reference_price": 100.0,
+        "horizon_hours": 1,
+    }
+    for name in ("oracle", "echo", "pulse"):
+        portfolios.open_position(name, pending)
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
+    result = expired_recovery.recover_expired_predictions()
+    data = json.loads(port_path.read_text())
+    assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
+    assert result.get("reason") != "judge_close_incomplete"
+    assert result.get("ok") is not False or result.get("reason") != "judge_close_incomplete"

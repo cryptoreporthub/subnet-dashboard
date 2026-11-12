@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import threading
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -472,6 +473,181 @@ def test_daily_tick_still_picks_when_reconcile_times_out(monkeypatch):
 
     def boom(**_kw):
         raise portfolios.PortfolioLockTimeout("portfolios lock held")
+
+    monkeypatch.setattr(prediction_loop, "reconcile_judge_positions", boom, raising=False)
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _rows: {})
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a: None)
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
+    monkeypatch.setattr(daily_pick_engine, "get_or_create_today_pick", lambda *_a, **_kw: {
+        "action": "HOLD", "date": "2026-01-01",
+    })
+    result = pick_scheduler.DailyPickScheduler().run_once()
+    assert result["ok"] is True
+    assert result.get("reconcile_ok") is False
+    assert not result.get("scheduler_hold")
+
+
+def test_postmortem_retries_after_durable_close(tmp_path, monkeypatch):
+    """A postmortem write failure after a durable close is retried; no duplicate."""
+    from internal.judges import postmortems, tracker
+
+    port_path = tmp_path / "judge_portfolios.json"
+    pm_dir = tmp_path / "postmortems"
+    pm_dir.mkdir()
+    pred_path = tmp_path / "predictions.json"
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
+    row = _gradeable_row(pred_id="pm-1", outcome="miss", actual_pct=-3.0)
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+    from internal.learning import predictions_store
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    _open_all_judges(row)
+
+    real = postmortems.record
+    calls = {"oracle": 0}
+
+    def flaky(judge_name, prediction, actual_pct=None):
+        if judge_name == "oracle" and calls["oracle"] == 0:
+            calls["oracle"] += 1
+            raise OSError("postmortem write failed")
+        if judge_name == "oracle":
+            calls["oracle"] += 1
+        return real(judge_name, prediction, actual_pct)
+
+    monkeypatch.setattr(postmortems, "record", flaky)
+    tracker.on_prediction_resolved(row, apply_judge_nudge=False)
+    first = {name: len(postmortems.list_for_judge(name)) for name in ("oracle", "echo", "pulse")}
+    assert first["oracle"] == 0
+    assert first["echo"] == 1
+    assert first["pulse"] == 1
+    data = json.loads(port_path.read_text())
+    assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
+
+    prediction_loop.reconcile_judge_positions(predictions_path=str(pred_path))
+    second = {name: len(postmortems.list_for_judge(name)) for name in ("oracle", "echo", "pulse")}
+    assert second == {"oracle": 1, "echo": 1, "pulse": 1}
+    prediction_loop.reconcile_judge_positions(predictions_path=str(pred_path))
+    third = {name: len(postmortems.list_for_judge(name)) for name in ("oracle", "echo", "pulse")}
+    assert third == {"oracle": 1, "echo": 1, "pulse": 1}
+
+
+def test_hit_with_null_correct_is_not_a_wrong_pick(tmp_path, monkeypatch):
+    """A gradeable hit with correct: null must not write wrong-pick postmortems."""
+    from internal.judges import postmortems, tracker
+
+    port_path = tmp_path / "judge_portfolios.json"
+    pm_dir = tmp_path / "postmortems"
+    pm_dir.mkdir()
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
+    row = _gradeable_row(pred_id="null-correct", outcome="hit", actual_pct=4.0, include_correct=False)
+    row["correct"] = None
+    _open_all_judges(row)
+    tracker.on_prediction_resolved(row, apply_judge_nudge=False)
+    assert all(len(postmortems.list_for_judge(name)) == 0 for name in ("oracle", "echo", "pulse"))
+    data = json.loads(port_path.read_text())
+    assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
+
+
+def test_hour_history_written_when_portfolio_open_is_incomplete(tmp_path, monkeypatch):
+    """Ledger-committed but positions_incomplete still records hour history once."""
+    from internal.council import pick_history, pick_scheduler
+    from internal.learning.prediction_loop import PickRecord, PickRecordKind
+
+    hist_path = tmp_path / "hour_history.json"
+    monkeypatch.setattr(pick_history, "PICK_HISTORY_PATH", str(hist_path))
+
+    history_ids = []
+    real_record = pick_history.record_hour_pick
+
+    def tracking(pick, subnet, *, prediction_id=None):
+        history_ids.append(prediction_id)
+        return real_record(pick, subnet, prediction_id=prediction_id)
+
+    monkeypatch.setattr(pick_history, "record_hour_pick", tracking)
+    stored = PickRecord(
+        PickRecordKind.INDETERMINATE,
+        {"id": "hour-1"},
+        "positions_incomplete",
+    )
+    monkeypatch.setattr(prediction_loop, "record_pick", lambda *a, **k: stored)
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 7, "price": 12}])
+    outcome = pick_scheduler._record_hour_pick(
+        {"action": "long", "subnet": {"netuid": 7, "price": 12}},
+        [{"netuid": 7, "price": 12}],
+        {},
+    )
+    assert outcome == "indeterminate"
+    assert history_ids == ["hour-1"]
+    # Retry with the same prediction id must not append a second history row.
+    outcome2 = pick_scheduler._record_hour_pick(
+        {"action": "long", "subnet": {"netuid": 7, "price": 12}},
+        [{"netuid": 7, "price": 12}],
+        {},
+    )
+    assert outcome2 == "indeterminate"
+    assert history_ids == ["hour-1", "hour-1"]
+    store = pick_history._load()
+    assert store.get("active", {}).get("prediction_id") == "hour-1"
+    history = store.get("history") or []
+    assert all(row.get("prediction_id") != "hour-1" or row.get("outcome") != "replaced" for row in history) or len(history) == 0
+    # Stronger: only one live/active entry, no retired copy of hour-1.
+    retired_same = [row for row in history if row.get("prediction_id") == "hour-1"]
+    assert retired_same == []
+
+
+def test_nudge_io_does_not_consume_close_deadline(tmp_path, monkeypatch):
+    """Per-judge nudge I/O must not spend the portfolio close deadline."""
+    from internal.judges import tracker, weights
+
+    port_path = tmp_path / "judge_portfolios.json"
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_LOCK_TIMEOUT_SECONDS", 0.25, raising=False)
+    row = _gradeable_row(pred_id="nudge-1", outcome="miss", actual_pct=-3.0)
+    _open_all_judges(row)
+
+    def slow_nudge(*_a, **_kw):
+        time.sleep(0.3)
+        return None
+
+    monkeypatch.setattr(weights, "nudge_judge", slow_nudge)
+    started = time.monotonic()
+    tracker.on_prediction_resolved(row, apply_judge_nudge=True)
+    elapsed = time.monotonic() - started
+    data = json.loads(port_path.read_text())
+    assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
+    assert all(len(data[name]["closed_positions"]) == 1 for name in ("oracle", "echo", "pulse"))
+    # Three 0.3s nudges may run; they just must not prevent the closes.
+    assert elapsed >= 0.3
+
+
+def test_hour_tick_continues_when_reconcile_raises_non_timeout(monkeypatch):
+    """A non-timeout reconcile error must not drop the hour pick."""
+    from internal.council import hourly_pick, pick_scheduler
+
+    def boom(**_kw):
+        raise ValueError("invalid judge portfolio")
+
+    monkeypatch.setattr(prediction_loop, "reconcile_judge_positions", boom, raising=False)
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 7, "price": 12}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _rows: {})
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a: None)
+    monkeypatch.setattr(hourly_pick, "select_hourly_pick", lambda *_a: {"action": "long", "subnet": {"netuid": 7, "price": 12}})
+    monkeypatch.setattr(pick_scheduler, "_record_hour_pick", lambda *_a, **_kw: "applied")
+    result = pick_scheduler.HourPickScheduler(refresh_minutes=15).run_once()
+    assert result["ok"] is True
+    assert result.get("reconcile_ok") is False
+    assert "invalid judge portfolio" in str(result.get("reconcile_error") or "")
+    assert result.get("pick_record_outcome") == "applied"
+
+
+def test_daily_tick_does_not_hold_when_reconcile_raises_non_timeout(monkeypatch):
+    """A non-timeout reconcile error must not write a daily scheduler_hold."""
+    from internal.council import daily_pick_engine, pick_scheduler
+
+    def boom(**_kw):
+        raise ValueError("could not convert string to float: 'abc'")
 
     monkeypatch.setattr(prediction_loop, "reconcile_judge_positions", boom, raising=False)
     monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [])
