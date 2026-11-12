@@ -14,7 +14,7 @@ from tools.review_orchestrator import db, persist
 from tools.review_orchestrator.deadman import evaluate_deadman
 
 V1A_RULES = (
-    "fresh_tick_ok",
+    "fresh_tick_alert_unknown",
     "missing_store_alerts",
     "stale_attempt_alerts",
     "completed_stale_alerts",
@@ -47,12 +47,12 @@ def _plant(
         conn.close()
 
 
-def _check_fresh_tick_ok(state_dir: Path) -> bool:
+def _check_fresh_tick_alert_unknown(state_dir: Path) -> bool:
     case = state_dir / "case_fresh"
     case.mkdir(parents=True)
     persist.run_tick(case, tick_id="fresh", noop=False)
     verdict = evaluate_deadman(case, max_age_minutes=40)
-    return verdict.ok is True and verdict.reason == "ok"
+    return verdict.ok is False and verdict.reason == "last_alert_unknown"
 
 
 def _check_missing_store_alerts(state_dir: Path) -> bool:
@@ -114,7 +114,7 @@ def _check_failing_tick_alerts(state_dir: Path) -> bool:
 
 def run_exam(state_dir: Path) -> int:
     checks = {
-        V1A_RULES[0]: _check_fresh_tick_ok(state_dir),
+        V1A_RULES[0]: _check_fresh_tick_alert_unknown(state_dir),
         V1A_RULES[1]: _check_missing_store_alerts(state_dir),
         V1A_RULES[2]: _check_stale_attempt_alerts(state_dir),
         V1A_RULES[3]: _check_completed_stale_alerts(state_dir),

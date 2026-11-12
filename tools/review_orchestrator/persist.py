@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import secrets
+import sqlite3
 import sys
 import time
 from dataclasses import dataclass
@@ -18,7 +19,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from tools.review_orchestrator import db
-from tools.review_orchestrator.db import DuplicateTickIdError, StoreUnavailableError
+from tools.review_orchestrator.db import (
+    DuplicateTickIdError,
+    StoreCorruptError,
+    StoreUnavailableError,
+)
 
 #: A running row older than this is swept to 'abandoned' before the next tick
 #: measures overlap, so a tick SIGKILLed between start and completion cannot pin
@@ -80,8 +85,7 @@ def run_tick(
     started_at = started.isoformat()
     cutoff = (started - ABANDONED_AFTER).isoformat()
 
-    conn = db.connect(state_dir)
-    try:
+    with db.locked_connect(state_dir) as conn:
         opened = db.start_tick(conn, tick_id, started_at, cutoff_iso=cutoff)
         started_monotonic = time.monotonic()
         try:
@@ -103,8 +107,6 @@ def run_tick(
             duration_ms=_elapsed_ms(started_monotonic),
             noop=noop,
         )
-    finally:
-        conn.close()
 
     return TickResult(
         tick_id=tick_id,
@@ -116,32 +118,119 @@ def run_tick(
 
 
 def read_latest_tick(state_dir: Path) -> dict[str, Any] | None:
-    conn = db.connect(state_dir)
-    try:
+    with db.locked_connect(state_dir) as conn:
         row = db.latest_row(conn)
-    finally:
-        conn.close()
     return dict(row) if row is not None else None
 
 
-def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
-    """Move a store that is not a database aside and return its new path.
+def _move_store_files(path: Path, moved: Path) -> Path:
+    pairs = (
+        (Path(f"{path}-wal"), Path(f"{moved}-wal")),
+        (Path(f"{path}-shm"), Path(f"{moved}-shm")),
+        (path, moved),
+    )
+    existing_targets = [target for _, target in pairs if target.exists()]
+    if existing_targets:
+        raise StoreUnavailableError(
+            f"repair target already exists: {existing_targets[0]}"
+        )
 
-    Returns the store path unchanged when there is nothing to repair.
+    completed: list[tuple[Path, Path]] = []
+    try:
+        for source, target in pairs:
+            if source.exists():
+                source.replace(target)
+                completed.append((source, target))
+    except OSError as exc:
+        rollback_errors = []
+        for source, target in reversed(completed):
+            try:
+                target.replace(source)
+            except OSError as rollback_exc:
+                rollback_errors.append(str(rollback_exc))
+        detail = f"{path}: {exc}"
+        if rollback_errors:
+            detail += f"; rollback failed: {'; '.join(rollback_errors)}"
+        raise StoreUnavailableError(detail) from exc
+    return moved
+
+
+def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
+    """Move an unreadable or untrusted store aside and return its new path.
+
+    A healthy store is left in place. Its WAL sidecars move with the database.
     """
-    path = db.db_path(Path(state_dir))
+    state_dir = Path(state_dir)
+    path = db.db_path(state_dir)
     if not path.exists():
         return path
     stamp = stamp or utc_now().strftime("%Y%m%dT%H%M%SZ")
     moved = path.with_name(f"{path.name}.corrupt-{stamp}")
     try:
-        path.replace(moved)
+        with db.store_lock(state_dir, exclusive=True):
+            if not path.exists():
+                return path
+
+            conn = None
+            try:
+                corrupt = False
+                try:
+                    conn = sqlite3.connect(
+                        str(path),
+                        isolation_level=None,
+                        timeout=db.BUSY_TIMEOUT_MS / 1000,
+                    )
+                    conn.execute(f"PRAGMA busy_timeout = {db.BUSY_TIMEOUT_MS}")
+                    conn.execute("BEGIN IMMEDIATE")
+                    check = conn.execute("PRAGMA quick_check").fetchone()
+                    table_columns = conn.execute(
+                        "PRAGMA table_info(ticks)"
+                    ).fetchall()
+                    columns = {row[1] for row in table_columns}
+                    sequence_column = next(
+                        (row for row in table_columns if row[1] == "seq"),
+                        None,
+                    )
+                    required_columns = {
+                        name.strip() for name in db.COLUMNS.split(",")
+                    }
+                    if (
+                        check is None
+                        or str(check[0]).lower() != "ok"
+                        or not required_columns.issubset(columns)
+                        or sequence_column is None
+                        or sequence_column[5] != 1
+                    ):
+                        corrupt = True
+                    else:
+                        maximum = conn.execute(
+                            "SELECT MAX(seq) FROM ticks"
+                        ).fetchone()[0]
+                        corrupt = (
+                            maximum is not None
+                            and int(maximum) > db.MAX_TRUSTED_SEQ
+                        )
+                except sqlite3.DatabaseError as exc:
+                    if isinstance(exc, sqlite3.OperationalError) and db._is_busy_or_locked(
+                        exc
+                    ):
+                        raise
+                    classified = db._store_error(exc, path)
+                    if isinstance(classified, StoreCorruptError):
+                        corrupt = True
+                    else:
+                        raise classified from exc
+
+                if not corrupt:
+                    if conn is not None:
+                        conn.execute("ROLLBACK")
+                    return path
+                return _move_store_files(path, moved)
+            finally:
+                if conn is not None:
+                    conn.close()
     except OSError as exc:
-        # A read-only directory or filesystem is not a corrupt store: `repair`
-        # itself cannot run. Name the real problem instead of letting the OS
-        # error escape as a traceback.
         raise StoreUnavailableError(f"{path}: {exc}") from exc
-    return moved
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -153,10 +242,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     moved = repair_store(args.state_dir.resolve())
-    if moved == db.db_path(args.state_dir.resolve()):
-        print("repair: no store to move")
-    else:
+    if moved != db.db_path(args.state_dir.resolve()):
         print(f"repair: moved corrupt store to {moved.name}")
+    elif moved.exists():
+        print("repair: healthy store; nothing moved")
+    else:
+        print("repair: no store to move")
     return 0
 
 

@@ -9,6 +9,8 @@ round-3 blockers.
 
 from __future__ import annotations
 
+import fcntl
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -18,6 +20,8 @@ from typing import Iterator
 
 DB_FILENAME = "orchestrator.sqlite"
 BUSY_TIMEOUT_MS = 5000
+WAL_CONVERSION_TIMEOUT_MS = 300
+WAL_CONVERSION_BUSY_TIMEOUT_MS = 25
 #: A hand-written seq above this would pin the AUTOINCREMENT counter for the
 #: life of the store; fail loudly instead of silently jamming every later tick.
 MAX_TRUSTED_SEQ = 2 ** 62
@@ -105,48 +109,137 @@ def db_path(state_dir: Path) -> Path:
     return Path(state_dir) / DB_FILENAME
 
 
+@contextmanager
+def store_lock(state_dir: Path, *, exclusive: bool = False) -> Iterator[None]:
+    """Coordinate production store users and repair through the directory inode."""
+    descriptor = os.open(Path(state_dir), os.O_RDONLY)
+    locked = False
+    try:
+        fcntl.flock(
+            descriptor,
+            fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH,
+        )
+        locked = True
+        yield
+    finally:
+        try:
+            if locked:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
+
+
+@contextmanager
+def locked_connect(state_dir: Path) -> Iterator[sqlite3.Connection]:
+    """Hold a shared store lease for the full lifetime of a connection."""
+    state_dir = Path(state_dir)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(state_dir, os.O_RDONLY)
+    conn = None
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_SH)
+        if not db_path(state_dir).is_file():
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            conn = connect(state_dir)
+            fcntl.flock(descriptor, fcntl.LOCK_SH)
+        else:
+            conn = connect(state_dir)
+        yield conn
+    finally:
+        try:
+            if conn is not None:
+                conn.close()
+        finally:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+            finally:
+                os.close(descriptor)
+
+
 def connect(state_dir: Path) -> sqlite3.Connection:
     """Open (creating if absent) the store and bring the schema up to date."""
     path = db_path(state_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
+    conn = None
     try:
         conn = sqlite3.connect(
             str(path), isolation_level=None, timeout=BUSY_TIMEOUT_MS / 1000
         )
         conn.row_factory = sqlite3.Row
-        conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+        conn.execute(f"PRAGMA busy_timeout = {WAL_CONVERSION_BUSY_TIMEOUT_MS}")
         _ensure_wal(conn)
+        conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute(_TABLE_SQL)
         _ensure_view(conn)
         conn.execute(f"SELECT {COLUMNS} FROM latest LIMIT 1").fetchone()
     except sqlite3.OperationalError as exc:
+        _close_after_setup_failure(conn)
         # Contention is transient: the caller retries, it does not repair.
-        text = str(exc).lower()
-        if "locked" in text or "busy" in text:
+        if _is_busy_or_locked(exc):
             raise
         raise _store_error(exc, path) from exc
     except sqlite3.DatabaseError as exc:
+        _close_after_setup_failure(conn)
         raise _store_error(exc, path) from exc
+    except BaseException:
+        _close_after_setup_failure(conn)
+        raise
     return conn
 
 
-def _ensure_wal(conn: sqlite3.Connection, *, attempts: int = 200) -> None:
+def _close_after_setup_failure(conn: sqlite3.Connection | None) -> None:
+    if conn is None:
+        return
+    try:
+        conn.close()
+    except sqlite3.Error:
+        pass
+
+
+def _is_busy_or_locked(exc: sqlite3.OperationalError) -> bool:
+    code = getattr(exc, "sqlite_errorcode", None)
+    if isinstance(code, int):
+        primary_code = code & 0xFF
+        return primary_code in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+    text = str(exc).lower()
+    return "locked" in text or "busy" in text
+
+
+def _ensure_wal(
+    conn: sqlite3.Connection,
+    *,
+    attempts: int = 200,
+    timeout_ms: int = WAL_CONVERSION_TIMEOUT_MS,
+) -> None:
     """Enable WAL, retrying while another connection holds the store.
 
     Converting the journal mode needs an exclusive lock and does not invoke the
-    busy handler, so a concurrent writer returns SQLITE_BUSY immediately. The
-    winner converts the store; losers see WAL on the next look.
+    busy handler on every SQLite build, so retries are limited to busy/locked
+    errors and bounded by a monotonic deadline.
     """
+    if attempts < 1 or timeout_ms < 0:
+        raise ValueError("attempts must be positive and timeout_ms non-negative")
+    deadline = time.monotonic() + timeout_ms / 1000
+    last_error = None
     for _ in range(attempts):
-        if str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower() == "wal":
-            return
         try:
+            if str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower() == "wal":
+                return
             conn.execute("PRAGMA journal_mode = WAL")
             return
-        except sqlite3.OperationalError:
-            time.sleep(0.005)
-    raise sqlite3.OperationalError("could not enable WAL")
+        except sqlite3.OperationalError as exc:
+            if not _is_busy_or_locked(exc):
+                raise
+            last_error = exc
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            time.sleep(min(0.005, remaining))
+    if last_error is not None:
+        raise last_error
+    raise sqlite3.OperationalError("WAL conversion did not complete")
 
 
 def _squash(sql: str) -> str:

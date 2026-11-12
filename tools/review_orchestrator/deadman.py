@@ -38,11 +38,15 @@ def _derived_completed_at(started_at: datetime, duration_ms: object) -> datetime
 
 
 def _load_latest(state_dir: Path):
-    conn = db.connect(state_dir)
-    try:
-        return db.latest_row(conn)
-    finally:
-        conn.close()
+    state_dir = Path(state_dir)
+    with db.store_lock(state_dir):
+        if not db.db_path(state_dir).is_file():
+            return None
+        conn = db.connect(state_dir)
+        try:
+            return db.latest_row(conn)
+        finally:
+            conn.close()
 
 
 def _is_failed(row) -> bool:
@@ -62,8 +66,6 @@ def evaluate_deadman(
 ) -> DeadmanVerdict:
     reference = now if now is not None else utc_now()
     limit = timedelta(minutes=max_age_minutes)
-    if not db.db_path(Path(state_dir)).is_file():
-        return DeadmanVerdict(ok=False, reason="heartbeat_unreadable")
     try:
         row = _load_latest(Path(state_dir))
     except (db.StoreError, sqlite3.Error, OSError):
@@ -92,8 +94,11 @@ def evaluate_deadman(
         if _is_failed(row):
             return DeadmanVerdict(ok=False, reason="tick_failed")
 
-        if row["last_alert_ok"] == 0:
+        alert_status = row["last_alert_ok"]
+        if alert_status == 0:
             return DeadmanVerdict(ok=False, reason="last_alert_failed")
+        if alert_status != 1:
+            return DeadmanVerdict(ok=False, reason="last_alert_unknown")
 
         return DeadmanVerdict(ok=True, reason="ok")
     except Exception:

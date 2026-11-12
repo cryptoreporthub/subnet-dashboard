@@ -46,10 +46,14 @@ them as corruption sends the operator down the wrong path. A lock is neither:
 .venv/bin/python -m tools.review_orchestrator.persist repair --state-dir /path/to/store
 ```
 
-This moves the corrupt store aside as `orchestrator.sqlite.corrupt-<stamp>` and the
-next tick creates a fresh one. In an unwritable directory, or on a read-only
-filesystem, `repair` raises `StoreUnavailableError` instead of letting the
-`OSError` escape as a traceback.
+Repair checks the store under an exclusive directory lock and leaves a healthy
+store in place. For a corrupt or untrusted store, it moves
+`orchestrator.sqlite`, `-wal`, and `-shm` together to matching
+`orchestrator.sqlite.corrupt-<stamp>` names; the next tick creates a fresh store.
+Production readers and ticks hold shared directory locks for their connection
+lifetime, so repair cannot move a store under an active tick. In an unwritable
+directory, or on a read-only filesystem, `repair` raises `StoreUnavailableError`
+instead of letting the `OSError` escape as a traceback.
 
 `StoreCorruptError` and `StoreUnavailableError` share the base `StoreError`, so a
 reader that wants every open failure catches one type and cannot miss a third one
@@ -82,9 +86,11 @@ row and returns one reason:
 - `tick_failed` — the latest row is a finished tick with `outcome = 'failed'`; a newer
   running row defers the verdict to that attempt, so a retry in flight is not reported;
 - `last_alert_failed` — `last_alert_ok = 0`;
+- `last_alert_unknown` — `last_alert_ok` is NULL or invalid; v1a sends no alerts,
+  so it cannot report delivery success;
 - `ok`.
 
-The staleness reasons outrank `tick_failed`, which outranks `last_alert_failed`.
+The staleness reasons outrank `tick_failed`, which outranks alert-status reasons.
 
 The completion time is derived as `started_at + duration_ms`; there is no separate
 heartbeat file. The CLI prints the reason and exits 0/1, or 3 on an unexpected error.
