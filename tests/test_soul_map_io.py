@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import select
 import subprocess
@@ -10,6 +11,8 @@ import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
+
+import pytest
 
 import internal.store.soul_map_io as soul_map_io
 from internal.council.mindmap_bridge import MindmapBridge
@@ -428,3 +431,36 @@ def test_write_soul_map_failed_io_does_not_poison_cache(monkeypatch, tmp_path):
 
     write_soul_map(lambda blob: blob.__setitem__("v", 2), path=str(soul_path))
     assert read_soul_map(str(soul_path))["v"] == 1
+
+def test_a_hard_flock_error_is_not_reported_as_a_lock_timeout(monkeypatch, tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"v": 1}), encoding="utf-8")
+    real_flock = soul_map_io.fcntl.flock
+    exclusive_calls = {"n": 0}
+
+    def flock_einval(fd, operation):
+        if operation & soul_map_io.fcntl.LOCK_EX:
+            exclusive_calls["n"] += 1
+            raise OSError(errno.EINVAL, "Invalid argument")
+        return real_flock(fd, operation)
+
+    monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_einval)
+    started = time.monotonic()
+    with pytest.raises(OSError) as caught:
+        write_soul_map(
+            lambda blob: blob.__setitem__("v", 2),
+            path=str(soul_path),
+            raise_on_lock_timeout=False,
+        )
+    elapsed = time.monotonic() - started
+    assert caught.value.errno == errno.EINVAL
+    assert exclusive_calls["n"] == 1
+    assert elapsed < 1.0
+    monkeypatch.setattr(soul_map_io.fcntl, "flock", real_flock)
+    result = write_soul_map(
+        lambda blob: blob.__setitem__("v", 3),
+        path=str(soul_path),
+        raise_on_lock_timeout=False,
+    )
+    assert result.outcome is WriteOutcome.APPLIED
+    assert read_soul_map(str(soul_path))["v"] == 3

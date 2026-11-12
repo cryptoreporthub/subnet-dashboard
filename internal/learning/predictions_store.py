@@ -117,7 +117,7 @@ def locked_predictions_file(timeout_seconds: float = 5.0, *, path: Optional[str]
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 acquired = True
                 break
-            except (BlockingIOError, OSError):
+            except BlockingIOError:
                 time.sleep(0.05)
         if not acquired:
             raise FileLockTimeout(

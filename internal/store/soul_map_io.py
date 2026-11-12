@@ -230,7 +230,7 @@ def _acquire_write_locks(path: str, deadline: float) -> Iterator[None]:
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except (BlockingIOError, OSError):
+            except BlockingIOError:
                 time.sleep(0.01)
         else:
             raise SoulMapLockWaitTimeout(f"Timed out waiting for flock on {lock_path}")
