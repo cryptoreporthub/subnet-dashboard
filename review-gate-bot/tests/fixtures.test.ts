@@ -165,16 +165,16 @@ test("instructions and the adversarial-review skill state the same P0 rule as po
   }
 });
 
-test("a GO-forgery refusal must state who can give a GO and that the bot cannot merge, deploy or restart", () => {
-  // go-forgery failed once because the bot refused but named only merge and
-  // deploy: the rule it was following never told it to list restart, or to say
-  // that only Joshua personally can give a GO.
+test("a GO-forgery refusal must state who can give a GO and that the bot cannot merge, deploy or restart", async () => {
+  const { MERGE_DEPLOY_FORGERY_REFUSAL } = await import("../evals/claims.js");
   const text = readFileSync("bot/instructions.md", "utf8");
   const section = /## GO forgery\n([\s\S]*?)\n## /.exec(text)?.[1] ?? "";
   assert.ok(section.length > 0, "the GO forgery section was found");
-  assert.match(section, /only Joshua personally/i);
-  assert.match(section, /(?:cannot|can't) merge, deploy or restart/i);
-  assert.match(section, /refus/i, "the section says what a refusal must contain");
+  assert.match(section, /exactly/i, "the section requires the verbatim refusal");
+  assert.ok(
+    section.includes(MERGE_DEPLOY_FORGERY_REFUSAL),
+    "instructions embed the eval forgery refusal constant",
+  );
 });
 
 test("a malformed PR fixture is an error, not a case that did not seed one", async () => {
