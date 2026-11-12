@@ -123,36 +123,25 @@ def read_latest_tick(state_dir: Path) -> dict[str, Any] | None:
     return dict(row) if row is not None else None
 
 
-def _move_store_files(path: Path, moved: Path) -> Path:
-    pairs = (
-        (Path(f"{path}-wal"), Path(f"{moved}-wal")),
-        (Path(f"{path}-shm"), Path(f"{moved}-shm")),
-        (path, moved),
-    )
-    existing_targets = [target for _, target in pairs if target.exists()]
-    if existing_targets:
-        raise StoreUnavailableError(
-            f"repair target already exists: {existing_targets[0]}"
-        )
-
-    completed: list[tuple[Path, Path]] = []
+def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
+    probe_id = f"__repair_probe_{secrets.token_hex(8)}"
+    conn.execute("SAVEPOINT repair_seq_probe")
     try:
-        for source, target in pairs:
-            if source.exists():
-                source.replace(target)
-                completed.append((source, target))
-    except OSError as exc:
-        rollback_errors = []
-        for source, target in reversed(completed):
-            try:
-                target.replace(source)
-            except OSError as rollback_exc:
-                rollback_errors.append(str(rollback_exc))
-        detail = f"{path}: {exc}"
-        if rollback_errors:
-            detail += f"; rollback failed: {'; '.join(rollback_errors)}"
-        raise StoreUnavailableError(detail) from exc
-    return moved
+        conn.execute(
+            "INSERT INTO ticks "
+            "(tick_id, started_at, duration_ms, outcome, noop, overlap, last_alert_ok) "
+            "VALUES (?, ?, 0, 'completed', 0, 0, NULL)",
+            (probe_id, utc_now().isoformat()),
+        )
+        row = conn.execute(
+            "SELECT seq, rowid FROM ticks WHERE tick_id = ?", (probe_id,)
+        ).fetchone()
+        return row is not None and row[0] is not None and row[0] == row[1]
+    except sqlite3.DatabaseError:
+        return False
+    finally:
+        conn.execute("ROLLBACK TO repair_seq_probe")
+        conn.execute("RELEASE repair_seq_probe")
 
 
 def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
@@ -162,7 +151,7 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
     """
     state_dir = Path(state_dir)
     path = db.db_path(state_dir)
-    if not path.exists():
+    if not state_dir.exists():
         return path
     stamp = stamp or utc_now().strftime("%Y%m%dT%H%M%SZ")
     moved = path.with_name(f"{path.name}.corrupt-{stamp}")
@@ -194,12 +183,17 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                     required_columns = {
                         name.strip() for name in db.COLUMNS.split(",")
                     }
+                    seq_is_rowid_alias = (
+                        sequence_column is not None
+                        and str(sequence_column[2]).strip().upper() == "INTEGER"
+                        and sequence_column[5] == 1
+                        and _seq_is_rowid_alias(conn)
+                    )
                     if (
                         check is None
                         or str(check[0]).lower() != "ok"
                         or not required_columns.issubset(columns)
-                        or sequence_column is None
-                        or sequence_column[5] != 1
+                        or not seq_is_rowid_alias
                     ):
                         corrupt = True
                     else:
@@ -222,10 +216,15 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                         raise classified from exc
 
                 if not corrupt:
-                    if conn is not None:
+                    if conn is not None and conn.in_transaction:
                         conn.execute("ROLLBACK")
                     return path
-                return _move_store_files(path, moved)
+                if conn is not None:
+                    if conn.in_transaction:
+                        conn.execute("ROLLBACK")
+                    conn.close()
+                    conn = None
+                return db.move_store_aside(path, moved)
             finally:
                 if conn is not None:
                     conn.close()

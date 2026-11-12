@@ -175,6 +175,44 @@ def test_repair_moves_store_missing_required_columns(tmp_path: Path) -> None:
     assert persist.run_tick(tmp_path, tick_id="recovered", noop=True).seq == 1
 
 
+@pytest.mark.parametrize(
+    ("seq_declaration", "table_suffix"),
+    [
+        ("TEXT PRIMARY KEY", ""),
+        ("INTEGER PRIMARY KEY DESC", ""),
+        ("INTEGER PRIMARY KEY", " WITHOUT ROWID"),
+    ],
+)
+def test_repair_moves_seq_keys_that_are_not_rowid_aliases(
+    tmp_path: Path, seq_declaration: str, table_suffix: str
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    conn.execute(
+        "CREATE TABLE ticks ("
+        f"seq {seq_declaration}, "
+        "tick_id TEXT NOT NULL UNIQUE, "
+        "started_at TEXT NOT NULL, "
+        "duration_ms INTEGER, "
+        "outcome TEXT NOT NULL DEFAULT 'running', "
+        "noop INTEGER NOT NULL DEFAULT 0, "
+        "overlap INTEGER NOT NULL DEFAULT 0, "
+        f"last_alert_ok INTEGER){table_suffix}"
+    )
+    conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="bad-seq")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-bad-seq"
+    result = persist.run_tick(tmp_path, tick_id="recovered", noop=True)
+    row = persist.read_latest_tick(tmp_path)
+    assert result.seq == 1
+    assert row is not None
+    assert row["seq"] == 1
+    assert row["outcome"] == "completed"
+    assert row["duration_ms"] is not None
+
+
 def test_repair_cli_reports_healthy_store_as_unchanged(
     tmp_path: Path, capsys
 ) -> None:
@@ -290,6 +328,71 @@ def test_repair_waits_for_live_tick_before_checking_store(tmp_path: Path) -> Non
     assert row is not None
     assert row["tick_id"] == "live"
     assert row["outcome"] == "completed"
+
+
+@pytest.mark.parametrize("crash_after", ["main", "wal", "shm"])
+def test_repair_recovers_after_each_file_rename(
+    tmp_path: Path, monkeypatch, crash_after: str
+) -> None:
+    class SimulatedCrash(BaseException):
+        pass
+
+    state_dir = tmp_path / crash_after
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    wal_keeper = sqlite3.connect(str(store), isolation_level=None)
+    wal_keeper.execute("PRAGMA wal_autocheckpoint = 0")
+    wal_keeper.execute(
+        "INSERT INTO ticks "
+        "(seq, tick_id, started_at, duration_ms, outcome, noop, overlap) "
+        "VALUES (?, 'wal-only-crash-row', ?, 0, 'completed', 0, 0)",
+        (db.MAX_TRUSTED_SEQ + 1, datetime.now(timezone.utc).isoformat()),
+    )
+
+    real_replace = Path.replace
+
+    def interrupt_after_rename(source: Path, target: Path) -> Path:
+        result = real_replace(source, target)
+        renamed = (
+            "main"
+            if source == store
+            else "wal"
+            if source == Path(f"{store}-wal")
+            else "shm"
+            if source == Path(f"{store}-shm")
+            else None
+        )
+        if renamed == crash_after:
+            raise SimulatedCrash(crash_after)
+        return result
+
+    monkeypatch.setattr(Path, "replace", interrupt_after_rename)
+    with pytest.raises(SimulatedCrash, match=crash_after):
+        persist.repair_store(state_dir, stamp="interrupted")
+    monkeypatch.setattr(Path, "replace", real_replace)
+
+    fresh = persist.run_tick(state_dir, tick_id="fresh", noop=True)
+    assert fresh.seq == 1
+    moved = state_dir / "orchestrator.sqlite.corrupt-interrupted"
+    assert moved.is_file()
+    assert Path(f"{moved}-wal").is_file()
+    assert Path(f"{moved}-shm").is_file()
+    wal_keeper.close()
+
+    moved_conn = sqlite3.connect(str(moved))
+    try:
+        moved_ids = {
+            row[0] for row in moved_conn.execute("SELECT tick_id FROM ticks")
+        }
+    finally:
+        moved_conn.close()
+    assert {"seed", "wal-only-crash-row"} <= moved_ids
+
+    fresh_row = persist.read_latest_tick(state_dir)
+    assert fresh_row is not None
+    assert fresh_row["seq"] == 1
+    assert fresh_row["tick_id"] == "fresh"
+    assert fresh_row["outcome"] == "completed"
 
 
 def test_fresh_completed_row_ok(tmp_path: Path) -> None:

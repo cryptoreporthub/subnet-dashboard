@@ -10,7 +10,9 @@ round-3 blockers.
 from __future__ import annotations
 
 import fcntl
+import json
 import os
+import secrets
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -19,6 +21,7 @@ from pathlib import Path
 from typing import Iterator
 
 DB_FILENAME = "orchestrator.sqlite"
+REPAIR_INTENT_FILENAME = ".orchestrator-repair-intent.json"
 BUSY_TIMEOUT_MS = 5000
 WAL_CONVERSION_TIMEOUT_MS = 300
 WAL_CONVERSION_BUSY_TIMEOUT_MS = 25
@@ -109,14 +112,163 @@ def db_path(state_dir: Path) -> Path:
     return Path(state_dir) / DB_FILENAME
 
 
+def _repair_intent_path(state_dir: Path) -> Path:
+    return Path(state_dir) / REPAIR_INTENT_FILENAME
+
+
+def _fsync_directory(state_dir: Path) -> None:
+    descriptor = os.open(state_dir, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _recover_repair_intent_locked(state_dir: Path) -> None:
+    intent = _repair_intent_path(state_dir)
+    if not intent.exists():
+        return
+    try:
+        document = json.loads(intent.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise StoreUnavailableError(f"invalid repair intent {intent}: {exc}") from exc
+
+    if not isinstance(document, dict):
+        raise StoreUnavailableError(f"invalid repair intent {intent}")
+    target_name = document.get("target")
+    files = document.get("files")
+    if (
+        document.get("version") != 1
+        or not isinstance(target_name, str)
+        or Path(target_name).name != target_name
+        or not target_name.startswith(f"{DB_FILENAME}.corrupt-")
+        or not isinstance(files, list)
+        or "main" not in files
+        or any(
+            not isinstance(item, str) or item not in {"main", "wal", "shm"}
+            for item in files
+        )
+        or len(files) != len(set(files))
+    ):
+        raise StoreUnavailableError(f"invalid repair intent {intent}")
+
+    main = db_path(state_dir)
+    moved = Path(state_dir) / target_name
+    source = {
+        "main": main,
+        "wal": Path(f"{main}-wal"),
+        "shm": Path(f"{main}-shm"),
+    }
+    destination = {
+        "main": moved,
+        "wal": Path(f"{moved}-wal"),
+        "shm": Path(f"{moved}-shm"),
+    }
+    try:
+        for name in ("main", "wal", "shm"):
+            if name not in files:
+                continue
+            original = source[name]
+            target = destination[name]
+            if original.exists() and target.exists():
+                raise StoreUnavailableError(
+                    f"ambiguous repair state: both {original} and {target} exist"
+                )
+            if original.exists():
+                original.replace(target)
+                _fsync_directory(Path(state_dir))
+            elif not target.exists():
+                raise StoreUnavailableError(
+                    f"repair data missing from both {original} and {target}"
+                )
+        intent.unlink()
+        _fsync_directory(Path(state_dir))
+    except StoreUnavailableError:
+        raise
+    except OSError as exc:
+        raise StoreUnavailableError(f"repair recovery {intent}: {exc}") from exc
+
+
+def _write_repair_intent(
+    state_dir: Path, moved: Path, files: list[str]
+) -> None:
+    intent = _repair_intent_path(state_dir)
+    temporary = Path(f"{intent}.{secrets.token_hex(8)}.tmp")
+    payload = {"version": 1, "target": moved.name, "files": files}
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, sort_keys=True)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, intent)
+        _fsync_directory(state_dir)
+    except BaseException:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def move_store_aside(path: Path, moved: Path) -> Path:
+    """Start and finish a recoverable move while the caller holds the write lock."""
+    state_dir = path.parent
+    if _repair_intent_path(state_dir).exists():
+        raise StoreUnavailableError(f"repair already pending in {state_dir}")
+    source = {
+        "main": path,
+        "wal": Path(f"{path}-wal"),
+        "shm": Path(f"{path}-shm"),
+    }
+    destination = {
+        "main": moved,
+        "wal": Path(f"{moved}-wal"),
+        "shm": Path(f"{moved}-shm"),
+    }
+    existing_targets = [target for target in destination.values() if target.exists()]
+    if existing_targets:
+        raise StoreUnavailableError(
+            f"repair target already exists: {existing_targets[0]}"
+        )
+    files = [name for name, source_path in source.items() if source_path.exists()]
+    if "main" not in files:
+        raise StoreUnavailableError(f"store disappeared before repair: {path}")
+    _write_repair_intent(state_dir, moved, files)
+    _recover_repair_intent_locked(state_dir)
+    return moved
+
+
+def _acquire_store_lock(
+    descriptor: int, state_dir: Path, mode: int
+) -> None:
+    fcntl.flock(descriptor, mode)
+    try:
+        if _repair_intent_path(state_dir).exists():
+            if mode == fcntl.LOCK_SH:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+            _recover_repair_intent_locked(state_dir)
+            if mode == fcntl.LOCK_SH:
+                fcntl.flock(descriptor, fcntl.LOCK_SH)
+    except BaseException:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        raise
+
+
 @contextmanager
 def store_lock(state_dir: Path, *, exclusive: bool = False) -> Iterator[None]:
     """Coordinate production store users and repair through the directory inode."""
     descriptor = os.open(Path(state_dir), os.O_RDONLY)
     locked = False
     try:
-        fcntl.flock(
+        _acquire_store_lock(
             descriptor,
+            Path(state_dir),
             fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH,
         )
         locked = True
@@ -137,10 +289,10 @@ def locked_connect(state_dir: Path) -> Iterator[sqlite3.Connection]:
     descriptor = os.open(state_dir, os.O_RDONLY)
     conn = None
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_SH)
+        _acquire_store_lock(descriptor, state_dir, fcntl.LOCK_SH)
         if not db_path(state_dir).is_file():
             fcntl.flock(descriptor, fcntl.LOCK_UN)
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            _acquire_store_lock(descriptor, state_dir, fcntl.LOCK_EX)
             conn = connect(state_dir)
             fcntl.flock(descriptor, fcntl.LOCK_SH)
         else:
