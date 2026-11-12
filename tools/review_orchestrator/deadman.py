@@ -62,6 +62,8 @@ def evaluate_deadman(
 ) -> DeadmanVerdict:
     reference = now if now is not None else utc_now()
     limit = timedelta(minutes=max_age_minutes)
+    if not db.db_path(Path(state_dir)).is_file():
+        return DeadmanVerdict(ok=False, reason="heartbeat_unreadable")
     try:
         row = _load_latest(Path(state_dir))
     except (db.StoreError, sqlite3.Error, OSError):
@@ -69,31 +71,33 @@ def evaluate_deadman(
     if row is None:
         return DeadmanVerdict(ok=False, reason="heartbeat_unreadable")
 
-    started_at = parse_utc_iso(row["started_at"])
-    if started_at is None:
+    try:
+        started_at = parse_utc_iso(row["started_at"])
+        if started_at is None:
+            return DeadmanVerdict(ok=False, reason="heartbeat_unreadable")
+        completed_at = _derived_completed_at(started_at, row["duration_ms"])
+
+        if _is_future(started_at, reference) or (
+            completed_at is not None and _is_future(completed_at, reference)
+        ):
+            return DeadmanVerdict(ok=False, reason="heartbeat_future")
+
+        if completed_at is None:
+            # A running or abandoned row past the limit is a stale attempt.
+            if reference - started_at > limit:
+                return DeadmanVerdict(ok=False, reason="attempt_stale")
+        elif reference - completed_at > limit:
+            return DeadmanVerdict(ok=False, reason="completed_stale")
+
+        if _is_failed(row):
+            return DeadmanVerdict(ok=False, reason="tick_failed")
+
+        if row["last_alert_ok"] == 0:
+            return DeadmanVerdict(ok=False, reason="last_alert_failed")
+
+        return DeadmanVerdict(ok=True, reason="ok")
+    except Exception:
         return DeadmanVerdict(ok=False, reason="heartbeat_unreadable")
-    completed_at = _derived_completed_at(started_at, row["duration_ms"])
-
-    if _is_future(started_at, reference) or (
-        completed_at is not None and _is_future(completed_at, reference)
-    ):
-        return DeadmanVerdict(ok=False, reason="heartbeat_future")
-
-    if completed_at is None:
-        # started and never finished: a running row past the limit, or one swept
-        # to 'abandoned' after a crash.
-        if reference - started_at > limit:
-            return DeadmanVerdict(ok=False, reason="attempt_stale")
-    elif reference - completed_at > limit:
-        return DeadmanVerdict(ok=False, reason="completed_stale")
-
-    if _is_failed(row):
-        return DeadmanVerdict(ok=False, reason="tick_failed")
-
-    if row["last_alert_ok"] == 0:
-        return DeadmanVerdict(ok=False, reason="last_alert_failed")
-
-    return DeadmanVerdict(ok=True, reason="ok")
 
 
 def _parse_max_age_min(value: str) -> int:
