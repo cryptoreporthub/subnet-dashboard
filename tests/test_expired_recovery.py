@@ -16,10 +16,16 @@ def _readable_portfolios(tmp_path, monkeypatch):
     port_path = tmp_path / "judge_portfolios.json"
     if not port_path.exists():
         port_path.write_text("{}")
-    if not port_path.exists():
-        port_path.write_text("{}")
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
     return port_path
+
+
+@pytest.fixture(autouse=True)
+def _isolate_learning_effect_receipts(tmp_path, monkeypatch):
+    from internal.learning import expired_recovery
+    receipts = tmp_path / "learning_effect_receipts.json"
+    monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", str(receipts), raising=False)
+    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", str(receipts))
 
 
 

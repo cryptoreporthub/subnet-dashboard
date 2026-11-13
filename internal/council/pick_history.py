@@ -31,8 +31,16 @@ def observe_pick_history() -> Dict[str, Any]:
         return {"kind": "unreadable", "data": {}, "error": f"{type(exc).__name__}: {exc}"}
     if not isinstance(data, dict):
         return {"kind": "unreadable", "data": {}, "error": "pick history root must be an object"}
-    data.setdefault("active", None)
-    data.setdefault("history", [])
+    active = data.get("active", None)
+    history = data.get("history", [])
+    if active is not None and not isinstance(active, dict):
+        return {"kind": "unreadable", "data": {}, "error": "pick history active must be an object or null"}
+    if not isinstance(history, list):
+        return {"kind": "unreadable", "data": {}, "error": "pick history history must be a list"}
+    if "active" not in data or "history" not in data:
+        data = dict(data)
+        data.setdefault("active", None)
+        data.setdefault("history", [])
     return {"kind": "readable", "data": data, "error": None}
 
 

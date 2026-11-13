@@ -19,6 +19,7 @@ from internal.learning import expired_recovery, prediction_loop, predictions_sto
 def _isolate_learning_effect_receipts(tmp_path, monkeypatch):
     receipts = tmp_path / "learning_effect_receipts.json"
     monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", str(receipts), raising=False)
+    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", str(receipts))
 
 
 def _gradeable(pred_id, *, outcome="miss", actual_pct=-3.0, correct=None):
@@ -275,6 +276,9 @@ def test_recovery_refused_persist_does_not_nudge_and_applied_keeps_stamps(tmp_pa
 
     monkeypatch.undo()
     # Re-apply path and price stubs plus counters after undo.
+    # undo() also drops the autouse receipts isolation; restore it.
+    monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", str(tmp_path / "learning_effect_receipts.json"), raising=False)
+    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", str(tmp_path / "learning_effect_receipts.json"))
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
     monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
@@ -979,3 +983,174 @@ def test_idless_hourly_duplicate_and_corrupt_history_are_not_green(tmp_path, mon
     assert second.get("ok") is False
     assert second.get("pick_record_outcome") in {"indeterminate", "failed"}
     assert hist_path.read_bytes() == corrupt
+
+
+def test_corrupt_receipts_are_not_replayed_or_rewritten(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+    from internal.learning.pump_calibration import maybe_adapt_after_resolve as pump_mod
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    port_path.write_text("{}")
+    graded = _expired("receipt-corrupt")
+    graded.update({"outcome": "miss", "status": "resolved", "correct": False, "actual_pct": -3.0, "resolved_price": 97.0})
+    graded["learning_effects"] = {"pending": ["expert"], "done": []}
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [graded], "stats": {}}))
+    receipts.write_bytes(b'{"half": ')
+    corrupt = receipts.read_bytes()
+    counts = {"expert": 0}
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *a, **k: False)
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", lambda *a, **k: counts.__setitem__("expert", counts["expert"] + 1))
+    monkeypatch.setattr(resolver, "_nudge_impact_strength", lambda *a, **k: None)
+    monkeypatch.setattr(resolver, "_record_scenario_outcome", lambda *a, **k: None)
+    monkeypatch.setattr(resolver, "_nudge_signal_weights", lambda *a, **k: None)
+    monkeypatch.setattr(price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"}))
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    assert receipts.read_bytes() == corrupt
+    assert counts["expert"] == 0
+
+
+def test_concurrent_receipt_writes_do_not_drop_keys(tmp_path, monkeypatch):
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    errors = []
+
+    def writer(i):
+        try:
+            expired_recovery.write_effect_receipt(("id", f"r-{i}"), "expert")
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=writer, args=(i,)) for i in range(20)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(5)
+    assert errors == [], errors
+    data = json.loads(receipts.read_text())
+    assert len(data) == 20
+
+
+def test_idless_hour_close_does_not_consume_unrelated_day_position(tmp_path, monkeypatch):
+    port_path = tmp_path / "judge_portfolios.json"
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    day = {
+        "id": None,
+        "netuid": 7,
+        "direction": "up",
+        "predicted_pct": 5.0,
+        "reference_price": 100.0,
+        "horizon_hours": 24,
+        "horizon_type": "day",
+        "created_at": "2026-07-01T00:00:00Z",
+    }
+    hour = {
+        "id": None,
+        "netuid": 7,
+        "direction": "up",
+        "predicted_pct": 1.0,
+        "reference_price": 100.0,
+        "horizon_hours": 1,
+        "horizon_type": "hour",
+        "created_at": "2026-07-01T10:00:00Z",
+        "outcome": "miss",
+        "actual_pct": -2.0,
+    }
+    portfolios.open_position("oracle", day)
+    closed = portfolios.close_position("oracle", hour, actual_pct=-2.0, outcome="miss")
+    assert closed is None
+    book = json.loads(port_path.read_text())
+    opens = (book.get("oracle") or {}).get("open_positions") or []
+    assert len(opens) == 1
+    assert opens[0].get("horizon_type") == "day" or opens[0].get("prediction_created_at") == "2026-07-01T00:00:00Z"
+
+
+def test_refused_receipt_ledger_stamp_is_not_ok(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+    from internal.learning.predictions_store import PersistOutcome, PersistReason, PersistResult
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    port_path.write_text("{}")
+    graded = _expired("refused-stamp")
+    graded.update({"outcome": "miss", "status": "resolved", "correct": False, "actual_pct": -3.0, "resolved_price": 97.0})
+    graded["learning_effects"] = {"pending": ["finalize", "pump"], "done": []}
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [graded], "stats": {}}))
+    real_merge = predictions_store.merge_ledger_changes
+
+    def refuse_receipt_stamp(*args, **kwargs):
+        if kwargs.get("trigger") == "learning_effect_receipt":
+            return PersistResult(PersistOutcome.REFUSED, PersistReason.CONFLICT_ONLY)
+        return real_merge(*args, **kwargs)
+
+    monkeypatch.setattr(predictions_store, "merge_ledger_changes", refuse_receipt_stamp)
+    monkeypatch.setattr(ps, "merge_ledger_changes", refuse_receipt_stamp)
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *a, **k: True)
+    monkeypatch.setattr(price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"}))
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    pending = ((disk.get("learning_effects") or {}).get("pending") or [])
+    assert "finalize" in pending or "pump" in pending
+
+
+def test_pump_failure_is_not_marked_done(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+    import internal.learning.pump_calibration as pump_calibration
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    port_path.write_text("{}")
+    graded = _expired("pump-fail")
+    graded.update({"outcome": "miss", "status": "resolved", "correct": False, "actual_pct": -3.0, "resolved_price": 97.0})
+    graded["learning_effects"] = {"pending": ["pump"], "done": []}
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [graded], "stats": {}}))
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *a, **k: True)
+    monkeypatch.setattr(price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"}))
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", lambda: (_ for _ in ()).throw(OSError("pump down")))
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    done = ((disk.get("learning_effects") or {}).get("done") or [])
+    pending = ((disk.get("learning_effects") or {}).get("pending") or [])
+    assert "pump" not in done
+    assert "pump" in pending
+    if receipts.exists():
+        assert "pump" not in receipts.read_text()
+
+
+def test_malformed_but_parseable_pick_history_is_not_rewritten(tmp_path, monkeypatch):
+    from internal.council import pick_history
+
+    hist_path = tmp_path / "pick_history.json"
+    monkeypatch.setattr(pick_history, "PICK_HISTORY_PATH", str(hist_path))
+    payload = json.dumps({"active": None, "history": {}})
+    hist_path.write_text(payload)
+    before = hist_path.read_bytes()
+    obs = pick_history.observe_pick_history()
+    assert obs.get("kind") != "readable"
+    try:
+        result = pick_history.record_hour_pick(
+            {"action": "long", "confidence": 0.7, "netuid": 7},
+            {"netuid": 7, "name": "Seven", "price": 12},
+            prediction_id="malformed-1",
+        )
+    except Exception:
+        result = None
+    assert result in {None, False} or (isinstance(result, dict) and result.get("kind") == "unreadable")
+    assert hist_path.read_bytes() == before

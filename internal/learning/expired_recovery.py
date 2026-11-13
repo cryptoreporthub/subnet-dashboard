@@ -14,12 +14,17 @@ by hydrate memo so repeated sweeps are cheap).
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
+import threading
+import time
+import uuid
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,17 @@ LEARNING_EFFECT_RECEIPTS_PATH = os.environ.get(
 
 _NORMAL_EFFECTS = ("expert", "impact", "finalize", "scenario", "signal")
 _SKIP_EFFECTS = ("finalize", "pump")
+
+_RECEIPTS_MUTEX = threading.RLock()
+RECEIPTS_LOCK_TIMEOUT_SECONDS = 5.0
+
+
+class LearningEffectReceiptsUnreadable(Exception):
+    """Raised when the effect-receipt journal exists but cannot be read."""
+
+
+class LearningEffectReceiptsLockTimeout(Exception):
+    """Raised when the receipt journal lock cannot be acquired in time."""
 
 
 def _utcnow_iso() -> str:
@@ -63,11 +79,15 @@ def _prediction_still_open(
             return False
         if kind != "readable":
             return True
+        from internal.judges.portfolios import _idless_ambiguous
+
         data = obs.get("data") or {}
         for name in ("oracle", "echo", "pulse"):
             judge = data.get(name) or {}
             for pos in judge.get("open_positions") or []:
-                if _position_matches(pos, pred_id, netuid):
+                if _position_matches(pos, pred_id, netuid, row=row):
+                    return True
+                if _idless_ambiguous(pos, pred_id, netuid, row=row):
                     return True
     except Exception:
         return True
@@ -75,7 +95,35 @@ def _prediction_still_open(
 
 
 def _receipts_path() -> str:
-    return LEARNING_EFFECT_RECEIPTS_PATH
+    return os.environ.get("LEARNING_EFFECT_RECEIPTS_PATH") or LEARNING_EFFECT_RECEIPTS_PATH
+
+
+@contextmanager
+def _receipts_lock() -> Iterator[None]:
+    deadline = time.monotonic() + RECEIPTS_LOCK_TIMEOUT_SECONDS
+    acquired = _RECEIPTS_MUTEX.acquire(timeout=RECEIPTS_LOCK_TIMEOUT_SECONDS)
+    try:
+        if not acquired:
+            raise LearningEffectReceiptsLockTimeout("timed out waiting for receipts mutex")
+        path = _receipts_path()
+        parent = os.path.dirname(path) or "data"
+        os.makedirs(parent, exist_ok=True)
+        with open(path + ".lock", "a+", encoding="utf-8") as lock:
+            while time.monotonic() < deadline:
+                try:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(0.05)
+            else:
+                raise LearningEffectReceiptsLockTimeout("timed out waiting for receipts flock")
+            try:
+                yield
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    finally:
+        if acquired:
+            _RECEIPTS_MUTEX.release()
 
 
 def _load_receipts() -> Dict[str, Any]:
@@ -83,13 +131,13 @@ def _load_receipts() -> Dict[str, Any]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-        if isinstance(data, dict):
-            return data
     except FileNotFoundError:
         return {}
-    except Exception:
-        return {}
-    return {}
+    except Exception as exc:
+        raise LearningEffectReceiptsUnreadable(f"{type(exc).__name__}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise LearningEffectReceiptsUnreadable("receipts root must be an object")
+    return data
 
 
 def _receipt_token(row_key: Optional[Tuple[Any, ...]], effect: str) -> str:
@@ -97,19 +145,28 @@ def _receipt_token(row_key: Optional[Tuple[Any, ...]], effect: str) -> str:
 
 
 def has_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> bool:
-    return _receipt_token(row_key, effect) in _load_receipts()
+    with _receipts_lock():
+        return _receipt_token(row_key, effect) in _load_receipts()
 
 
 def write_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> None:
     path = _receipts_path()
-    data = _load_receipts()
-    data[_receipt_token(row_key, effect)] = _utcnow_iso()
-    parent = os.path.dirname(path) or "data"
-    os.makedirs(parent, exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2)
-    os.replace(tmp, path)
+    with _receipts_lock():
+        data = _load_receipts()
+        data[_receipt_token(row_key, effect)] = _utcnow_iso()
+        parent = os.path.dirname(path) or "data"
+        os.makedirs(parent, exist_ok=True)
+        tmp = f"{path}.tmp.{os.getpid()}.{uuid.uuid4().hex}"
+        try:
+            with open(tmp, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, indent=2)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
 
 
 def _pending_list(row: Dict[str, Any]) -> List[str]:
@@ -152,7 +209,15 @@ def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
         done.append(effect)
     effects["pending"] = pending
     effects["done"] = done
-    merge_ledger_changes(before, after, caller="expired_recovery", trigger="learning_effect_receipt")
+    from internal.learning.predictions_store import PersistOutcome
+
+    result = merge_ledger_changes(before, after, caller="expired_recovery", trigger="learning_effect_receipt")
+    if result.outcome is not PersistOutcome.APPLIED:
+        reason = result.reason.value if result.reason is not None else str(result.outcome)
+        raise RuntimeError(f"learning effect ledger stamp not applied: {reason}")
+    committed = set(result.committed_keys or ())
+    if committed and key not in committed:
+        raise RuntimeError("learning effect ledger stamp did not include the row key")
     row["learning_effects"] = {"pending": list(pending), "done": list(done)}
 
 
@@ -321,11 +386,19 @@ def recover_expired_predictions(
             if not pending:
                 pending = _pending_list(row)
             for effect in list(pending):
-                if has_effect_receipt(key, effect):
+                try:
+                    already = has_effect_receipt(key, effect)
+                except LearningEffectReceiptsUnreadable:
+                    logger.exception("expired recovery receipts unreadable")
+                    effect_incomplete.append(row.get("id"))
+                    incomplete.append(row.get("id"))
+                    continue
+                if already:
                     try:
                         _move_effect_on_ledger(row, effect)
                     except Exception:
                         logger.exception("expired recovery receipt stamp failed")
+                        effect_incomplete.append(row.get("id"))
                         incomplete.append(row.get("id"))
                         raise
                     continue
@@ -392,12 +465,9 @@ def recover_expired_predictions(
                                 row, item.get("correct", row.get("correct")), capture=item.get("capture")
                             )
                     elif effect == "pump":
-                        try:
-                            from internal.learning.pump_calibration import maybe_adapt_after_resolve
+                        from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
-                            maybe_adapt_after_resolve()
-                        except Exception:
-                            logger.exception("expired recovery pump calibration failed")
+                        maybe_adapt_after_resolve()
                     write_effect_receipt(key, effect)
                     _move_effect_on_ledger(row, effect)
                 except Exception:

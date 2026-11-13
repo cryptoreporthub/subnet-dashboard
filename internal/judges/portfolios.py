@@ -23,7 +23,7 @@ import contextvars
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 PORTFOLIOS_PATH = os.path.join("data", "judge_portfolios.json")
 _PORTFOLIOS_MUTEX = threading.RLock()
@@ -137,15 +137,64 @@ def _prediction_is_terminal(pred_id: Any) -> bool:
         return False
 
 
-def _position_matches(pos: Dict[str, Any], pred_id: Any, netuid: Any = None) -> bool:
-    if pred_id is not None and pos.get("id") == pred_id:
-        return True
-    if pred_id is None and netuid is not None and pos.get("id") is None and pos.get("netuid") == netuid:
-        return True
-    return False
+def _position_identity(source: Optional[Dict[str, Any]]) -> Tuple[Any, Any]:
+    if not source:
+        return (None, None)
+    created = source.get("prediction_created_at")
+    if created is None:
+        created = source.get("created_at")
+    return (created, source.get("horizon_type"))
 
 
-def holds_open(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None, netuid: Any = None) -> bool:
+def _idless_identity_complete(created: Any, horizon: Any) -> bool:
+    return created is not None and horizon is not None
+
+
+def _position_matches(
+    pos: Dict[str, Any],
+    pred_id: Any,
+    netuid: Any = None,
+    row: Optional[Dict[str, Any]] = None,
+) -> bool:
+    if pred_id is not None:
+        return pos.get("id") == pred_id
+    if pos.get("id") is not None:
+        return False
+    if netuid is None or pos.get("netuid") != netuid:
+        return False
+    row_created, row_horizon = _position_identity(row)
+    pos_created, pos_horizon = _position_identity(pos)
+    if not _idless_identity_complete(row_created, row_horizon) or not _idless_identity_complete(pos_created, pos_horizon):
+        return False
+    return row_created == pos_created and row_horizon == pos_horizon
+
+
+def _idless_ambiguous(
+    pos: Dict[str, Any],
+    pred_id: Any,
+    netuid: Any = None,
+    row: Optional[Dict[str, Any]] = None,
+) -> bool:
+    if pred_id is not None or pos.get("id") is not None:
+        return False
+    if netuid is None or pos.get("netuid") != netuid:
+        return False
+    row_created, row_horizon = _position_identity(row)
+    pos_created, pos_horizon = _position_identity(pos)
+    return not (
+        _idless_identity_complete(row_created, row_horizon)
+        and _idless_identity_complete(pos_created, pos_horizon)
+    )
+
+
+def holds_open(
+    judge_name: str,
+    pred_id: Any,
+    *,
+    data: Optional[Dict[str, Any]] = None,
+    netuid: Any = None,
+    row: Optional[Dict[str, Any]] = None,
+) -> bool:
     if data is None:
         obs = observe_portfolios()
         if obs["kind"] == "missing":
@@ -156,10 +205,13 @@ def holds_open(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] 
     if pred_id is None and netuid is None:
         return False
     judge = data.get(str(judge_name).lower()) or {}
-    return any(_position_matches(pos, pred_id, netuid) for pos in judge.get("open_positions") or [])
+    return any(
+        _position_matches(pos, pred_id, netuid, row=row) or _idless_ambiguous(pos, pred_id, netuid, row=row)
+        for pos in judge.get("open_positions") or []
+    )
 
 
-def holds_closed(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None, netuid: Any = None) -> bool:
+def holds_closed(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None, netuid: Any = None, row: Optional[Dict[str, Any]] = None) -> bool:
     if data is None:
         obs = observe_portfolios()
         if obs["kind"] == "missing":
@@ -170,7 +222,7 @@ def holds_closed(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]
     if pred_id is None and netuid is None:
         return False
     judge = data.get(str(judge_name).lower()) or {}
-    return any(_position_matches(pos, pred_id, netuid) for pos in judge.get("closed_positions") or [])
+    return any(_position_matches(pos, pred_id, netuid, row=row) for pos in judge.get("closed_positions") or [])
 
 
 def _closed_row_from_prediction(
@@ -352,6 +404,8 @@ def _open_position(data, judge_name, prediction, size):
         "reference_price": float(prediction.get("reference_price", 0) or 0),
         "size": round(float(size) * risk_mult, 4), "risk_multiplier": risk_mult,
         "bucket": _bucket(horizon), "horizon_hours": horizon, "entered_at": _utcnow(),
+        "prediction_created_at": prediction.get("created_at"),
+        "horizon_type": prediction.get("horizon_type"),
     }
     judge.setdefault("open_positions", []).append(position)
     _recompute_summary(judge)
@@ -461,7 +515,7 @@ def close_position(
         (
             i
             for i, pos in enumerate(open_positions)
-            if pos.get("id") == pred_id or (pos.get("netuid") == netuid and pred_id is None)
+            if _position_matches(pos, pred_id, netuid, row=prediction)
         ),
         None,
     )
