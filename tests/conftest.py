@@ -83,3 +83,93 @@ def usable_soul_map(tmp_path, monkeypatch):
     from tests.score_snapshot_testutil import install_soul_map
 
     return install_soul_map(tmp_path, monkeypatch)
+
+
+_HOLDER_SOURCE = (
+    "import sqlite3, sys, time\n"
+    "from pathlib import Path\n"
+    "from tools.review_orchestrator import db\n"
+    "state, tick_id, ready, seconds = (\n"
+    "    Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3]), float(sys.argv[4])\n"
+    ")\n"
+    "# Raw connection on purpose: db.connect() would repair the schema first,\n"
+    "# which is exactly what a caller under contention must not be able to do.\n"
+    "conn = sqlite3.connect(str(state / db.DB_FILENAME), timeout=30)\n"
+    "conn.execute('PRAGMA busy_timeout = 30000')\n"
+    "conn.execute('BEGIN IMMEDIATE')\n"
+    "conn.execute(\n"
+    "    'INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)',\n"
+    "    (tick_id, '2026-01-01T00:00:00+00:00'),\n"
+    ")\n"
+    "ready.write_text('ready')\n"
+    "time.sleep(seconds)\n"
+    "conn.execute('ROLLBACK')\n"
+    "conn.close()\n"
+)
+
+
+@pytest.fixture
+def holding_writer():
+    """Run a separate process that holds a write transaction on the store.
+
+    Yields ``hold(state_dir, tick_id, seconds=...)``, a context manager that
+    starts the holder, waits until it owns the write lock, and kills it on exit.
+    Contention behaviour needs a second *process*: a second connection in the
+    same process shares SQLite's lock state and cannot reproduce it.
+    """
+    import contextlib
+    import os
+    import subprocess
+    import sys
+    import time
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[1]
+
+    @contextlib.contextmanager
+    def hold(state_dir, tick_id: str, *, seconds: float = 8.0):
+        ready = Path(state_dir) / f".holder-ready-{tick_id}"
+        env = {**os.environ, "PYTHONPATH": str(repo_root)}
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                _HOLDER_SOURCE,
+                str(state_dir),
+                tick_id,
+                str(ready),
+                str(seconds),
+            ],
+            env=env,
+            cwd=str(repo_root),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 20
+            while not ready.exists():
+                if proc.poll() is not None:
+                    raise AssertionError(
+                        "lock holder exited early: " + (proc.stderr.read() or "")
+                    )
+                if time.monotonic() > deadline:
+                    raise AssertionError("lock holder never acquired the write lock")
+                time.sleep(0.02)
+            yield proc
+        finally:
+            if proc.poll() is None:
+                try:
+                    proc.terminate()
+                except ProcessLookupError:
+                    pass
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=10)
+            if proc.stderr is not None:
+                proc.stderr.close()
+            ready.unlink(missing_ok=True)
+
+    return hold
