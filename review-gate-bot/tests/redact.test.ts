@@ -1,0 +1,624 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { redactSecrets } from "../bot/lib/redact.js";
+
+test("a named credential keeps the name and loses the value", () => {
+  const { text, redactedNames } = redactSecrets("GITHUB_TOKEN=ghp_abc123def456ghi789jkl012");
+  assert.equal(text.includes("ghp_abc123"), false);
+  assert.equal(text.includes("GITHUB_TOKEN=<redacted:GITHUB_TOKEN>"), true);
+  assert.deepEqual(redactedNames, ["GITHUB_TOKEN"]);
+});
+
+test("JSON-shaped credentials are redacted too", () => {
+  const raw = '{"RESOLVER_API_KEY": "sk-live-abcdefghijklmnop"}';
+  const { text } = redactSecrets(raw);
+  assert.equal(text.includes("sk-live"), false);
+  const parsed = JSON.parse(text) as { RESOLVER_API_KEY: string };
+  assert.equal(parsed.RESOLVER_API_KEY, "<redacted:RESOLVER_API_KEY>");
+});
+
+test("an unlabelled GitHub token is redacted without a name", () => {
+  const { text, redactedNames } = redactSecrets("the key is ghp_aaaaaaaaaaaaaaaaaaaa here");
+  assert.equal(text.includes("ghp_aaaa"), false);
+  assert.equal(text.includes("<redacted>"), true);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
+test("a private key block is removed whole", () => {
+  const block = "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY-----";
+  const { text } = redactSecrets(`before ${block} after`);
+  assert.equal(text.includes("MIIEow"), false);
+  assert.equal(text.includes("after"), true);
+});
+
+test("placeholders and template references are left alone", () => {
+  const source = 'TOKEN=${GITHUB_TOKEN}\nSECRET=""\nAPI_KEY=x\nPASSWORD=changeme';
+  assert.equal(redactSecrets(source).text, source);
+});
+
+test("a variable name with no secret-looking word is untouched", () => {
+  const source = "PORT=8080\nLOG_LEVEL=debug";
+  assert.equal(redactSecrets(source).text, source);
+});
+
+test("a body naming the variable but not the value passes unchanged", () => {
+  const body = "The diff prints `GITHUB_TOKEN` to stdout. Value not reproduced here.";
+  const { text, redactedNames } = redactSecrets(body);
+  assert.equal(text, body);
+  assert.deepEqual(redactedNames, []);
+});
+
+// --- Finding 6: all-digit values are credentials too ----------------------
+
+test("an all-digit password is redacted, not exempted as a placeholder", () => {
+  // The reported hole: every all-digit value was treated as a placeholder, so
+  // this came back unchanged.
+  const { text, redactedNames } = redactSecrets("DATABASE_PASSWORD=123456");
+  assert.equal(text.includes("123456"), false);
+  assert.equal(text.includes("DATABASE_PASSWORD=<redacted:DATABASE_PASSWORD>"), true);
+  assert.deepEqual(redactedNames, ["DATABASE_PASSWORD"]);
+});
+
+test("a lowercase numeric password and a numeric client secret are redacted", () => {
+  assert.equal(redactSecrets('{"password": "8675309"}').text.includes("8675309"), false);
+  assert.equal(redactSecrets('{"client_secret": "987654321"}').text.includes("987654321"), false);
+  assert.equal(redactSecrets("API_KEY=1234567890").text.includes("1234567890"), false);
+});
+
+test("only the explicit stub `x` is left readable; a short real credential is redacted", () => {
+  assert.equal(redactSecrets("API_KEY=x").text, "API_KEY=x");
+  const short: [source: string, secret: string][] = [
+    ["DB_PASS=abc", "abc"],
+    ["PASSWORD=ab", "ab"],
+    ["pwd=1234", "1234"],
+    ["SECRET=a1", "a1"],
+    ["token: abc", "abc"],
+  ];
+  for (const [source, secret] of short) {
+    const { text, redactedNames } = redactSecrets(source);
+    assert.equal(text.split(/[=:]/).slice(1).join("").includes(secret), false, source);
+    assert.equal(redactedNames.length, 1, source);
+  }
+});
+
+test("a numeric value that cannot be a credential is still left readable", () => {
+  // The narrow exception: below the four-character floor there is nothing to
+  // protect, so a stub like `x` or `1` is not turned into noise.
+  const source = "API_KEY=x";
+  assert.equal(redactSecrets(source).text, source);
+});
+
+// --- Finding 6: lowercase credential keys --------------------------------
+
+test("a lowercase JSON token key is matched case-insensitively", () => {
+  const raw = '{"token": "opaquevalue1234"}';
+  const { text, redactedNames } = redactSecrets(raw);
+  assert.equal(text.includes("opaquevalue1234"), false);
+  const parsed = JSON.parse(text) as { token: string };
+  assert.equal(parsed.token, "<redacted:token>");
+  assert.deepEqual(redactedNames, ["token"]);
+});
+
+test("ditto r4508315657: JSON credential assignments stay parseable", () => {
+  const cases: { raw: string; secret: string }[] = [
+    { raw: '{"token":"supersecretvalue"}', secret: "supersecretvalue" },
+    { raw: '{"client_secret":"987654321","label":"keep"}', secret: "987654321" },
+    { raw: '{"api_key":"keyval1234567890"}', secret: "keyval1234567890" },
+  ];
+  for (const { raw, secret } of cases) {
+    const { text } = redactSecrets(raw);
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    assert.equal(JSON.stringify(parsed).includes(secret), false, raw);
+    assert.ok(text.includes("<redacted:"), raw);
+    assert.equal(JSON.stringify(parsed).includes(secret), false, raw);
+  }
+});
+
+test("a bare lowercase key=value pair is matched too", () => {
+  const source = "password: hunter2hunter2";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("hunter2hunter2"), false);
+});
+
+test("mixed-case credential keys are matched", () => {
+  const { text } = redactSecrets('"Api_Key": "abcdef123456"');
+  assert.equal(text.includes("abcdef123456"), false);
+});
+
+test("a long kebab-case identifier is not swallowed as a credential", () => {
+  // The old `key-`/`cur-`/`cr-` pattern redacted long kebab-case names. A
+  // single-segment word like this must survive so the review stays readable.
+  const source = "see the key-manager documentation for details";
+  assert.equal(redactSecrets(source).text, source);
+});
+
+test("a real key-shaped value after a `key-` prefix is still redacted", () => {
+  const { text } = redactSecrets("key-abcdefghijklmnop_qrstuvwx0123");
+  assert.equal(text.includes("abcdefghijklmnop"), false);
+});
+
+// --- Second review: credential shapes that survived -----------------------
+
+test("a bearer token loses its value, not just the word Bearer", () => {
+  const { text } = redactSecrets("Authorization: Bearer ya29.a0AfH6SMBabcdefghijklmnopqrstuvwxyz0123");
+  assert.equal(text.includes("ya29"), false);
+});
+
+test("a standalone bearer token is redacted even with no header name", () => {
+  const { text, redactedNames } = redactSecrets("the call sent Bearer Q7mK4pV9xR2nL6sT8wY3 upstream");
+  assert.equal(text.includes("Q7mK4pV9xR2nL6sT8wY3"), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
+test("prose after the word bearer stays readable", () => {
+  const source = "see the Bearer authentication tokens section and basic implementation-notes";
+  assert.equal(redactSecrets(source).text, source);
+});
+
+test("a bearer label on one line redacts the token but keeps line boundaries", () => {
+  const token = "Q7mK4pV9xR2nL6sT8wY3aB5";
+  const source = `x Bearer\n${token}\nL3`;
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes(token), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.equal(text.endsWith("L3"), true);
+  assert.match(text, /Bearer\n<redacted>\nL3$/);
+});
+
+test("a bearer label with CRLF redacts the token but keeps line boundaries", () => {
+  const token = "Q7mK4pV9xR2nL6sT8wY3aB5";
+  const source = `x Bearer\r\n${token}\r\nL3`;
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes(token), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.match(text, /\r?\nL3$/);
+  assert.equal(text.includes("<redacted>"), true);
+});
+
+test("URL userinfo redaction keeps the last at-sign before the host", () => {
+  const { text } = redactSecrets("api https://user:pass@word@host/x");
+  assert.equal(text.includes("pass"), false);
+  assert.equal(text, "api https://<redacted>@host/x");
+});
+
+test("credentials inside a URL are removed", () => {
+  const { text } = redactSecrets("DATABASE at postgres://admin:hunter22@db.internal:5432/app is down");
+  assert.equal(text.includes("hunter22"), false);
+  assert.equal(text.includes("db.internal"), true, "the host stays; only the userinfo goes");
+});
+
+test("a URL password that contains @ is redacted through the last @ before the host", () => {
+  const { text } = redactSecrets("DATABASE at postgres://admin:p@ss@db:5432/app is down");
+  assert.equal(text.includes("p@ss"), false, `leaked password: ${text}`);
+  assert.equal(text.includes("ss@db"), false, `leaked password tail: ${text}`);
+  assert.equal(text.includes("db:5432"), true, "the host stays readable");
+});
+
+test("provider key shapes are removed without a variable name", () => {
+  for (const secret of [
+    "sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWx",
+    "sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz012345",
+    "fo1_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+    "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw0",
+  ]) {
+    assert.equal(redactSecrets(`found ${secret} in the log`).text.includes(secret), false, secret);
+  }
+});
+
+test("pass and pwd count as credential names, but bypass and passed do not", () => {
+  assert.equal(redactSecrets("DB_PASS=hunter22").text.includes("hunter22"), false);
+  assert.equal(redactSecrets("MY_PWD=hunter22").text.includes("hunter22"), false);
+  const prose = "BYPASS_CACHE=enabled\nTESTS_PASSED=forty-two";
+  assert.equal(redactSecrets(prose).text, prose);
+});
+
+test("a private key with no END line is removed to the end of the text", () => {
+  const { text } = redactSecrets("log:\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nmore");
+  assert.equal(text.includes("b3BlbnNz"), false);
+});
+
+// Timing guards: the scrubber is synchronous, so a slow pattern stalls the whole bot. The
+// limits are generous; the fixed patterns finish in milliseconds.
+function timed(input: string): { text: string; ms: number } {
+  const started = performance.now();
+  const { text } = redactSecrets(input);
+  return { text, ms: performance.now() - started };
+}
+
+test("a 100 KB run of name characters with no keyword scrubs in under a second", () => {
+  const { ms } = timed("a.b-".repeat(25_000));
+  assert.ok(ms < 1000, `took ${Math.round(ms)} ms`);
+});
+
+test("a 100 KB run of keyword-dense name characters scrubs in under a second", () => {
+  const { ms } = timed("token".repeat(20_000));
+  assert.ok(ms < 1000, `took ${Math.round(ms)} ms`);
+});
+
+test("a credential name longer than any fixed bound is still redacted", () => {
+  const { text, redactedNames } = redactSecrets(`${"X".repeat(120)}_TOKEN=plainvalue9Z8Y7X6W`);
+  assert.equal(text.includes("plainvalue9Z8Y7X6W"), false);
+  assert.equal(redactedNames.length, 1);
+});
+
+// A credential assignment nested inside another value is still a credential.
+test("a password nested inside a JSON string is redacted", () => {
+  const { text } = redactSecrets('{"msg":"login password=hunter2 failed"}');
+  assert.equal(text.includes("hunter2"), false);
+});
+
+test("a password inside a command-line flag is redacted", () => {
+  const { text } = redactSecrets("cmd=--password=hunter2");
+  assert.equal(text.includes("hunter2"), false);
+});
+
+test("an access token in a query string is redacted", () => {
+  const { text } = redactSecrets("redirect=https://h/cb?access_token=abc123xyz789");
+  assert.equal(text.includes("abc123xyz789"), false);
+});
+
+test("a credential at the end of an assignment chain is redacted", () => {
+  const { text } = redactSecrets("a=b=token=zzzzzzzz");
+  assert.equal(text.includes("zzzzzzzz"), false);
+});
+
+test("a 100 KB run of JWT-shaped segments scrubs in under a second", () => {
+  const { ms } = timed("eyJaaaaaaaa-".repeat(9_000));
+  assert.ok(ms < 1000, `took ${Math.round(ms)} ms`);
+});
+
+test("a credential after a placeholder-valued credential is still redacted", () => {
+  // Found by a differential fuzz against the 44ce7ea scrubber: the placeholder `$VAR` must be
+  // passed over whole, or the scan re-reads its quoted text and misses `api_key`.
+  const { text } = redactSecrets('?TOKEN="$VAR?TOKEN":"basic??api_key":"SECRET2947x4Z');
+  assert.equal(text.includes("SECRET2947x4Z"), false);
+});
+
+test("a 1 MB run of JWT-shaped segments joined by dashes scrubs in under half a second", () => {
+  const { ms } = timed("eyJaaaaaaaa-".repeat(90_000));
+  assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
+});
+
+test("ditto r4508315371: a JWT after a dash or underscore is redacted", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9." + "a".repeat(80) + "." + "b".repeat(43);
+  assert.equal(redactSecrets(`x-${jwt}`).text.includes(jwt), false);
+  assert.equal(redactSecrets(`x_${jwt}`).text.includes(jwt), false);
+  assert.equal(redactSecrets(`x ${jwt}`).text.includes(jwt), false);
+});
+
+test("ditto r4508840723: header decoys do not rescan a shared long payload", () => {
+  const header = `eyJ${"a".repeat(20)}${"eyJ".repeat(80)}${"b".repeat(40)}`;
+  const payload = "p".repeat(30_000);
+  const jwt = `${header}.${payload}.${"s".repeat(5)}`;
+  const { ms } = timed(`noise ${jwt}`);
+  assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
+});
+
+test("ditto r4508598811: a JWT with an oversized payload segment is redacted whole", () => {
+  const header = "eyJhbGciOiJIUzI1NiJ9";
+  const payload = "a".repeat(65_537);
+  const jwt = `${header}.${payload}.${"B".repeat(43)}`;
+  const { text } = redactSecrets(`leak=${jwt}`);
+  assert.equal(text.includes(jwt), false);
+  assert.equal(text.includes(payload.slice(65_500)), false);
+});
+
+test("ditto r4508598602: a JWT signature longer than 65536 characters is redacted whole", () => {
+  const header = "eyJhbGciOiJIUzI1NiJ9";
+  const payload = "a".repeat(80);
+  const signature = "B".repeat(65_537);
+  const jwt = `${header}.${payload}.${signature}`;
+  const { text } = redactSecrets(`leak=${jwt}`);
+  assert.equal(text.includes(signature), false);
+  assert.equal(text.includes(signature.slice(65_500)), false);
+  assert.equal(text.includes("<redacted>"), true);
+});
+
+test("ditto r4508757420: a JWT whose header segment is exactly JWT_MAX_HEADER_NO_DOT characters is redacted", () => {
+  const maxHeader = 65_536;
+  const header = `eyJ${"A".repeat(maxHeader - 3)}`;
+  assert.equal(header.length, maxHeader);
+  const payload = Buffer.from(JSON.stringify({ sub: "x" })).toString("base64url");
+  const jwt = `${header}.${payload}.${"B".repeat(43)}`;
+  const { text } = redactSecrets(`wrapped ${jwt}`);
+  assert.equal(text.includes(jwt), false);
+});
+
+test("ditto r4508757228: jwtHeaderDotScan does not rescan a long prefix for every dot", () => {
+  const prefix = `eyJ${"A".repeat(300)}`;
+  const input = `${prefix}@${".".repeat(2_000)}`;
+  const { ms } = timed(input);
+  assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
+  assert.equal(redactSecrets(input).text, input);
+});
+
+test("ditto r4508840989: nested eyJ decoys do not indexOf past the header window", () => {
+  const decoys = `eyJ${"A".repeat(40)}`;
+  const body = decoys.repeat(120);
+  const input = `${body}${"B".repeat(400_000)}`;
+  const { ms } = timed(input);
+  assert.ok(ms < 500, `took ${Math.round(ms)} ms`);
+});
+
+test("ditto r4508694445: a JWT with a header segment longer than 128 characters is redacted", () => {
+  const x5c = ["A".repeat(100), "B".repeat(100)];
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", x5c })).toString("base64url");
+  assert.ok(header.length > 128, `header length ${header.length}`);
+  const payload = Buffer.from(JSON.stringify({ sub: "x" })).toString("base64url");
+  const jwt = `${header}.${payload}.${"C".repeat(43)}`;
+  const { text, redactedNames } = redactSecrets(`cert=${jwt}`);
+  assert.equal(text.includes(jwt), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
+test("ditto r4508668004: a JWT whose header encoding contains nested eyJ is redacted whole", () => {
+  const header = Buffer.from(
+    JSON.stringify({ alg: "HS256", ctx: { eyJ: "nested", v: 1 } }),
+  ).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sub: "x" })).toString("base64url");
+  const jwt = `${header}.${payload}.${"A".repeat(43)}`;
+  assert.match(header, /eyJ/);
+  const { text, redactedNames } = redactSecrets(`prefix ${jwt} suffix`);
+  assert.equal(text.includes(jwt), false);
+  assert.equal(text.includes(header), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
+test("ditto r4508617566: skip past a failed candidate does not jump over an embedded JWT", () => {
+  const pad = "a".repeat(65_530);
+  const jwt =
+    "eyJhbGciOiJIUzI1NiJ9.eyJ4IjowLCJ5IjogeyJ6IjoxfX0.AAAAAAAAAAAAAAAA";
+  const input = `eyJ${pad}${jwt}`;
+  const { text } = redactSecrets(input);
+  assert.equal(text.includes(jwt), false);
+  assert.equal(text.includes("eyJ4Ijow"), false);
+});
+
+test("ditto r4508598457: a JWT with eyJ inside the payload segment is redacted whole", () => {
+  const jwt =
+    "eyJhbGciOiJIUzI1NiJ9.eyJ4IjowLCJ5IjogeyJ6IjoxfX0.AAAAAAAAAAAAAAAA";
+  const { text, redactedNames } = redactSecrets(`prefix ${jwt} suffix`);
+  assert.equal(text.includes(jwt), false);
+  assert.equal(text.includes("eyJ4Ijow"), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
+test("ditto r4508315371: a JWT with a segment longer than 2048 characters is redacted", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9." + "a".repeat(3000) + "." + "b".repeat(43);
+  const { text, redactedNames } = redactSecrets(`session=${jwt}`);
+  assert.equal(text.includes(jwt), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
+test("an angle-bracketed credential is redacted; only generic placeholder words are passed over", () => {
+  const leaked = redactSecrets("PASSWORD=<hunter2>").text;
+  assert.equal(leaked.includes("hunter2"), false, `leaked: ${leaked}`);
+  assert.equal(redactSecrets("PASSWORD=<placeholder>").text.includes("<placeholder>"), true);
+});
+
+test("a lowercase dollar assignment value is redacted", () => {
+  assert.equal(redactSecrets("PASSWORD=$hunter2").text.includes("hunter2"), false);
+});
+
+test("whole shell variable references pass through unchanged", () => {
+  assert.equal(redactSecrets("PASSWORD=$VAR").text, "PASSWORD=$VAR");
+  assert.equal(redactSecrets("PASSWORD=${VAR}").text, "PASSWORD=${VAR}");
+  assert.equal(redactSecrets("PASSWORD=$HUNTER2").text, "PASSWORD=$HUNTER2");
+  assert.equal(redactSecrets("PASSWORD=${VAR} next").text, "PASSWORD=${VAR} next");
+});
+
+test("fail-safe credential lines redact through end of line when the token is not a boundary placeholder", () => {
+  const secrets = [
+    "p@ss",
+    "p#ss!word",
+    "secret",
+    "Tr0ngPass9",
+    "%secret",
+    "-suffix",
+    "@x",
+  ] as const;
+  const sources = [
+    "PASSWORD=${VAR}' p@ss'",
+    "PASSWORD=abc}secret",
+    "PASSWORD=p${VAR}secret",
+    "PASSWORD=${VAR}p@ss",
+    "PASSWORD=${VAR}p#ss!word",
+    "PASSWORD=${VAR",
+    "PASSWORD=$Tr0ngPass9",
+    "PASSWORD=$VAR%secret",
+    "PASSWORD=$VAR-suffix",
+    "PASSWORD=$VAR@x",
+  ] as const;
+  for (const source of sources) {
+    const { text, redactedNames } = redactSecrets(source);
+    for (const secret of secrets) {
+      assert.equal(text.includes(secret), false, `${source} leaked ${secret}`);
+    }
+    assert.equal(text.includes("<redacted:PASSWORD>"), true, source);
+    assert.deepEqual(redactedNames, ["PASSWORD"], source);
+  }
+});
+
+test("a parenthesized placeholder assignment keeps closing syntax", () => {
+  assert.equal(redactSecrets("(PASSWORD=$VAR)").text, "(PASSWORD=$VAR)");
+});
+
+test("a quoted assignment value with a glued suffix is redacted through end of line", () => {
+  const cases = [
+    'PASSWORD="abc"def',
+    "PASSWORD='x'secret",
+    'PASSWORD="${VAR}"p@ss',
+  ] as const;
+  for (const source of cases) {
+    const { text } = redactSecrets(source);
+    assert.equal(text.includes("def"), false, source);
+    assert.equal(text.includes("secret"), false, source);
+    assert.equal(text.includes("p@ss"), false, source);
+    assert.equal(text, "PASSWORD=<redacted:PASSWORD>", source);
+  }
+});
+
+test("a quoted assignment value with a whitespace boundary redacts the token only", () => {
+  const { text } = redactSecrets('PASSWORD="ok" next');
+  assert.equal(text.includes("next"), true);
+  assert.equal(text, 'PASSWORD="<redacted:PASSWORD>" next');
+});
+
+test("a closing brace after a dollar token does not count as a placeholder boundary", () => {
+  for (const source of ["PASSWORD=$VAR}secret", "PASSWORD=${VAR}}secret"] as const) {
+    const { text } = redactSecrets(source);
+    assert.equal(text.includes("secret"), false, source);
+    assert.equal(text, "PASSWORD=<redacted:PASSWORD>", source);
+  }
+});
+
+test("pretty-printed JSON with a quoted password at end of line stays parseable", () => {
+  const raw = '{\n  "password": "hunter22"\n}';
+  const { text } = redactSecrets(raw);
+  const parsed = JSON.parse(text) as { password: string };
+  assert.equal(parsed.password, "<redacted:password>");
+  assert.equal(text.includes("hunter22"), false);
+});
+
+test("single-line JSON with a quoted credential stays parseable after redaction", () => {
+  const raw = '{"password": "hunter22"}';
+  const { text } = redactSecrets(raw);
+  const parsed = JSON.parse(text) as { password: string };
+  assert.equal(parsed.password, "<redacted:password>");
+});
+
+test("an ampersand glued after a placeholder token triggers whole-line redaction", () => {
+  const { text } = redactSecrets("PASSWORD=$VAR&p@ss");
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text, "PASSWORD=<redacted:PASSWORD>");
+});
+
+test("a quoted value that spans a raw newline is fail-safe redacted without a suffix leak", () => {
+  const source = 'PASSWORD="p@ss\nword"x';
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("word"), false);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unquoted shell line continuation is redacted on the following physical line", () => {
+  const source = "PASSWORD=abc\\\nsecret";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("secret"), false);
+  assert.equal(text.includes("abc"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unterminated quoted assignment value does not leave a suffix on the next line", () => {
+  const source = 'PASSWORD="hunter\nword';
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("word"), false);
+  assert.equal(text.includes("hunter"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("a whole-line redaction applies to a typical source line with a quoted env lookup", () => {
+  const source = 'token = os.environ["GITHUB_TOKEN"]';
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("GITHUB_TOKEN"), false);
+  assert.equal(text, "token = <redacted:token>");
+});
+
+test("multiline fail-safe redaction preserves physical line count for backslash continuation", () => {
+  const source = ["PASSWORD=abc\\", "secret", "MARKER=ok"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("secret"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.equal(text.split("\n")[2], "MARKER=ok");
+});
+
+test("a complete quoted $VAR placeholder stays readable on the same line", () => {
+  assert.equal(redactSecrets('PASSWORD="$VAR" next').text, 'PASSWORD="$VAR" next');
+});
+
+test("an unclosed quoted placeholder does not skip redaction on the next line", () => {
+  const source = ['PASSWORD="$VAR', "hunter2", "tail"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("hunter2"), false);
+  assert.equal(text.includes("tail"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unclosed single-quoted placeholder does not skip redaction on the next line", () => {
+  const source = ["PASSWORD='$VAR", "hunter2", "tail"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("hunter2"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an unclosed quoted stub redacts a secret on the following line", () => {
+  const source = ['PASSWORD="x', "hunter2", "tail"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("hunter2"), false);
+  assert.equal(text.includes("tail"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an open quote closed mid-line without a boundary redacts glued suffix text", () => {
+  const source = ['PASSWORD="first\\', 'second"p@ss', "MARKER=ok"].join("\n");
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.includes("second"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("an open quote with a false close and glued suffix redacts under CRLF", () => {
+  const source = "PASSWORD=\"first\\\r\nsecond\"p@ss\r\nMARKER=ok";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+});
+
+test("multiline fail-safe redaction with CRLF preserves physical line count", () => {
+  const source = "PASSWORD=abc\\\r\nsecret\r\nMARKER=ok";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("secret"), false);
+  assert.equal(text.split("\n").length, source.split("\n").length);
+  assert.equal(text.split("\n")[2], "MARKER=ok");
+});
+
+test("multiline fail-safe redaction preserves line count for open and closed quoted values", () => {
+  const open = ['PASSWORD="first', 'hunter2"', "tail"].join("\n");
+  const closed = ['PASSWORD="first', 'second"', "tail"].join("\n");
+  for (const source of [open, closed]) {
+    const { text } = redactSecrets(source);
+    assert.equal(text.includes("hunter2"), false);
+    assert.equal(text.includes("second"), false);
+    assert.equal(text.split("\n").length, source.split("\n").length);
+    assert.equal(text.split("\n")[2], "tail");
+  }
+});
+
+test("redacting one credential line leaves the next line readable", () => {
+  const source = "PASSWORD=${VAR}p@ss\nLOG_LEVEL=debug";
+  const { text } = redactSecrets(source);
+  assert.equal(text.includes("p@ss"), false);
+  assert.equal(text.endsWith("LOG_LEVEL=debug"), true);
+});
+
+test("an angle-bracketed value with a digit is a credential, not a placeholder word", () => {
+  assert.equal(redactSecrets("PASSWORD=<yourhunter2>").text.includes("yourhunter2"), false);
+});
+
+test("a standalone opaque credential with no known prefix is redacted", () => {
+  const token = "Q7mK4pV9xR2nL6sT8wY3aB5cD7eF9gH1";
+  assert.equal(redactSecrets(`session=${token}`).text.includes(token), false, "an assigned value");
+  assert.equal(redactSecrets(`the value was ${token} in the log`).text.includes(token), false, "a bare value in prose");
+});
+
+test("ordinary words and kebab-case identifiers stay readable", () => {
+  const prose = "the verdict-gate-review-bot-deterministic-check is green and the Replit-Ditto-Cursor loop ran";
+  assert.equal(redactSecrets(prose).text, prose);
+});
+
+test("the opaque-credential rule scrubs a megabyte of identifier characters quickly", () => {
+  const run = "A".repeat(1_000_000);
+  const started = performance.now();
+  redactSecrets(run);
+  assert.ok(performance.now() - started < 500, "the rule must not backtrack across a long run");
+});

@@ -1,0 +1,558 @@
+import type { Octokit } from "@octokit/rest";
+import type { HostMcpRegistry } from "@grok/agent-sdk";
+import type { HostKvApi } from "@grok/agent-sdk/kv";
+import { openGateCheckWorking, postGateCheck, probeCheckDedupeSnapshot, type CreateCheck, type GateCheckHandle } from "./check.js";
+import {
+  readGateState,
+  readLivePair,
+  readSuiteRecord,
+  suiteStateFromRecord,
+  gateSuiteRecord,
+  isValidHeadSha,
+  pairCompareReady,
+  type PrRef,
+  type PullsGetData,
+} from "./gh.js";
+import { newDeliveryBudget, observePair, observePairFromPull, type ReadyPair } from "./pair-observation.js";
+import { readSuiteRecordTrusted } from "./pair-record.js";
+import { gateActions, prKey, reviewTurnKey } from "./gate.js";
+import { leaseToken, releaseLeaseIfHolder } from "./lock.js";
+import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
+import { tagCursorAndDitto, tagReplit } from "./tag.js";
+import { redactSecrets } from "./redact.js";
+import { runSuiteIfDue } from "./suite-record.js";
+import type { RunnerReader } from "./runner.js";
+import { GATE_BOT_LOGIN } from "./verdicts.js";
+
+/** What the gate needs from the host: plain handles, so it can run without the SDK. */
+export type GateDeps = {
+  octokit: Octokit;
+  kv: HostKvApi;
+  mcp: HostMcpRegistry;
+  ref: PrRef;
+  /** `ctx.github.createCheck`: opens the `review-gate` check run on a commit. */
+  createCheck: CreateCheck;
+  /** The clock the review-turn lease reads. Defaults to `Date.now`. */
+  now?: () => number;
+  /** Where suite artifacts are read from. Defaults to the GitHub API; tests supply a fake. */
+  reader?: RunnerReader;
+};
+
+/**
+ * PR actions that start a review turn.
+ *
+ * `synchronize` is included on purpose: a new head resets every verdict, so it
+ * must re-review. A duplicate delivery is harmless because the per-head lock
+ * refuses a second review of the same SHA.
+ */
+export const REVIEW_ACTIONS = new Set(["opened", "synchronize", "reopened", "ready_for_review"]);
+
+/**
+ * The head and draft flag, read live.
+ *
+ * Every hook re-reads this rather than trusting the delivery payload: a hook
+ * can fire on a draft, and a draft must never be tagged or reviewed — the
+ * reviewer round trip is for a PR that is actually asking for review.
+ */
+async function readHead(octokit: Octokit, ref: PrRef): Promise<{
+  headSha: string;
+  baseSha?: string;
+  baseTipSha?: string;
+  draft: boolean;
+  observation: Awaited<ReturnType<typeof observePair>>;
+  /** When `pulls.get` succeeded — pass through `readGateState` to avoid a second PR fetch (RD-08). */
+  prPull?: PullsGetData;
+}> {
+  try {
+    const { data: prPull } = await octokit.rest.pulls.get({
+      owner: ref.owner,
+      repo: ref.repo,
+      pull_number: ref.number,
+    });
+    const observation = await observePairFromPull(octokit, ref, prPull);
+    if (observation.kind === "ready") {
+      return {
+        headSha: observation.headSha,
+        baseSha: observation.mergeBaseSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+        prPull,
+      };
+    }
+    if (observation.kind === "base-unavailable") {
+      return {
+        headSha: observation.headSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+        prPull,
+      };
+    }
+    const live = await readLivePair(octokit, ref);
+    return {
+      headSha: live.headSha,
+      baseSha: live.baseSha === "" ? undefined : live.baseSha,
+      baseTipSha: live.baseTipSha === "" ? undefined : live.baseTipSha,
+      draft: live.draft,
+      observation,
+      prPull,
+    };
+  } catch {
+    const observation = await observePair(octokit, ref);
+    if (observation.kind === "ready") {
+      return {
+        headSha: observation.headSha,
+        baseSha: observation.mergeBaseSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+      };
+    }
+    if (observation.kind === "base-unavailable") {
+      return {
+        headSha: observation.headSha,
+        baseTipSha: observation.baseTipSha,
+        draft: observation.draft,
+        observation,
+      };
+    }
+    const live = await readLivePair(octokit, ref);
+    return {
+      headSha: live.headSha,
+      baseSha: live.baseSha === "" ? undefined : live.baseSha,
+      baseTipSha: live.baseTipSha === "" ? undefined : live.baseTipSha,
+      draft: live.draft,
+      observation,
+    };
+  }
+}
+
+/** The suite is green for this exact head and PR base, read live. */
+async function pairSuiteReady(input: {
+  octokit: Octokit;
+  kv: HostKvApi;
+  ref: PrRef;
+  headSha: string;
+  baseTipSha: string | undefined;
+  /** When the delivery already observed a ReadyPair, reuse it to avoid extra reads and pair skew. */
+  alignedPair?: ReadyPair;
+}): Promise<boolean> {
+  const obs =
+    input.alignedPair !== undefined
+      ? input.alignedPair
+      : await observePair(input.octokit, input.ref);
+  if (obs.kind !== "ready") {
+    return false;
+  }
+  if (obs.headSha !== input.headSha || obs.baseTipSha !== input.baseTipSha) {
+    return false;
+  }
+  const trusted = await readSuiteRecordTrusted(input.kv, input.ref, input.headSha, input.baseTipSha, obs);
+  if (!trusted.ok) {
+    return false;
+  }
+  const record = gateSuiteRecord(trusted.record, true);
+  const suite = suiteStateFromRecord(record);
+  return suite === "clean" || suite === "carried";
+}
+
+export type AdvanceResult = {
+  headSha: string;
+  draft: boolean;
+  next: string;
+  needsReviewTurn: boolean;
+  /** The lease a granted review turn holds, to carry on the turn and release on failure. */
+  reviewLease?: ReviewTurnLease;
+  /** What the gate's own suite step did: recorded, waiting, refused, or skipped. */
+  suite: string;
+  taggedCursorDitto: string;
+  taggedReplit: string;
+  replitAsk: string;
+  check: string;
+};
+
+/**
+ * One structured line for an ask that will not succeed. A silent failure here
+ * used to mean Replit was never asked and nobody knew.
+ */
+export function logAsk(outcome: ReplitAskOutcome, pr: string, headSha: string): void {
+  if (outcome.asked || outcome.reason === "already-asked" || !outcome.persistent) {
+    return;
+  }
+  console.error(
+    JSON.stringify({
+      level: "error",
+      event: "replit_ask_persistent_failure",
+      pr,
+      head: headSha,
+      reason: outcome.reason,
+      attempts: outcome.attempts,
+      detail: outcome.detail,
+      effect:
+        "Replit was never successfully asked for this head. The gate does not advance on the ask: it still needs Replit's posted verdict, which will arrive only if the @replit tag reaches them.",
+    }),
+  );
+}
+
+function askLabel(outcome: ReplitAskOutcome): string {
+  if (outcome.asked) {
+    return "asked";
+  }
+  if (outcome.reason === "already-asked") {
+    return "already-asked";
+  }
+  return outcome.persistent ? `failed:persistent:${outcome.reason}` : `failed:${outcome.reason}`;
+}
+
+/**
+ * Re-read the gate for the PR's current head and post whatever tags it allows.
+ *
+ * No model turn and no judgement: `lib/gate.ts` decides (`gateActions`), this
+ * only delivers. Every post is lock-guarded per head, so a replay or a
+ * duplicate webhook runs this again without repeating a comment.
+ *
+ * **Draft guard.** A draft is returned before anything is posted or asked. The
+ * pull_request hook had this check; the comment and event hooks did not, so a
+ * comment on a draft PR tagged both reviewers. The decision lives in
+ * `gateActions`, so all three hooks refuse a draft the same way.
+ */
+export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
+  const { octokit, kv, mcp, ref, createCheck, now, reader } = deps;
+  const { headSha, baseSha, baseTipSha, draft, observation, prPull } = await readHead(octokit, ref);
+  const expectedPair: ReadyPair | undefined = observation.kind === "ready" ? observation : undefined;
+
+  if (!isValidHeadSha(headSha)) {
+    return {
+      headSha: headSha || "0".repeat(40),
+      draft,
+      next: "review",
+      needsReviewTurn: false,
+      suite: "skipped:no-head",
+      taggedCursorDitto: "skipped:no-head",
+      taggedReplit: "skipped:no-head",
+      replitAsk: "skipped:no-head",
+      check: "skipped:no-head",
+    };
+  }
+
+  if (draft) {
+    return {
+      headSha,
+      draft,
+      next: "review",
+      needsReviewTurn: false,
+      suite: "skipped:draft",
+      taggedCursorDitto: "skipped:draft",
+      taggedReplit: "skipped:draft",
+      replitAsk: "skipped:draft",
+      check: "skipped:draft",
+    };
+  }
+
+  const deliveryBudget = newDeliveryBudget();
+
+  // A failing post must not lose the review turn that follows it, and must not
+  // stop the next step: each is logged and reported, then the gate moves on.
+  const attempt = async (step: string, body: () => Promise<string>): Promise<string> => {
+    try {
+      return await body();
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "gate_step_failed",
+          step,
+          pr: prKey(ref),
+          head: headSha,
+          error: redactSecrets(error instanceof Error ? error.message : String(error)).text,
+        }),
+      );
+      return `failed:${step}`;
+    }
+  };
+
+  let state = await readGateState({ octokit, kv, ref, headSha, prPull });
+  let actions = gateActions(state, false);
+
+  // The suite is the gate's own step. When it is due, record it now and read the gate again, so the
+  // lease, tags, ask and check below all see the result. A wait or a refusal leaves the gate as read.
+  let suite = "skipped";
+  let workingCheck: GateCheckHandle | undefined;
+  if (actions.runSuite) {
+    if (!pairCompareReady({ headSha, baseSha: baseSha ?? "", baseTipSha: baseTipSha ?? "" })) {
+      console.warn(JSON.stringify({ level: "warn", event: "suite_base_missing", pr: prKey(ref), head: headSha }));
+      suite = "skipped:no-base";
+    } else {
+      const checkAlreadyPosted =
+        expectedPair !== undefined &&
+        (await probeCheckDedupeSnapshot({ kv, ref, state, readyPair: expectedPair })).unchanged;
+      if (checkAlreadyPosted) {
+        suite = await attempt("run-suite", () =>
+          runSuiteIfDue({ octokit, kv, ref, headSha, baseSha: baseSha as string, baseTipSha: baseTipSha as string, reader }),
+        );
+      } else {
+        let opened: GateCheckHandle | undefined;
+        const openLabel = await attempt("check-working", async () => {
+          opened = await openGateCheckWorking({
+            octokit,
+            kv,
+            ref,
+            headSha,
+            baseSha: baseSha as string,
+            baseTipSha: baseTipSha as string,
+            createCheck,
+            budget: deliveryBudget,
+          });
+          return opened === undefined ? "skipped:stale-pair" : "opened";
+        });
+        workingCheck = opened;
+        if (openLabel === "opened") {
+          suite = await attempt("run-suite", () =>
+            runSuiteIfDue({ octokit, kv, ref, headSha, baseSha: baseSha as string, baseTipSha: baseTipSha as string, reader }),
+          );
+        } else {
+          suite = openLabel;
+        }
+      }
+    }
+    // A recorded result, or any refusal of the head (a changed suite definition, a compare cut off at the file cap),
+    // changes what the gate says: read it again. Every head refusal label is `refused:head-*`.
+    if (suite === "recorded" || suite.startsWith("refused:head-")) {
+      state = await readGateState({ octokit, kv, ref, headSha, prPull });
+      actions = gateActions(state, false);
+    }
+  }
+
+  // Every delivery for this head reads the same missing verdict, so each would
+  // ask for a review turn. Only the one that takes the lease asks.
+  const token = actions.needsReviewTurn ? await leaseToken(kv, reviewTurnKey(ref, headSha), now) : undefined;
+  const reviewLease: ReviewTurnLease | undefined = token === undefined ? undefined : { head: headSha, token };
+  if (actions.needsReviewTurn && reviewLease === undefined) {
+    console.warn(JSON.stringify({ level: "warn", event: "review_turn_lease_held", pr: prKey(ref), head: headSha }));
+  }
+
+  // The Cursor/Ditto tag is posted on every head, so the round trip starts
+  // immediately and does not wait for MC's verdict to be written down.
+  const taggedCursorDitto = actions.tagCursorDitto
+    ? await attempt("tag-cursor-ditto", async () => (await tagCursorAndDitto({ octokit, kv, ref, headSha, state })).reason)
+    : "skipped";
+
+  const taggedReplit = actions.tagReplit
+    ? await attempt("tag-replit", async () => {
+        const live = await readLivePair(octokit, ref);
+        if (
+          !(await pairSuiteReady({
+            octokit,
+            kv,
+            ref,
+            headSha: live.headSha,
+            baseTipSha: live.baseTipSha,
+            alignedPair: expectedPair,
+          }))
+        ) {
+          return "skipped:stale-pair";
+        }
+        return (await tagReplit({ octokit, kv, ref, headSha, currentHeadSha: live.headSha })).reason;
+      })
+    : "skipped";
+
+  // The ask follows the tag. When this delivery had to post the tag, the ask
+  // waits for confirmation that it is on the PR (posted now, or already there);
+  // a failed or contested tag post must not be followed by an ask. In
+  // `await_replit` the tag is known to exist, so a failed ask is retried freely.
+  const tagConfirmed = taggedReplit === "posted" || taggedReplit === "already-posted";
+  const replitAsk =
+    actions.askReplit && (!actions.tagReplit || tagConfirmed)
+      ? await attempt("ask-replit", async () => {
+          const live = await readLivePair(octokit, ref);
+          if (
+            !(await pairSuiteReady({
+              octokit,
+              kv,
+              ref,
+              headSha,
+              baseTipSha: live.baseTipSha,
+              alignedPair: expectedPair,
+            }))
+          ) {
+            return "skipped:stale-pair";
+          }
+          const ask = await askReplitOnce({ kv, mcp, ref, headSha });
+          logAsk(ask, prKey(ref), headSha);
+          return askLabel(ask);
+        })
+      : "skipped";
+
+  // The check reports the gate as read at the top of this delivery; a verdict
+  // posted later arrives as its own event and replaces it.
+  const check = await attempt("check", () =>
+    postGateCheck({
+      octokit,
+      kv,
+      ref,
+      state,
+      createCheck,
+      workingCheck,
+      expectedPair,
+      deliveryBudget,
+      read: () => readGateState({ octokit, kv, ref, headSha, prPull }),
+    }),
+  );
+
+  return {
+    headSha,
+    draft,
+    next: state.next,
+    needsReviewTurn: reviewLease !== undefined,
+    reviewLease,
+    suite,
+    taggedCursorDitto,
+    taggedReplit,
+    replitAsk,
+    check,
+  };
+}
+
+/** A review turn's lease: the head it is for and the token that proves it is this turn's. */
+export type ReviewTurnLease = { head: string; token: string };
+
+/**
+ * Whether a failed turn gives its lease back. A `cancelled` turn was stopped, or preempted by a
+ * follow-up, and a replacement may already be running for the same head: releasing then starts
+ * a second turn beside it. Only an error frees the lease.
+ */
+export function failureReleasesLease(status: string | undefined): boolean {
+  return status !== "cancelled";
+}
+
+/**
+ * Give back a granted review turn's lease, but only if it is still this turn's. The lease is
+ * freed when its own token is stored under its key; a later turn's lease, or a lease that
+ * expired and was retaken, has another token and is left alone. A lost lease falls back to
+ * the TTL.
+ */
+export async function releaseReviewTurnIfHolder(kv: HostKvApi, ref: PrRef, lease: ReviewTurnLease): Promise<boolean> {
+  const released = await releaseLeaseIfHolder(kv, reviewTurnKey(ref, lease.head), lease.token);
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      event: released ? "review_turn_lease_released" : "review_turn_lease_not_held",
+      pr: prKey(ref),
+      head: lease.head,
+    }),
+  );
+  return released;
+}
+
+/**
+ * The lease a turn was started with, read from its channel state. Anything not exactly the
+ * shape the bot wrote is no lease, so a missing or garbled state releases nothing.
+ */
+export function reviewLeaseFromState(value: unknown): ReviewTurnLease | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  const lease = (value as { reviewLease?: unknown }).reviewLease;
+  if (typeof lease !== "object" || lease === null) {
+    return undefined;
+  }
+  const { head, token } = lease as { head?: unknown; token?: unknown };
+  if (typeof head !== "string" || !/^[0-9a-f]{40}$/.test(head)) {
+    return undefined;
+  }
+  if (typeof token !== "string" || !/^[A-Za-z0-9-]{1,80}$/.test(token)) {
+    return undefined;
+  }
+  return { head, token };
+}
+
+/**
+ * `pull_request` delivery: does it start a model turn?
+ *
+ * The gate decides, from the live PR: a draft, or a head that already has an MC
+ * verdict, needs none. The payload's own draft flag only short-circuits the
+ * read.
+ */
+export async function pullRequestReviewTurn(
+  deps: GateDeps,
+  pr: { action: string; draft: boolean; changes?: { base?: unknown } },
+): Promise<ReviewTurnLease | undefined> {
+  if (pr.action === "edited" && pr.changes?.base !== undefined) {
+    const result = await advanceGate(deps);
+    if (result.reviewLease !== undefined) {
+      await releaseReviewTurnIfHolder(deps.kv, deps.ref, result.reviewLease);
+    }
+    return undefined;
+  }
+  if (pr.draft || !REVIEW_ACTIONS.has(pr.action)) {
+    return undefined;
+  }
+  // Tags first, in plain code, so they land even if the model turn fails.
+  return (await advanceGate(deps)).reviewLease;
+}
+
+/**
+ * A push to a branch that is some open PR's base: re-run the gate for each such PR with no model turn.
+ */
+export async function pushToBaseBranch(deps: GateDeps, push: { ref: string }): Promise<void> {
+  const branch = push.ref.replace(/^refs\/heads\//, "");
+  const { octokit, ref: anchor } = deps;
+  const prs = await octokit.paginate(octokit.rest.pulls.list, {
+    owner: anchor.owner,
+    repo: anchor.repo,
+    state: "open",
+    base: branch,
+    per_page: 100,
+  });
+  for (const pr of prs) {
+    try {
+      const ref = { owner: anchor.owner, repo: anchor.repo, number: pr.number };
+      const result = await advanceGate({ ...deps, ref });
+      if (result.reviewLease !== undefined) {
+        await releaseReviewTurnIfHolder(deps.kv, ref, result.reviewLease);
+      }
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "push_to_base_branch_pr_failed",
+          pr: pr.number,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+}
+
+export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draft: boolean }): Promise<boolean> {
+  return (await pullRequestReviewTurn(deps, pr)) !== undefined;
+}
+
+/**
+ * Comment delivery: does it start a model turn?
+ *
+ * The bot's own comments come back as webhooks and must not re-enter the gate.
+ * They are authored by the App's bot login, which nobody else holds, so the
+ * login alone is the test. The owner account is not: Joshua, MC, Claude, Ditto's
+ * relayed comments and the Replit reports all post there.
+ */
+export async function commentReviewTurn(deps: GateDeps, author: string | undefined): Promise<ReviewTurnLease | undefined> {
+  if (author === GATE_BOT_LOGIN) {
+    return undefined;
+  }
+  return (await advanceGate(deps)).reviewLease;
+}
+
+export async function commentTurn(deps: GateDeps, author: string | undefined): Promise<boolean> {
+  return (await commentReviewTurn(deps, author)) !== undefined;
+}
+
+/** `pull_request_review` delivery: does it start a model turn? */
+export async function reviewEventReviewTurn(deps: GateDeps): Promise<ReviewTurnLease | undefined> {
+  return (await advanceGate(deps)).reviewLease;
+}
+
+export async function reviewEventTurn(deps: GateDeps): Promise<boolean> {
+  return (await reviewEventReviewTurn(deps)) !== undefined;
+}
