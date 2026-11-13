@@ -390,6 +390,29 @@ def test_repair_intent_with_missing_main_fails_closed(
     assert not moved.exists()
 
 
+def test_repair_intent_rejects_directory_at_pending_main_target(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "directory-repair-main"
+    state_dir.mkdir()
+    store = db.db_path(state_dir)
+    moved = state_dir / "orchestrator.sqlite.corrupt-directory-main"
+    moved.mkdir()
+    intent = db._repair_intent_path(state_dir)
+    intent.write_text(
+        json.dumps({"version": 1, "target": moved.name, "files": ["main"]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(db.StoreUnavailableError):
+        with db.locked_connect(state_dir):
+            pass
+
+    assert intent.is_file()
+    assert moved.is_dir()
+    assert not store.exists()
+
+
 def test_repair_cli_reports_target_when_completing_pending_move(
     tmp_path: Path, capsys
 ) -> None:
@@ -485,6 +508,144 @@ def test_repair_keeps_store_with_trigger_named_ticks_on_another_table(
         state_dir / "orchestrator.sqlite.corrupt-other-table-trigger"
     ).exists()
     assert persist.read_latest_tick(state_dir)["tick_id"] == "seed"
+
+
+def test_repair_keeps_case_folded_ticks_schema(tmp_path: Path) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.execute(
+            "CREATE TABLE TICKS ("
+            "SEQ INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "TICK_ID TEXT NOT NULL UNIQUE, "
+            "STARTED_AT TEXT NOT NULL, "
+            "DURATION_MS INTEGER, "
+            "OUTCOME TEXT NOT NULL DEFAULT 'running', "
+            "NOOP INTEGER NOT NULL DEFAULT 0, "
+            "OVERLAP INTEGER NOT NULL DEFAULT 0, "
+            "LAST_ALERT_OK INTEGER)"
+        )
+        conn.execute(
+            "INSERT INTO TICKS "
+            "(TICK_ID, STARTED_AT, DURATION_MS, OUTCOME) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    result = persist.repair_store(tmp_path, stamp="case-folded")
+
+    assert result == store
+    assert store.is_file()
+    assert not (tmp_path / "orchestrator.sqlite.corrupt-case-folded").exists()
+    assert persist.run_tick(tmp_path, tick_id="next", noop=True).seq == 2
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "next"
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        "poisoned-sqlite-sequence",
+        "missing-unique-tick-id",
+        "missing-autoincrement",
+        "impostor-latest-table",
+    ],
+)
+def test_repair_quarantines_writer_unusable_store_shapes(
+    tmp_path: Path, shape: str
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    try:
+        if shape == "poisoned-sqlite-sequence":
+            conn.execute(db._TABLE_SQL)
+            conn.execute(
+                "INSERT INTO ticks "
+                "(tick_id, started_at, duration_ms, outcome) "
+                "VALUES ('seed', ?, 0, 'completed')",
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+            conn.execute(
+                "UPDATE sqlite_sequence SET seq = ? WHERE name = 'ticks'",
+                (db.MAX_TRUSTED_SEQ + 1,),
+            )
+        else:
+            seq_declaration = (
+                "INTEGER PRIMARY KEY"
+                if shape == "missing-autoincrement"
+                else "INTEGER PRIMARY KEY AUTOINCREMENT"
+            )
+            tick_id_declaration = (
+                "TEXT NOT NULL"
+                if shape == "missing-unique-tick-id"
+                else "TEXT NOT NULL UNIQUE"
+            )
+            conn.execute(
+                "CREATE TABLE ticks ("
+                f"seq {seq_declaration}, "
+                f"tick_id {tick_id_declaration}, "
+                "started_at TEXT NOT NULL, "
+                "duration_ms INTEGER, "
+                "outcome TEXT NOT NULL DEFAULT 'running', "
+                "noop INTEGER NOT NULL DEFAULT 0, "
+                "overlap INTEGER NOT NULL DEFAULT 0, "
+                "last_alert_ok INTEGER)"
+            )
+            if shape == "impostor-latest-table":
+                conn.execute("CREATE TABLE latest (value TEXT)")
+            else:
+                conn.execute(db._VIEW_SQL)
+        conn.commit()
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp=shape)
+
+    assert moved == tmp_path / f"orchestrator.sqlite.corrupt-{shape}"
+    assert moved.is_file()
+    assert not store.exists()
+    assert persist.run_tick(tmp_path, tick_id="recovered", noop=True).seq == 1
+
+
+def test_locked_connect_times_out_when_store_lock_is_contended(
+    tmp_path: Path, monkeypatch
+) -> None:
+    state_dir = tmp_path / "contended-lock"
+    state_dir.mkdir()
+    monkeypatch.setattr(db, "STORE_LOCK_TIMEOUT_SECONDS", 0.1, raising=False)
+    holder = os.open(state_dir, os.O_RDONLY)
+    db.fcntl.flock(holder, db.fcntl.LOCK_EX)
+    errors: list[BaseException] = []
+    finished = threading.Event()
+
+    def open_store() -> None:
+        try:
+            with db.locked_connect(state_dir):
+                pass
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            finished.set()
+
+    worker = threading.Thread(target=open_store, daemon=True)
+    started = time.monotonic()
+    try:
+        worker.start()
+        finished_while_contended = finished.wait(timeout=0.5)
+    finally:
+        db.fcntl.flock(holder, db.fcntl.LOCK_UN)
+        os.close(holder)
+    worker.join(timeout=1)
+
+    assert finished_while_contended
+    assert not worker.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], db.StoreUnavailableError)
+    assert "timed out acquiring store lock" in str(errors[0])
+    assert time.monotonic() - started < 0.5
+    assert not db.db_path(state_dir).exists()
 
 
 def test_repair_moves_untrusted_store_past_ambiguous_repair_intent(

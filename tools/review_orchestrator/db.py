@@ -9,6 +9,7 @@ round-3 blockers.
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import json
 import os
@@ -25,6 +26,7 @@ REPAIR_INTENT_FILENAME = ".orchestrator-repair-intent.json"
 BUSY_TIMEOUT_MS = 5000
 WAL_CONVERSION_TIMEOUT_MS = 300
 WAL_CONVERSION_BUSY_TIMEOUT_MS = 25
+STORE_LOCK_TIMEOUT_SECONDS = 2.0
 #: A hand-written seq above this would pin the AUTOINCREMENT counter for the
 #: life of the store; fail loudly instead of silently jamming every later tick.
 MAX_TRUSTED_SEQ = 2 ** 62
@@ -54,7 +56,9 @@ _VIEW_DROP_SQL = "DROP VIEW IF EXISTS latest"
 
 _VIEW_SQL = """
 CREATE VIEW latest AS
-    SELECT seq, tick_id, started_at, duration_ms, outcome, noop, overlap, last_alert_ok
+    SELECT seq AS seq, tick_id AS tick_id, started_at AS started_at,
+           duration_ms AS duration_ms, outcome AS outcome, noop AS noop,
+           overlap AS overlap, last_alert_ok AS last_alert_ok
     FROM ticks
     ORDER BY seq DESC
     LIMIT 1
@@ -176,13 +180,31 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
             continue
         original = source[name]
         target = destination[name]
+        if name == "main":
+            original_is_file = original.is_file()
+            target_is_file = target.is_file()
+            if original.exists() and not original_is_file:
+                raise StoreUnavailableError(
+                    f"repair main database is not a file: {original}"
+                )
+            if target.exists() and not target_is_file:
+                raise StoreUnavailableError(
+                    f"repair main database is not a file: {target}"
+                )
+            if not original_is_file and not target_is_file:
+                raise StoreUnavailableError(
+                    f"repair main database is missing from both {original} and {target}"
+                )
+            if original_is_file and target_is_file:
+                raise _RepairIntentStateError(
+                    f"ambiguous repair state: both {original} and {target} exist"
+                )
+            if original_is_file:
+                moves.append((original, target))
+            continue
         if original.exists() and target.exists():
             raise _RepairIntentStateError(
                 f"ambiguous repair state: both {original} and {target} exist"
-            )
-        if name == "main" and not original.exists() and not target.exists():
-            raise StoreUnavailableError(
-                f"repair main database is missing from both {original} and {target}"
             )
         if original.exists():
             moves.append((original, target))
@@ -280,15 +302,36 @@ def move_store_aside(path: Path, moved: Path) -> Path:
 def _acquire_store_lock(
     descriptor: int, state_dir: Path, mode: int, *, recover_intent: bool = True
 ) -> None:
-    fcntl.flock(descriptor, mode)
+    deadline = time.monotonic() + STORE_LOCK_TIMEOUT_SECONDS
+
+    def acquire(lock_mode: int) -> None:
+        while True:
+            try:
+                fcntl.flock(descriptor, lock_mode | fcntl.LOCK_NB)
+                return
+            except OSError as exc:
+                if exc.errno == errno.EINTR:
+                    continue
+                if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK):
+                    raise StoreUnavailableError(
+                        f"cannot acquire store lock in {state_dir}: {exc}"
+                    ) from exc
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise StoreUnavailableError(
+                        f"timed out acquiring store lock in {state_dir}"
+                    ) from exc
+                time.sleep(min(0.01, remaining))
+
+    acquire(mode)
     try:
         if recover_intent and _repair_intent_path(state_dir).exists():
             if mode == fcntl.LOCK_SH:
                 fcntl.flock(descriptor, fcntl.LOCK_UN)
-                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                acquire(fcntl.LOCK_EX)
             _recover_repair_intent_locked(state_dir)
             if mode == fcntl.LOCK_SH:
-                fcntl.flock(descriptor, fcntl.LOCK_SH)
+                acquire(fcntl.LOCK_SH)
     except BaseException:
         fcntl.flock(descriptor, fcntl.LOCK_UN)
         raise

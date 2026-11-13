@@ -9,6 +9,7 @@ and a schema invariant tying `duration_ms` to `outcome`).
 from __future__ import annotations
 
 import argparse
+import re
 import secrets
 import sqlite3
 import sys
@@ -125,14 +126,14 @@ def read_latest_tick(state_dir: Path) -> dict[str, Any] | None:
 
 def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
     object_type = conn.execute(
-        "SELECT type FROM sqlite_master WHERE name = 'ticks'"
+        "SELECT type FROM sqlite_master WHERE name = 'ticks' COLLATE NOCASE"
     ).fetchone()
-    if object_type is None or object_type[0] != "table":
+    if object_type is None or str(object_type[0]).casefold() != "table":
         return False
 
     if conn.execute(
         "SELECT 1 FROM sqlite_master "
-        "WHERE type = 'trigger' AND tbl_name = 'ticks' LIMIT 1"
+        "WHERE type = 'trigger' AND tbl_name = 'ticks' COLLATE NOCASE LIMIT 1"
     ).fetchone():
         return False
 
@@ -140,7 +141,7 @@ def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
         (
             row
             for row in conn.execute("PRAGMA table_list").fetchall()
-            if row[1] == "ticks"
+            if str(row[1]).casefold() == "ticks"
         ),
         None,
     )
@@ -151,13 +152,181 @@ def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
     primary_key = [row for row in columns if row[5]]
     if (
         len(primary_key) != 1
-        or primary_key[0][1] != "seq"
+        or str(primary_key[0][1]).casefold() != "seq"
         or str(primary_key[0][2]).strip().upper() != "INTEGER"
     ):
         return False
 
     indexes = conn.execute("PRAGMA index_list('ticks')").fetchall()
     return not any(row[3] == "pk" for row in indexes)
+
+
+def _table_definitions(sql: str) -> list[str]:
+    """Return CREATE TABLE definitions split only at top-level commas."""
+    definitions: list[str] = []
+    depth = 0
+    start = None
+    index = 0
+    while index < len(sql):
+        char = sql[index]
+        if sql.startswith("--", index):
+            newline = sql.find("\n", index + 2)
+            index = len(sql) if newline < 0 else newline + 1
+            continue
+        if sql.startswith("/*", index):
+            end = sql.find("*/", index + 2)
+            index = len(sql) if end < 0 else end + 2
+            continue
+        if char in ("'", '"', "`", "["):
+            closing = "]" if char == "[" else char
+            index += 1
+            while index < len(sql):
+                if sql[index] == closing:
+                    if closing != "]" and index + 1 < len(sql) and sql[index + 1] == closing:
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                index += 1
+            continue
+        if char == "(":
+            if depth == 0:
+                start = index + 1
+            depth += 1
+        elif char == ")" and depth:
+            depth -= 1
+            if depth == 0 and start is not None:
+                definitions.append(sql[start:index].strip())
+                return definitions
+        elif char == "," and depth == 1 and start is not None:
+            definitions.append(sql[start:index].strip())
+            start = index + 1
+        index += 1
+    return []
+
+
+def _leading_identifier(definition: str) -> str | None:
+    match = re.match(
+        r'\s*(?:"((?:""|[^"])*)"|`([^`]*)`|\[([^\]]*)\]|([^\s,()]+))',
+        definition,
+    )
+    if match is None:
+        return None
+    for group in match.groups()[:3]:
+        if group is not None:
+            return group.replace('""', '"')
+    return match.group(4)
+
+
+def _top_level_keywords(sql: str) -> list[str]:
+    words: list[str] = []
+    depth = 0
+    index = 0
+    while index < len(sql):
+        char = sql[index]
+        if sql.startswith("--", index):
+            newline = sql.find("\n", index + 2)
+            index = len(sql) if newline < 0 else newline + 1
+            continue
+        if sql.startswith("/*", index):
+            end = sql.find("*/", index + 2)
+            index = len(sql) if end < 0 else end + 2
+            continue
+        if char in ("'", '"', "`", "["):
+            closing = "]" if char == "[" else char
+            index += 1
+            while index < len(sql):
+                if sql[index] == closing:
+                    if closing != "]" and index + 1 < len(sql) and sql[index + 1] == closing:
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                index += 1
+            continue
+        if char == "(":
+            depth += 1
+            index += 1
+            continue
+        if char == ")":
+            depth = max(0, depth - 1)
+            index += 1
+            continue
+        if depth == 0 and (char.isalpha() or char == "_"):
+            end = index + 1
+            while end < len(sql) and (
+                sql[end].isalnum() or sql[end] in "_$"
+            ):
+                end += 1
+            words.append(sql[index:end].upper())
+            index = end
+            continue
+        index += 1
+    return words
+
+
+def _seq_uses_autoincrement(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'ticks' COLLATE NOCASE"
+    ).fetchone()
+    if row is None or not isinstance(row[0], str):
+        return False
+    for definition in _table_definitions(row[0]):
+        column_name = _leading_identifier(definition)
+        if column_name is None or column_name.casefold() != "seq":
+            continue
+        words = _top_level_keywords(definition)
+        for index in range(len(words) - 2):
+            if words[index : index + 2] == ["PRIMARY", "KEY"]:
+                return "AUTOINCREMENT" in words[index + 2 :]
+    return False
+
+
+def _tick_id_is_unique(conn: sqlite3.Connection) -> bool:
+    for index in conn.execute("PRAGMA index_list('ticks')").fetchall():
+        if not index[2] or (len(index) > 4 and index[4]):
+            continue
+        index_name = '"' + str(index[1]).replace('"', '""') + '"'
+        columns = conn.execute(f"PRAGMA index_info({index_name})").fetchall()
+        if (
+            len(columns) == 1
+            and columns[0][2] is not None
+            and str(columns[0][2]).casefold() == "tick_id"
+        ):
+            return True
+    return False
+
+
+def _sqlite_sequence_is_healthy(conn: sqlite3.Connection) -> bool:
+    sequence_table = conn.execute(
+        "SELECT 1 FROM sqlite_master "
+        "WHERE type = 'table' AND name = 'sqlite_sequence' COLLATE NOCASE"
+    ).fetchone()
+    if sequence_table is None:
+        return False
+    rows = conn.execute(
+        "SELECT seq, typeof(seq) FROM sqlite_sequence "
+        "WHERE name = 'ticks' COLLATE NOCASE"
+    ).fetchall()
+    if len(rows) > 1:
+        return False
+    maximum = conn.execute("SELECT MAX(seq) FROM ticks").fetchone()[0]
+    if not rows:
+        return maximum is None
+    sequence, value_type = rows[0]
+    return (
+        value_type == "integer"
+        and 0 <= sequence <= db.MAX_TRUSTED_SEQ
+        and (maximum is None or sequence >= maximum)
+    )
+
+
+def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
+    latest = conn.execute(
+        "SELECT type FROM sqlite_master WHERE name = 'latest' COLLATE NOCASE"
+    ).fetchone()
+    return latest is None or str(latest[0]).casefold() == "view"
 
 
 def _available_repair_target(path: Path, stamp: str) -> Path:
@@ -204,9 +373,9 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                     table_columns = conn.execute(
                         "PRAGMA table_info(ticks)"
                     ).fetchall()
-                    columns = {row[1] for row in table_columns}
+                    columns = {str(row[1]).casefold() for row in table_columns}
                     required_columns = {
-                        name.strip() for name in db.COLUMNS.split(",")
+                        name.strip().casefold() for name in db.COLUMNS.split(",")
                     }
                     seq_is_rowid_alias = _seq_is_rowid_alias(conn)
                     if (
@@ -214,6 +383,10 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                         or str(check[0]).lower() != "ok"
                         or not required_columns.issubset(columns)
                         or not seq_is_rowid_alias
+                        or not _seq_uses_autoincrement(conn)
+                        or not _tick_id_is_unique(conn)
+                        or not _sqlite_sequence_is_healthy(conn)
+                        or not _latest_object_is_usable(conn)
                     ):
                         corrupt = True
                     else:
