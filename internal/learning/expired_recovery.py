@@ -500,7 +500,23 @@ def recover_expired_predictions(
         })
         recovered += 1
 
+    # One timeout per sweep, not _MAX_RECOVER × effects × deadline (default 20×5×5s).
+    apply_lock_gave_up = False
+    receipts_lock_gave_up = False
+
+    def _note_lock_timeout(row, *, apply_timeout: bool = False, receipts_timeout: bool = False) -> None:
+        nonlocal apply_lock_gave_up, receipts_lock_gave_up
+        effect_incomplete.append(row.get("id"))
+        incomplete.append(row.get("id"))
+        if apply_timeout:
+            apply_lock_gave_up = True
+            apply_lock_timed_out.append(row.get("id"))
+        if receipts_timeout:
+            receipts_lock_gave_up = True
+            receipts_lock_timed_out.append(row.get("id"))
+
     def _run_effects(items: List[Dict[str, Any]]) -> None:
+        nonlocal apply_lock_gave_up, receipts_lock_gave_up
         for item in items:
             row = item["row"]
             key = _row_key(row)
@@ -516,6 +532,18 @@ def recover_expired_predictions(
             work = pending + [name for name in indeterminate if name not in pending]
             indeterminate_set = set(indeterminate)
             for effect in list(work):
+                # Fail-closed: a None key collides in has_effect_receipt and
+                # _ledger_effect_state, so do not consult either.
+                if key is None:
+                    effect_incomplete.append(row.get("id"))
+                    incomplete.append(row.get("id"))
+                    continue
+                if apply_lock_gave_up:
+                    _note_lock_timeout(row, apply_timeout=True)
+                    continue
+                if receipts_lock_gave_up:
+                    _note_lock_timeout(row, receipts_timeout=True)
+                    continue
                 try:
                     already = has_effect_receipt(key, effect)
                 except LearningEffectReceiptsUnreadable:
@@ -525,9 +553,7 @@ def recover_expired_predictions(
                     continue
                 except LearningEffectReceiptsLockTimeout:
                     logger.exception("expired recovery receipts lock timeout")
-                    effect_incomplete.append(row.get("id"))
-                    incomplete.append(row.get("id"))
-                    receipts_lock_timed_out.append(row.get("id"))
+                    _note_lock_timeout(row, receipts_timeout=True)
                     continue
                 if already or effect in indeterminate_set:
                     if not already:
@@ -535,9 +561,7 @@ def recover_expired_predictions(
                             write_effect_receipt(key, effect)
                         except LearningEffectReceiptsLockTimeout:
                             logger.exception("expired recovery indeterminate receipt rewrite timed out")
-                            effect_incomplete.append(row.get("id"))
-                            incomplete.append(row.get("id"))
-                            receipts_lock_timed_out.append(row.get("id"))
+                            _note_lock_timeout(row, receipts_timeout=True)
                             continue
                         except Exception:
                             logger.exception("expired recovery indeterminate receipt rewrite failed")
@@ -562,9 +586,7 @@ def recover_expired_predictions(
                                 state = _ledger_effect_state(key, effect)
                         except LearningEffectReceiptsLockTimeout:
                             logger.exception("expired recovery under-lock recheck lock timeout")
-                            effect_incomplete.append(row.get("id"))
-                            incomplete.append(row.get("id"))
-                            receipts_lock_timed_out.append(row.get("id"))
+                            _note_lock_timeout(row, receipts_timeout=True)
                             continue
                         except LearningEffectReceiptsUnreadable:
                             # Existing unreadable path surfaces as effects_incomplete.
@@ -582,9 +604,7 @@ def recover_expired_predictions(
                                 try:
                                     write_effect_receipt(key, effect)
                                 except LearningEffectReceiptsLockTimeout:
-                                    effect_incomplete.append(row.get("id"))
-                                    incomplete.append(row.get("id"))
-                                    receipts_lock_timed_out.append(row.get("id"))
+                                    _note_lock_timeout(row, receipts_timeout=True)
                                     continue
                                 except Exception:
                                     effect_incomplete.append(row.get("id"))
@@ -597,6 +617,10 @@ def recover_expired_predictions(
                                 effect_incomplete.append(row.get("id"))
                                 incomplete.append(row.get("id"))
                                 raise
+                            continue
+                        if state == "absent":
+                            effect_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
                             continue
                         if effect == "expert":
                             if not resolver._skip_council_learning(row):
@@ -682,33 +706,26 @@ def recover_expired_predictions(
                                 except Exception:
                                     logger.exception("expired recovery indeterminate mark failed twice")
                                     mark_failed = True
-                            if mark_failed:
+                            # A post-effect receipts-lock timeout still arms the
+                            # per-sweep latch so later effects do not wait N×deadline.
+                            # This row may already be indeterminate; later rows must
+                            # not run. The held-lock tests assert zero effect calls;
+                            # this path does not.
+                            if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
+                                _note_lock_timeout(row, receipts_timeout=True)
+                            else:
                                 effect_incomplete.append(row.get("id"))
                                 incomplete.append(row.get("id"))
-                                if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
-                                    receipts_lock_timed_out.append(row.get("id"))
-                                else:
-                                    receipts_write_failed.append(row.get("id"))
-                                continue
-                            effect_incomplete.append(row.get("id"))
-                            incomplete.append(row.get("id"))
-                            if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
-                                receipts_lock_timed_out.append(row.get("id"))
-                            else:
                                 receipts_write_failed.append(row.get("id"))
                             continue
                         _move_effect_on_ledger(row, effect)
                 except LearningEffectApplyLockTimeout:
                     logger.exception("expired recovery apply lock timeout")
-                    effect_incomplete.append(row.get("id"))
-                    incomplete.append(row.get("id"))
-                    apply_lock_timed_out.append(row.get("id"))
+                    _note_lock_timeout(row, apply_timeout=True)
                     continue
                 except LearningEffectReceiptsLockTimeout:
                     logger.exception("expired recovery receipts lock timeout")
-                    effect_incomplete.append(row.get("id"))
-                    incomplete.append(row.get("id"))
-                    receipts_lock_timed_out.append(row.get("id"))
+                    _note_lock_timeout(row, receipts_timeout=True)
                     continue
                 except Exception:
                     logger.exception("expired recovery post-commit effects failed")

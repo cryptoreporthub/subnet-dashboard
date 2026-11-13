@@ -1699,3 +1699,214 @@ def test_m3_indeterminate_mark_retries_once(tmp_path, monkeypatch):
     after_two = _v8_disk_effects(pred_path)
     assert "pump" in after_two["done"]
     assert "pump" not in after_two["indeterminate"]
+
+
+def test_v12_m1_archive_during_recheck_does_not_apply_stale_effect(tmp_path, monkeypatch):
+    import uuid
+    from internal.learning import ledger_heal
+
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v12-absent", pending=["pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    real_state = expired_recovery._ledger_effect_state
+    hooked = {"archive": None}
+
+    def hook(key, effect):
+        if hooked["archive"] is None:
+            hooked["archive"] = ledger_heal.archive_predictions_epoch(
+                reset_request_id=str(uuid.uuid4()),
+                predictions_path=str(pred_path),
+                archive_dir=str(tmp_path / "epoch-archive"),
+                re_heal_daily=False,
+            )
+        return real_state(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "_ledger_effect_state", hook)
+    result = expired_recovery.recover_expired_predictions()
+    assert hooked["archive"] and hooked["archive"].get("ok") is True
+    assert counts["pump"] == 0
+    assert result.get("ok") is not True
+    assert result.get("reason") == "effects_incomplete"
+    remaining = json.loads(pred_path.read_text()).get("resolved") or []
+    assert remaining == []
+
+
+def test_v12_m1_control_applies_once_on_disk(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v12-absent-control", pending=["pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is True
+    assert counts["pump"] == 1
+    after = _v8_disk_effects(pred_path)
+    assert "pump" in after["done"]
+    assert "pump" not in after["pending"]
+    assert "pump" not in after["indeterminate"]
+
+
+def test_v12_m2_apply_lock_timeout_aborts_remaining_effects(tmp_path, monkeypatch):
+    import fcntl
+    import multiprocessing
+    import time as time_mod
+
+    pred_path, receipts = _v8_resolved_effects_setup(
+        tmp_path,
+        monkeypatch,
+        pred_id="v12-apply-amp",
+        pending=["expert", "impact", "finalize", "scenario", "pump"],
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 0.25)
+    lock_path = expired_recovery._apply_lock_path()
+    Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
+    ready = multiprocessing.Event()
+    release = multiprocessing.Event()
+
+    def hold():
+        with open(lock_path, "a+", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            ready.set()
+            release.wait(timeout=15)
+
+    child = multiprocessing.Process(target=hold)
+    child.start()
+    try:
+        assert ready.wait(timeout=5)
+        started = time_mod.monotonic()
+        result = expired_recovery.recover_expired_predictions()
+        elapsed = time_mod.monotonic() - started
+        assert elapsed < 0.9
+        assert result.get("ok") is not True
+        assert result.get("reason") == "effect_apply_lock_timeout"
+        assert counts["pump"] == 0
+        assert counts["finalize"] == 0
+    finally:
+        release.set()
+        child.join(timeout=5)
+    assert child.exitcode == 0
+
+
+def test_v12_m2_receipts_lock_timeout_aborts_remaining_effects(tmp_path, monkeypatch):
+    import fcntl
+    import multiprocessing
+    import time as time_mod
+
+    pred_path, receipts = _v8_resolved_effects_setup(
+        tmp_path,
+        monkeypatch,
+        pred_id="v12-receipts-amp",
+        pending=["expert", "impact", "finalize", "scenario", "pump"],
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    monkeypatch.setattr(expired_recovery, "RECEIPTS_LOCK_TIMEOUT_SECONDS", 0.25)
+    lock_path = expired_recovery._receipts_path() + ".lock"
+    Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
+    ready = multiprocessing.Event()
+    release = multiprocessing.Event()
+
+    def hold():
+        with open(lock_path, "a+", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            ready.set()
+            release.wait(timeout=15)
+
+    child = multiprocessing.Process(target=hold)
+    child.start()
+    try:
+        assert ready.wait(timeout=5)
+        started = time_mod.monotonic()
+        result = expired_recovery.recover_expired_predictions()
+        elapsed = time_mod.monotonic() - started
+        assert elapsed < 0.9
+        assert result.get("ok") is not True
+        assert result.get("reason") == "receipts_lock_timeout"
+        assert counts["pump"] == 0
+        assert counts["finalize"] == 0
+    finally:
+        release.set()
+        child.join(timeout=5)
+    assert child.exitcode == 0
+
+
+def test_v12_receipts_latch_after_applied_write_timeout_skips_later_rows(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    port_path.write_text("{}")
+    rows = []
+    for pred_id in ("v12-latch-a", "v12-latch-b"):
+        graded = _expired(pred_id)
+        graded.update({"outcome": "miss", "status": "resolved", "correct": False, "actual_pct": -3.0, "resolved_price": 97.0})
+        graded["learning_effects"] = {"pending": ["pump"], "done": []}
+        rows.append(graded)
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": rows, "stats": {}}))
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *a, **k: True)
+    monkeypatch.setattr(price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"}))
+    counts = _v8_effect_counts(monkeypatch)
+    real_write = expired_recovery.write_effect_receipt
+
+    def write_fail_first(key, effect):
+        if key == ("id", "v12-latch-a") and effect == "pump":
+            raise expired_recovery.LearningEffectReceiptsLockTimeout("injected post-effect lock timeout")
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write_fail_first)
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    assert result.get("reason") == "receipts_lock_timeout"
+    assert counts["pump"] == 1
+    disk = {row["id"]: row.get("learning_effects") or {} for row in json.loads(pred_path.read_text())["resolved"]}
+    assert "pump" in (disk["v12-latch-a"].get("indeterminate") or [])
+    assert "pump" in (disk["v12-latch-b"].get("pending") or [])
+    assert "pump" not in (disk["v12-latch-b"].get("done") or [])
+
+
+def test_v12_l3_none_key_guard_does_not_follow_stale_receipt(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    port_path.write_text("{}")
+
+    def idless(pending, done=None):
+        return {
+            "name": "idless",
+            "status": "resolved",
+            "outcome": "miss",
+            "correct": False,
+            "actual_pct": -3.0,
+            "resolved_price": 97.0,
+            "learning_effects": {"pending": list(pending), "done": list(done or []), "indeterminate": []},
+        }
+
+    pred_path.write_text(json.dumps({
+        "predictions": [],
+        "resolved": [idless([], done=["pump"]), idless(["pump"])],
+        "stats": {},
+    }))
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *a, **k: True)
+    monkeypatch.setattr(price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"}))
+    counts = _v8_effect_counts(monkeypatch)
+    expired_recovery.write_effect_receipt(None, "pump")
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    assert result.get("reason") == "effects_incomplete"
+    assert counts["pump"] == 0
+    disk = json.loads(pred_path.read_text())["resolved"]
+    assert disk[0]["learning_effects"]["done"] == ["pump"]
+    assert "pump" not in (disk[0]["learning_effects"].get("pending") or [])
+    assert disk[1]["learning_effects"]["pending"] == ["pump"]
+    assert "pump" not in (disk[1]["learning_effects"].get("done") or [])
