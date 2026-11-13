@@ -77,7 +77,8 @@ def run_tick(
 
     If `work` raises, the row is closed `failed` with a duration and the error is
     re-raised. A SIGKILL leaves the row `running`; the next tick sweeps it and the
-    dead-man reports it as `attempt_stale` past the age limit.
+    dead-man reports it as `attempt_stale` past the age limit. If a sweeper
+    abandons this row while work runs, the returned outcome is `abandoned`.
     """
     state_dir = Path(state_dir)
     tick_id = tick_id or secrets.token_hex(8)
@@ -100,7 +101,7 @@ def run_tick(
                 noop=noop,
             )
             raise
-        db.complete_tick(
+        completion_outcome = db.complete_tick(
             conn,
             opened.seq,
             outcome="completed",
@@ -111,7 +112,7 @@ def run_tick(
     return TickResult(
         tick_id=tick_id,
         seq=opened.seq,
-        outcome="completed",
+        outcome=completion_outcome,
         overlap=opened.overlap,
         noop=noop,
     )
@@ -417,7 +418,7 @@ def _trigger_is_inert(sql: str) -> bool:
     return body == [("ident", "select"), ("number", "1")]
 
 
-def _trigger_has_only_unprotected_dml(sql: str) -> bool:
+def _trigger_has_only_dml(sql: str) -> bool:
     tokens = _sql_tokens(sql)
     begin = next(
         (index for index, token in enumerate(tokens) if token == ("ident", "begin")),
@@ -434,14 +435,7 @@ def _trigger_has_only_unprotected_dml(sql: str) -> bool:
     if begin is None or end is None or end <= begin:
         return False
 
-    protected = {"ticks", "latest", "sqlite_sequence"}
     body = tokens[begin + 1 : end]
-    if any(
-        kind in {"ident", "string"} and value.casefold() in protected
-        for kind, value in body
-    ):
-        return False
-
     statements: list[list[tuple[str, str]]] = []
     current: list[tuple[str, str]] = []
     for token in body:
@@ -463,41 +457,109 @@ def _trigger_has_only_unprotected_dml(sql: str) -> bool:
     )
 
 
+_PROTECTED_SQL_OBJECTS = {"ticks", "latest", "sqlite_sequence"}
+_PROTECTED_SQL_ACTIONS = {
+    sqlite3.SQLITE_READ,
+    sqlite3.SQLITE_INSERT,
+    sqlite3.SQLITE_UPDATE,
+    sqlite3.SQLITE_DELETE,
+}
+
+
+def _statement_uses_protected_objects(
+    conn: sqlite3.Connection,
+    statement: str,
+    *,
+    unmodifiable_view: str | None = None,
+) -> bool:
+    protected = False
+
+    def authorize(action, first, _second, _database, _source):
+        nonlocal protected
+        if (
+            action in _PROTECTED_SQL_ACTIONS
+            and isinstance(first, str)
+            and first.casefold() in _PROTECTED_SQL_OBJECTS
+        ):
+            protected = True
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    try:
+        conn.set_authorizer(authorize)
+        conn.execute(f"EXPLAIN {statement}").fetchall()
+    except sqlite3.OperationalError as exc:
+        if (
+            unmodifiable_view is not None
+            and str(exc).casefold()
+            == f"cannot modify {unmodifiable_view} because it is a view".casefold()
+        ):
+            return False
+        return True
+    except sqlite3.DatabaseError:
+        return True
+    finally:
+        conn.set_authorizer(None)
+    return protected
+
+
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _trigger_target_uses_protected_objects(
+    conn: sqlite3.Connection, table_name: str
+) -> bool:
+    target = conn.execute(
+        "SELECT type FROM sqlite_schema WHERE name=? COLLATE NOCASE",
+        (table_name,),
+    ).fetchone()
+    if target is None or str(target[0]).casefold() not in {"table", "view"}:
+        return True
+    unmodifiable_view = (
+        table_name if str(target[0]).casefold() == "view" else None
+    )
+
+    quoted_table = _quote_identifier(table_name)
+    columns = conn.execute(f"PRAGMA table_xinfo({quoted_table})").fetchall()
+    writable_columns = [
+        _quote_identifier(str(row[1]))
+        for row in columns
+        if int(row[6]) == 0
+    ]
+    if not writable_columns:
+        return True
+
+    assignments = ", ".join(f"{column}={column}" for column in writable_columns)
+    statements = (
+        f"INSERT INTO {quoted_table} DEFAULT VALUES",
+        f"UPDATE {quoted_table} SET {assignments} WHERE 0",
+        f"DELETE FROM {quoted_table} WHERE 0",
+    )
+    return any(
+        _statement_uses_protected_objects(
+            conn,
+            statement,
+            unmodifiable_view=unmodifiable_view,
+        )
+        for statement in statements
+    )
+
+
 def _triggers_are_safe(conn: sqlite3.Connection) -> bool:
-    for name, table_name, sql in conn.execute(
+    targets: set[str] = set()
+    for _name, table_name, sql in conn.execute(
         "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type='trigger'"
     ):
         if str(table_name).casefold() == "ticks" or not isinstance(sql, str):
             return False
-        tokens = _sql_tokens(sql)
-        begin = next(
-            (
-                index
-                for index, token in enumerate(tokens)
-                if token == ("ident", "begin")
-            ),
-            None,
-        )
-        end = next(
-            (
-                index
-                for index in range(len(tokens) - 1, -1, -1)
-                if tokens[index] == ("ident", "end")
-            ),
-            None,
-        )
-        if begin is None or end is None or end <= begin:
+        if not (_trigger_is_inert(sql) or _trigger_has_only_dml(sql)):
             return False
-        body = tokens[begin + 1 : end]
-        protected = {"ticks", "latest", "sqlite_sequence"}
-        if any(
-            kind in {"ident", "string"} and value.casefold() in protected
-            for kind, value in body
-        ):
-            return False
-        if not (_trigger_is_inert(sql) or _trigger_has_only_unprotected_dml(sql)):
-            return False
-    return True
+        targets.add(str(table_name))
+    return not any(
+        _trigger_target_uses_protected_objects(conn, table_name)
+        for table_name in targets
+    )
 
 
 _LEGACY_LATEST_VIEW_SQL = """
@@ -520,48 +582,13 @@ def _view_body(sql: str) -> list[tuple[str, str]] | None:
     return tokens[as_index + 1 :]
 
 
-def _unrelated_view_is_safe(name: str, sql: object) -> bool:
+def _unrelated_view_is_safe(
+    conn: sqlite3.Connection, name: str, sql: object
+) -> bool:
     if not isinstance(sql, str):
         return False
-    tokens = _sql_tokens(sql)
-    as_index = next(
-        (index for index, token in enumerate(tokens) if token == ("ident", "as")),
-        None,
-    )
-    if (
-        len(tokens) < 4
-        or tokens[0:2] != [("ident", "create"), ("ident", "view")]
-        or as_index is None
-        or not any(
-            kind == "ident" and value.casefold() == name.casefold()
-            for kind, value in tokens[:as_index]
-        )
-    ):
-        return False
-    body = tokens[as_index + 1 :]
-    protected = {"ticks", "latest", "sqlite_sequence"}
-    if (
-        not body
-        or body[0] != ("ident", "select")
-        or any(
-            kind in {"ident", "string"} and value.casefold() in protected
-            for kind, value in body
-        )
-        or any(
-            token == ("symbol", "(")
-            or token == ("symbol", ")")
-            or token == ("symbol", ";")
-            for token in body
-        )
-        or sum(token == ("ident", "from") for token in body) != 1
-        or any(
-            token == ("ident", keyword)
-            for token in body
-            for keyword in ("with", "union", "intersect", "except", "join")
-        )
-    ):
-        return False
-    return True
+    query = f"SELECT * FROM {_quote_identifier(name)} LIMIT 0"
+    return not _statement_uses_protected_objects(conn, query)
 
 
 def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
@@ -575,7 +602,7 @@ def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
     ).fetchall()
     for name, view_sql in views:
         if str(name).casefold() != "latest" and not _unrelated_view_is_safe(
-            str(name), view_sql
+            conn, str(name), view_sql
         ):
             return False
     latest = latest_object

@@ -59,8 +59,7 @@ CREATE TABLE IF NOT EXISTS ticks (
 )
 """
 
-# Dropped and recreated on every connect so a schema change cannot leave a
-# stale view definition pinned in an existing store.
+# Rewritten only when the stored reader-view definition differs.
 _VIEW_DROP_SQL = "DROP VIEW IF EXISTS latest"
 
 _VIEW_SQL = """
@@ -590,6 +589,20 @@ def connect(state_dir: Path) -> sqlite3.Connection:
     return conn
 
 
+def connect_reader(state_dir: Path) -> sqlite3.Connection:
+    """Open an existing store read-only without applying schema changes."""
+    path = db_path(state_dir).resolve()
+    conn = sqlite3.connect(
+        f"{path.as_uri()}?mode=ro",
+        uri=True,
+        isolation_level=None,
+        timeout=0,
+    )
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
+
+
 def _close_after_setup_failure(conn: sqlite3.Connection | None) -> None:
     if conn is None:
         return
@@ -675,7 +688,8 @@ def _ensure_view(conn: sqlite3.Connection) -> None:
             conn.execute(_VIEW_SQL)
         conn.execute("COMMIT")
     except BaseException:
-        conn.execute("ROLLBACK")
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
         raise
 
 
@@ -770,8 +784,8 @@ def complete_tick(
     duration_ms: int,
     noop: bool,
     last_alert_ok: bool | None = None,
-) -> None:
-    """Move a running row to a terminal outcome; only identical replays are no-ops."""
+) -> str:
+    """Return the stored terminal outcome, without replacing an abandoned row."""
     if outcome not in ("completed", "failed"):
         raise ValueError(f"terminal outcome required, got {outcome!r}")
     with _immediate(conn):
@@ -790,7 +804,9 @@ def complete_tick(
         current = tuple(row)
         if current[0] != "running" or current[1] is not None:
             if current == requested:
-                return
+                return str(current[0])
+            if current[0] == "abandoned" and current[1] is None:
+                return "abandoned"
             raise TickAlreadyFinalizedError(
                 f"tick seq {seq} is already finalized as "
                 f"{current[0]} with duration {current[1]!r}"
@@ -800,6 +816,7 @@ def complete_tick(
             "WHERE seq = ? AND outcome = 'running' AND duration_ms IS NULL",
             (*requested, int(seq)),
         )
+    return outcome
 
 
 def latest_row(conn: sqlite3.Connection) -> sqlite3.Row | None:

@@ -42,7 +42,7 @@ def _load_latest(state_dir: Path):
     with db.store_lock(state_dir):
         if not db.db_path(state_dir).is_file():
             return None
-        conn = db.connect(state_dir)
+        conn = db.connect_reader(state_dir)
         try:
             return db.latest_row(conn)
         finally:

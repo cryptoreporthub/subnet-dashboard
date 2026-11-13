@@ -1156,7 +1156,7 @@ def test_every_store_open_failure_is_heartbeat_unreadable(
         called = True
         raise error
 
-    monkeypatch.setattr(deadman.db, "connect", boom)
+    monkeypatch.setattr(deadman.db, "connect_reader", boom, raising=False)
     code = deadman.main(["--state-dir", str(tmp_path)])
     assert called
     assert code == 1
