@@ -15,6 +15,7 @@ import json
 import os
 import secrets
 import sqlite3
+import stat
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -26,7 +27,15 @@ REPAIR_INTENT_FILENAME = ".orchestrator-repair-intent.json"
 BUSY_TIMEOUT_MS = 5000
 WAL_CONVERSION_TIMEOUT_MS = 300
 WAL_CONVERSION_BUSY_TIMEOUT_MS = 25
+#: Shared-lock budget for a reader connection (`locked_connect`).
 STORE_LOCK_TIMEOUT_SECONDS = 2.0
+#: The dead-man read is a liveness check: it must never inherit the writer
+#: budget, or a wedged writer would hang the very thing watching for it.
+DEADMAN_LOCK_TIMEOUT_SECONDS = 2.0
+#: Exclusive repair/writer acquisition waits for a tick to finish. A tick can
+#: legitimately run for minutes, so this matches the tick lifecycle rather than
+#: the 2s read budget that made repair fail spuriously.
+WRITER_LOCK_TIMEOUT_SECONDS = 600.0
 #: A hand-written seq above this would pin the AUTOINCREMENT counter for the
 #: life of the store; fail loudly instead of silently jamming every later tick.
 MAX_TRUSTED_SEQ = 2 ** 62
@@ -132,6 +141,34 @@ def _fsync_directory(state_dir: Path) -> None:
         os.close(descriptor)
 
 
+def _path_kind(path: Path) -> str:
+    """"regular", "absent", or "other" — never follows a symlink.
+
+    `Path.is_file()` follows symlinks, so a symlink planted at the pending main
+    target would be reported as a completed move. lstat refuses to follow.
+    """
+    try:
+        mode = os.lstat(path).st_mode
+    except (OSError, ValueError):
+        return "absent"
+    return "regular" if stat.S_ISREG(mode) else "other"
+
+
+def _validate_intent_target(target_name: object) -> None:
+    if (
+        not isinstance(target_name, str)
+        or Path(target_name).name != target_name
+        or not target_name.startswith(f"{DB_FILENAME}.corrupt-")
+    ):
+        raise _RepairIntentStateError("invalid repair intent target")
+    # A NUL byte cannot name a file: it raises ValueError at rename time, which
+    # would escape every StoreError handler. Treat it as corrupt intent.
+    if "\x00" in target_name:
+        raise _RepairIntentStateError(
+            "invalid repair intent target: embedded NUL byte"
+        )
+
+
 def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
     intent = _repair_intent_path(state_dir)
     if not intent.exists():
@@ -149,9 +186,6 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
     files = document.get("files")
     if (
         document.get("version") != 1
-        or not isinstance(target_name, str)
-        or Path(target_name).name != target_name
-        or not target_name.startswith(f"{DB_FILENAME}.corrupt-")
         or not isinstance(files, list)
         or "main" not in files
         or any(
@@ -161,6 +195,10 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
         or len(files) != len(set(files))
     ):
         raise _RepairIntentStateError(f"invalid repair intent {intent}")
+    try:
+        _validate_intent_target(target_name)
+    except _RepairIntentStateError as exc:
+        raise _RepairIntentStateError(f"invalid repair intent {intent}: {exc}") from exc
 
     main = db_path(state_dir)
     moved = Path(state_dir) / target_name
@@ -174,6 +212,22 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
         "wal": Path(f"{moved}-wal"),
         "shm": Path(f"{moved}-shm"),
     }
+
+    # An intent that omits a sidecar sitting on disk would strand it beside a
+    # database that is no longer the one it belongs to; committed-but-
+    # uncheckpointed WAL rows would then be silently dropped. Fail closed.
+    for name in ("wal", "shm"):
+        if name in files:
+            continue
+        if _path_kind(source[name]) != "absent":
+            raise _RepairIntentStateError(
+                f"repair intent omits a sidecar present on disk: {source[name]}"
+            )
+        if _path_kind(destination[name]) != "absent":
+            raise _RepairIntentStateError(
+                f"repair intent omits a sidecar present on disk: {destination[name]}"
+            )
+
     moves = []
     for name in ("main", "wal", "shm"):
         if name not in files:
@@ -181,16 +235,18 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
         original = source[name]
         target = destination[name]
         if name == "main":
-            original_is_file = original.is_file()
-            target_is_file = target.is_file()
-            if original.exists() and not original_is_file:
+            original_kind = _path_kind(original)
+            target_kind = _path_kind(target)
+            if original_kind == "other":
                 raise StoreUnavailableError(
-                    f"repair main database is not a file: {original}"
+                    f"repair main database is not a regular file: {original}"
                 )
-            if target.exists() and not target_is_file:
+            if target_kind == "other":
                 raise StoreUnavailableError(
-                    f"repair main database is not a file: {target}"
+                    f"repair main database is not a regular file: {target}"
                 )
+            original_is_file = original_kind == "regular"
+            target_is_file = target_kind == "regular"
             if not original_is_file and not target_is_file:
                 raise StoreUnavailableError(
                     f"repair main database is missing from both {original} and {target}"
@@ -300,9 +356,17 @@ def move_store_aside(path: Path, moved: Path) -> Path:
 
 
 def _acquire_store_lock(
-    descriptor: int, state_dir: Path, mode: int, *, recover_intent: bool = True
+    descriptor: int,
+    state_dir: Path,
+    mode: int,
+    *,
+    recover_intent: bool = True,
+    timeout_seconds: float | None = None,
 ) -> None:
-    deadline = time.monotonic() + STORE_LOCK_TIMEOUT_SECONDS
+    budget = (
+        STORE_LOCK_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
+    )
+    deadline = time.monotonic() + budget
 
     def acquire(lock_mode: int) -> None:
         while True:
@@ -339,10 +403,22 @@ def _acquire_store_lock(
 
 @contextmanager
 def store_lock(
-    state_dir: Path, *, exclusive: bool = False, recover_intent: bool = True
+    state_dir: Path,
+    *,
+    exclusive: bool = False,
+    recover_intent: bool = True,
+    timeout_seconds: float | None = None,
 ) -> Iterator[None]:
-    """Coordinate production store users and repair through the directory inode."""
+    """Coordinate production store users and repair through the directory inode.
+
+    An exclusive lease waits for the tick lifecycle; a shared read (the dead-man)
+    is bounded so a wedged writer cannot hang the check that watches it.
+    """
     descriptor = os.open(Path(state_dir), os.O_RDONLY)
+    if timeout_seconds is None:
+        timeout_seconds = (
+            WRITER_LOCK_TIMEOUT_SECONDS if exclusive else DEADMAN_LOCK_TIMEOUT_SECONDS
+        )
     locked = False
     try:
         _acquire_store_lock(
@@ -350,6 +426,7 @@ def store_lock(
             Path(state_dir),
             fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH,
             recover_intent=recover_intent,
+            timeout_seconds=timeout_seconds,
         )
         locked = True
         yield
@@ -372,7 +449,12 @@ def locked_connect(state_dir: Path) -> Iterator[sqlite3.Connection]:
         _acquire_store_lock(descriptor, state_dir, fcntl.LOCK_SH)
         if not db_path(state_dir).is_file():
             fcntl.flock(descriptor, fcntl.LOCK_UN)
-            _acquire_store_lock(descriptor, state_dir, fcntl.LOCK_EX)
+            _acquire_store_lock(
+                descriptor,
+                state_dir,
+                fcntl.LOCK_EX,
+                timeout_seconds=WRITER_LOCK_TIMEOUT_SECONDS,
+            )
             conn = connect(state_dir)
             fcntl.flock(descriptor, fcntl.LOCK_SH)
         else:
@@ -546,6 +628,12 @@ def start_tick(
                 (tick_id, started_at, overlap),
             )
         except sqlite3.IntegrityError as exc:
+            # Only a tick_id collision is a duplicate. A CHECK or NOT NULL
+            # failure is a store defect and must not be mislabelled.
+            if not conn.execute(
+                "SELECT 1 FROM ticks WHERE tick_id = ? LIMIT 1", (tick_id,)
+            ).fetchone():
+                raise
             raise DuplicateTickIdError(tick_id) from exc
         seq = int(cursor.lastrowid)
     return StartedTick(seq=seq, overlap=bool(overlap))

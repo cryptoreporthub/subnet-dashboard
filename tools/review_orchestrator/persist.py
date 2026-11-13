@@ -9,7 +9,6 @@ and a schema invariant tying `duration_ms` to `outcome`).
 from __future__ import annotations
 
 import argparse
-import re
 import secrets
 import sqlite3
 import sys
@@ -161,164 +160,17 @@ def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
     return not any(row[3] == "pk" for row in indexes)
 
 
-def _table_definitions(sql: str) -> list[str]:
-    """Return CREATE TABLE definitions split only at top-level commas."""
-    definitions: list[str] = []
-    depth = 0
-    start = None
-    index = 0
-    while index < len(sql):
-        char = sql[index]
-        if sql.startswith("--", index):
-            newline = sql.find("\n", index + 2)
-            index = len(sql) if newline < 0 else newline + 1
-            continue
-        if sql.startswith("/*", index):
-            end = sql.find("*/", index + 2)
-            index = len(sql) if end < 0 else end + 2
-            continue
-        if char in ("'", '"', "`", "["):
-            closing = "]" if char == "[" else char
-            index += 1
-            while index < len(sql):
-                if sql[index] == closing:
-                    if closing != "]" and index + 1 < len(sql) and sql[index + 1] == closing:
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                index += 1
-            continue
-        if char == "(":
-            if depth == 0:
-                start = index + 1
-            depth += 1
-        elif char == ")" and depth:
-            depth -= 1
-            if depth == 0 and start is not None:
-                definitions.append(sql[start:index].strip())
-                return definitions
-        elif char == "," and depth == 1 and start is not None:
-            definitions.append(sql[start:index].strip())
-            start = index + 1
-        index += 1
-    return []
+def _ticks_has_a_trigger(conn: sqlite3.Connection) -> bool:
+    """A trigger on `ticks` can RAISE(ROLLBACK), which destroys a savepoint.
 
-
-def _leading_identifier(definition: str) -> str | None:
-    match = re.match(
-        r'\s*(?:"((?:""|[^"])*)"|`([^`]*)`|\[([^\]]*)\]|([^\s,()]+))',
-        definition,
-    )
-    if match is None:
-        return None
-    for group in match.groups()[:3]:
-        if group is not None:
-            return group.replace('""', '"')
-    return match.group(4)
-
-
-def _top_level_keywords(sql: str) -> list[str]:
-    words: list[str] = []
-    depth = 0
-    index = 0
-    while index < len(sql):
-        char = sql[index]
-        if sql.startswith("--", index):
-            newline = sql.find("\n", index + 2)
-            index = len(sql) if newline < 0 else newline + 1
-            continue
-        if sql.startswith("/*", index):
-            end = sql.find("*/", index + 2)
-            index = len(sql) if end < 0 else end + 2
-            continue
-        if char in ("'", '"', "`", "["):
-            closing = "]" if char == "[" else char
-            index += 1
-            while index < len(sql):
-                if sql[index] == closing:
-                    if closing != "]" and index + 1 < len(sql) and sql[index + 1] == closing:
-                        index += 2
-                        continue
-                    index += 1
-                    break
-                index += 1
-            continue
-        if char == "(":
-            depth += 1
-            index += 1
-            continue
-        if char == ")":
-            depth = max(0, depth - 1)
-            index += 1
-            continue
-        if depth == 0 and (char.isalpha() or char == "_"):
-            end = index + 1
-            while end < len(sql) and (
-                sql[end].isalnum() or sql[end] in "_$"
-            ):
-                end += 1
-            words.append(sql[index:end].upper())
-            index = end
-            continue
-        index += 1
-    return words
-
-
-def _seq_uses_autoincrement(conn: sqlite3.Connection) -> bool:
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master "
-        "WHERE type = 'table' AND name = 'ticks' COLLATE NOCASE"
-    ).fetchone()
-    if row is None or not isinstance(row[0], str):
-        return False
-    for definition in _table_definitions(row[0]):
-        column_name = _leading_identifier(definition)
-        if column_name is None or column_name.casefold() != "seq":
-            continue
-        words = _top_level_keywords(definition)
-        for index in range(len(words) - 2):
-            if words[index : index + 2] == ["PRIMARY", "KEY"]:
-                return "AUTOINCREMENT" in words[index + 2 :]
-    return False
-
-
-def _tick_id_is_unique(conn: sqlite3.Connection) -> bool:
-    for index in conn.execute("PRAGMA index_list('ticks')").fetchall():
-        if not index[2] or (len(index) > 4 and index[4]):
-            continue
-        index_name = '"' + str(index[1]).replace('"', '""') + '"'
-        columns = conn.execute(f"PRAGMA index_info({index_name})").fetchall()
-        if (
-            len(columns) == 1
-            and columns[0][2] is not None
-            and str(columns[0][2]).casefold() == "tick_id"
-        ):
-            return True
-    return False
-
-
-def _sqlite_sequence_is_healthy(conn: sqlite3.Connection) -> bool:
-    sequence_table = conn.execute(
-        "SELECT 1 FROM sqlite_master "
-        "WHERE type = 'table' AND name = 'sqlite_sequence' COLLATE NOCASE"
-    ).fetchone()
-    if sequence_table is None:
-        return False
-    rows = conn.execute(
-        "SELECT seq, typeof(seq) FROM sqlite_sequence "
-        "WHERE name = 'ticks' COLLATE NOCASE"
-    ).fetchall()
-    if len(rows) > 1:
-        return False
-    maximum = conn.execute("SELECT MAX(seq) FROM ticks").fetchone()[0]
-    if not rows:
-        return maximum is None
-    sequence, value_type = rows[0]
+    `tbl_name` is matched case-insensitively so a trigger on `TICKS` is caught.
+    """
     return (
-        value_type == "integer"
-        and 0 <= sequence <= db.MAX_TRUSTED_SEQ
-        and (maximum is None or sequence >= maximum)
+        conn.execute(
+            "SELECT 1 FROM sqlite_master "
+            "WHERE type = 'trigger' AND tbl_name = 'ticks' COLLATE NOCASE LIMIT 1"
+        ).fetchone()
+        is not None
     )
 
 
@@ -327,6 +179,104 @@ def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
         "SELECT type FROM sqlite_master WHERE name = 'latest' COLLATE NOCASE"
     ).fetchone()
     return latest is None or str(latest[0]).casefold() == "view"
+
+
+_PROBE_TICK_ID = "__repair_probe__"
+
+
+def _probe_store_behaviour(conn: sqlite3.Connection) -> bool:
+    """Exercise the store the way the writer will, inside a rolled-back savepoint.
+
+    Structural inspection cannot tell a benign CHECK from one that rejects every
+    row, nor spot a column the writer never fills. Behaviour can. Everything here
+    is undone by `ROLLBACK TO`, so a healthy store is left byte-identical.
+
+    Returns False for any behaviour the writer depends on that the store lacks.
+    Raises sqlite3.DatabaseError when the store rejects the probe outright.
+    """
+    conn.execute("SAVEPOINT repair_probe")
+    try:
+        started_at = utc_now().isoformat()
+
+        # Insert like `start_tick`: only tick_id, started_at, overlap.
+        cursor = conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
+            (_PROBE_TICK_ID, started_at),
+        )
+        rowid = cursor.lastrowid
+        if not isinstance(rowid, int):
+            return False
+
+        # seq must alias the rowid, or MAX(seq) and the reader disagree.
+        probe = conn.execute(
+            "SELECT _rowid_, seq FROM ticks WHERE tick_id = ?", (_PROBE_TICK_ID,)
+        ).fetchone()
+        if probe is None or int(probe[0]) != int(probe[1]):
+            return False
+        seq = int(probe[1])
+
+        # Complete like `complete_tick`.
+        updated = conn.execute(
+            "UPDATE ticks SET outcome = 'completed', duration_ms = 0, noop = 0 "
+            "WHERE seq = ? AND duration_ms IS NULL",
+            (seq,),
+        )
+        if updated.rowcount != 1:
+            return False
+
+        # The reader's view, if present, must see the probe row as the latest.
+        # An absent view is fine: `connect` creates it. A table named `latest`
+        # is an impostor and was already rejected structurally.
+        if _latest_object_is_usable(conn) and conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = 'latest'"
+        ).fetchone():
+            latest = conn.execute("SELECT seq FROM latest").fetchone()
+            if latest is None or int(latest[0]) != seq:
+                return False
+
+        # A duplicate tick_id must be rejected.
+        try:
+            conn.execute(
+                "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
+                (_PROBE_TICK_ID, started_at),
+            )
+        except sqlite3.IntegrityError:
+            pass
+        else:
+            return False
+
+        # AUTOINCREMENT must not reuse the seq of a deleted row.
+        conn.execute("DELETE FROM ticks WHERE tick_id = ?", (_PROBE_TICK_ID,))
+        cursor = conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
+            (f"{_PROBE_TICK_ID}_reuse", started_at),
+        )
+        reused = cursor.lastrowid
+        if not isinstance(reused, int) or reused <= seq:
+            return False
+
+        # The counter must stay trustworthy: one row, integer, not poisoned.
+        rows = conn.execute(
+            "SELECT seq, typeof(seq) FROM sqlite_sequence "
+            "WHERE name = 'ticks' COLLATE NOCASE"
+        ).fetchall()
+        if len(rows) != 1:
+            return False
+        sequence, value_type = rows[0]
+        if value_type != "integer" or int(sequence) > db.MAX_TRUSTED_SEQ:
+            return False
+        if int(sequence) < reused:
+            return False
+
+        return True
+    finally:
+        # A trigger that already tore the savepoint down makes these no-ops;
+        # never let cleanup mask the probe's own verdict or error.
+        try:
+            conn.execute("ROLLBACK TO SAVEPOINT repair_probe")
+            conn.execute("RELEASE SAVEPOINT repair_probe")
+        except sqlite3.OperationalError:
+            pass
 
 
 def _available_repair_target(path: Path, stamp: str) -> Path:
@@ -377,17 +327,15 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                     required_columns = {
                         name.strip().casefold() for name in db.COLUMNS.split(",")
                     }
-                    seq_is_rowid_alias = _seq_is_rowid_alias(conn)
-                    if (
-                        check is None
-                        or str(check[0]).lower() != "ok"
-                        or not required_columns.issubset(columns)
-                        or not seq_is_rowid_alias
-                        or not _seq_uses_autoincrement(conn)
-                        or not _tick_id_is_unique(conn)
-                        or not _sqlite_sequence_is_healthy(conn)
-                        or not _latest_object_is_usable(conn)
-                    ):
+                    structurally_trusted = (
+                        check is not None
+                        and str(check[0]).lower() == "ok"
+                        and required_columns.issubset(columns)
+                        and _seq_is_rowid_alias(conn)
+                        and not _ticks_has_a_trigger(conn)
+                        and _latest_object_is_usable(conn)
+                    )
+                    if not structurally_trusted:
                         corrupt = True
                     else:
                         maximum = conn.execute(
@@ -396,7 +344,11 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                         corrupt = (
                             maximum is not None
                             and int(maximum) > db.MAX_TRUSTED_SEQ
-                        )
+                        ) or not _probe_store_behaviour(conn)
+                except sqlite3.IntegrityError:
+                    # The probe wrote a row the writer itself would write and the
+                    # store refused it: the schema is hostile, not the access.
+                    corrupt = True
                 except sqlite3.DatabaseError as exc:
                     if isinstance(exc, sqlite3.OperationalError) and db._is_busy_or_locked(
                         exc
@@ -436,14 +388,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state-dir", type=Path, required=True)
     args = parser.parse_args(argv)
 
-    moved = repair_store(args.state_dir.resolve())
-    if moved != db.db_path(args.state_dir.resolve()):
+    state_dir = args.state_dir.resolve()
+    quarantined_before = _orphaned_intents(state_dir)
+    moved = repair_store(state_dir)
+    quarantined = _orphaned_intents(state_dir) - quarantined_before
+
+    if moved != db.db_path(state_dir):
         print(f"repair: moved corrupt store to {moved.name}")
     elif moved.exists():
         print("repair: healthy store; nothing moved")
     else:
         print("repair: no store to move")
+    # An ambiguous or corrupt intent is quarantined, not repaired. Say so, or a
+    # bare "no store to move" reads as "there was nothing wrong here".
+    for orphan in sorted(quarantined):
+        print(f"repair: quarantined unusable repair intent as {orphan.name}")
     return 0
+
+
+def _orphaned_intents(state_dir: Path) -> set[Path]:
+    return set(state_dir.glob(f"{db.REPAIR_INTENT_FILENAME}.orphan-*"))
 
 
 if __name__ == "__main__":
