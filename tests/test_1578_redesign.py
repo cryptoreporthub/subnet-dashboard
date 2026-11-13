@@ -1130,6 +1130,7 @@ def test_pump_failure_is_not_marked_done(tmp_path, monkeypatch):
     pending = ((disk.get("learning_effects") or {}).get("pending") or [])
     assert "pump" not in done
     assert "pump" in pending
+    assert "pump" not in ((disk.get("learning_effects") or {}).get("indeterminate") or [])
     if receipts.exists():
         assert "pump" not in receipts.read_text()
 
@@ -1252,3 +1253,196 @@ def test_receipt_lock_timeout_has_its_own_reason(tmp_path, monkeypatch):
     result = expired_recovery.recover_expired_predictions()
     assert result.get("ok") is not True
     assert result.get("reason") == "receipts_lock_timeout"
+
+
+def _v8_resolved_effects_setup(tmp_path, monkeypatch, *, pred_id, pending, done=None, indeterminate=None):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    port_path.write_text("{}")
+    graded = _expired(pred_id)
+    graded.update({"outcome": "miss", "status": "resolved", "correct": False, "actual_pct": -3.0, "resolved_price": 97.0})
+    effects = {"pending": list(pending), "done": list(done or [])}
+    if indeterminate is not None:
+        effects["indeterminate"] = list(indeterminate)
+    graded["learning_effects"] = effects
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [graded], "stats": {}}))
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *a, **k: True)
+    monkeypatch.setattr(price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"}))
+    return pred_path, receipts
+
+
+def _v8_effect_counts(monkeypatch):
+    import internal.learning.pump_calibration as pump_calibration
+    from internal.council import resolver
+
+    counts = {"pump": 0, "finalize": 0}
+
+    def pump():
+        counts["pump"] += 1
+
+    def finalize(*_a, **_k):
+        counts["finalize"] += 1
+
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", pump)
+    monkeypatch.setattr(resolver, "atomic_finalize_resolution", finalize)
+    return counts
+
+
+def _v8_disk_effects(pred_path):
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    effects = disk.get("learning_effects") or {}
+    return {
+        "pending": list(effects.get("pending") or []),
+        "done": list(effects.get("done") or []),
+        "indeterminate": list(effects.get("indeterminate") or []),
+        "row": disk,
+    }
+
+
+def test_receipt_write_timeout_after_pump_marks_indeterminate_and_retry_does_not_reapply(tmp_path, monkeypatch):
+    from internal.learning import predictions_store as ps
+
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v8-timeout", pending=["finalize", "pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    real_write = expired_recovery.write_effect_receipt
+
+    def write_fail_pump(key, effect):
+        if effect == "pump":
+            raise expired_recovery.LearningEffectReceiptsLockTimeout("injected lock timeout")
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write_fail_pump)
+    first = expired_recovery.recover_expired_predictions()
+    assert first.get("ok") is not True
+    assert first.get("reason") == "receipts_lock_timeout"
+    assert counts["pump"] == 1
+    after_one = _v8_disk_effects(pred_path)
+    assert "pump" in after_one["indeterminate"]
+    assert "pump" not in after_one["pending"]
+    assert "pump" not in after_one["done"]
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    before_two = dict(counts)
+    ledger_writes = {"n": 0}
+    real_merge = ps.merge_ledger_changes
+
+    def counted_merge(*a, **k):
+        ledger_writes["n"] += 1
+        return real_merge(*a, **k)
+
+    monkeypatch.setattr(ps, "merge_ledger_changes", counted_merge)
+    monkeypatch.setattr(predictions_store, "merge_ledger_changes", counted_merge)
+    second = expired_recovery.recover_expired_predictions()
+    assert second.get("ok") is True
+    assert second.get("recovered") == 0
+    assert counts["pump"] == before_two["pump"]
+    assert counts["finalize"] == before_two["finalize"]
+    after_two = _v8_disk_effects(pred_path)
+    assert "pump" in after_two["done"]
+    assert "pump" not in after_two["indeterminate"]
+    assert "pump" not in after_two["pending"]
+
+    writes_after_two = ledger_writes["n"]
+    ledger_writes["n"] = 0
+    third = expired_recovery.recover_expired_predictions()
+    assert third.get("ok") is True
+    assert counts["pump"] == before_two["pump"]
+    assert counts["finalize"] == before_two["finalize"]
+    assert ledger_writes["n"] <= 1
+    # unused but documents that run 2 did work on the ledger
+    assert writes_after_two >= 0
+
+
+def test_receipt_write_nontimeout_failure_after_pump_marks_indeterminate(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v8-enospc", pending=["finalize", "pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    real_write = expired_recovery.write_effect_receipt
+
+    def write_fail_pump(key, effect):
+        if effect == "pump":
+            raise OSError(28, "No space left on device")
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write_fail_pump)
+    first = expired_recovery.recover_expired_predictions()
+    assert first.get("ok") is not True
+    assert first.get("reason") == "receipts_write_failed"
+    assert counts["pump"] == 1
+    after_one = _v8_disk_effects(pred_path)
+    assert "pump" in after_one["indeterminate"]
+    assert "pump" not in after_one["pending"]
+    assert "pump" not in after_one["done"]
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    before_two = dict(counts)
+    second = expired_recovery.recover_expired_predictions()
+    assert second.get("ok") is True
+    assert counts["pump"] == before_two["pump"]
+    assert counts["finalize"] == before_two["finalize"]
+    after_two = _v8_disk_effects(pred_path)
+    assert "pump" in after_two["done"]
+    assert "pump" not in after_two["indeterminate"]
+
+
+def test_receipt_write_still_failing_on_retry_does_not_reapply(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v8-retry-timeout", pending=["finalize", "pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    real_write = expired_recovery.write_effect_receipt
+
+    def write_fail_pump(key, effect):
+        if effect == "pump":
+            raise expired_recovery.LearningEffectReceiptsLockTimeout("injected lock timeout")
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write_fail_pump)
+    first = expired_recovery.recover_expired_predictions()
+    assert first.get("reason") == "receipts_lock_timeout"
+    assert counts["pump"] == 1
+    second = expired_recovery.recover_expired_predictions()
+    assert second.get("ok") is not True
+    assert second.get("reason") == "receipts_lock_timeout"
+    assert counts["pump"] == 1
+    after = _v8_disk_effects(pred_path)
+    assert "pump" in after["indeterminate"]
+    assert "pump" not in after["done"]
+
+
+def test_indeterminate_only_row_does_not_disable_portfolio_unobservable(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path,
+        monkeypatch,
+        pred_id="v8-unobs",
+        pending=[],
+        done=["finalize"],
+        indeterminate=["pump"],
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    monkeypatch.setattr(
+        expired_recovery,
+        "observe_portfolios",
+        lambda: {"kind": "unreadable", "error": "injected unreadable"},
+        raising=False,
+    )
+    # recover_expired_predictions imports observe_portfolios locally from portfolios
+    import internal.judges.portfolios as port_mod
+
+    monkeypatch.setattr(port_mod, "observe_portfolios", lambda: {"kind": "unreadable", "error": "injected unreadable"})
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    assert result.get("reason") == "portfolio_unobservable"
+    assert counts["pump"] == 0
+    after = _v8_disk_effects(pred_path)
+    assert "pump" in after["indeterminate"]

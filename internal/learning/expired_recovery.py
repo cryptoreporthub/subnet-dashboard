@@ -100,12 +100,16 @@ def _receipts_path() -> str:
 
 @contextmanager
 def _receipts_lock(*, exclusive: bool = True) -> Iterator[None]:
+    # _RECEIPTS_MUTEX still serializes in-process readers; LOCK_SH is for
+    # cross-process overlap only.
     acquired = _RECEIPTS_MUTEX.acquire(timeout=RECEIPTS_LOCK_TIMEOUT_SECONDS)
     try:
         if not acquired:
             raise LearningEffectReceiptsLockTimeout("timed out waiting for receipts mutex")
         path = _receipts_path()
         parent = os.path.dirname(path) or "data"
+        # A shared read may makedirs and create the .lock sibling so flock has a
+        # path; this is an intentional tradeoff, not a silent write of receipt data.
         os.makedirs(parent, exist_ok=True)
         # Fresh flock budget, independent of how long the mutex wait already took.
         deadline = time.monotonic() + RECEIPTS_LOCK_TIMEOUT_SECONDS
@@ -183,7 +187,9 @@ def _stamp_learning_effects_pending(row: Dict[str, Any]) -> None:
     existing = row.get("learning_effects")
     if isinstance(existing, dict) and existing.get("pending"):
         return
-    row["learning_effects"] = {"pending": _pending_list(row), "done": list((existing or {}).get("done") or [])}
+    done = list((existing or {}).get("done") or []) if isinstance(existing, dict) else []
+    # New grade cycle: do not carry a prior outcome's indeterminate list.
+    row["learning_effects"] = {"pending": _pending_list(row), "done": done, "indeterminate": []}
 
 
 def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
@@ -204,13 +210,15 @@ def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
             break
     if target is None:
         return
-    effects = target.setdefault("learning_effects", {"pending": [], "done": []})
+    effects = target.setdefault("learning_effects", {"pending": [], "done": [], "indeterminate": []})
     pending = [name for name in (effects.get("pending") or []) if name != effect]
     done = list(effects.get("done") or [])
     if effect not in done:
         done.append(effect)
+    indeterminate = [name for name in (effects.get("indeterminate") or []) if name != effect]
     effects["pending"] = pending
     effects["done"] = done
+    effects["indeterminate"] = indeterminate
     from internal.learning.predictions_store import PersistOutcome
 
     result = merge_ledger_changes(before, after, caller="expired_recovery", trigger="learning_effect_receipt")
@@ -220,7 +228,50 @@ def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
     committed = set(result.committed_keys or ())
     if committed and key not in committed:
         raise RuntimeError("learning effect ledger stamp did not include the row key")
-    row["learning_effects"] = {"pending": list(pending), "done": list(done)}
+    row["learning_effects"] = {
+        "pending": list(pending),
+        "done": list(done),
+        "indeterminate": list(indeterminate),
+    }
+
+
+def _mark_effect_indeterminate(row: Dict[str, Any], effect: str) -> None:
+    from internal.learning.predictions_store import load_predictions, merge_ledger_changes, _row_key, PersistOutcome
+
+    key = _row_key(row)
+    before = load_predictions(fail_closed=True)
+    after = deepcopy(before)
+    target = None
+    for bucket in ("predictions", "resolved"):
+        for candidate in after.get(bucket) or []:
+            if not isinstance(candidate, dict):
+                continue
+            if _row_key(candidate) == key:
+                target = candidate
+                break
+        if target is not None:
+            break
+    if target is None:
+        return
+    effects = target.setdefault("learning_effects", {"pending": [], "done": [], "indeterminate": []})
+    pending = [name for name in (effects.get("pending") or []) if name != effect]
+    indeterminate = list(effects.get("indeterminate") or [])
+    if effect not in indeterminate:
+        indeterminate.append(effect)
+    effects["pending"] = pending
+    effects["indeterminate"] = indeterminate
+    result = merge_ledger_changes(before, after, caller="expired_recovery", trigger="learning_effect_receipt")
+    if result.outcome is not PersistOutcome.APPLIED:
+        reason = result.reason.value if result.reason is not None else str(result.outcome)
+        raise RuntimeError(f"learning effect indeterminate stamp not applied: {reason}")
+    committed = set(result.committed_keys or ())
+    if committed and key not in committed:
+        raise RuntimeError("learning effect indeterminate stamp did not include the row key")
+    row["learning_effects"] = {
+        "pending": list(pending),
+        "done": list(effects.get("done") or []),
+        "indeterminate": list(indeterminate),
+    }
 
 
 def recover_expired_predictions(
@@ -248,6 +299,7 @@ def recover_expired_predictions(
     close_incomplete: List[Any] = []
     effect_incomplete: List[Any] = []
     receipts_lock_timed_out: List[Any] = []
+    receipts_write_failed: List[Any] = []
 
     def _fail(reason: str, *, error: str = "", recovered: int = 0, **extra: Any) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -271,13 +323,18 @@ def recover_expired_predictions(
 
     observation = observe_portfolios()
     retryable_pending: List[Dict[str, Any]] = []
+    retryable_indeterminate: List[Dict[str, Any]] = []
     for row in data.get("resolved") or []:
         if not isinstance(row, dict):
             continue
-        pending = ((row.get("learning_effects") or {}) if isinstance(row.get("learning_effects"), dict) else {}).get("pending") or []
+        effects = row.get("learning_effects") if isinstance(row.get("learning_effects"), dict) else {}
+        pending = effects.get("pending") or []
+        indeterminate = effects.get("indeterminate") or []
         outcome = str(row.get("outcome") or "").lower()
         if pending and outcome not in _RETIRED:
             retryable_pending.append(row)
+        if indeterminate and outcome not in _RETIRED:
+            retryable_indeterminate.append(row)
 
     if not dry_run and observation.get("kind") == "unreadable" and not retryable_pending:
         return _fail(
@@ -385,10 +442,18 @@ def recover_expired_predictions(
         for item in items:
             row = item["row"]
             key = _row_key(row)
-            pending = list(((row.get("learning_effects") or {}).get("pending") or []))
-            if not pending:
+            effects_row = row.get("learning_effects")
+            if isinstance(effects_row, dict):
+                pending = list(effects_row.get("pending") or [])
+                indeterminate = list(effects_row.get("indeterminate") or [])
+            else:
                 pending = _pending_list(row)
-            for effect in list(pending):
+                indeterminate = []
+            # Dedup: an effect is processed once. Indeterminate names take the
+            # receipt-only branch even if they also appear in pending.
+            work = pending + [name for name in indeterminate if name not in pending]
+            indeterminate_set = set(indeterminate)
+            for effect in list(work):
                 try:
                     already = has_effect_receipt(key, effect)
                 except LearningEffectReceiptsUnreadable:
@@ -402,7 +467,22 @@ def recover_expired_predictions(
                     incomplete.append(row.get("id"))
                     receipts_lock_timed_out.append(row.get("id"))
                     continue
-                if already:
+                if already or effect in indeterminate_set:
+                    if not already:
+                        try:
+                            write_effect_receipt(key, effect)
+                        except LearningEffectReceiptsLockTimeout:
+                            logger.exception("expired recovery indeterminate receipt rewrite timed out")
+                            effect_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
+                            receipts_lock_timed_out.append(row.get("id"))
+                            continue
+                        except Exception:
+                            logger.exception("expired recovery indeterminate receipt rewrite failed")
+                            effect_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
+                            receipts_write_failed.append(row.get("id"))
+                            continue
                     try:
                         _move_effect_on_ledger(row, effect)
                     except Exception:
@@ -478,9 +558,32 @@ def recover_expired_predictions(
 
                         maybe_adapt_after_resolve()
                     # Crash window: if we die after the effect applies and before this
-                    # receipt lands, retry can double-apply. Do not add a pre-effect
-                    # claim unless it has an explicit indeterminate state.
-                    write_effect_receipt(key, effect)
+                    # receipt (or an indeterminate marker) lands, or if a post-effect
+                    # receipt write fails and the ledger mark also fails, retry can
+                    # double-apply. Do not add a pre-effect claim unless it has an
+                    # explicit indeterminate state.
+                    try:
+                        write_effect_receipt(key, effect)
+                    except Exception as write_exc:
+                        logger.exception("expired recovery effect applied but receipt write failed")
+                        try:
+                            _mark_effect_indeterminate(row, effect)
+                        except Exception:
+                            logger.exception("expired recovery indeterminate mark failed")
+                            effect_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
+                            if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
+                                receipts_lock_timed_out.append(row.get("id"))
+                            else:
+                                receipts_write_failed.append(row.get("id"))
+                            continue
+                        effect_incomplete.append(row.get("id"))
+                        incomplete.append(row.get("id"))
+                        if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
+                            receipts_lock_timed_out.append(row.get("id"))
+                        else:
+                            receipts_write_failed.append(row.get("id"))
+                        continue
                     _move_effect_on_ledger(row, effect)
                 except LearningEffectReceiptsLockTimeout:
                     logger.exception("expired recovery receipts lock timeout")
@@ -536,7 +639,7 @@ def recover_expired_predictions(
                 incomplete_ids=incomplete or None,
             )
 
-    if not dry_run and retryable_pending:
+    if not dry_run and (retryable_pending or retryable_indeterminate):
         # Reload so receipt stamps from a preceding grade pass are visible.
         try:
             fresh = load_predictions(fail_closed=True)
@@ -546,8 +649,10 @@ def recover_expired_predictions(
         for row in fresh.get("resolved") or []:
             if not isinstance(row, dict):
                 continue
-            pending = ((row.get("learning_effects") or {}) if isinstance(row.get("learning_effects"), dict) else {}).get("pending") or []
-            if pending and str(row.get("outcome") or "").lower() not in _RETIRED:
+            effects = row.get("learning_effects") if isinstance(row.get("learning_effects"), dict) else {}
+            pending = effects.get("pending") or []
+            indeterminate = effects.get("indeterminate") or []
+            if (pending or indeterminate) and str(row.get("outcome") or "").lower() not in _RETIRED:
                 pending_items.append({
                     "row": row,
                     "actual_pct": row.get("actual_pct"),
@@ -573,6 +678,8 @@ def recover_expired_predictions(
     if incomplete:
         if receipts_lock_timed_out:
             reason = "receipts_lock_timeout"
+        elif receipts_write_failed:
+            reason = "receipts_write_failed"
         elif effect_incomplete:
             reason = "effects_incomplete"
         else:
