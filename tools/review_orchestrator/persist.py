@@ -130,6 +130,12 @@ def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
     if object_type is None or object_type[0] != "table":
         return False
 
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master "
+        "WHERE type = 'trigger' AND tbl_name = 'ticks' LIMIT 1"
+    ).fetchone():
+        return False
+
     table = next(
         (
             row
@@ -177,7 +183,9 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
     stamp = stamp or utc_now().strftime("%Y%m%dT%H%M%SZ")
     try:
         with db.store_lock(state_dir, exclusive=True, recover_intent=False):
-            db._recover_or_quarantine_repair_intent_locked(state_dir)
+            recovered = db._recover_or_quarantine_repair_intent_locked(state_dir)
+            if recovered is not None:
+                return recovered
             if not path.exists():
                 return path
 

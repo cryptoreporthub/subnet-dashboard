@@ -359,10 +359,132 @@ def test_repair_completes_intent_when_wal_and_shm_are_absent(
 
     result = persist.repair_store(state_dir, stamp="stale-intent")
 
-    assert result == store
+    assert result == moved
     assert moved.is_file()
     assert not store.exists()
     assert not db._repair_intent_path(state_dir).exists()
+
+
+def test_repair_intent_with_missing_main_fails_closed(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "missing-repair-main"
+    state_dir.mkdir()
+    store = db.db_path(state_dir)
+    moved = state_dir / "orchestrator.sqlite.corrupt-missing-main"
+    intent = db._repair_intent_path(state_dir)
+    intent.write_text(
+        json.dumps({"version": 1, "target": moved.name, "files": ["main"]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(db.StoreUnavailableError):
+        with db.locked_connect(state_dir):
+            pass
+
+    with pytest.raises(db.StoreUnavailableError):
+        persist.repair_store(state_dir, stamp="missing-main")
+
+    assert intent.is_file()
+    assert not store.exists()
+    assert not moved.exists()
+
+
+def test_repair_cli_reports_target_when_completing_pending_move(
+    tmp_path: Path, capsys
+) -> None:
+    state_dir = tmp_path / "pending-cli-repair"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    moved = state_dir / "orchestrator.sqlite.corrupt-pending-cli"
+    Path(f"{store}-wal").unlink(missing_ok=True)
+    Path(f"{store}-shm").unlink(missing_ok=True)
+    db._repair_intent_path(state_dir).write_text(
+        json.dumps(
+            {"version": 1, "target": moved.name, "files": ["main", "wal", "shm"]}
+        ),
+        encoding="utf-8",
+    )
+
+    assert persist.main(["repair", "--state-dir", str(state_dir)]) == 0
+
+    assert capsys.readouterr().out.strip() == (
+        f"repair: moved corrupt store to {moved.name}"
+    )
+    assert moved.is_file()
+    assert not store.exists()
+    assert not db._repair_intent_path(state_dir).exists()
+
+
+def test_repair_accepts_main_already_at_pending_intent_target(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "main-at-target"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    moved = state_dir / "orchestrator.sqlite.corrupt-main-at-target"
+    Path(f"{store}-wal").unlink(missing_ok=True)
+    Path(f"{store}-shm").unlink(missing_ok=True)
+    store.replace(moved)
+    db._repair_intent_path(state_dir).write_text(
+        json.dumps({"version": 1, "target": moved.name, "files": ["main"]}),
+        encoding="utf-8",
+    )
+
+    result = persist.repair_store(state_dir, stamp="main-at-target")
+
+    assert result == moved
+    assert moved.is_file()
+    assert not store.exists()
+    assert not db._repair_intent_path(state_dir).exists()
+
+
+def test_repair_quarantines_store_with_trigger_attached_to_ticks(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "ticks-trigger"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.execute(
+            "CREATE TRIGGER delete_ticks_after_insert AFTER INSERT ON ticks "
+            "BEGIN DELETE FROM ticks; END"
+        )
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(state_dir, stamp="ticks-trigger")
+
+    assert moved == state_dir / "orchestrator.sqlite.corrupt-ticks-trigger"
+    assert moved.is_file()
+    assert not store.exists()
+
+
+def test_repair_keeps_store_with_trigger_named_ticks_on_another_table(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "other-table-trigger"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.execute("CREATE TABLE other_table (value TEXT)")
+        conn.execute(
+            "CREATE TRIGGER ticks AFTER INSERT ON other_table "
+            "BEGIN SELECT 1; END"
+        )
+    finally:
+        conn.close()
+
+    result = persist.repair_store(state_dir, stamp="other-table-trigger")
+
+    assert result == store
+    assert store.is_file()
+    assert not (
+        state_dir / "orchestrator.sqlite.corrupt-other-table-trigger"
+    ).exists()
+    assert persist.read_latest_tick(state_dir)["tick_id"] == "seed"
 
 
 def test_repair_moves_untrusted_store_past_ambiguous_repair_intent(

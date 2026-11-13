@@ -128,10 +128,10 @@ def _fsync_directory(state_dir: Path) -> None:
         os.close(descriptor)
 
 
-def _recover_repair_intent_locked(state_dir: Path) -> None:
+def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
     intent = _repair_intent_path(state_dir)
     if not intent.exists():
-        return
+        return None
     try:
         document = json.loads(intent.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
@@ -180,10 +180,12 @@ def _recover_repair_intent_locked(state_dir: Path) -> None:
             raise _RepairIntentStateError(
                 f"ambiguous repair state: both {original} and {target} exist"
             )
+        if name == "main" and not original.exists() and not target.exists():
+            raise StoreUnavailableError(
+                f"repair main database is missing from both {original} and {target}"
+            )
         if original.exists():
             moves.append((original, target))
-        # If neither exists, the file was already checkpointed or removed.
-        # Treat its move as complete so recovery is safe to retry.
 
     try:
         for original, target in moves:
@@ -193,6 +195,7 @@ def _recover_repair_intent_locked(state_dir: Path) -> None:
         _fsync_directory(Path(state_dir))
     except OSError as exc:
         raise StoreUnavailableError(f"repair recovery {intent}: {exc}") from exc
+    return moved
 
 
 def _quarantine_repair_intent_locked(state_dir: Path) -> Path | None:
@@ -212,12 +215,12 @@ def _quarantine_repair_intent_locked(state_dir: Path) -> Path | None:
 
 
 def _recover_or_quarantine_repair_intent_locked(state_dir: Path) -> Path | None:
-    """Recover a valid move, or preserve a stale/ambiguous intent for repair."""
+    """Return a completed move target, or quarantine an invalid intent."""
     try:
-        _recover_repair_intent_locked(state_dir)
+        return _recover_repair_intent_locked(state_dir)
     except _RepairIntentStateError:
-        return _quarantine_repair_intent_locked(state_dir)
-    return None
+        _quarantine_repair_intent_locked(state_dir)
+        return None
 
 
 def _write_repair_intent(
