@@ -1359,7 +1359,7 @@ def test_receipt_write_timeout_after_pump_marks_indeterminate_and_retry_does_not
     assert counts["finalize"] == before_two["finalize"]
     assert ledger_writes["n"] <= 1
     # unused but documents that run 2 did work on the ledger
-    assert writes_after_two >= 0
+    assert writes_after_two == 1
 
 
 def test_receipt_write_nontimeout_failure_after_pump_marks_indeterminate(tmp_path, monkeypatch):
@@ -1446,3 +1446,256 @@ def test_indeterminate_only_row_does_not_disable_portfolio_unobservable(tmp_path
     assert counts["pump"] == 0
     after = _v8_disk_effects(pred_path)
     assert "pump" in after["indeterminate"]
+
+
+def test_postmortem_record_times_out_when_lock_is_held(tmp_path, monkeypatch):
+    import fcntl
+    import multiprocessing
+    import time as time_mod
+
+    from internal.judges import postmortems
+
+    pm_dir = tmp_path / "postmortems"
+    pm_dir.mkdir()
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
+    monkeypatch.setattr(postmortems, "POSTMORTEM_LOCK_TIMEOUT_SECONDS", 0.3)
+    path = Path(postmortems._path("oracle"))
+    lock_path = str(path) + ".lock"
+    ready = multiprocessing.Event()
+    release = multiprocessing.Event()
+
+    def hold():
+        with open(lock_path, "a+", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            ready.set()
+            release.wait(timeout=15)
+
+    child = multiprocessing.Process(target=hold)
+    child.start()
+    try:
+        assert ready.wait(timeout=5)
+        before = path.read_bytes() if path.exists() else b""
+        started = time_mod.monotonic()
+        with pytest.raises(postmortems.PostmortemLockTimeout):
+            postmortems.record(
+                "oracle",
+                {"id": "pm-timeout", "netuid": 1, "name": "Seven", "direction": "up", "predicted_pct": 1.0},
+                actual_pct=-2.0,
+            )
+        assert (time_mod.monotonic() - started) < 1.3
+        after = path.read_bytes() if path.exists() else b""
+        assert after == before
+    finally:
+        release.set()
+        child.join(timeout=5)
+    assert child.exitcode == 0
+    entry = postmortems.record(
+        "oracle",
+        {"id": "pm-timeout", "netuid": 1, "name": "Seven", "direction": "up", "predicted_pct": 1.0},
+        actual_pct=-2.0,
+    )
+    assert entry.get("prediction_id") == "pm-timeout"
+    assert path.exists()
+
+
+def test_m2_overlapping_recovers_apply_pump_once(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v10-overlap", pending=["pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    barrier = threading.Barrier(2)
+    first_seen = {}
+    real_has = expired_recovery.has_effect_receipt
+
+    def gated_has(key, effect):
+        ident = threading.get_ident()
+        if ident not in first_seen:
+            first_seen[ident] = True
+            barrier.wait(timeout=5)
+        return real_has(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "has_effect_receipt", gated_has)
+    results = [None, None]
+
+    def run(idx):
+        results[idx] = expired_recovery.recover_expired_predictions()
+
+    threads = [threading.Thread(target=run, args=(i,)) for i in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+        assert not thread.is_alive()
+    assert counts["pump"] == 1
+    after = _v8_disk_effects(pred_path)
+    assert "pump" in after["done"]
+    assert "pump" not in after["pending"]
+    assert "pump" not in after["indeterminate"]
+
+
+def test_m2_overlap_receipt_write_failure_second_thread_does_not_reapply(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v10-overlap-fail", pending=["pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    barrier = threading.Barrier(2)
+    first_seen = {}
+    real_has = expired_recovery.has_effect_receipt
+    real_write = expired_recovery.write_effect_receipt
+
+    def gated_has(key, effect):
+        ident = threading.get_ident()
+        if ident not in first_seen:
+            first_seen[ident] = True
+            barrier.wait(timeout=5)
+        return real_has(key, effect)
+
+    def write_fail_pump(key, effect):
+        if effect == "pump":
+            raise expired_recovery.LearningEffectReceiptsLockTimeout("injected lock timeout")
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "has_effect_receipt", gated_has)
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write_fail_pump)
+    results = [None, None]
+
+    def run(idx):
+        results[idx] = expired_recovery.recover_expired_predictions()
+
+    threads = [threading.Thread(target=run, args=(i,)) for i in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15)
+        assert not thread.is_alive()
+    assert counts["pump"] == 1
+    after = _v8_disk_effects(pred_path)
+    assert "pump" in after["indeterminate"]
+    assert "pump" not in after["pending"]
+    assert "pump" not in after["done"]
+    assert all(result.get("ok") is not True for result in results)
+
+
+def test_m2_failed_recheck_does_not_apply(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v10-recheck", pending=["pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    calls = {"n": 0}
+
+    def has(_key, _effect):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return False
+        raise expired_recovery.LearningEffectReceiptsUnreadable("injected unreadable")
+
+    monkeypatch.setattr(expired_recovery, "has_effect_receipt", has)
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    assert result.get("reason") == "effects_incomplete"
+    assert counts["pump"] == 0
+
+
+def test_m2_apply_lock_timeout_does_not_apply(tmp_path, monkeypatch):
+    import fcntl
+    import multiprocessing
+    import time as time_mod
+
+    pred_path, receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v10-apply-timeout", pending=["pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 0.3)
+    lock_path = expired_recovery._apply_lock_path()
+    Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
+    ready = multiprocessing.Event()
+    release = multiprocessing.Event()
+
+    def hold():
+        with open(lock_path, "a+", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            ready.set()
+            release.wait(timeout=15)
+
+    child = multiprocessing.Process(target=hold)
+    child.start()
+    try:
+        assert ready.wait(timeout=5)
+        started = time_mod.monotonic()
+        result = expired_recovery.recover_expired_predictions()
+        assert (time_mod.monotonic() - started) < 1.3
+        assert result.get("ok") is not True
+        assert result.get("reason") == "effect_apply_lock_timeout"
+        assert counts["pump"] == 0
+    finally:
+        release.set()
+        child.join(timeout=5)
+    assert child.exitcode == 0
+
+
+def test_m2_receipts_flock_not_held_during_effect_body(tmp_path, monkeypatch):
+    import fcntl
+
+    pred_path, receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v10-no-hold", pending=["pump"]
+    )
+    import internal.learning.pump_calibration as pump_calibration
+
+    held = {"during_effect": None}
+
+    def pump():
+        lock_path = expired_recovery._receipts_path() + ".lock"
+        Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT)
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                held["during_effect"] = False
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except BlockingIOError:
+                held["during_effect"] = True
+        finally:
+            os.close(fd)
+
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", pump)
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is True
+    assert held["during_effect"] is False
+
+
+def test_m3_indeterminate_mark_retries_once(tmp_path, monkeypatch):
+    pred_path, _receipts = _v8_resolved_effects_setup(
+        tmp_path, monkeypatch, pred_id="v10-mark-retry", pending=["pump"]
+    )
+    counts = _v8_effect_counts(monkeypatch)
+    real_write = expired_recovery.write_effect_receipt
+    real_mark = expired_recovery._mark_effect_indeterminate
+    marks = {"n": 0}
+
+    def write_fail_pump(key, effect):
+        if effect == "pump":
+            raise expired_recovery.LearningEffectReceiptsLockTimeout("injected lock timeout")
+        return real_write(key, effect)
+
+    def mark_fail_once(row, effect):
+        marks["n"] += 1
+        if marks["n"] == 1:
+            raise RuntimeError("injected first mark failure")
+        return real_mark(row, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write_fail_pump)
+    monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", mark_fail_once)
+    first = expired_recovery.recover_expired_predictions()
+    assert first.get("ok") is not True
+    assert marks["n"] == 2
+    after_one = _v8_disk_effects(pred_path)
+    assert "pump" in after_one["indeterminate"]
+    assert "pump" not in after_one["pending"]
+    assert counts["pump"] == 1
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    second = expired_recovery.recover_expired_predictions()
+    assert second.get("ok") is True
+    assert counts["pump"] == 1
+    after_two = _v8_disk_effects(pred_path)
+    assert "pump" in after_two["done"]
+    assert "pump" not in after_two["indeterminate"]

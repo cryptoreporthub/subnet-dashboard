@@ -43,6 +43,67 @@ _SKIP_EFFECTS = ("finalize", "pump")
 
 _RECEIPTS_MUTEX = threading.RLock()
 RECEIPTS_LOCK_TIMEOUT_SECONDS = 5.0
+APPLY_LOCK_TIMEOUT_SECONDS = 5.0
+_APPLY_MUTEX = threading.Lock()
+
+
+class LearningEffectApplyLockTimeout(Exception):
+    """Raised when the learning-effect apply lock deadline passes."""
+
+
+def _apply_lock_path() -> str:
+    return _receipts_path() + ".apply"
+
+
+@contextmanager
+def _apply_lock() -> Iterator[None]:
+    # One deadline for mutex + flock. Path follows the isolated receipts journal.
+    deadline = time.monotonic() + APPLY_LOCK_TIMEOUT_SECONDS
+    acquired = _APPLY_MUTEX.acquire(timeout=max(0.0, deadline - time.monotonic()))
+    try:
+        if not acquired:
+            raise LearningEffectApplyLockTimeout("timed out waiting for apply mutex")
+        path = _apply_lock_path()
+        parent = os.path.dirname(path) or "data"
+        os.makedirs(parent, exist_ok=True)
+        with open(path, "a+", encoding="utf-8") as lock:
+            while time.monotonic() < deadline:
+                try:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    time.sleep(0.05)
+            else:
+                raise LearningEffectApplyLockTimeout("timed out waiting for apply flock")
+            try:
+                yield
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    finally:
+        if acquired:
+            _APPLY_MUTEX.release()
+
+
+def _ledger_effect_state(key, effect) -> str:
+    """Re-read durable effect state for one row/effect under the apply lock."""
+    from internal.learning.predictions_store import load_predictions, _row_key
+
+    data = load_predictions(fail_closed=True)
+    for bucket in ("predictions", "resolved"):
+        for row in data.get(bucket) or []:
+            if not isinstance(row, dict):
+                continue
+            if _row_key(row) != key:
+                continue
+            effects = row.get("learning_effects") if isinstance(row.get("learning_effects"), dict) else {}
+            if effect in (effects.get("indeterminate") or []):
+                return "indeterminate"
+            if effect in (effects.get("done") or []):
+                return "done"
+            if effect in (effects.get("pending") or []):
+                return "pending"
+            return "absent"
+    return "absent"
 
 
 class LearningEffectReceiptsUnreadable(Exception):
@@ -300,6 +361,7 @@ def recover_expired_predictions(
     effect_incomplete: List[Any] = []
     receipts_lock_timed_out: List[Any] = []
     receipts_write_failed: List[Any] = []
+    apply_lock_timed_out: List[Any] = []
 
     def _fail(reason: str, *, error: str = "", recovered: int = 0, **extra: Any) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -492,84 +554,142 @@ def recover_expired_predictions(
                         raise
                     continue
                 try:
-                    if effect == "expert":
-                        if not resolver._skip_council_learning(row):
-                            resolver._nudge_attributed_expert(
-                                row,
-                                correct=item.get("correct"),
-                                capture=item.get("capture"),
-                                stamped_expert=item.get("expert"),
-                            )
-                    elif effect == "impact":
-                        if not resolver._skip_council_learning(row):
-                            resolver._nudge_impact_strength(row, item.get("correct"))
-                    elif effect == "finalize":
-                        from internal.council.capture import stamp_capture_fields as _stamp
-                        from internal.judges.portfolios import observe_portfolios
-
-                        capture = item.get("capture") or _stamp(row, float(row.get("actual_pct") or 0))
-                        resolve_at = item.get("resolve_at") or row.get("resolved_at")
-                        if hasattr(resolve_at, "isoformat"):
-                            resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
-                        else:
-                            resolved_at = str(resolve_at or row.get("resolved_at") or _utcnow_iso())
-                        warnings_before = list(row.get("side_effect_warnings") or [])
-                        resolver.atomic_finalize_resolution(
-                            row,
-                            actual_pct=float(item.get("actual_pct") if item.get("actual_pct") is not None else row.get("actual_pct") or 0),
-                            outcome=str(item.get("new_outcome") or row.get("outcome") or ""),
-                            correct=item.get("correct") if item.get("correct") is not None else row.get("correct"),
-                            resolved_price=float(item.get("price") if item.get("price") is not None else row.get("resolved_price") or 0),
-                            resolved_at=resolved_at,
-                            price_meta=item.get("meta"),
-                            apply_judge_nudge=False,
-                        )
-                        warnings_after = list(row.get("side_effect_warnings") or [])
-                        fresh_close_warning = any(
-                            name in warnings_after and name not in warnings_before
-                            for name in ("on_prediction_resolved", "portfolios_unobservable")
-                        )
-                        obs = observe_portfolios()
-                        still_open = False
-                        if obs.get("kind") == "unreadable":
-                            still_open = True
-                        elif obs.get("kind") != "missing":
-                            still_open = _prediction_still_open(row.get("id"), row=row, observation=obs)
-                        if still_open or fresh_close_warning:
-                            close_incomplete.append(row.get("id"))
+                    with _apply_lock():
+                        try:
+                            if has_effect_receipt(key, effect):
+                                state = "receipted"
+                            else:
+                                state = _ledger_effect_state(key, effect)
+                        except LearningEffectReceiptsLockTimeout:
+                            logger.exception("expired recovery under-lock recheck lock timeout")
+                            effect_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
+                            receipts_lock_timed_out.append(row.get("id"))
+                            continue
+                        except LearningEffectReceiptsUnreadable:
+                            # Existing unreadable path surfaces as effects_incomplete.
+                            logger.exception("expired recovery under-lock recheck unreadable")
+                            effect_incomplete.append(row.get("id"))
                             incomplete.append(row.get("id"))
                             continue
-                    elif effect == "scenario":
-                        if not resolver._skip_council_learning(row):
-                            resolver._record_scenario_outcome(
-                                row,
-                                item.get("actual_pct", row.get("actual_pct")),
-                                item.get("new_outcome", row.get("outcome")),
-                                item.get("correct", row.get("correct")),
-                                item.get("expert", row.get("expert")),
-                            )
-                    elif effect == "signal":
-                        if not resolver._skip_council_learning(row):
-                            resolver._nudge_signal_weights(
-                                row, item.get("correct", row.get("correct")), capture=item.get("capture")
-                            )
-                    elif effect == "pump":
-                        from internal.learning.pump_calibration import maybe_adapt_after_resolve
-
-                        maybe_adapt_after_resolve()
-                    # Crash window: if we die after the effect applies and before this
-                    # receipt (or an indeterminate marker) lands, or if a post-effect
-                    # receipt write fails and the ledger mark also fails, retry can
-                    # double-apply. Do not add a pre-effect claim unless it has an
-                    # explicit indeterminate state.
-                    try:
-                        write_effect_receipt(key, effect)
-                    except Exception as write_exc:
-                        logger.exception("expired recovery effect applied but receipt write failed")
-                        try:
-                            _mark_effect_indeterminate(row, effect)
                         except Exception:
-                            logger.exception("expired recovery indeterminate mark failed")
+                            logger.exception("expired recovery under-lock recheck failed")
+                            effect_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
+                            continue
+                        if state in ("receipted", "indeterminate", "done"):
+                            if state == "indeterminate":
+                                try:
+                                    write_effect_receipt(key, effect)
+                                except LearningEffectReceiptsLockTimeout:
+                                    effect_incomplete.append(row.get("id"))
+                                    incomplete.append(row.get("id"))
+                                    receipts_lock_timed_out.append(row.get("id"))
+                                    continue
+                                except Exception:
+                                    effect_incomplete.append(row.get("id"))
+                                    incomplete.append(row.get("id"))
+                                    receipts_write_failed.append(row.get("id"))
+                                    continue
+                            try:
+                                _move_effect_on_ledger(row, effect)
+                            except Exception:
+                                effect_incomplete.append(row.get("id"))
+                                incomplete.append(row.get("id"))
+                                raise
+                            continue
+                        if effect == "expert":
+                            if not resolver._skip_council_learning(row):
+                                resolver._nudge_attributed_expert(
+                                    row,
+                                    correct=item.get("correct"),
+                                    capture=item.get("capture"),
+                                    stamped_expert=item.get("expert"),
+                                )
+                        elif effect == "impact":
+                            if not resolver._skip_council_learning(row):
+                                resolver._nudge_impact_strength(row, item.get("correct"))
+                        elif effect == "finalize":
+                            from internal.council.capture import stamp_capture_fields as _stamp
+                            from internal.judges.portfolios import observe_portfolios
+
+                            capture = item.get("capture") or _stamp(row, float(row.get("actual_pct") or 0))
+                            resolve_at = item.get("resolve_at") or row.get("resolved_at")
+                            if hasattr(resolve_at, "isoformat"):
+                                resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
+                            else:
+                                resolved_at = str(resolve_at or row.get("resolved_at") or _utcnow_iso())
+                            warnings_before = list(row.get("side_effect_warnings") or [])
+                            resolver.atomic_finalize_resolution(
+                                row,
+                                actual_pct=float(item.get("actual_pct") if item.get("actual_pct") is not None else row.get("actual_pct") or 0),
+                                outcome=str(item.get("new_outcome") or row.get("outcome") or ""),
+                                correct=item.get("correct") if item.get("correct") is not None else row.get("correct"),
+                                resolved_price=float(item.get("price") if item.get("price") is not None else row.get("resolved_price") or 0),
+                                resolved_at=resolved_at,
+                                price_meta=item.get("meta"),
+                                apply_judge_nudge=False,
+                            )
+                            warnings_after = list(row.get("side_effect_warnings") or [])
+                            fresh_close_warning = any(
+                                name in warnings_after and name not in warnings_before
+                                for name in ("on_prediction_resolved", "portfolios_unobservable")
+                            )
+                            obs = observe_portfolios()
+                            still_open = False
+                            if obs.get("kind") == "unreadable":
+                                still_open = True
+                            elif obs.get("kind") != "missing":
+                                still_open = _prediction_still_open(row.get("id"), row=row, observation=obs)
+                            if still_open or fresh_close_warning:
+                                close_incomplete.append(row.get("id"))
+                                incomplete.append(row.get("id"))
+                                continue
+                        elif effect == "scenario":
+                            if not resolver._skip_council_learning(row):
+                                resolver._record_scenario_outcome(
+                                    row,
+                                    item.get("actual_pct", row.get("actual_pct")),
+                                    item.get("new_outcome", row.get("outcome")),
+                                    item.get("correct", row.get("correct")),
+                                    item.get("expert", row.get("expert")),
+                                )
+                        elif effect == "signal":
+                            if not resolver._skip_council_learning(row):
+                                resolver._nudge_signal_weights(
+                                    row, item.get("correct", row.get("correct")), capture=item.get("capture")
+                                )
+                        elif effect == "pump":
+                            from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                            maybe_adapt_after_resolve()
+                        # Crash window: if we die after the effect applies and before this
+                        # receipt or indeterminate marker lands, retry can double-apply.
+                        # If the receipt write fails, retry the indeterminate merge once
+                        # before giving up. If both mark attempts fail, the effect stays
+                        # pending (accepted residual). Do not add a pre-effect claim.
+                        try:
+                            write_effect_receipt(key, effect)
+                        except Exception as write_exc:
+                            logger.exception("expired recovery effect applied but receipt write failed")
+                            mark_failed = False
+                            try:
+                                _mark_effect_indeterminate(row, effect)
+                            except Exception:
+                                logger.exception("expired recovery indeterminate mark failed; retrying once")
+                                try:
+                                    _mark_effect_indeterminate(row, effect)
+                                except Exception:
+                                    logger.exception("expired recovery indeterminate mark failed twice")
+                                    mark_failed = True
+                            if mark_failed:
+                                effect_incomplete.append(row.get("id"))
+                                incomplete.append(row.get("id"))
+                                if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
+                                    receipts_lock_timed_out.append(row.get("id"))
+                                else:
+                                    receipts_write_failed.append(row.get("id"))
+                                continue
                             effect_incomplete.append(row.get("id"))
                             incomplete.append(row.get("id"))
                             if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
@@ -577,14 +697,13 @@ def recover_expired_predictions(
                             else:
                                 receipts_write_failed.append(row.get("id"))
                             continue
-                        effect_incomplete.append(row.get("id"))
-                        incomplete.append(row.get("id"))
-                        if isinstance(write_exc, LearningEffectReceiptsLockTimeout):
-                            receipts_lock_timed_out.append(row.get("id"))
-                        else:
-                            receipts_write_failed.append(row.get("id"))
-                        continue
-                    _move_effect_on_ledger(row, effect)
+                        _move_effect_on_ledger(row, effect)
+                except LearningEffectApplyLockTimeout:
+                    logger.exception("expired recovery apply lock timeout")
+                    effect_incomplete.append(row.get("id"))
+                    incomplete.append(row.get("id"))
+                    apply_lock_timed_out.append(row.get("id"))
+                    continue
                 except LearningEffectReceiptsLockTimeout:
                     logger.exception("expired recovery receipts lock timeout")
                     effect_incomplete.append(row.get("id"))
@@ -676,7 +795,9 @@ def recover_expired_predictions(
                 )
 
     if incomplete:
-        if receipts_lock_timed_out:
+        if apply_lock_timed_out:
+            reason = "effect_apply_lock_timeout"
+        elif receipts_lock_timed_out:
             reason = "receipts_lock_timeout"
         elif receipts_write_failed:
             reason = "receipts_write_failed"

@@ -15,11 +15,17 @@ import fcntl
 import json
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
 _RECORD_LOCK = threading.Lock()
+POSTMORTEM_LOCK_TIMEOUT_SECONDS = 5.0
+
+
+class PostmortemLockTimeout(Exception):
+    """Raised only when the postmortem lock deadline passes."""
 
 def _path(judge_name: str) -> str:
     """Resolve the on-disk path for a judge's postmortem file (registry + containment)."""
@@ -134,20 +140,43 @@ def record(
     actual_pct: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Record a new postmortem for a wrong pick."""
-    with _RECORD_LOCK:
-        return _record_locked(judge_name, prediction, actual_pct)
+    # Read the timeout constant here so tests can patch it.
+    deadline = time.monotonic() + POSTMORTEM_LOCK_TIMEOUT_SECONDS
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise PostmortemLockTimeout("postmortem lock deadline already passed")
+    acquired = _RECORD_LOCK.acquire(timeout=max(0.0, remaining))
+    try:
+        if not acquired:
+            raise PostmortemLockTimeout("timed out waiting for postmortem mutex")
+        return _record_locked(judge_name, prediction, actual_pct, deadline=deadline)
+    finally:
+        if acquired:
+            _RECORD_LOCK.release()
 
 
 def _record_locked(
     judge_name: str,
     prediction: Dict[str, Any],
     actual_pct: Optional[float] = None,
+    *,
+    deadline: Optional[float] = None,
 ) -> Dict[str, Any]:
     os.makedirs(POSTMORTEMS_DIR, exist_ok=True)
     path = _path(judge_name)
+    # flock the sidecar, never the data path — _save may replace the data file.
     lock_path = path + ".lock"
+    if deadline is None:
+        deadline = time.monotonic() + POSTMORTEM_LOCK_TIMEOUT_SECONDS
     with open(lock_path, "a+", encoding="utf-8") as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                time.sleep(0.05)
+        else:
+            raise PostmortemLockTimeout("timed out waiting for postmortem flock")
         try:
             entries = _load(judge_name)
             pred_id = prediction.get("id")
