@@ -123,19 +123,486 @@ def read_latest_tick(state_dir: Path) -> dict[str, Any] | None:
     return dict(row) if row is not None else None
 
 
-def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
-    object_type = conn.execute(
-        "SELECT type FROM sqlite_master WHERE name = 'ticks' COLLATE NOCASE"
+def _sql_tokens(sql: str) -> list[tuple[str, str]]:
+    """Tokenize SQLite DDL, discarding comments but preserving quoted values."""
+    tokens: list[tuple[str, str]] = []
+    i = 0
+    while i < len(sql):
+        char = sql[i]
+        if char.isspace():
+            i += 1
+            continue
+        if sql.startswith("--", i):
+            newline = sql.find("\n", i + 2)
+            i = len(sql) if newline < 0 else newline + 1
+            continue
+        if sql.startswith("/*", i):
+            end = sql.find("*/", i + 2)
+            if end < 0:
+                return []
+            i = end + 2
+            continue
+        if char in ("'", '"', "`", "["):
+            closing = "]" if char == "[" else char
+            i += 1
+            value: list[str] = []
+            while i < len(sql):
+                if sql[i] == closing:
+                    if closing != "]" and i + 1 < len(sql) and sql[i + 1] == closing:
+                        value.append(closing)
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                value.append(sql[i])
+                i += 1
+            else:
+                return []
+            kind = "string" if char == "'" else "ident"
+            token_value = "".join(value)
+            if kind == "ident":
+                token_value = token_value.casefold()
+            tokens.append((kind, token_value))
+            continue
+        if char.isascii() and (char.isalpha() or char == "_"):
+            end = i + 1
+            while end < len(sql) and (
+                sql[end].isascii()
+                and (sql[end].isalnum() or sql[end] in "_$")
+            ):
+                end += 1
+            value = sql[i:end]
+            tokens.append(("ident", value.casefold()))
+            i = end
+            continue
+        if char.isascii() and char.isdigit():
+            end = i + 1
+            while end < len(sql) and sql[end].isascii() and sql[end].isdigit():
+                end += 1
+            if (
+                end + 1 < len(sql)
+                and sql[end] == "."
+                and sql[end + 1].isascii()
+                and sql[end + 1].isdigit()
+            ):
+                end += 1
+                while end < len(sql) and sql[end].isascii() and sql[end].isdigit():
+                    end += 1
+            value = sql[i:end]
+            tokens.append(("number", value))
+            i = end
+            continue
+        pair = sql[i : i + 2]
+        if pair in {"<=", ">=", "!=", "<>", "||", "=="}:
+            tokens.append(("symbol", pair))
+            i += 2
+        else:
+            tokens.append(("symbol", char))
+            i += 1
+    return tokens
+
+
+def _token_values(tokens: list[tuple[str, str]]) -> tuple[tuple[str, str], ...]:
+    return tuple(tokens)
+
+
+def _unwrap_sql_parens(tokens: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    while len(tokens) >= 2 and tokens[0] == ("symbol", "("):
+        depth = 0
+        closes_at_end = False
+        for index, token in enumerate(tokens):
+            if token == ("symbol", "("):
+                depth += 1
+            elif token == ("symbol", ")"):
+                depth -= 1
+                if depth == 0:
+                    closes_at_end = index == len(tokens) - 1
+                    break
+        if not closes_at_end:
+            break
+        tokens = tokens[1:-1]
+    return tokens
+
+
+def _check_expressions(sql: str) -> list[tuple[tuple[str, str], ...]] | None:
+    tokens = _sql_tokens(sql)
+    if not tokens:
+        return None
+    opening = next(
+        (index for index, token in enumerate(tokens) if token == ("symbol", "(")),
+        None,
+    )
+    if opening is None:
+        return None
+    depth = 0
+    closing = None
+    for index in range(opening, len(tokens)):
+        if tokens[index] == ("symbol", "("):
+            depth += 1
+        elif tokens[index] == ("symbol", ")"):
+            depth -= 1
+            if depth == 0:
+                closing = index
+                break
+    if closing is None:
+        return None
+
+    checks: list[tuple[tuple[str, str], ...]] = []
+    index = opening + 1
+    while index < closing:
+        if tokens[index] == ("ident", "check") and index + 1 < closing:
+            if tokens[index + 1] != ("symbol", "("):
+                return None
+            depth = 1
+            end = index + 2
+            while end < closing and depth:
+                if tokens[end] == ("symbol", "("):
+                    depth += 1
+                elif tokens[end] == ("symbol", ")"):
+                    depth -= 1
+                end += 1
+            if depth:
+                return None
+            expression = _unwrap_sql_parens(tokens[index + 2 : end - 1])
+            checks.append(_token_values(expression))
+            index = end
+        else:
+            index += 1
+    return checks
+
+
+def _normalized_expression(expression: str) -> tuple[tuple[str, str], ...]:
+    return _token_values(_unwrap_sql_parens(_sql_tokens(expression)))
+
+
+_CANONICAL_CHECKS = {
+    _normalized_expression("length(started_at) BETWEEN 20 AND 40"),
+    _normalized_expression("duration_ms IS NULL OR duration_ms >= 0"),
+    _normalized_expression(
+        "outcome IN ('running', 'completed', 'failed', 'abandoned')"
+    ),
+    _normalized_expression("noop IN (0, 1)"),
+    _normalized_expression("overlap IN (0, 1)"),
+    _normalized_expression("last_alert_ok IS NULL OR last_alert_ok IN (0, 1)"),
+    _normalized_expression(
+        "(outcome IN ('running', 'abandoned')) = (duration_ms IS NULL)"
+    ),
+}
+
+
+def _ddl_has_only_known_checks(sql: str) -> bool:
+    checks = _check_expressions(sql)
+    return (
+        checks is not None
+        and len(checks) == len(set(checks))
+        and all(check in _CANONICAL_CHECKS for check in checks)
+    )
+
+
+def _ddl_has_default_conflict_and_collation(sql: str) -> bool:
+    tokens = _sql_tokens(sql)
+    if not tokens:
+        return False
+    for index, token in enumerate(tokens):
+        if token == ("ident", "on") and index + 1 < len(tokens):
+            if tokens[index + 1] == ("ident", "conflict"):
+                if (
+                    index + 2 >= len(tokens)
+                    or tokens[index + 2] != ("ident", "abort")
+                ):
+                    return False
+        if token == ("ident", "collate"):
+            if index + 1 >= len(tokens) or tokens[index + 1] != ("ident", "binary"):
+                return False
+    return True
+
+
+def _normalized_default(value: object) -> tuple[tuple[str, str], ...] | None:
+    if value is None:
+        return None
+    tokens = _unwrap_sql_parens(_sql_tokens(str(value)))
+    return _token_values(tokens)
+
+
+def _ticks_columns_are_canonical(conn: sqlite3.Connection) -> bool:
+    columns = conn.execute("PRAGMA table_xinfo(ticks)").fetchall()
+    names = [str(row[1]).casefold() for row in columns]
+    base_names = [
+        "seq",
+        "tick_id",
+        "started_at",
+        "duration_ms",
+        "outcome",
+        "noop",
+        "overlap",
+        "last_alert_ok",
+    ]
+    with_legacy_rowid = [
+        "seq",
+        "rowid",
+        "tick_id",
+        "started_at",
+        "duration_ms",
+        "outcome",
+        "noop",
+        "overlap",
+        "last_alert_ok",
+    ]
+    if names not in (base_names, with_legacy_rowid):
+        return False
+
+    expected: dict[str, tuple[str, int, object, int]] = {
+        "seq": ("integer", 0, None, 1),
+        "tick_id": ("text", 1, None, 0),
+        "started_at": ("text", 1, None, 0),
+        "duration_ms": ("integer", 0, None, 0),
+        "outcome": ("text", 1, "'running'", 0),
+        "noop": ("integer", 1, "0", 0),
+        "overlap": ("integer", 1, "0", 0),
+        "last_alert_ok": ("integer", 0, None, 0),
+    }
+    if "rowid" in names:
+        expected["rowid"] = ("text", 0, None, 0)
+    for row in columns:
+        name = str(row[1]).casefold()
+        declared_type, not_null, default, primary_key = expected[name]
+        if (
+            str(row[2]).strip().casefold() != declared_type
+            or int(row[3]) != not_null
+            or _normalized_default(row[4]) != _normalized_default(default)
+            or int(row[5]) != primary_key
+            or int(row[6]) != 0
+        ):
+            return False
+    return True
+
+
+def _ticks_index_is_canonical(conn: sqlite3.Connection) -> bool:
+    indexes = conn.execute("PRAGMA index_list(ticks)").fetchall()
+    if len(indexes) != 1:
+        return False
+    index = indexes[0]
+    if int(index[2]) != 1 or str(index[3]).casefold() != "u" or int(index[4]):
+        return False
+    escaped = str(index[1]).replace('"', '""')
+    key_columns = [
+        row for row in conn.execute(f'PRAGMA index_xinfo("{escaped}")')
+        if int(row[5]) == 1
+    ]
+    return (
+        len(key_columns) == 1
+        and str(key_columns[0][2]).casefold() == "tick_id"
+        and int(key_columns[0][3]) == 0
+        and str(key_columns[0][4]).casefold() == "binary"
+    )
+
+
+def _trigger_is_inert(sql: str) -> bool:
+    tokens = _sql_tokens(sql)
+    begin = next(
+        (index for index, token in enumerate(tokens) if token == ("ident", "begin")),
+        None,
+    )
+    end = next(
+        (
+            index
+            for index in range(len(tokens) - 1, -1, -1)
+            if tokens[index] == ("ident", "end")
+        ),
+        None,
+    )
+    if begin is None or end is None or end <= begin:
+        return False
+    body = [token for token in tokens[begin + 1 : end] if token != ("symbol", ";")]
+    return body == [("ident", "select"), ("number", "1")]
+
+
+def _triggers_are_safe(conn: sqlite3.Connection) -> bool:
+    for name, table_name, sql in conn.execute(
+        "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type='trigger'"
+    ):
+        if str(table_name).casefold() == "ticks" or not isinstance(sql, str):
+            return False
+        tokens = _sql_tokens(sql)
+        begin = next(
+            (
+                index
+                for index, token in enumerate(tokens)
+                if token == ("ident", "begin")
+            ),
+            None,
+        )
+        end = next(
+            (
+                index
+                for index in range(len(tokens) - 1, -1, -1)
+                if tokens[index] == ("ident", "end")
+            ),
+            None,
+        )
+        if begin is None or end is None or end <= begin:
+            return False
+        body = tokens[begin + 1 : end]
+        protected = {"ticks", "latest", "sqlite_sequence"}
+        if any(
+            kind in {"ident", "string"} and value.casefold() in protected
+            for kind, value in body
+        ):
+            return False
+        if not _trigger_is_inert(sql):
+            return False
+    return True
+
+
+def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
+    latest_object = conn.execute(
+        "SELECT type, sql FROM sqlite_schema WHERE name='latest' COLLATE NOCASE"
     ).fetchone()
-    if object_type is None or str(object_type[0]).casefold() != "table":
+    if latest_object is not None and str(latest_object[0]).casefold() != "view":
+        return False
+    views = conn.execute(
+        "SELECT name, sql FROM sqlite_schema WHERE type='view'"
+    ).fetchall()
+    if any(str(row[0]).casefold() != "latest" for row in views):
+        return False
+    latest = latest_object
+    if latest is None:
+        return True
+    sql = latest[1]
+    if not isinstance(sql, str):
+        return False
+    tokens = _sql_tokens(sql)
+    as_index = next(
+        (
+            index
+            for index, token in enumerate(tokens)
+            if token == ("ident", "as")
+        ),
+        None,
+    )
+    expected = _sql_tokens(db._VIEW_SQL)
+    expected_as = next(
+        index for index, token in enumerate(expected) if token == ("ident", "as")
+    )
+    return (
+        as_index is not None
+        and tokens[as_index + 1 :] == expected[expected_as + 1 :]
+    )
+
+
+def _sqlite_sequence_is_trustworthy(
+    conn: sqlite3.Connection, maximum: int
+) -> bool:
+    sequence_table = conn.execute(
+        "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='sqlite_sequence'"
+    ).fetchone()
+    if sequence_table is None:
+        return maximum == 0
+    try:
+        rows = conn.execute(
+            "SELECT name, seq, typeof(seq) FROM sqlite_sequence"
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return False
+    by_name: dict[str, list[tuple[object, object]]] = {}
+    for name, sequence, value_type in rows:
+        if not isinstance(name, str):
+            return False
+        by_name.setdefault(name.casefold(), []).append((sequence, value_type))
+    if any(len(values) != 1 for values in by_name.values()):
         return False
 
-    if conn.execute(
-        "SELECT 1 FROM sqlite_master "
-        "WHERE type = 'trigger' AND tbl_name = 'ticks' COLLATE NOCASE LIMIT 1"
-    ).fetchone():
+    tick_rows = by_name.pop("ticks", [])
+    if not tick_rows:
+        if maximum:
+            return False
+        tick_sequence = 0
+    else:
+        sequence, value_type = tick_rows[0]
+        if value_type != "integer" or not isinstance(sequence, int) or sequence < 0:
+            return False
+        tick_sequence = sequence
+        if tick_sequence < maximum:
+            return False
+    if max(maximum, tick_sequence) + 1 > db.MAX_TRUSTED_SEQ:
         return False
 
+    tables = {
+        str(name).casefold(): sql
+        for name, sql in conn.execute(
+            "SELECT name, sql FROM sqlite_schema WHERE type='table'"
+        )
+        if isinstance(name, str)
+    }
+    for name, values in by_name.items():
+        if name not in tables or name.startswith("sqlite_"):
+            return False
+        sql = tables[name]
+        if not isinstance(sql, str) or "autoincrement" not in {
+            value for kind, value in _sql_tokens(sql) if kind == "ident"
+        }:
+            return False
+        sequence, value_type = values[0]
+        if value_type != "integer" or not isinstance(sequence, int) or sequence < 0:
+            return False
+    return True
+
+
+def _sqlite_metadata_is_recognized(conn: sqlite3.Connection) -> bool:
+    tables = {
+        str(name).casefold()
+        for (name,) in conn.execute(
+            "SELECT name FROM sqlite_schema WHERE type='table'"
+        )
+        if isinstance(name, str)
+    }
+    known_stats = {
+        "sqlite_stat1": ("tbl", "idx", "stat"),
+        "sqlite_stat2": ("tbl", "idx", "sampleno", "sample"),
+        "sqlite_stat3": ("tbl", "idx", "neq", "nlt", "ndlt", "sample"),
+        "sqlite_stat4": ("tbl", "idx", "neq", "nlt", "ndlt", "sample"),
+    }
+    for kind, name, _table_name in conn.execute(
+        "SELECT type, name, tbl_name FROM sqlite_schema"
+    ):
+        if not isinstance(name, str) or not name.casefold().startswith("sqlite_"):
+            continue
+        folded = name.casefold()
+        if folded == "sqlite_sequence":
+            if str(kind).casefold() != "table":
+                return False
+            columns = tuple(
+                str(row[1]).casefold()
+                for row in conn.execute('PRAGMA table_info("sqlite_sequence")')
+            )
+            if columns != ("name", "seq"):
+                return False
+        elif folded in known_stats:
+            if str(kind).casefold() != "table":
+                return False
+            escaped = folded.replace('"', '""')
+            columns = tuple(
+                str(row[1]).casefold()
+                for row in conn.execute(f'PRAGMA table_info("{escaped}")')
+            )
+            if columns != known_stats[folded]:
+                return False
+            for (table_name,) in conn.execute(
+                f'SELECT DISTINCT tbl FROM "{escaped}"'
+            ):
+                if (
+                    not isinstance(table_name, str)
+                    or table_name.casefold() not in tables
+                ):
+                    return False
+        elif folded.startswith("sqlite_autoindex_"):
+            continue
+        else:
+            return False
+    return True
+
+
+def _ticks_schema_is_trustworthy(conn: sqlite3.Connection) -> bool:
     table = next(
         (
             row
@@ -144,139 +611,50 @@ def _seq_is_rowid_alias(conn: sqlite3.Connection) -> bool:
         ),
         None,
     )
-    if table is None or table[2] != "table" or bool(table[4]):
+    if table is None or str(table[2]).casefold() != "table" or bool(table[4]):
         return False
-
-    columns = conn.execute("PRAGMA table_info(ticks)").fetchall()
-    primary_key = [row for row in columns if row[5]]
+    if len(table) > 5 and bool(table[5]):
+        return False
+    schema_row = conn.execute(
+        "SELECT type, sql FROM sqlite_schema WHERE name='ticks' COLLATE NOCASE"
+    ).fetchone()
     if (
-        len(primary_key) != 1
-        or str(primary_key[0][1]).casefold() != "seq"
-        or str(primary_key[0][2]).strip().upper() != "INTEGER"
+        schema_row is None
+        or str(schema_row[0]).casefold() != "table"
+        or not isinstance(schema_row[1], str)
+    ):
+        return False
+    sql = schema_row[1]
+    tokens = _sql_tokens(sql)
+    if (
+        not tokens
+        or not _ticks_columns_are_canonical(conn)
+        or not _ticks_index_is_canonical(conn)
+        or conn.execute("PRAGMA foreign_key_list(ticks)").fetchall()
+        or not _ddl_has_only_known_checks(sql)
+        or not _ddl_has_default_conflict_and_collation(sql)
+        or "autoincrement"
+        not in {value for kind, value in tokens if kind == "ident"}
     ):
         return False
 
-    indexes = conn.execute("PRAGMA index_list('ticks')").fetchall()
-    return not any(row[3] == "pk" for row in indexes)
-
-
-def _ticks_has_a_trigger(conn: sqlite3.Connection) -> bool:
-    """A trigger on `ticks` can RAISE(ROLLBACK), which destroys a savepoint.
-
-    `tbl_name` is matched case-insensitively so a trigger on `TICKS` is caught.
-    """
-    return (
-        conn.execute(
-            "SELECT 1 FROM sqlite_master "
-            "WHERE type = 'trigger' AND tbl_name = 'ticks' COLLATE NOCASE LIMIT 1"
-        ).fetchone()
-        is not None
+    maximum_row = conn.execute("SELECT MAX(seq) FROM ticks").fetchone()
+    maximum = (
+        0
+        if maximum_row is None or maximum_row[0] is None
+        else int(maximum_row[0])
     )
+    return _sqlite_sequence_is_trustworthy(conn, maximum)
 
 
-def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
-    latest = conn.execute(
-        "SELECT type FROM sqlite_master WHERE name = 'latest' COLLATE NOCASE"
-    ).fetchone()
-    return latest is None or str(latest[0]).casefold() == "view"
-
-
-_PROBE_TICK_ID = "__repair_probe__"
-
-
-def _probe_store_behaviour(conn: sqlite3.Connection) -> bool:
-    """Exercise the store the way the writer will, inside a rolled-back savepoint.
-
-    Structural inspection cannot tell a benign CHECK from one that rejects every
-    row, nor spot a column the writer never fills. Behaviour can. Everything here
-    is undone by `ROLLBACK TO`, so a healthy store is left byte-identical.
-
-    Returns False for any behaviour the writer depends on that the store lacks.
-    Raises sqlite3.DatabaseError when the store rejects the probe outright.
-    """
-    conn.execute("SAVEPOINT repair_probe")
-    try:
-        started_at = utc_now().isoformat()
-
-        # Insert like `start_tick`: only tick_id, started_at, overlap.
-        cursor = conn.execute(
-            "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
-            (_PROBE_TICK_ID, started_at),
-        )
-        rowid = cursor.lastrowid
-        if not isinstance(rowid, int):
-            return False
-
-        # seq must alias the rowid, or MAX(seq) and the reader disagree.
-        probe = conn.execute(
-            "SELECT _rowid_, seq FROM ticks WHERE tick_id = ?", (_PROBE_TICK_ID,)
-        ).fetchone()
-        if probe is None or int(probe[0]) != int(probe[1]):
-            return False
-        seq = int(probe[1])
-
-        # Complete like `complete_tick`.
-        updated = conn.execute(
-            "UPDATE ticks SET outcome = 'completed', duration_ms = 0, noop = 0 "
-            "WHERE seq = ? AND duration_ms IS NULL",
-            (seq,),
-        )
-        if updated.rowcount != 1:
-            return False
-
-        # The reader's view, if present, must see the probe row as the latest.
-        # An absent view is fine: `connect` creates it. A table named `latest`
-        # is an impostor and was already rejected structurally.
-        if _latest_object_is_usable(conn) and conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = 'latest'"
-        ).fetchone():
-            latest = conn.execute("SELECT seq FROM latest").fetchone()
-            if latest is None or int(latest[0]) != seq:
-                return False
-
-        # A duplicate tick_id must be rejected.
-        try:
-            conn.execute(
-                "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
-                (_PROBE_TICK_ID, started_at),
-            )
-        except sqlite3.IntegrityError:
-            pass
-        else:
-            return False
-
-        # AUTOINCREMENT must not reuse the seq of a deleted row.
-        conn.execute("DELETE FROM ticks WHERE tick_id = ?", (_PROBE_TICK_ID,))
-        cursor = conn.execute(
-            "INSERT INTO ticks (tick_id, started_at, overlap) VALUES (?, ?, 0)",
-            (f"{_PROBE_TICK_ID}_reuse", started_at),
-        )
-        reused = cursor.lastrowid
-        if not isinstance(reused, int) or reused <= seq:
-            return False
-
-        # The counter must stay trustworthy: one row, integer, not poisoned.
-        rows = conn.execute(
-            "SELECT seq, typeof(seq) FROM sqlite_sequence "
-            "WHERE name = 'ticks' COLLATE NOCASE"
-        ).fetchall()
-        if len(rows) != 1:
-            return False
-        sequence, value_type = rows[0]
-        if value_type != "integer" or int(sequence) > db.MAX_TRUSTED_SEQ:
-            return False
-        if int(sequence) < reused:
-            return False
-
-        return True
-    finally:
-        # A trigger that already tore the savepoint down makes these no-ops;
-        # never let cleanup mask the probe's own verdict or error.
-        try:
-            conn.execute("ROLLBACK TO SAVEPOINT repair_probe")
-            conn.execute("RELEASE SAVEPOINT repair_probe")
-        except sqlite3.OperationalError:
-            pass
+def _schema_is_trustworthy(conn: sqlite3.Connection) -> bool:
+    if not _ticks_schema_is_trustworthy(conn):
+        return False
+    return (
+        _sqlite_metadata_is_recognized(conn)
+        and _latest_object_is_usable(conn)
+        and _triggers_are_safe(conn)
+    )
 
 
 def _available_repair_target(path: Path, stamp: str) -> Path:
@@ -320,35 +698,12 @@ def repair_store(state_dir: Path, *, stamp: str | None = None) -> Path:
                     conn.execute(f"PRAGMA busy_timeout = {db.BUSY_TIMEOUT_MS}")
                     conn.execute("BEGIN IMMEDIATE")
                     check = conn.execute("PRAGMA quick_check").fetchone()
-                    table_columns = conn.execute(
-                        "PRAGMA table_info(ticks)"
-                    ).fetchall()
-                    columns = {str(row[1]).casefold() for row in table_columns}
-                    required_columns = {
-                        name.strip().casefold() for name in db.COLUMNS.split(",")
-                    }
                     structurally_trusted = (
                         check is not None
                         and str(check[0]).lower() == "ok"
-                        and required_columns.issubset(columns)
-                        and _seq_is_rowid_alias(conn)
-                        and not _ticks_has_a_trigger(conn)
-                        and _latest_object_is_usable(conn)
+                        and _schema_is_trustworthy(conn)
                     )
-                    if not structurally_trusted:
-                        corrupt = True
-                    else:
-                        maximum = conn.execute(
-                            "SELECT MAX(seq) FROM ticks"
-                        ).fetchone()[0]
-                        corrupt = (
-                            maximum is not None
-                            and int(maximum) > db.MAX_TRUSTED_SEQ
-                        ) or not _probe_store_behaviour(conn)
-                except sqlite3.IntegrityError:
-                    # The probe wrote a row the writer itself would write and the
-                    # store refused it: the schema is hostile, not the access.
-                    corrupt = True
+                    corrupt = not structurally_trusted
                 except sqlite3.DatabaseError as exc:
                     if isinstance(exc, sqlite3.OperationalError) and db._is_busy_or_locked(
                         exc
@@ -386,11 +741,37 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("command", choices=["repair"])
     parser.add_argument("--state-dir", type=Path, required=True)
+    parser.add_argument(
+        "--acknowledge-wal-loss",
+        action="store_true",
+        help="archive an unresolved repair intent after confirmed WAL data loss",
+    )
     args = parser.parse_args(argv)
 
     state_dir = args.state_dir.resolve()
+    if args.acknowledge_wal_loss:
+        try:
+            moved, orphan = db.acknowledge_missing_wal_loss(state_dir)
+        except (OSError, StoreUnavailableError) as exc:
+            print(f"repair: blocked: {exc}", file=sys.stderr)
+            return 2
+        print(
+            "repair: WAL data is unrecoverable; "
+            f"intent quarantined as {orphan.name}; archived main preserved at "
+            f"{moved.name}; the next start will create a fresh store"
+        )
+        return 0
+
     quarantined_before = _orphaned_intents(state_dir)
-    moved = repair_store(state_dir)
+    try:
+        moved = repair_store(state_dir)
+    except db._RepairIntentWalMissingError as exc:
+        print(
+            "repair: blocked: expected WAL missing at source and target; "
+            f"intent retained; target={exc.target.name}",
+            file=sys.stderr,
+        )
+        return 2
     quarantined = _orphaned_intents(state_dir) - quarantined_before
 
     if moved != db.db_path(state_dir):

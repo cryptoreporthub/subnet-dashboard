@@ -103,6 +103,16 @@ class _RepairIntentStateError(StoreUnavailableError):
     """A stale or ambiguous intent that the explicit repair path can quarantine."""
 
 
+class _RepairIntentWalMissingError(StoreUnavailableError):
+    """A listed WAL is missing from both locations; keep the intent unresolved."""
+
+    def __init__(self, target: Path) -> None:
+        self.target = target
+        super().__init__(
+            f"expected WAL missing at source and target for repair target {target.name}"
+        )
+
+
 #: sqlite messages that mean the bytes on disk are not a database. Everything
 #: else is access, contention, or I/O, and must not be reported as corruption.
 _CORRUPT_MARKERS = ("not a database", "malformed")
@@ -169,7 +179,9 @@ def _validate_intent_target(target_name: object) -> None:
         )
 
 
-def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
+def _read_repair_intent_locked(
+    state_dir: Path,
+) -> tuple[Path, str, list[str]] | None:
     intent = _repair_intent_path(state_dir)
     if not intent.exists():
         return None
@@ -199,6 +211,14 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
         _validate_intent_target(target_name)
     except _RepairIntentStateError as exc:
         raise _RepairIntentStateError(f"invalid repair intent {intent}: {exc}") from exc
+    return intent, target_name, files
+
+
+def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
+    parsed = _read_repair_intent_locked(state_dir)
+    if parsed is None:
+        return None
+    intent, target_name, files = parsed
 
     main = db_path(state_dir)
     moved = Path(state_dir) / target_name
@@ -258,12 +278,23 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
             if original_is_file:
                 moves.append((original, target))
             continue
-        if original.exists() and target.exists():
+        original_kind = _path_kind(original)
+        target_kind = _path_kind(target)
+        if original_kind == "other" or target_kind == "other":
+            raise StoreUnavailableError(
+                f"repair sidecar is not a regular file: "
+                f"{original if original_kind == 'other' else target}"
+            )
+        if original_kind == "regular" and target_kind == "regular":
             raise _RepairIntentStateError(
                 f"ambiguous repair state: both {original} and {target} exist"
             )
-        if original.exists():
+        if original_kind == "regular":
             moves.append((original, target))
+        elif target_kind == "regular":
+            continue
+        elif name == "wal":
+            raise _RepairIntentWalMissingError(moved)
 
     try:
         for original, target in moves:
@@ -274,6 +305,58 @@ def _recover_repair_intent_locked(state_dir: Path) -> Path | None:
     except OSError as exc:
         raise StoreUnavailableError(f"repair recovery {intent}: {exc}") from exc
     return moved
+
+
+def acknowledge_missing_wal_loss(state_dir: Path) -> tuple[Path, Path]:
+    """Quarantine only a validated intent with an irrecoverably missing WAL."""
+    state_dir = Path(state_dir)
+    with store_lock(state_dir, exclusive=True, recover_intent=False):
+        parsed = _read_repair_intent_locked(state_dir)
+        if parsed is None:
+            raise StoreUnavailableError("no pending repair intent to acknowledge")
+        _, target_name, files = parsed
+        if "wal" not in files:
+            raise StoreUnavailableError(
+                "WAL loss acknowledgement requires a manifest-listed WAL"
+            )
+        main = db_path(state_dir)
+        moved = state_dir / target_name
+        source = {
+            "main": main,
+            "wal": Path(f"{main}-wal"),
+            "shm": Path(f"{main}-shm"),
+        }
+        destination = {
+            "main": moved,
+            "wal": Path(f"{moved}-wal"),
+            "shm": Path(f"{moved}-shm"),
+        }
+        for name in ("wal", "shm"):
+            if name not in files:
+                if (
+                    _path_kind(source[name]) != "absent"
+                    or _path_kind(destination[name]) != "absent"
+                ):
+                    raise StoreUnavailableError(
+                        "WAL loss acknowledgement refused: unlisted sidecar exists"
+                    )
+        if (
+            _path_kind(source["main"]) != "absent"
+            or _path_kind(destination["main"]) != "regular"
+            or _path_kind(source["wal"]) != "absent"
+            or _path_kind(destination["wal"]) != "absent"
+            or _path_kind(source["shm"]) != "absent"
+            or _path_kind(destination["shm"]) not in {"regular", "absent"}
+        ):
+            raise StoreUnavailableError(
+                "WAL loss acknowledgement requires a moved main and missing WAL"
+            )
+        orphan = _quarantine_repair_intent_locked(state_dir)
+        if orphan is None:
+            raise StoreUnavailableError(
+                "repair intent disappeared during acknowledgement"
+            )
+        return moved, orphan
 
 
 def _quarantine_repair_intent_locked(state_dir: Path) -> Path | None:
@@ -607,10 +690,40 @@ def start_tick(
 ) -> StartedTick:
     """Sweep stale running rows, measure overlap, and open a new running row."""
     with _immediate(conn):
-        highest = int(conn.execute("SELECT COALESCE(MAX(seq), 0) FROM ticks").fetchone()[0])
-        if highest > MAX_TRUSTED_SEQ:
+        highest = int(
+            conn.execute("SELECT COALESCE(MAX(seq), 0) FROM ticks").fetchone()[0]
+        )
+        try:
+            sequences = conn.execute(
+                "SELECT seq, typeof(seq) FROM sqlite_sequence "
+                "WHERE name = 'ticks' COLLATE NOCASE"
+            ).fetchall()
+        except sqlite3.DatabaseError as exc:
             raise StoreCorruptError(
-                f"seq {highest} exceeds the trusted maximum {MAX_TRUSTED_SEQ}"
+                f"ticks sequence metadata is unreadable: {exc}"
+            ) from exc
+        if len(sequences) > 1:
+            raise StoreCorruptError("ticks has duplicate sqlite_sequence rows")
+        if not sequences:
+            if highest:
+                raise StoreCorruptError(
+                    "ticks rows exist but sqlite_sequence has no ticks entry"
+                )
+            sequence = 0
+        else:
+            sequence_value, value_type = sequences[0]
+            if value_type != "integer" or not isinstance(sequence_value, int):
+                raise StoreCorruptError("ticks sqlite_sequence value is not an integer")
+            sequence = sequence_value
+        next_sequence = max(highest, sequence) + 1
+        if sequence < highest:
+            raise StoreCorruptError(
+                f"ticks sqlite_sequence {sequence} is behind the highest row {highest}"
+            )
+        if next_sequence > MAX_TRUSTED_SEQ:
+            raise StoreCorruptError(
+                f"next seq {next_sequence} exceeds the trusted maximum "
+                f"{MAX_TRUSTED_SEQ}"
             )
         conn.execute(
             "UPDATE ticks SET outcome = 'abandoned' "

@@ -224,7 +224,7 @@ def test_repair_moves_structurally_untrusted_ticks(
     assert row["duration_ms"] is not None
 
 
-def test_repair_rejects_composite_seq_primary_key_with_matching_probe_values(
+def test_repair_rejects_composite_seq_primary_key_with_matching_row_values(
     tmp_path: Path,
 ) -> None:
     store = db.db_path(tmp_path)
@@ -343,7 +343,7 @@ def test_repair_moves_untrusted_store_with_rollback_trigger(
     assert not store.exists()
 
 
-def test_repair_completes_intent_when_wal_and_shm_are_absent(
+def test_repair_completes_intent_when_absent_sidecars_were_not_listed(
     tmp_path: Path,
 ) -> None:
     state_dir = tmp_path / "missing-sidecars"
@@ -353,7 +353,7 @@ def test_repair_completes_intent_when_wal_and_shm_are_absent(
         Path(f"{store}{suffix}").unlink(missing_ok=True)
     moved = state_dir / "orchestrator.sqlite.corrupt-stale"
     db._repair_intent_path(state_dir).write_text(
-        json.dumps({"version": 1, "target": moved.name, "files": ["main", "wal", "shm"]}),
+        json.dumps({"version": 1, "target": moved.name, "files": ["main"]}),
         encoding="utf-8",
     )
 
@@ -424,7 +424,7 @@ def test_repair_cli_reports_target_when_completing_pending_move(
     Path(f"{store}-shm").unlink(missing_ok=True)
     db._repair_intent_path(state_dir).write_text(
         json.dumps(
-            {"version": 1, "target": moved.name, "files": ["main", "wal", "shm"]}
+            {"version": 1, "target": moved.name, "files": ["main"]}
         ),
         encoding="utf-8",
     )
@@ -1427,11 +1427,7 @@ def test_repair_keeps_schema_with_leading_comment_and_quoted_identifiers(
 def test_repair_quarantines_uppercase_ticks_with_trigger_on_ticks(
     tmp_path: Path,
 ) -> None:
-    """A trigger target is matched case-insensitively.
-
-    The lexer compared `tbl_name` case-sensitively, so a RAISE(ROLLBACK) trigger
-    on an uppercase `TICKS` slipped through and could abort the probe savepoint.
-    """
+    """A trigger target is matched case-insensitively without executing it."""
     store = db.db_path(tmp_path)
     conn = sqlite3.connect(str(store))
     try:
@@ -1471,11 +1467,7 @@ def test_repair_quarantines_uppercase_ticks_with_trigger_on_ticks(
 def test_repair_quarantines_hostile_check_constraint(
     tmp_path: Path, hostile_column: str
 ) -> None:
-    """A CHECK that rejects every row is caught by the probe, not by the DDL text.
-
-    Nothing in the schema text distinguishes a hostile CHECK from a benign one;
-    only attempting the write does.
-    """
+    """Unknown CHECK expressions are rejected by the schema allowlist."""
     store = db.db_path(tmp_path)
     conn = sqlite3.connect(str(store))
     try:
@@ -1502,8 +1494,7 @@ def test_repair_quarantines_hostile_check_constraint(
 
 
 def test_repair_quarantines_extra_not_null_column(tmp_path: Path) -> None:
-    """A column the writer never fills with NOT NULL and no default blocks every
-    insert; the probe raises rather than the store passing on column names."""
+    """A column the writer never fills with NOT NULL and no default is untrusted."""
     store = db.db_path(tmp_path)
     conn = sqlite3.connect(str(store))
     try:
@@ -1530,9 +1521,10 @@ def test_repair_quarantines_extra_not_null_column(tmp_path: Path) -> None:
     assert persist.run_tick(tmp_path, tick_id="recovered", noop=True).seq == 1
 
 
-def test_repair_probe_leaves_no_rows_or_sequence_change(tmp_path: Path) -> None:
-    """A healthy store is only probed. The probe rolls back, so the store keeps
-    its rows, its sqlite_sequence, and its next seq."""
+def test_repair_schema_check_leaves_no_rows_or_sequence_change(
+    tmp_path: Path,
+) -> None:
+    """Read-only validation leaves rows, sqlite_sequence, and next seq unchanged."""
     persist.run_tick(tmp_path, tick_id="first", noop=True)
     conn = sqlite3.connect(str(db.db_path(tmp_path)))
     try:
@@ -1543,7 +1535,7 @@ def test_repair_probe_leaves_no_rows_or_sequence_change(tmp_path: Path) -> None:
     finally:
         conn.close()
 
-    result = persist.repair_store(tmp_path, stamp="probe-rollback")
+    result = persist.repair_store(tmp_path, stamp="schema-validation")
     assert result == db.db_path(tmp_path)
 
     conn = sqlite3.connect(str(db.db_path(tmp_path)))
@@ -1921,3 +1913,633 @@ def test_repair_cli_reports_no_store_only_when_none_exists(
     assert persist.main(["repair", "--state-dir", str(state_dir)]) == 0
 
     assert capsys.readouterr().out.strip() == "repair: no store to move"
+
+
+def test_repair_rejects_sampled_duration_check(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    ddl = db._TABLE_SQL.replace(
+        "duration_ms   INTEGER          CHECK "
+        "(duration_ms IS NULL OR duration_ms >= 0)",
+        "duration_ms   INTEGER          CHECK "
+        "(duration_ms IS NULL OR duration_ms IN (0, 1, 2, 10, 1000))",
+    )
+    assert ddl != db._TABLE_SQL
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.executescript(ddl)
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, outcome) "
+            "VALUES ('duration-check', ?, 'running')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "UPDATE ticks SET outcome = 'completed', duration_ms = 55 "
+                "WHERE tick_id = 'duration-check'"
+            )
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="sampled-duration")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-sampled-duration"
+    moved_conn = sqlite3.connect(str(moved))
+    try:
+        row = moved_conn.execute(
+            "SELECT tick_id, outcome, duration_ms FROM ticks"
+        ).fetchone()
+    finally:
+        moved_conn.close()
+    assert row == ("duration-check", "running", None)
+
+
+@pytest.mark.parametrize(
+    "trigger_body",
+    [
+        "UPDATE sqlite_sequence SET seq=4611686018427387904 WHERE name='ticks'",
+        'UPDATE "sqlite_sequence" SET seq=4611686018427387904 WHERE name="ticks"',
+        "DELETE FROM [TiCkS]",
+        "DELETE FROM 'ticks'",
+        "SELECT * FROM [LaTeSt]",
+        "SELECT unknown_trigger_function()",
+    ],
+)
+def test_repair_rejects_off_target_trigger_that_can_damage_ticks(
+    tmp_path: Path, trigger_body: str
+) -> None:
+    state_dir = tmp_path / "off-target-trigger"
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.execute("CREATE TABLE auxiliary (value INTEGER)")
+        conn.execute(
+            "CREATE TRIGGER damage AFTER INSERT ON auxiliary "
+            f"BEGIN {trigger_body}; END"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(state_dir, stamp="off-target-trigger")
+
+    assert moved == state_dir / "orchestrator.sqlite.corrupt-off-target-trigger"
+    assert moved.is_file()
+    assert not store.exists()
+    archived = sqlite3.connect(str(moved))
+    try:
+        assert archived.execute(
+            "SELECT tick_id FROM ticks ORDER BY seq"
+        ).fetchall() == [("seed",)]
+    finally:
+        archived.close()
+
+
+@pytest.mark.parametrize(
+    ("constraint", "action"),
+    [
+        ("unique", "REPLACE"),
+        ("unique", "IGNORE"),
+        ("unique", "FAIL"),
+        ("unique", "ROLLBACK"),
+        ("primary-key", "REPLACE"),
+        ("primary-key", "IGNORE"),
+        ("primary-key", "FAIL"),
+        ("primary-key", "ROLLBACK"),
+    ],
+)
+def test_repair_rejects_nondefault_constraint_conflict_action(
+    tmp_path: Path, constraint: str, action: str
+) -> None:
+    store = db.db_path(tmp_path)
+    ddl = db._TABLE_SQL
+    if constraint == "unique":
+        ddl = ddl.replace(
+            "tick_id       TEXT    NOT NULL UNIQUE,",
+            f"tick_id       TEXT    NOT NULL UNIQUE ON CONFLICT {action},",
+        )
+    else:
+        ddl = ddl.replace(
+            "seq           INTEGER PRIMARY KEY AUTOINCREMENT,",
+            f"seq           INTEGER PRIMARY KEY ON CONFLICT {action} AUTOINCREMENT,",
+        )
+    assert ddl != db._TABLE_SQL
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.executescript(ddl)
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(
+        tmp_path, stamp=f"conflict-{constraint}-{action.lower()}"
+    )
+
+    assert moved == tmp_path / (
+        f"orchestrator.sqlite.corrupt-conflict-{constraint}-{action.lower()}"
+    )
+    archived = sqlite3.connect(str(moved))
+    try:
+        assert archived.execute(
+            "SELECT tick_id, seq FROM ticks"
+        ).fetchall() == [("seed", 1)]
+    finally:
+        archived.close()
+
+
+def test_repair_rejects_duplicate_id_replace_conflict_policy(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    ddl = db._TABLE_SQL.replace(
+        "tick_id       TEXT    NOT NULL UNIQUE,",
+        "tick_id       TEXT    NOT NULL UNIQUE ON CONFLICT REPLACE,",
+    )
+    assert ddl != db._TABLE_SQL
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.executescript(ddl)
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('same-id', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="replace-conflict")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-replace-conflict"
+    archived = sqlite3.connect(str(moved))
+    try:
+        assert archived.execute(
+            "SELECT tick_id, seq FROM ticks"
+        ).fetchall() == [("same-id", 1)]
+    finally:
+        archived.close()
+
+
+def test_repair_keeps_explicit_default_abort_conflict_policy(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    ddl = db._TABLE_SQL.replace(
+        "tick_id       TEXT    NOT NULL UNIQUE,",
+        "tick_id       TEXT    NOT NULL UNIQUE ON CONFLICT ABORT,",
+    )
+    assert ddl != db._TABLE_SQL
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.executescript(ddl)
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert persist.repair_store(tmp_path, stamp="default-abort") == store
+    with pytest.raises(db.DuplicateTickIdError):
+        persist.run_tick(tmp_path, tick_id="seed", noop=True)
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        "started-at-nocase",
+        "extra-nocase-index",
+        "generated-column",
+        "strict",
+        "foreign-key",
+        "duplicate-check",
+    ],
+)
+def test_repair_rejects_unsupported_ticks_schema_modifiers(
+    tmp_path: Path, shape: str
+) -> None:
+    store = db.db_path(tmp_path)
+    ddl = db._TABLE_SQL
+    if shape == "started-at-nocase":
+        ddl = ddl.replace(
+            "started_at    TEXT    NOT NULL CHECK",
+            "started_at    TEXT    COLLATE NOCASE NOT NULL CHECK",
+        )
+    elif shape == "generated-column":
+        ddl = ddl.replace(
+            "last_alert_ok INTEGER          CHECK",
+            "display TEXT GENERATED ALWAYS AS (tick_id) VIRTUAL,\n"
+            "    last_alert_ok INTEGER          CHECK",
+        )
+    elif shape == "strict":
+        ddl = ddl.rstrip() + " STRICT"
+    conn = sqlite3.connect(str(store))
+    try:
+        if shape == "foreign-key":
+            conn.execute("CREATE TABLE auxiliary (value TEXT PRIMARY KEY)")
+            ddl = ddl.replace(
+                "last_alert_ok INTEGER          CHECK",
+                "last_alert_ok INTEGER          CHECK",
+            ).rstrip()
+            ddl = ddl[:-1] + (
+                ", FOREIGN KEY (last_alert_ok) REFERENCES auxiliary(value))"
+            )
+        elif shape == "duplicate-check":
+            ddl = ddl.replace(
+                "last_alert_ok INTEGER          CHECK "
+                "(last_alert_ok IS NULL OR last_alert_ok IN (0, 1)),",
+                "last_alert_ok INTEGER          CHECK "
+                "(last_alert_ok IS NULL OR last_alert_ok IN (0, 1)), "
+                "CHECK (noop IN (0, 1)),",
+            )
+        conn.executescript(ddl)
+        if shape == "extra-nocase-index":
+            conn.execute(
+                "CREATE INDEX started_at_nocase ON ticks(started_at COLLATE NOCASE)"
+            )
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp=shape)
+
+    assert moved == tmp_path / f"orchestrator.sqlite.corrupt-{shape}"
+    assert moved.is_file()
+
+
+def test_repair_rejects_noncanonical_latest_view(tmp_path: Path) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.executescript(db._TABLE_SQL)
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.execute("CREATE VIEW latest AS SELECT tick_id FROM ticks")
+        conn.commit()
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="noncanonical-latest-view")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-noncanonical-latest-view"
+    assert moved.is_file()
+
+
+def test_repair_keeps_unrelated_autoincrement_table_and_analyze_metadata(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.executescript(db._TABLE_SQL)
+        conn.execute(
+            "CREATE TABLE auxiliary (seq INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT)"
+        )
+        conn.execute("INSERT INTO auxiliary(value) VALUES ('independent')")
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.execute("ANALYZE")
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert persist.repair_store(tmp_path, stamp="analyzed-auxiliary") == store
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "seed"
+
+
+@pytest.mark.parametrize(
+    "shape",
+    ["duplicate", "noninteger", "behind-row", "missing"],
+)
+def test_repair_rejects_inconsistent_ticks_sequence_metadata(
+    tmp_path: Path, shape: str
+) -> None:
+    persist.run_tick(tmp_path, tick_id="seed", noop=True)
+    conn = db.connect(tmp_path)
+    try:
+        if shape == "duplicate":
+            conn.execute(
+                "INSERT INTO sqlite_sequence(name, seq) VALUES ('ticks', 1)"
+            )
+        elif shape == "noninteger":
+            conn.execute(
+                "UPDATE sqlite_sequence SET seq='not-an-integer' WHERE name='ticks'"
+            )
+        elif shape == "behind-row":
+            conn.execute(
+                "UPDATE sqlite_sequence SET seq=0 WHERE name='ticks'"
+            )
+        else:
+            conn.execute("DELETE FROM sqlite_sequence WHERE name='ticks'")
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp=f"sequence-{shape}")
+
+    assert moved == tmp_path / f"orchestrator.sqlite.corrupt-sequence-{shape}"
+    assert moved.is_file()
+
+
+def test_repair_rejects_internal_rowid_shadow_column(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.execute(
+            "CREATE TABLE ticks ("
+            "seq INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "_rowid_ TEXT, "
+            "tick_id TEXT NOT NULL UNIQUE, "
+            "started_at TEXT NOT NULL, "
+            "duration_ms INTEGER, "
+            "outcome TEXT NOT NULL DEFAULT 'running', "
+            "noop INTEGER NOT NULL DEFAULT 0, "
+            "overlap INTEGER NOT NULL DEFAULT 0, "
+            "last_alert_ok INTEGER)"
+        )
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="internal-rowid-shadow")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-internal-rowid-shadow"
+    assert moved.is_file()
+    assert not store.exists()
+
+
+def test_repair_keeps_canonical_store_without_latest_view(
+    tmp_path: Path,
+) -> None:
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(str(store))
+    try:
+        conn.executescript(db._TABLE_SQL)
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, duration_ms, outcome) "
+            "VALUES ('seed', ?, 0, 'completed')",
+            (datetime.now(timezone.utc).isoformat(),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    assert persist.repair_store(tmp_path, stamp="missing-latest") == store
+    assert persist.read_latest_tick(tmp_path)["tick_id"] == "seed"
+
+
+def test_start_tick_refuses_exhausted_sequence_before_sweeping(
+    tmp_path: Path,
+) -> None:
+    persist.run_tick(tmp_path, tick_id="seed", noop=True)
+    conn = db.connect(tmp_path)
+    stale_start = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    try:
+        conn.execute(
+            "INSERT INTO ticks (tick_id, started_at, outcome, overlap) "
+            "VALUES ('stale-running', ?, 'running', 0)",
+            (stale_start,),
+        )
+        conn.execute(
+            "UPDATE sqlite_sequence SET seq=? WHERE name='ticks'",
+            (db.MAX_TRUSTED_SEQ,),
+        )
+    finally:
+        conn.close()
+
+    with pytest.raises(db.StoreCorruptError):
+        persist.run_tick(tmp_path, tick_id="must-not-start", noop=True)
+
+    check = sqlite3.connect(str(db.db_path(tmp_path)))
+    try:
+        assert check.execute(
+            "SELECT outcome FROM ticks WHERE tick_id='stale-running'"
+        ).fetchone() == ("running",)
+        assert check.execute(
+            "SELECT seq FROM sqlite_sequence WHERE name='ticks'"
+        ).fetchone() == (db.MAX_TRUSTED_SEQ,)
+        assert check.execute(
+            "SELECT 1 FROM ticks WHERE tick_id='must-not-start'"
+        ).fetchone() is None
+    finally:
+        check.close()
+
+
+def test_start_tick_reserves_the_last_trusted_sequence(
+    tmp_path: Path,
+) -> None:
+    persist.run_tick(tmp_path, tick_id="seed", noop=True)
+    conn = db.connect(tmp_path)
+    try:
+        conn.execute(
+            "UPDATE sqlite_sequence SET seq=? WHERE name='ticks'",
+            (db.MAX_TRUSTED_SEQ - 1,),
+        )
+    finally:
+        conn.close()
+
+    final = persist.run_tick(tmp_path, tick_id="last-trusted", noop=True)
+    assert final.seq == db.MAX_TRUSTED_SEQ
+
+    with pytest.raises(db.StoreCorruptError):
+        persist.run_tick(tmp_path, tick_id="over-trusted", noop=True)
+
+    check = sqlite3.connect(str(db.db_path(tmp_path)))
+    try:
+        assert check.execute(
+            "SELECT seq, tick_id FROM ticks ORDER BY seq DESC LIMIT 1"
+        ).fetchone() == (db.MAX_TRUSTED_SEQ, "last-trusted")
+    finally:
+        check.close()
+
+
+def test_repair_quarantines_store_without_sequence_headroom(
+    tmp_path: Path,
+) -> None:
+    persist.run_tick(tmp_path, tick_id="seed", noop=True)
+    conn = db.connect(tmp_path)
+    try:
+        conn.execute(
+            "UPDATE sqlite_sequence SET seq=? WHERE name='ticks'",
+            (db.MAX_TRUSTED_SEQ,),
+        )
+    finally:
+        conn.close()
+
+    moved = persist.repair_store(tmp_path, stamp="no-sequence-headroom")
+
+    assert moved == tmp_path / "orchestrator.sqlite.corrupt-no-sequence-headroom"
+    assert moved.is_file()
+    assert not db.db_path(tmp_path).exists()
+
+
+def _create_lost_wal_repair_state(state_dir: Path) -> tuple[Path, bytes]:
+    persist.run_tick(state_dir, tick_id="seed", noop=True)
+    store = db.db_path(state_dir)
+    script = (
+        "import os, sqlite3, sys; "
+        "p=sys.argv[1]; c=sqlite3.connect(p, isolation_level=None); "
+        "c.execute('PRAGMA journal_mode=WAL'); "
+        "c.execute('PRAGMA synchronous=NORMAL'); "
+        "c.execute('PRAGMA wal_autocheckpoint=0'); "
+        "c.execute(\"INSERT INTO ticks "
+        "(seq,tick_id,started_at,duration_ms,outcome,noop,overlap) "
+        "VALUES (2,'wal-only', '2026-01-01T00:00:00+00:00',0,'completed',0,0)\"); "
+        "os._exit(0)"
+    )
+    subprocess.run(
+        [sys.executable, "-c", script, str(store)],
+        cwd=_REPO_ROOT,
+        check=True,
+    )
+    wal = Path(f"{store}-wal")
+    assert wal.is_file()
+    wal_backup = wal.read_bytes()
+    immutable = sqlite3.connect(f"{store.as_uri()}?immutable=1", uri=True)
+    try:
+        assert immutable.execute(
+            "SELECT COUNT(*) FROM ticks WHERE tick_id='wal-only'"
+        ).fetchone() == (0,)
+    finally:
+        immutable.close()
+
+    target = state_dir / "orchestrator.sqlite.corrupt-lost-wal"
+    db._repair_intent_path(state_dir).write_text(
+        json.dumps(
+            {"version": 1, "target": target.name, "files": ["main", "wal"]}
+        ),
+        encoding="utf-8",
+    )
+    store.replace(target)
+    wal.unlink()
+    Path(f"{store}-shm").unlink(missing_ok=True)
+    return target, wal_backup
+
+
+def _run_repair_cli(state_dir: Path, *options: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from tools.review_orchestrator.persist import main; "
+            "raise SystemExit(main())",
+            "repair",
+            "--state-dir",
+            str(state_dir),
+            *options,
+        ],
+        cwd=_REPO_ROOT,
+        text=True,
+        capture_output=True,
+    )
+
+
+def test_missing_wal_blocks_cli_and_keeps_intent_without_creating_store(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "lost-wal"
+    state_dir.mkdir()
+    target, _ = _create_lost_wal_repair_state(state_dir)
+    before = target.read_bytes()
+
+    result = _run_repair_cli(state_dir)
+
+    assert result.returncode == 2
+    assert (
+        "repair: blocked: expected WAL missing at source and target; "
+        "intent retained; target=orchestrator.sqlite.corrupt-lost-wal"
+    ) in result.stderr
+    assert db._repair_intent_path(state_dir).is_file()
+    assert target.read_bytes() == before
+    assert not db.db_path(state_dir).exists()
+    assert not Path(f"{db.db_path(state_dir)}-wal").exists()
+    with pytest.raises(db.StoreUnavailableError):
+        persist.read_latest_tick(state_dir)
+    assert not db.db_path(state_dir).exists()
+
+
+def test_acknowledging_lost_wal_quarantines_intent_and_preserves_archive(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "acknowledged-lost-wal"
+    state_dir.mkdir()
+    target, _ = _create_lost_wal_repair_state(state_dir)
+    before = target.read_bytes()
+
+    result = _run_repair_cli(state_dir, "--acknowledge-wal-loss")
+
+    assert result.returncode == 0
+    assert "WAL data is unrecoverable" in result.stdout
+    assert "archived main preserved" in result.stdout
+    assert "next start will create a fresh store" in result.stdout
+    assert not db._repair_intent_path(state_dir).exists()
+    assert len(
+        list(state_dir.glob(".orchestrator-repair-intent.json.orphan-*"))
+    ) == 1
+    assert target.read_bytes() == before
+    assert not db.db_path(state_dir).exists()
+
+
+def test_wal_loss_acknowledgement_is_rejected_without_matching_intent(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "not-a-wal-loss"
+    persist.run_tick(state_dir, tick_id="healthy", noop=True)
+    before = db.db_path(state_dir).read_bytes()
+
+    result = _run_repair_cli(state_dir, "--acknowledge-wal-loss")
+
+    assert result.returncode == 2
+    assert "no pending repair intent to acknowledge" in result.stderr
+    assert db.db_path(state_dir).read_bytes() == before
+    assert not db._repair_intent_path(state_dir).exists()
+
+
+def test_restoring_consistent_backup_wal_resumes_pending_repair(
+    tmp_path: Path,
+) -> None:
+    state_dir = tmp_path / "restored-wal"
+    state_dir.mkdir()
+    target, wal_backup = _create_lost_wal_repair_state(state_dir)
+    with pytest.raises(db.StoreUnavailableError):
+        with db.locked_connect(state_dir):
+            pass
+    Path(f"{target}-wal").write_bytes(wal_backup)
+
+    assert persist.repair_store(state_dir, stamp="restored-wal") == target
+    assert not db._repair_intent_path(state_dir).exists()
+
+    conn = sqlite3.connect(str(target))
+    try:
+        assert conn.execute(
+            "SELECT tick_id FROM ticks WHERE tick_id='wal-only'"
+        ).fetchone() == ("wal-only",)
+    finally:
+        conn.close()
