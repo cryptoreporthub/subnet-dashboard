@@ -21,4 +21,6 @@ jobs:
       - name: Machine inventory
         run: flyctl machines list --app subnet-dashboard
       - name: Boot probe
-        run: flyctl logs --app subnet-dashboard --no-tail | grep -iE "skip|inline|worker" || echo "boot line outside window"
+        run: |
+          logs=$(flyctl logs --app subnet-dashboard --no-tail) || { echo "flyctl logs failed" >&2; exit 1; }
+          printf '%s\n' "$logs" | grep -iE "skip|inline|worker" || echo "boot line outside window"
