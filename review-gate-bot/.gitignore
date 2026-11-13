@@ -1,0 +1,10 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+
+# Local agent state: sessions, kv, eval history.
+.agent-serve/
+.agentkit/
+state-root/
+evals/**/report.xml
+reports/
