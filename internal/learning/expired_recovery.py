@@ -14,41 +14,147 @@ by hydrate memo so repeated sweeps are cheap).
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 _RETIRED = frozenset({"expired", "ungradeable"})
 _MAX_RECOVER = 20
 
+# Per-effect receipts for expired-recovery learning. This is not the pump-desk
+# learning: {key, kind, state, owner, done} schema in internal/council/learning_effects.py.
+LEARNING_EFFECT_RECEIPTS_PATH = os.environ.get(
+    "LEARNING_EFFECT_RECEIPTS_PATH",
+    os.path.join("data", "learning_effect_receipts.json"),
+)
+
+_NORMAL_EFFECTS = ("expert", "impact", "finalize", "scenario", "signal")
+_SKIP_EFFECTS = ("finalize", "pump")
+
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-
-def _prediction_still_open(pred_id: object, *, observation: Optional[dict] = None) -> bool:
-    """True when any judge still holds an open position, or the book is unobservable."""
-    if pred_id is None:
-        return False
+def _prediction_still_open(
+    pred_id: object,
+    *,
+    observation: Optional[dict] = None,
+    netuid: object = None,
+    row: Optional[dict] = None,
+) -> bool:
+    """True when a matching open position remains, or the book is unreadable."""
+    if row:
+        if pred_id is None:
+            pred_id = row.get("id")
+        if netuid is None:
+            netuid = row.get("netuid")
     try:
-        from internal.judges.portfolios import observe_portfolios
+        from internal.judges.portfolios import observe_portfolios, _position_matches
 
         obs = observation if observation is not None else observe_portfolios()
-        if obs.get("kind") != "readable":
+        kind = obs.get("kind")
+        if kind == "missing":
+            return False
+        if kind != "readable":
             return True
         data = obs.get("data") or {}
         for name in ("oracle", "echo", "pulse"):
             judge = data.get(name) or {}
             for pos in judge.get("open_positions") or []:
-                if pos.get("id") == pred_id:
+                if _position_matches(pos, pred_id, netuid):
                     return True
     except Exception:
         return True
     return False
+
+
+def _receipts_path() -> str:
+    return LEARNING_EFFECT_RECEIPTS_PATH
+
+
+def _load_receipts() -> Dict[str, Any]:
+    path = _receipts_path()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if isinstance(data, dict):
+            return data
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+    return {}
+
+
+def _receipt_token(row_key: Optional[Tuple[Any, ...]], effect: str) -> str:
+    return json.dumps([list(row_key) if row_key is not None else None, effect], separators=(",", ":"))
+
+
+def has_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> bool:
+    return _receipt_token(row_key, effect) in _load_receipts()
+
+
+def write_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> None:
+    path = _receipts_path()
+    data = _load_receipts()
+    data[_receipt_token(row_key, effect)] = _utcnow_iso()
+    parent = os.path.dirname(path) or "data"
+    os.makedirs(parent, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2)
+    os.replace(tmp, path)
+
+
+def _pending_list(row: Dict[str, Any]) -> List[str]:
+    from internal.council import resolver
+
+    if resolver._skip_council_learning(row):
+        return list(_SKIP_EFFECTS)
+    return list(_NORMAL_EFFECTS)
+
+
+def _stamp_learning_effects_pending(row: Dict[str, Any]) -> None:
+    existing = row.get("learning_effects")
+    if isinstance(existing, dict) and existing.get("pending"):
+        return
+    row["learning_effects"] = {"pending": _pending_list(row), "done": list((existing or {}).get("done") or [])}
+
+
+def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
+    from internal.learning.predictions_store import load_predictions, merge_ledger_changes, _row_key
+
+    key = _row_key(row)
+    before = load_predictions(fail_closed=True)
+    after = deepcopy(before)
+    target = None
+    for bucket in ("predictions", "resolved"):
+        for candidate in after.get(bucket) or []:
+            if not isinstance(candidate, dict):
+                continue
+            if _row_key(candidate) == key:
+                target = candidate
+                break
+        if target is not None:
+            break
+    if target is None:
+        return
+    effects = target.setdefault("learning_effects", {"pending": [], "done": []})
+    pending = [name for name in (effects.get("pending") or []) if name != effect]
+    done = list(effects.get("done") or [])
+    if effect not in done:
+        done.append(effect)
+    effects["pending"] = pending
+    effects["done"] = done
+    merge_ledger_changes(before, after, caller="expired_recovery", trigger="learning_effect_receipt")
+    row["learning_effects"] = {"pending": list(pending), "done": list(done)}
+
 
 def recover_expired_predictions(
     *,
@@ -59,6 +165,7 @@ def recover_expired_predictions(
     from internal.learning.predictions_store import (
         PersistOutcome,
         PredictionsLedgerUnreadable,
+        _row_key,
         load_predictions,
         merge_ledger_changes,
         update_stats,
@@ -71,6 +178,8 @@ def recover_expired_predictions(
     recovered, skipped = 0, 0
     details: List[Dict[str, Any]] = []
     incomplete: List[Any] = []
+    close_incomplete: List[Any] = []
+    effect_incomplete: List[Any] = []
 
     def _fail(reason: str, *, error: str = "", recovered: int = 0, **extra: Any) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -93,7 +202,16 @@ def recover_expired_predictions(
         return _fail("ledger_unreadable", error=str(exc))
 
     observation = observe_portfolios()
-    if not dry_run and observation.get("kind") != "readable":
+    retryable_pending: List[Dict[str, Any]] = []
+    for row in data.get("resolved") or []:
+        if not isinstance(row, dict):
+            continue
+        pending = ((row.get("learning_effects") or {}) if isinstance(row.get("learning_effects"), dict) else {}).get("pending") or []
+        outcome = str(row.get("outcome") or "").lower()
+        if pending and outcome not in _RETIRED:
+            retryable_pending.append(row)
+
+    if not dry_run and observation.get("kind") == "unreadable" and not retryable_pending:
         return _fail(
             "portfolio_unobservable",
             error=str(observation.get("error") or observation.get("kind") or "unobservable"),
@@ -180,6 +298,7 @@ def recover_expired_predictions(
         row["resolved_at"] = resolve_at.isoformat().replace("+00:00", "Z")
         row["recovered_at"] = _utcnow_iso()
         row["recovery"] = {"from": outcome, "price_source": meta.get("price_source")}
+        _stamp_learning_effects_pending(row)
         recovered_rows.append({
             "row": row,
             "actual_pct": actual_pct,
@@ -193,6 +312,99 @@ def recover_expired_predictions(
             "prior_outcome": outcome,
         })
         recovered += 1
+
+    def _run_effects(items: List[Dict[str, Any]]) -> None:
+        for item in items:
+            row = item["row"]
+            key = _row_key(row)
+            pending = list(((row.get("learning_effects") or {}).get("pending") or []))
+            if not pending:
+                pending = _pending_list(row)
+            for effect in list(pending):
+                if has_effect_receipt(key, effect):
+                    try:
+                        _move_effect_on_ledger(row, effect)
+                    except Exception:
+                        logger.exception("expired recovery receipt stamp failed")
+                        incomplete.append(row.get("id"))
+                        raise
+                    continue
+                try:
+                    if effect == "expert":
+                        if not resolver._skip_council_learning(row):
+                            resolver._nudge_attributed_expert(
+                                row,
+                                correct=item.get("correct"),
+                                capture=item.get("capture"),
+                                stamped_expert=item.get("expert"),
+                            )
+                    elif effect == "impact":
+                        if not resolver._skip_council_learning(row):
+                            resolver._nudge_impact_strength(row, item.get("correct"))
+                    elif effect == "finalize":
+                        from internal.council.capture import stamp_capture_fields as _stamp
+                        from internal.judges.portfolios import observe_portfolios
+
+                        capture = item.get("capture") or _stamp(row, float(row.get("actual_pct") or 0))
+                        resolve_at = item.get("resolve_at") or row.get("resolved_at")
+                        if hasattr(resolve_at, "isoformat"):
+                            resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
+                        else:
+                            resolved_at = str(resolve_at or row.get("resolved_at") or _utcnow_iso())
+                        warnings_before = list(row.get("side_effect_warnings") or [])
+                        resolver.atomic_finalize_resolution(
+                            row,
+                            actual_pct=float(item.get("actual_pct") if item.get("actual_pct") is not None else row.get("actual_pct") or 0),
+                            outcome=str(item.get("new_outcome") or row.get("outcome") or ""),
+                            correct=item.get("correct") if item.get("correct") is not None else row.get("correct"),
+                            resolved_price=float(item.get("price") if item.get("price") is not None else row.get("resolved_price") or 0),
+                            resolved_at=resolved_at,
+                            price_meta=item.get("meta"),
+                            apply_judge_nudge=False,
+                        )
+                        warnings_after = list(row.get("side_effect_warnings") or [])
+                        fresh_close_warning = any(
+                            name in warnings_after and name not in warnings_before
+                            for name in ("on_prediction_resolved", "portfolios_unobservable")
+                        )
+                        obs = observe_portfolios()
+                        still_open = False
+                        if obs.get("kind") == "unreadable":
+                            still_open = True
+                        elif obs.get("kind") != "missing":
+                            still_open = _prediction_still_open(row.get("id"), row=row, observation=obs)
+                        if still_open or fresh_close_warning:
+                            close_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
+                            continue
+                    elif effect == "scenario":
+                        if not resolver._skip_council_learning(row):
+                            resolver._record_scenario_outcome(
+                                row,
+                                item.get("actual_pct", row.get("actual_pct")),
+                                item.get("new_outcome", row.get("outcome")),
+                                item.get("correct", row.get("correct")),
+                                item.get("expert", row.get("expert")),
+                            )
+                    elif effect == "signal":
+                        if not resolver._skip_council_learning(row):
+                            resolver._nudge_signal_weights(
+                                row, item.get("correct", row.get("correct")), capture=item.get("capture")
+                            )
+                    elif effect == "pump":
+                        try:
+                            from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                            maybe_adapt_after_resolve()
+                        except Exception:
+                            logger.exception("expired recovery pump calibration failed")
+                    write_effect_receipt(key, effect)
+                    _move_effect_on_ledger(row, effect)
+                except Exception:
+                    logger.exception("expired recovery post-commit effects failed")
+                    effect_incomplete.append(row.get("id"))
+                    incomplete.append(row.get("id"))
+                    raise
 
     if not dry_run and recovered:
         try:
@@ -214,74 +426,72 @@ def recover_expired_predictions(
                 recovered=0,
                 incomplete_ids=incomplete or None,
             )
-        # APPLIED means the after-image (including recovered_rows) is on disk.
-        applied_rows = list(recovered_rows)
+        committed = set(result.committed_keys or ())
+        applied_rows = [item for item in recovered_rows if _row_key(item["row"]) in committed]
         recovered = len(applied_rows)
+        conflict_keys = tuple(result.conflicts or ())
         try:
-            for item in applied_rows:
-                row = item["row"]
-                if not resolver._skip_council_learning(row):
-                    resolver._nudge_attributed_expert(
-                        row,
-                        correct=item["correct"],
-                        capture=item["capture"],
-                        stamped_expert=item["expert"],
-                    )
-                    resolver._nudge_impact_strength(row, item["correct"])
-                warnings_before = list(row.get("side_effect_warnings") or [])
-                resolver.atomic_finalize_resolution(
-                    row,
-                    actual_pct=item["actual_pct"],
-                    outcome=item["new_outcome"],
-                    correct=item["correct"],
-                    resolved_price=item["price"],
-                    resolved_at=item["resolve_at"].isoformat().replace("+00:00", "Z"),
-                    price_meta=item["meta"],
-                    apply_judge_nudge=False,
-                )
-                warnings_after = list(row.get("side_effect_warnings") or [])
-                fresh_close_warning = (
-                    "on_prediction_resolved" in warnings_after
-                    and "on_prediction_resolved" not in warnings_before
-                )
-                still_open = _prediction_still_open(row.get("id"), observation=observation)
-                if still_open:
-                    # Re-check after close so a pre-close readable book can complete.
-                    still_open = _prediction_still_open(row.get("id"))
-                    if observation.get("kind") != "readable":
-                        still_open = True
-                if fresh_close_warning or still_open:
-                    incomplete.append(row.get("id"))
-                if not resolver._skip_council_learning(row):
-                    resolver._record_scenario_outcome(
-                        row, item["actual_pct"], item["new_outcome"], item["correct"], item["expert"]
-                    )
-                    resolver._nudge_signal_weights(row, item["correct"], capture=item["capture"])
-                else:
-                    try:
-                        from internal.learning.pump_calibration import maybe_adapt_after_resolve
-
-                        maybe_adapt_after_resolve()
-                    except Exception:
-                        logger.exception("expired recovery pump calibration failed")
+            _run_effects(applied_rows)
         except Exception as exc:
-            logger.exception("expired recovery post-commit effects failed")
             return _fail(
                 "effects_incomplete",
                 error=str(exc),
                 recovered=recovered,
                 incomplete_ids=incomplete or None,
             )
-        logger.info("expired recovery: recovered=%s skipped=%s", recovered, skipped)
+        if conflict_keys:
+            return _fail(
+                "persist_conflict",
+                error="persist_conflict",
+                recovered=recovered,
+                conflicts=[list(k) if isinstance(k, tuple) else k for k in conflict_keys],
+                incomplete_ids=incomplete or None,
+            )
+
+    if not dry_run and retryable_pending:
+        # Reload so receipt stamps from a preceding grade pass are visible.
+        try:
+            fresh = load_predictions(fail_closed=True)
+        except Exception as exc:
+            return _fail("ledger_unreadable", error=str(exc), recovered=recovered)
+        pending_items = []
+        for row in fresh.get("resolved") or []:
+            if not isinstance(row, dict):
+                continue
+            pending = ((row.get("learning_effects") or {}) if isinstance(row.get("learning_effects"), dict) else {}).get("pending") or []
+            if pending and str(row.get("outcome") or "").lower() not in _RETIRED:
+                pending_items.append({
+                    "row": row,
+                    "actual_pct": row.get("actual_pct"),
+                    "new_outcome": row.get("outcome"),
+                    "correct": row.get("correct"),
+                    "price": row.get("resolved_price"),
+                    "resolve_at": row.get("resolved_at"),
+                    "meta": {"price_source": row.get("price_source")},
+                    "capture": None,
+                    "expert": row.get("expert"),
+                })
+        if pending_items:
+            try:
+                _run_effects(pending_items)
+            except Exception as exc:
+                return _fail(
+                    "effects_incomplete",
+                    error=str(exc),
+                    recovered=recovered,
+                    incomplete_ids=incomplete or None,
+                )
 
     if incomplete:
+        reason = "effects_incomplete" if effect_incomplete else "judge_close_incomplete"
         return _fail(
-            "judge_close_incomplete",
-            error="judge_close_incomplete",
+            reason,
+            error=reason,
             recovered=recovered,
             incomplete_ids=incomplete,
         )
 
+    logger.info("expired recovery: recovered=%s skipped=%s", recovered, skipped)
     return {
         "ok": True,
         "dry_run": dry_run,

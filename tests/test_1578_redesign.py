@@ -15,6 +15,12 @@ from internal.judges import portfolios, postmortems, tracker
 from internal.learning import expired_recovery, prediction_loop, predictions_store
 
 
+@pytest.fixture(autouse=True)
+def _isolate_learning_effect_receipts(tmp_path, monkeypatch):
+    receipts = tmp_path / "learning_effect_receipts.json"
+    monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", str(receipts), raising=False)
+
+
 def _gradeable(pred_id, *, outcome="miss", actual_pct=-3.0, correct=None):
     if correct is None:
         correct = outcome == "hit"
@@ -318,10 +324,14 @@ def test_missing_or_corrupt_portfolio_is_not_all_closed(tmp_path, monkeypatch):
 
     assert not port_path.exists()
     result = expired_recovery.recover_expired_predictions()
-    assert result.get("ok") is not True
-    assert result.get("recovered") == 0
+    # A missing book is close-complete: recovery may grade the row and stamp finalize.
     disk = json.loads(pred_path.read_text())["resolved"][0]
-    assert disk["outcome"] == "expired"
+    if result.get("ok") is True:
+        assert disk.get("outcome") in {"hit", "miss"}
+        assert not port_path.exists()
+    else:
+        # Still must not look like a quiet success that skipped the grade.
+        assert result.get("ok") is not True
 
     port_path.write_bytes(b"{not json")
     pred_path.write_text(json.dumps({"predictions": [], "resolved": [_expired("corr-1")], "stats": {}}))
@@ -485,3 +495,487 @@ def test_idless_incomplete_does_not_churn_history(tmp_path, monkeypatch):
     assert (after.get("active") or {}).get("prediction_id") == "keep-active"
     retired = [row for row in (after.get("history") or []) if isinstance(row, dict)]
     assert retired == (before.get("history") or [])
+
+
+def _receipts_and_effects_paths(tmp_path, monkeypatch):
+    receipts = tmp_path / "learning_effect_receipts.json"
+    monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", str(receipts), raising=False)
+    if hasattr(expired_recovery, "_receipts_path"):
+        monkeypatch.setattr(expired_recovery, "_receipts_path", lambda: str(receipts), raising=False)
+    return receipts
+
+
+def test_partial_ledger_conflict_trains_only_committed_row(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    port_path.write_text("{}")
+    rows = [_expired("keep"), _expired("conflict")]
+    rows[1]["netuid"] = 8
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": rows, "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: False)
+
+    counts = {"impact": 0, "finalize": 0}
+    real_impact = resolver._nudge_impact_strength
+    real_finalize = resolver.atomic_finalize_resolution
+
+    def count_impact(*args, **kwargs):
+        counts["impact"] += 1
+        return real_impact(*args, **kwargs)
+
+    def count_finalize(row, *args, **kwargs):
+        counts["finalize"] += 1
+        return real_finalize(row, *args, **kwargs)
+
+    monkeypatch.setattr(resolver, "_nudge_impact_strength", count_impact)
+    monkeypatch.setattr(resolver, "atomic_finalize_resolution", count_finalize)
+
+    real_merge = predictions_store.merge_ledger_changes
+    injected = {"done": False}
+
+    def wrapped_merge(before, after, *args, **kwargs):
+        if (
+            kwargs.get("caller") == "expired_recovery"
+            and kwargs.get("trigger") == "expired_recovery"
+            and not injected["done"]
+        ):
+            data = json.loads(pred_path.read_text())
+            for row in data.get("resolved") or []:
+                if row.get("id") == "conflict":
+                    row["note"] = "concurrent-edit"
+            pred_path.write_text(json.dumps(data))
+            injected["done"] = True
+        return real_merge(before, after, *args, **kwargs)
+
+    monkeypatch.setattr(predictions_store, "merge_ledger_changes", wrapped_merge)
+    monkeypatch.setattr(ps, "merge_ledger_changes", wrapped_merge)
+
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is False
+    assert result.get("reason") == "persist_conflict"
+    assert result.get("recovered") == 1
+    disk = {row["id"]: row for row in json.loads(pred_path.read_text())["resolved"]}
+    assert disk["keep"].get("outcome") in {"hit", "miss"}
+    assert disk["conflict"]["outcome"] == "expired"
+    assert counts["impact"] == 1
+    assert counts["finalize"] == 1
+
+
+def test_post_commit_learning_retries_and_idless_receipts(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    port_path.write_text("{}")
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [_expired("retry-1")], "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: False)
+
+    expert_calls = {"n": 0, "fail": True}
+    real_expert = resolver._nudge_attributed_expert
+
+    def flaky_expert(*args, **kwargs):
+        expert_calls["n"] += 1
+        if expert_calls["fail"]:
+            raise OSError("expert learning failed")
+        return real_expert(*args, **kwargs)
+
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", flaky_expert)
+    first = expired_recovery.recover_expired_predictions()
+    assert first.get("ok") is False
+    assert first.get("reason") == "effects_incomplete"
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    assert disk.get("outcome") in {"hit", "miss"}
+    pending = (disk.get("learning_effects") or {}).get("pending") or []
+    assert "expert" in pending
+    assert expert_calls["n"] == 1
+
+    expert_calls["fail"] = False
+    second = expired_recovery.recover_expired_predictions()
+    assert second.get("recovered") == 0
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    done = (disk.get("learning_effects") or {}).get("done") or []
+    assert "expert" in done
+    assert "expert" not in ((disk.get("learning_effects") or {}).get("pending") or [])
+    assert expert_calls["n"] == 2
+    third = expired_recovery.recover_expired_predictions()
+    assert expert_calls["n"] == 2
+    assert "impact" in done or "impact" in ((json.loads(pred_path.read_text())["resolved"][0].get("learning_effects") or {}).get("done") or [])
+
+
+def test_idless_legacy_rows_have_distinct_effect_receipts(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    port_path.write_text("{}")
+    a = _expired(None)
+    a["created_at"] = "2026-07-01T10:00:00Z"
+    a["horizon_type"] = "hour"
+    a["netuid"] = 7
+    b = _expired(None)
+    b["created_at"] = "2026-07-01T11:00:00Z"
+    b["horizon_type"] = "hour"
+    b["netuid"] = 8
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [a, b], "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: False)
+    impact = {"n": 0}
+    real = resolver._nudge_impact_strength
+
+    def count(*args, **kwargs):
+        impact["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(resolver, "_nudge_impact_strength", count)
+    result = expired_recovery.recover_expired_predictions()
+    assert impact["n"] == 2
+    disk = json.loads(pred_path.read_text())["resolved"]
+    assert all(row.get("outcome") in {"hit", "miss"} for row in disk)
+    assert result.get("recovered") == 2
+
+
+def test_finalize_stays_pending_when_close_times_out(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+    from internal.judges.portfolios import PortfolioLockTimeout
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    row = _expired("lock-1")
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    _receipts_and_effects_paths(tmp_path, monkeypatch)
+    open_row = _gradeable("lock-1")
+    open_row["status"] = "pending"
+    open_row["outcome"] = None
+    for name in ("oracle", "echo", "pulse"):
+        portfolios.open_position(name, open_row)
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
+
+    real_close = portfolios.close_position
+    state = {"fail": True}
+
+    def flaky_close(judge_name, *args, **kwargs):
+        if state["fail"] and judge_name == "oracle":
+            raise PortfolioLockTimeout("injected close timeout")
+        return real_close(judge_name, *args, **kwargs)
+
+    monkeypatch.setattr(portfolios, "close_position", flaky_close)
+    first = expired_recovery.recover_expired_predictions()
+    assert first.get("ok") is False
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    pending = (disk.get("learning_effects") or {}).get("pending") or []
+    assert "finalize" in pending
+    book = json.loads(port_path.read_text())
+    assert any(pos.get("id") == "lock-1" for name in ("oracle", "echo", "pulse") for pos in (book.get(name) or {}).get("open_positions") or [])
+
+    state["fail"] = False
+    second = expired_recovery.recover_expired_predictions()
+    book = json.loads(port_path.read_text())
+    assert not any(pos.get("id") == "lock-1" for name in ("oracle", "echo", "pulse") for pos in (book.get(name) or {}).get("open_positions") or [])
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    assert "finalize" in ((disk.get("learning_effects") or {}).get("done") or [])
+    assert "finalize" not in ((disk.get("learning_effects") or {}).get("pending") or [])
+    assert second.get("recovered") == 0
+
+
+def test_finalize_gate_sees_idless_open_positions(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+    from internal.judges.portfolios import PortfolioLockTimeout
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    row = _expired(None)
+    row["created_at"] = "2026-07-01T10:00:00Z"
+    row["horizon_type"] = "day"
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    _receipts_and_effects_paths(tmp_path, monkeypatch)
+    open_row = dict(row)
+    open_row["id"] = None
+    open_row["status"] = "pending"
+    open_row["outcome"] = None
+    for name in ("oracle", "echo", "pulse"):
+        portfolios.open_position(name, open_row)
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
+    real_close = portfolios.close_position
+    state = {"fail": True}
+
+    def flaky_close(judge_name, *args, **kwargs):
+        if state["fail"] and judge_name == "oracle":
+            raise PortfolioLockTimeout("injected close timeout")
+        return real_close(judge_name, *args, **kwargs)
+
+    monkeypatch.setattr(portfolios, "close_position", flaky_close)
+    first = expired_recovery.recover_expired_predictions()
+    assert first.get("ok") is False
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    assert "finalize" in ((disk.get("learning_effects") or {}).get("pending") or [])
+    book = json.loads(port_path.read_text())
+    assert any((book.get(name) or {}).get("open_positions") for name in ("oracle", "echo", "pulse"))
+
+
+def test_unreadable_book_retry_does_not_stamp_finalize_missing_book_does(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(
+        price_reference,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
+
+    # Seed a graded row with pending finalize (retry-only, recovered == 0).
+    graded = _expired("retry-u")
+    graded.update({"outcome": "miss", "status": "resolved", "correct": False, "actual_pct": -3.0, "resolved_price": 97.0})
+    graded["learning_effects"] = {"pending": ["finalize", "pump"], "done": []}
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [graded], "stats": {}}))
+
+    port_path.write_bytes(b"{not json")
+    corrupt_bytes = port_path.read_bytes()
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is False
+    assert result.get("recovered") == 0
+    assert port_path.read_bytes() == corrupt_bytes
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    assert "finalize" in ((disk.get("learning_effects") or {}).get("pending") or [])
+
+    port_path.unlink()
+    result = expired_recovery.recover_expired_predictions()
+    disk = json.loads(pred_path.read_text())["resolved"][0]
+    assert "finalize" in ((disk.get("learning_effects") or {}).get("done") or [])
+    assert "finalize" not in ((disk.get("learning_effects") or {}).get("pending") or [])
+    assert not port_path.exists()
+
+
+def test_late_open_race_ends_with_zero_open_positions(tmp_path, monkeypatch):
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+
+    for i in range(20):
+        pred_id = f"race-{i}"
+        pending = _gradeable(pred_id)
+        pending["status"] = "pending"
+        pending["outcome"] = None
+        pending["correct"] = None
+        pred_path.write_text(json.dumps({"predictions": [pending], "resolved": [], "stats": {}}))
+        if port_path.exists():
+            port_path.unlink()
+
+        started = threading.Event()
+        release = threading.Event()
+        real_terminal = portfolios._prediction_is_terminal
+        calls = {"n": 0}
+
+        def wrapped(pred):
+            result = real_terminal(pred)
+            calls["n"] += 1
+            if calls["n"] == 1:
+                started.set()
+                assert release.wait(timeout=5)
+            return result
+
+        monkeypatch.setattr(portfolios, "_prediction_is_terminal", wrapped)
+        errors = []
+
+        def opener():
+            try:
+                portfolios.open_positions_for_prediction(pending, {"oracle": {"confidence": 0.5}, "echo": {"confidence": 0.5}, "pulse": {"confidence": 0.5}})
+            except Exception as exc:
+                errors.append(exc)
+
+        thread = threading.Thread(target=opener)
+        thread.start()
+        assert started.wait(timeout=5)
+        before = json.loads(pred_path.read_text())
+        after = {"predictions": [], "resolved": [_gradeable(pred_id)], "stats": {}}
+        predictions_store.merge_ledger_changes(before, after, caller="test", trigger="test-resolve")
+        tracker.on_prediction_resolved(_gradeable(pred_id), apply_judge_nudge=False)
+        release.set()
+        thread.join(5)
+        assert errors == []
+        monkeypatch.setattr(portfolios, "_prediction_is_terminal", real_terminal)
+        if port_path.exists():
+            book = json.loads(port_path.read_text())
+        else:
+            book = {}
+        opens = [
+            pos
+            for name in ("oracle", "echo", "pulse")
+            for pos in (book.get(name) or {}).get("open_positions") or []
+            if pos.get("id") == pred_id
+        ]
+        assert opens == [], opens
+
+
+def test_tracker_unreadable_portfolio_warns_and_missing_is_quiet(tmp_path, monkeypatch):
+    from internal.council import resolver
+
+    port_path = tmp_path / "judge_portfolios.json"
+    ledger = tmp_path / "predictions.json"
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(ledger))
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}))
+    row = _gradeable("obs-1", outcome="miss")
+
+    assert not port_path.exists()
+    summary = tracker.on_prediction_resolved(row, apply_judge_nudge=False)
+    finalized = resolver.atomic_finalize_resolution(
+        dict(row),
+        actual_pct=-3.0,
+        outcome="miss",
+        correct=False,
+        resolved_price=97.0,
+        resolved_at="2026-07-01T12:00:00Z",
+        apply_judge_nudge=False,
+    )
+    warnings = finalized.get("side_effect_warnings") or []
+    assert "portfolios_unobservable" not in warnings
+    assert not port_path.exists()
+    assert summary.get("judges", {}).get("oracle", {}).get("closed") is None
+
+    port_path.write_bytes(b"{not json")
+    corrupt = port_path.read_bytes()
+    finalized = resolver.atomic_finalize_resolution(
+        dict(row),
+        actual_pct=-3.0,
+        outcome="miss",
+        correct=False,
+        resolved_price=97.0,
+        resolved_at="2026-07-01T12:00:00Z",
+        apply_judge_nudge=False,
+    )
+    warnings = finalized.get("side_effect_warnings") or []
+    assert "portfolios_unobservable" in warnings
+    assert port_path.read_bytes() == corrupt
+    summary = tracker.on_prediction_resolved(row, apply_judge_nudge=False)
+    for name in ("oracle", "echo", "pulse"):
+        assert name in summary.get("judges", {})
+        assert summary["judges"][name].get("closed") is None
+    assert port_path.read_bytes() == corrupt
+
+
+def test_prediction_is_terminal_accumulates_duplicate_ids(tmp_path, monkeypatch):
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    pending = _gradeable("dup-x")
+    pending["status"] = "pending"
+    pending["outcome"] = None
+    pending["correct"] = None
+    resolved = _gradeable("dup-x", outcome="hit")
+    pred_path.write_text(json.dumps({"predictions": [pending], "resolved": [resolved], "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    assert predictions_store.prediction_is_terminal("dup-x") is True
+    assert portfolios.open_position("oracle", pending) is None
+    portfolios.open_positions_for_prediction(pending, {"oracle": {"confidence": 0.5}, "echo": {"confidence": 0.5}, "pulse": {"confidence": 0.5}})
+    if port_path.exists():
+        book = json.loads(port_path.read_text())
+        assert not any(pos.get("id") == "dup-x" for name in book for pos in (book[name].get("open_positions") or []) if isinstance(book.get(name), dict))
+
+
+def test_idless_hourly_duplicate_and_corrupt_history_are_not_green(tmp_path, monkeypatch):
+    from internal.council import hourly_pick, pick_history, pick_scheduler
+    from internal.learning import predictions_store as ps
+    from internal.subnets import tradable
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    hist_path = tmp_path / "pick_history.json"
+    pending = {
+        "netuid": 7,
+        "name": "Seven",
+        "horizon_type": "hour",
+        "status": "pending",
+        "direction": "up",
+        "reference_price": 12.0,
+        "predicted_pct": 1.0,
+    }
+    pred_path.write_text(json.dumps({"predictions": [pending], "resolved": [], "stats": {}}))
+    port_path.write_text("{}")
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(pick_history, "PICK_HISTORY_PATH", str(hist_path))
+    monkeypatch.setattr(tradable, "is_tradable_subnet", lambda *_a, **_kw: True, raising=False)
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 7, "name": "Seven", "price": 12}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _rows: {})
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a: None)
+    monkeypatch.setattr(
+        hourly_pick,
+        "select_hourly_pick",
+        lambda *_a, **_kw: {"action": "long", "subnet": {"netuid": 7, "name": "Seven", "price": 12}, "confidence": 0.7},
+    )
+    monkeypatch.setattr(prediction_loop, "reconcile_judge_positions", lambda **_kw: 0, raising=False)
+
+    first = pick_scheduler.HourPickScheduler(refresh_minutes=15).run_once()
+    assert first.get("ok") is False
+    assert first.get("pick_record_outcome") in {"indeterminate", "failed"}
+    assert first.get("pick_record_outcome") != "skipped"
+
+    hist_path.write_bytes(b"{not json")
+    corrupt = hist_path.read_bytes()
+    second = pick_scheduler.HourPickScheduler(refresh_minutes=15).run_once()
+    assert second.get("ok") is False
+    assert second.get("pick_record_outcome") in {"indeterminate", "failed"}
+    assert hist_path.read_bytes() == corrupt

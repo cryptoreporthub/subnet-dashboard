@@ -88,17 +88,23 @@ def on_prediction_resolved(
     }
 
     from internal.judges.portfolios import (
+        PortfolioUnreadable,
         holds_closed,
         holds_open,
         portfolios_operation_deadline,
     )
 
     pred_id = prediction.get("id")
+    netuid = prediction.get("netuid")
+    portfolios_unobservable = False
     for judge in all_judges():
         with portfolios_operation_deadline():
             closed = None
-            if holds_open(judge.name, pred_id):
+            try:
                 closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
+            except PortfolioUnreadable:
+                portfolios_unobservable = True
+                closed = None
         if closed and apply_judge_nudge:
             try:
                 from internal.council.grading import is_pump_desk_claim
@@ -158,12 +164,15 @@ def on_prediction_resolved(
         postmortem = None
         # Replay returns None after a durable close; still retry a missing postmortem.
         # Skip if this judge still has the id open (the close itself failed).
-        if wrong:
+        if wrong and not portfolios_unobservable:
             try:
-                held = closed is not None or holds_closed(judge.name, pred_id)
-                still_open = holds_open(judge.name, pred_id)
+                held = closed is not None or holds_closed(judge.name, pred_id, netuid=netuid)
+                still_open = holds_open(judge.name, pred_id, netuid=netuid)
                 if held and not still_open:
                     postmortem = judge.record_postmortem(prediction, actual_pct)
+            except PortfolioUnreadable:
+                portfolios_unobservable = True
+                postmortem = None
             except Exception:
                 postmortem = None
         summary["judges"][judge.name] = {
@@ -179,4 +188,6 @@ def on_prediction_resolved(
         except Exception:
             pass
 
+    if portfolios_unobservable:
+        summary["portfolios_unobservable"] = True
     return summary

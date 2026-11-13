@@ -221,21 +221,28 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
         prediction = stored.prediction
         if stored_kind in ("skipped", "duplicate") and stored.reason == "duplicate":
             from internal.learning.predictions_store import pending_hour_prediction
+            from internal.council.pick_history import PickHistoryUnreadable
 
             netuid = subnet_row.get("netuid") or pick.get("netuid")
             if netuid is None and isinstance(pick.get("subnet"), dict):
                 netuid = pick["subnet"].get("netuid")
             prediction = prediction or pending_hour_prediction(netuid)
             pred_id = (prediction or {}).get("id") if isinstance(prediction, dict) else None
-            if pred_id and not pick_history.has_prediction(pred_id):
-                try:
-                    written = pick_history.record_hour_pick(pick, subnet_row, prediction_id=pred_id)
-                except Exception as exc:
-                    logger.warning("pick_history repair failed: %s", exc)
+            try:
+                if pred_id and not pick_history.has_prediction(pred_id):
+                    try:
+                        written = pick_history.record_hour_pick(pick, subnet_row, prediction_id=pred_id)
+                    except Exception as exc:
+                        logger.warning("pick_history repair failed: %s", exc)
+                        return "indeterminate"
+                    if written is None or not pick_history.has_prediction(pred_id):
+                        return "indeterminate"
+                elif pred_id and not pick_history.has_prediction(pred_id):
                     return "indeterminate"
-                if written is None or not pick_history.has_prediction(pred_id):
+                elif not pred_id:
                     return "indeterminate"
-            elif pred_id and not pick_history.has_prediction(pred_id):
+            except PickHistoryUnreadable as exc:
+                logger.warning("pick_history unreadable: %s", exc)
                 return "indeterminate"
             return stored_kind
         ledger_committed = stored_kind == "committed" or (

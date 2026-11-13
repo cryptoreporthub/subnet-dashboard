@@ -490,6 +490,7 @@ def prediction_is_terminal(pred_id: Any, *, path: Optional[str] = None) -> bool:
     # rows may still have (or need) open paper positions for recovery to close.
     terminal_status = {"resolved"}
     terminal_outcome = {"hit", "miss"}
+    terminal = False
     for bucket in ("predictions", "resolved"):
         for row in data.get(bucket) or []:
             if not isinstance(row, dict):
@@ -498,8 +499,9 @@ def prediction_is_terminal(pred_id: Any, *, path: Optional[str] = None) -> bool:
                 continue
             status = str(row.get("status") or "")
             outcome = str(row.get("outcome") or "")
-            return status in terminal_status or outcome in terminal_outcome
-    return False
+            if status in terminal_status or outcome in terminal_outcome:
+                terminal = True
+    return terminal
 
 
 def pending_hour_prediction(

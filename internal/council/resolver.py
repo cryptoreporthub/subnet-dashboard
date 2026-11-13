@@ -1050,10 +1050,18 @@ def atomic_finalize_resolution(
         with _cycle_persist_guard_safe():
             if _cycle_writes_revoked_safe():
                 return prediction
-            on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
-    except Exception:
-        logger.exception("atomic_finalize: on_prediction_resolved failed")
-        warnings.append("on_prediction_resolved")
+            summary = on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
+            if isinstance(summary, dict) and summary.get("portfolios_unobservable"):
+                warnings.append("portfolios_unobservable")
+    except Exception as exc:
+        from internal.judges.portfolios import PortfolioUnreadable
+
+        if isinstance(exc, PortfolioUnreadable):
+            logger.exception("atomic_finalize: portfolios unreadable")
+            warnings.append("portfolios_unobservable")
+        else:
+            logger.exception("atomic_finalize: on_prediction_resolved failed")
+            warnings.append("on_prediction_resolved")
 
     try:
         from internal.council.prediction_trace import record_prediction_resolved

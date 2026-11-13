@@ -37,6 +37,10 @@ class PortfolioLockTimeout(TimeoutError):
     """Raised when the portfolios mutex or flock is not acquired before the deadline."""
 
 
+class PortfolioUnreadable(Exception):
+    """Raised when the portfolios book exists but cannot be read."""
+
+
 @contextmanager
 def portfolios_operation_deadline(seconds: Optional[float] = None) -> Iterator[None]:
     """Set a shared absolute deadline for nested portfolio lock acquisitions.
@@ -133,28 +137,40 @@ def _prediction_is_terminal(pred_id: Any) -> bool:
         return False
 
 
-def holds_open(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None) -> bool:
-    if pred_id is None:
-        return False
-    if data is None:
-        obs = observe_portfolios()
-        if obs["kind"] != "readable":
-            return False
-        data = obs["data"]
-    judge = data.get(str(judge_name).lower()) or {}
-    return any(pos.get("id") == pred_id for pos in judge.get("open_positions") or [])
+def _position_matches(pos: Dict[str, Any], pred_id: Any, netuid: Any = None) -> bool:
+    if pred_id is not None and pos.get("id") == pred_id:
+        return True
+    if pred_id is None and netuid is not None and pos.get("id") is None and pos.get("netuid") == netuid:
+        return True
+    return False
 
 
-def holds_closed(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None) -> bool:
-    if pred_id is None:
-        return False
+def holds_open(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None, netuid: Any = None) -> bool:
     if data is None:
         obs = observe_portfolios()
-        if obs["kind"] != "readable":
+        if obs["kind"] == "missing":
             return False
+        if obs["kind"] != "readable":
+            raise PortfolioUnreadable(obs.get("error") or "unreadable portfolios")
         data = obs["data"]
+    if pred_id is None and netuid is None:
+        return False
     judge = data.get(str(judge_name).lower()) or {}
-    return any(pos.get("id") == pred_id for pos in judge.get("closed_positions") or [])
+    return any(_position_matches(pos, pred_id, netuid) for pos in judge.get("open_positions") or [])
+
+
+def holds_closed(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None, netuid: Any = None) -> bool:
+    if data is None:
+        obs = observe_portfolios()
+        if obs["kind"] == "missing":
+            return False
+        if obs["kind"] != "readable":
+            raise PortfolioUnreadable(obs.get("error") or "unreadable portfolios")
+        data = obs["data"]
+    if pred_id is None and netuid is None:
+        return False
+    judge = data.get(str(judge_name).lower()) or {}
+    return any(_position_matches(pos, pred_id, netuid) for pos in judge.get("closed_positions") or [])
 
 
 def _closed_row_from_prediction(
@@ -342,16 +358,23 @@ def _open_position(data, judge_name, prediction, size):
     return position
 
 
-@_portfolio_transaction
 def open_positions_for_prediction(prediction: Dict[str, Any], scores: Dict[str, Any]) -> None:
+    # Unlocked early exit; the in-lock recheck immediately before _save is the real gate.
     if _prediction_is_terminal(prediction.get("id")):
         return
+    _open_positions_for_prediction_locked(prediction, scores)
+
+
+@_portfolio_transaction
+def _open_positions_for_prediction_locked(prediction: Dict[str, Any], scores: Dict[str, Any]) -> None:
     data = _load_checked()
     changed = False
     for name in ("oracle", "echo", "pulse"):
         confidence = float((scores.get(name) or {}).get("confidence", 0.5) or 0.5)
         changed |= _open_position(data, name, prediction, 0.5 + 0.5 * confidence) is not None
     if changed:
+        if _prediction_is_terminal(prediction.get("id")):
+            return
         _save(data)
 
 
@@ -375,6 +398,8 @@ def _open_position_locked(
     data = _load_checked()
     position = _open_position(data, judge_name, prediction, size)
     if position is not None:
+        if _prediction_is_terminal(prediction.get("id")):
+            return None
         _save(data)
     return position
 
@@ -408,6 +433,8 @@ def close_position(
     judge key, and no file create.
     """
     obs = observe_portfolios()
+    if obs["kind"] == "unreadable":
+        raise PortfolioUnreadable(obs.get("error") or "unreadable portfolios")
     if obs["kind"] != "readable":
         return None
     data = obs["data"]
