@@ -1154,3 +1154,101 @@ def test_malformed_but_parseable_pick_history_is_not_rewritten(tmp_path, monkeyp
         result = None
     assert result in {None, False} or (isinstance(result, dict) and result.get("kind") == "unreadable")
     assert hist_path.read_bytes() == before
+
+
+def test_tracker_idless_postmortem_gate_uses_row_identity(tmp_path, monkeypatch):
+    pm_dir = tmp_path / "postmortems"
+    pm_dir.mkdir()
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
+    port_path = tmp_path / "judge_portfolios.json"
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    day = {
+        "id": None,
+        "netuid": 7,
+        "direction": "up",
+        "predicted_pct": 5.0,
+        "reference_price": 100.0,
+        "horizon_hours": 24,
+        "horizon_type": "day",
+        "created_at": "2026-07-01T00:00:00Z",
+    }
+    hour = {
+        "id": None,
+        "netuid": 7,
+        "name": "Seven",
+        "direction": "up",
+        "predicted_pct": 5.0,
+        "reference_price": 100.0,
+        "horizon_hours": 1,
+        "horizon_type": "hour",
+        "created_at": "2026-07-01T10:00:00Z",
+        "outcome": "miss",
+        "correct": False,
+        "actual_pct": -2.0,
+        "resolved_price": 98.0,
+        "status": "resolved",
+    }
+    portfolios.open_position("oracle", day)
+    portfolios.open_position("oracle", hour)
+    summary = tracker.on_prediction_resolved(hour, apply_judge_nudge=False)
+    assert summary.get("wrong") is True
+    oracle = (summary.get("judges") or {}).get("oracle") or {}
+    assert oracle.get("postmortem") is not None
+    book = json.loads(port_path.read_text())
+    opens = (book.get("oracle") or {}).get("open_positions") or []
+    assert len(opens) == 1
+    assert opens[0].get("horizon_type") == "day"
+
+
+def test_receipt_reads_use_shared_lock(tmp_path, monkeypatch):
+    import fcntl as fcntl_mod
+
+    receipts = _receipts_and_effects_paths(tmp_path, monkeypatch)
+    flags = []
+    real_flock = fcntl_mod.flock
+
+    def record_flock(fd, op):
+        flags.append(op)
+        return real_flock(fd, op)
+
+    monkeypatch.setattr(fcntl_mod, "flock", record_flock)
+    monkeypatch.setattr(expired_recovery.fcntl, "flock", record_flock)
+    assert expired_recovery.has_effect_receipt(("id", "lock-r"), "expert") is False
+    shared_ops = [op for op in flags if op & fcntl_mod.LOCK_SH]
+    exclusive_ops = [op for op in flags if op & fcntl_mod.LOCK_EX]
+    assert shared_ops, flags
+    assert not exclusive_ops, flags
+    flags.clear()
+    expired_recovery.write_effect_receipt(("id", "lock-r"), "expert")
+    write_shared = [op for op in flags if op & fcntl_mod.LOCK_SH]
+    write_excl = [op for op in flags if op & fcntl_mod.LOCK_EX]
+    assert write_excl, flags
+    assert not write_shared, flags
+    assert receipts.exists()
+
+
+def test_receipt_lock_timeout_has_its_own_reason(tmp_path, monkeypatch):
+    from internal.council import resolver, price_reference
+    from internal.learning import predictions_store as ps
+
+    pred_path = tmp_path / "predictions.json"
+    port_path = tmp_path / "judge_portfolios.json"
+    _receipts_and_effects_paths(tmp_path, monkeypatch)
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    port_path.write_text("{}")
+    graded = _expired("lock-timeout")
+    graded.update({"outcome": "miss", "status": "resolved", "correct": False, "actual_pct": -3.0, "resolved_price": 97.0})
+    graded["learning_effects"] = {"pending": ["finalize", "pump"], "done": []}
+    pred_path.write_text(json.dumps({"predictions": [], "resolved": [graded], "stats": {}}))
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *a, **k: True)
+    monkeypatch.setattr(price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"}))
+
+    def boom(*_a, **_k):
+        raise expired_recovery.LearningEffectReceiptsLockTimeout("injected lock timeout")
+
+    monkeypatch.setattr(expired_recovery, "has_effect_receipt", boom)
+    result = expired_recovery.recover_expired_predictions()
+    assert result.get("ok") is not True
+    assert result.get("reason") == "receipts_lock_timeout"

@@ -99,8 +99,7 @@ def _receipts_path() -> str:
 
 
 @contextmanager
-def _receipts_lock() -> Iterator[None]:
-    deadline = time.monotonic() + RECEIPTS_LOCK_TIMEOUT_SECONDS
+def _receipts_lock(*, exclusive: bool = True) -> Iterator[None]:
     acquired = _RECEIPTS_MUTEX.acquire(timeout=RECEIPTS_LOCK_TIMEOUT_SECONDS)
     try:
         if not acquired:
@@ -108,10 +107,13 @@ def _receipts_lock() -> Iterator[None]:
         path = _receipts_path()
         parent = os.path.dirname(path) or "data"
         os.makedirs(parent, exist_ok=True)
+        # Fresh flock budget, independent of how long the mutex wait already took.
+        deadline = time.monotonic() + RECEIPTS_LOCK_TIMEOUT_SECONDS
+        flag = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
         with open(path + ".lock", "a+", encoding="utf-8") as lock:
             while time.monotonic() < deadline:
                 try:
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(lock.fileno(), flag | fcntl.LOCK_NB)
                     break
                 except BlockingIOError:
                     time.sleep(0.05)
@@ -145,13 +147,13 @@ def _receipt_token(row_key: Optional[Tuple[Any, ...]], effect: str) -> str:
 
 
 def has_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> bool:
-    with _receipts_lock():
+    with _receipts_lock(exclusive=False):
         return _receipt_token(row_key, effect) in _load_receipts()
 
 
 def write_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> None:
     path = _receipts_path()
-    with _receipts_lock():
+    with _receipts_lock(exclusive=True):
         data = _load_receipts()
         data[_receipt_token(row_key, effect)] = _utcnow_iso()
         parent = os.path.dirname(path) or "data"
@@ -245,6 +247,7 @@ def recover_expired_predictions(
     incomplete: List[Any] = []
     close_incomplete: List[Any] = []
     effect_incomplete: List[Any] = []
+    receipts_lock_timed_out: List[Any] = []
 
     def _fail(reason: str, *, error: str = "", recovered: int = 0, **extra: Any) -> Dict[str, Any]:
         payload: Dict[str, Any] = {
@@ -393,6 +396,12 @@ def recover_expired_predictions(
                     effect_incomplete.append(row.get("id"))
                     incomplete.append(row.get("id"))
                     continue
+                except LearningEffectReceiptsLockTimeout:
+                    logger.exception("expired recovery receipts lock timeout")
+                    effect_incomplete.append(row.get("id"))
+                    incomplete.append(row.get("id"))
+                    receipts_lock_timed_out.append(row.get("id"))
+                    continue
                 if already:
                     try:
                         _move_effect_on_ledger(row, effect)
@@ -468,8 +477,17 @@ def recover_expired_predictions(
                         from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
                         maybe_adapt_after_resolve()
+                    # Crash window: if we die after the effect applies and before this
+                    # receipt lands, retry can double-apply. Do not add a pre-effect
+                    # claim unless it has an explicit indeterminate state.
                     write_effect_receipt(key, effect)
                     _move_effect_on_ledger(row, effect)
+                except LearningEffectReceiptsLockTimeout:
+                    logger.exception("expired recovery receipts lock timeout")
+                    effect_incomplete.append(row.get("id"))
+                    incomplete.append(row.get("id"))
+                    receipts_lock_timed_out.append(row.get("id"))
+                    continue
                 except Exception:
                     logger.exception("expired recovery post-commit effects failed")
                     effect_incomplete.append(row.get("id"))
@@ -553,7 +571,12 @@ def recover_expired_predictions(
                 )
 
     if incomplete:
-        reason = "effects_incomplete" if effect_incomplete else "judge_close_incomplete"
+        if receipts_lock_timed_out:
+            reason = "receipts_lock_timeout"
+        elif effect_incomplete:
+            reason = "effects_incomplete"
+        else:
+            reason = "judge_close_incomplete"
         return _fail(
             reason,
             error=reason,

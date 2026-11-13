@@ -166,8 +166,8 @@ def on_prediction_resolved(
         # Skip if this judge still has the id open (the close itself failed).
         if wrong and not portfolios_unobservable:
             try:
-                held = closed is not None or holds_closed(judge.name, pred_id, netuid=netuid)
-                still_open = holds_open(judge.name, pred_id, netuid=netuid)
+                held = closed is not None or holds_closed(judge.name, pred_id, netuid=netuid, row=prediction)
+                still_open = holds_open(judge.name, pred_id, netuid=netuid, row=prediction)
                 if held and not still_open:
                     postmortem = judge.record_postmortem(prediction, actual_pct)
             except PortfolioUnreadable:
