@@ -1,0 +1,10 @@
+# Fix-4 admissible overlay on freeze tarball 8eea815e…
+# Full inventory + SHA-256: fix4-export-content.manifest
+# Canonical patch (git apply -p1): /opt/cursor/artifacts/fix4-task3-export.patch
+# Extract tarball → copy paths below OR apply patch → npm ci → npm run check && npm test
+
+bot/lib/check.ts
+bot/lib/advance.ts
+tests/suite-record.test.ts
+tests/check-throw-grid.test.ts
+fix4-freeze-overlay.manifest

@@ -19,6 +19,8 @@
 
 **Forbidden:** Claude Sonnet **4.5** and **4.6** (any effort). Do not use `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families unless the human asks.
 
+**Exception:** the review-gate bot (`review-gate-bot/bot/agent.ts`) runs `deepseek-v41-flash-1017` at max effort, and its eval judge runs `grok-4.7` at high. Joshua set both (#1513), overriding this guide for that bot only.
+
 **Default build:** **Composer 2.5 slow** (`composer-2.5`).
 
 **Grok thinking policy (mandatory) — user 2026-07-15; updated 2026-08-01:**
