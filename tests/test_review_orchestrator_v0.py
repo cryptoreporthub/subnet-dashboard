@@ -413,14 +413,16 @@ def test_locked_rollback_journal_wal_conversion_is_bounded(
         raw.execute("SELECT * FROM lock_probe").fetchall()
 
         code = (
-            "import sqlite3, sys\n"
+            "import sqlite3, sys, time\n"
             "from pathlib import Path\n"
             "from tools.review_orchestrator import db\n"
             "db.BUSY_TIMEOUT_MS = 1\n"
+            "started = time.monotonic()\n"
             "try:\n"
             "    db.connect(Path(sys.argv[1]))\n"
             "except sqlite3.OperationalError as exc:\n"
-            "    print(type(exc).__name__ + ':' + str(exc))\n"
+            "    elapsed = time.monotonic() - started\n"
+            "    print(type(exc).__name__ + ':' + str(exc) + ';elapsed=' + str(elapsed))\n"
             "else:\n"
             "    raise SystemExit(2)\n"
         )
@@ -433,7 +435,7 @@ def test_locked_rollback_journal_wal_conversion_is_bounded(
                 text=True,
                 env=env,
                 cwd=str(_REPO_ROOT),
-                timeout=0.9,
+                timeout=3.0,
                 check=False,
             )
         except subprocess.TimeoutExpired:
@@ -446,7 +448,9 @@ def test_locked_rollback_journal_wal_conversion_is_bounded(
     assert result.returncode == 0
     assert result.stdout.startswith("OperationalError:")
     assert "locked" in result.stdout.lower() or "busy" in result.stdout.lower()
-    assert elapsed < 0.9
+    operation_elapsed = float(result.stdout.rsplit(";elapsed=", 1)[1].strip())
+    assert operation_elapsed < 0.9
+    assert elapsed < 3.0
 
 
 def test_corrupt_markers_still_map_to_corruption(tmp_path: Path, monkeypatch) -> None:
@@ -522,7 +526,12 @@ def test_complete_tick_replay_is_a_no_op(tmp_path: Path) -> None:
     conn = db.connect(tmp_path)
     try:
         db.complete_tick(
-            conn, result.seq, outcome="failed", duration_ms=12345, noop=False
+            conn,
+            result.seq,
+            outcome=before["outcome"],
+            duration_ms=before["duration_ms"],
+            noop=bool(before["noop"]),
+            last_alert_ok=None,
         )
     finally:
         conn.close()

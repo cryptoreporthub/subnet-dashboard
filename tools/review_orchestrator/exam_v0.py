@@ -34,18 +34,13 @@ def _plant_running(state_dir: Path, tick_id: str, started_at: str) -> None:
 
 
 def _read_rows(state_dir: Path) -> list[dict]:
-    """Rows in write order.
-
-    No ORDER BY: a full scan returns rowid order, which is the order the ticks
-    were inserted. Reading through a query sorted by `seq` would make any
-    rising-seq check a tautology.
-    """
+    """Read rows in sequence order for comparison with the known tick order."""
     conn = db.connect(state_dir)
     try:
         return [
             dict(row)
             for row in conn.execute(
-                "SELECT seq, tick_id, outcome, duration_ms FROM ticks"
+                "SELECT seq, tick_id, outcome, duration_ms FROM ticks ORDER BY seq"
             )
         ]
     finally:
@@ -58,7 +53,7 @@ def _check_rows(state_dir: Path, expected_ids: list[str]) -> bool:
     seqs = [row["seq"] for row in rows]
     return (
         ids == list(expected_ids)
-        and all(later > earlier for earlier, later in zip(seqs, seqs[1:]))
+        and seqs == list(range(1, len(expected_ids) + 1))
         and all(
             row["outcome"] == "completed" and row["duration_ms"] is not None
             for row in rows

@@ -129,6 +129,10 @@ class DuplicateTickIdError(ValueError):
     """Caller-supplied tick_id is already present in this store."""
 
 
+class TickAlreadyFinalizedError(RuntimeError):
+    """A terminal tick cannot be changed by a late or conflicting completion."""
+
+
 @dataclass(frozen=True)
 class StartedTick:
     seq: int
@@ -624,7 +628,12 @@ def _ensure_wal(
         try:
             if str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower() == "wal":
                 return
-            conn.execute("PRAGMA journal_mode = WAL")
+            result = conn.execute("PRAGMA journal_mode = WAL").fetchone()
+            if result is None or str(result[0]).casefold() != "wal":
+                actual = None if result is None else result[0]
+                raise sqlite3.OperationalError(
+                    f"WAL mode was not enabled; journal_mode={actual!r}"
+                )
             return
         except sqlite3.OperationalError as exc:
             if not _is_busy_or_locked(exc):
@@ -676,7 +685,8 @@ def _immediate(conn: sqlite3.Connection) -> Iterator[None]:
     try:
         yield
     except BaseException:
-        conn.execute("ROLLBACK")
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
         raise
     conn.execute("COMMIT")
 
@@ -761,21 +771,34 @@ def complete_tick(
     noop: bool,
     last_alert_ok: bool | None = None,
 ) -> None:
-    """Move a running row to a terminal outcome. A replay (duration already set)
-    is a no-op, so a retried completion cannot rewrite history."""
+    """Move a running row to a terminal outcome; only identical replays are no-ops."""
     if outcome not in ("completed", "failed"):
         raise ValueError(f"terminal outcome required, got {outcome!r}")
     with _immediate(conn):
+        row = conn.execute(
+            "SELECT outcome, duration_ms, noop, last_alert_ok FROM ticks WHERE seq=?",
+            (int(seq),),
+        ).fetchone()
+        if row is None:
+            raise StoreCorruptError(f"cannot complete missing tick seq {seq}")
+        requested = (
+            outcome,
+            int(duration_ms),
+            1 if noop else 0,
+            None if last_alert_ok is None else int(last_alert_ok),
+        )
+        current = tuple(row)
+        if current[0] != "running" or current[1] is not None:
+            if current == requested:
+                return
+            raise TickAlreadyFinalizedError(
+                f"tick seq {seq} is already finalized as "
+                f"{current[0]} with duration {current[1]!r}"
+            )
         conn.execute(
             "UPDATE ticks SET outcome = ?, duration_ms = ?, noop = ?, last_alert_ok = ? "
-            "WHERE seq = ? AND duration_ms IS NULL",
-            (
-                outcome,
-                int(duration_ms),
-                1 if noop else 0,
-                None if last_alert_ok is None else int(last_alert_ok),
-                int(seq),
-            ),
+            "WHERE seq = ? AND outcome = 'running' AND duration_ms IS NULL",
+            (*requested, int(seq)),
         )
 
 

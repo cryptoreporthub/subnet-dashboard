@@ -295,7 +295,7 @@ def _ddl_has_only_known_checks(sql: str) -> bool:
     return (
         checks is not None
         and len(checks) == len(set(checks))
-        and all(check in _CANONICAL_CHECKS for check in checks)
+        and set(checks) == _CANONICAL_CHECKS
     )
 
 
@@ -417,6 +417,52 @@ def _trigger_is_inert(sql: str) -> bool:
     return body == [("ident", "select"), ("number", "1")]
 
 
+def _trigger_has_only_unprotected_dml(sql: str) -> bool:
+    tokens = _sql_tokens(sql)
+    begin = next(
+        (index for index, token in enumerate(tokens) if token == ("ident", "begin")),
+        None,
+    )
+    end = next(
+        (
+            index
+            for index in range(len(tokens) - 1, -1, -1)
+            if tokens[index] == ("ident", "end")
+        ),
+        None,
+    )
+    if begin is None or end is None or end <= begin:
+        return False
+
+    protected = {"ticks", "latest", "sqlite_sequence"}
+    body = tokens[begin + 1 : end]
+    if any(
+        kind in {"ident", "string"} and value.casefold() in protected
+        for kind, value in body
+    ):
+        return False
+
+    statements: list[list[tuple[str, str]]] = []
+    current: list[tuple[str, str]] = []
+    for token in body:
+        if token == ("symbol", ";"):
+            if current:
+                statements.append(current)
+                current = []
+        else:
+            current.append(token)
+    if current:
+        statements.append(current)
+    allowed = {
+        ("ident", "insert"),
+        ("ident", "update"),
+        ("ident", "delete"),
+    }
+    return bool(statements) and all(
+        statement and statement[0] in allowed for statement in statements
+    )
+
+
 def _triggers_are_safe(conn: sqlite3.Connection) -> bool:
     for name, table_name, sql in conn.execute(
         "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type='trigger'"
@@ -449,8 +495,72 @@ def _triggers_are_safe(conn: sqlite3.Connection) -> bool:
             for kind, value in body
         ):
             return False
-        if not _trigger_is_inert(sql):
+        if not (_trigger_is_inert(sql) or _trigger_has_only_unprotected_dml(sql)):
             return False
+    return True
+
+
+_LEGACY_LATEST_VIEW_SQL = """
+CREATE VIEW latest AS
+    SELECT seq, tick_id, started_at, duration_ms, outcome, noop, overlap, last_alert_ok
+    FROM ticks
+    ORDER BY seq DESC
+    LIMIT 1
+"""
+
+
+def _view_body(sql: str) -> list[tuple[str, str]] | None:
+    tokens = _sql_tokens(sql)
+    as_index = next(
+        (index for index, token in enumerate(tokens) if token == ("ident", "as")),
+        None,
+    )
+    if as_index is None:
+        return None
+    return tokens[as_index + 1 :]
+
+
+def _unrelated_view_is_safe(name: str, sql: object) -> bool:
+    if not isinstance(sql, str):
+        return False
+    tokens = _sql_tokens(sql)
+    as_index = next(
+        (index for index, token in enumerate(tokens) if token == ("ident", "as")),
+        None,
+    )
+    if (
+        len(tokens) < 4
+        or tokens[0:2] != [("ident", "create"), ("ident", "view")]
+        or as_index is None
+        or not any(
+            kind == "ident" and value.casefold() == name.casefold()
+            for kind, value in tokens[:as_index]
+        )
+    ):
+        return False
+    body = tokens[as_index + 1 :]
+    protected = {"ticks", "latest", "sqlite_sequence"}
+    if (
+        not body
+        or body[0] != ("ident", "select")
+        or any(
+            kind in {"ident", "string"} and value.casefold() in protected
+            for kind, value in body
+        )
+        or any(
+            token == ("symbol", "(")
+            or token == ("symbol", ")")
+            or token == ("symbol", ";")
+            for token in body
+        )
+        or sum(token == ("ident", "from") for token in body) != 1
+        or any(
+            token == ("ident", keyword)
+            for token in body
+            for keyword in ("with", "union", "intersect", "except", "join")
+        )
+    ):
+        return False
     return True
 
 
@@ -463,31 +573,22 @@ def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
     views = conn.execute(
         "SELECT name, sql FROM sqlite_schema WHERE type='view'"
     ).fetchall()
-    if any(str(row[0]).casefold() != "latest" for row in views):
-        return False
+    for name, view_sql in views:
+        if str(name).casefold() != "latest" and not _unrelated_view_is_safe(
+            str(name), view_sql
+        ):
+            return False
     latest = latest_object
     if latest is None:
         return True
     sql = latest[1]
     if not isinstance(sql, str):
         return False
-    tokens = _sql_tokens(sql)
-    as_index = next(
-        (
-            index
-            for index, token in enumerate(tokens)
-            if token == ("ident", "as")
-        ),
-        None,
-    )
-    expected = _sql_tokens(db._VIEW_SQL)
-    expected_as = next(
-        index for index, token in enumerate(expected) if token == ("ident", "as")
-    )
-    return (
-        as_index is not None
-        and tokens[as_index + 1 :] == expected[expected_as + 1 :]
-    )
+    body = _view_body(sql)
+    return body is not None and tuple(body) in {
+        tuple(_view_body(db._VIEW_SQL) or ()),
+        tuple(_view_body(_LEGACY_LATEST_VIEW_SQL) or ()),
+    }
 
 
 def _sqlite_sequence_is_trustworthy(
@@ -762,9 +863,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    quarantined_before = _orphaned_intents(state_dir)
     try:
+        quarantined_before = _orphaned_intents(state_dir)
         moved = repair_store(state_dir)
+        quarantined = _orphaned_intents(state_dir) - quarantined_before
     except db._RepairIntentWalMissingError as exc:
         print(
             "repair: blocked: expected WAL missing at source and target; "
@@ -772,7 +874,12 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    quarantined = _orphaned_intents(state_dir) - quarantined_before
+    except (StoreUnavailableError, sqlite3.OperationalError, OSError) as exc:
+        print(
+            f"repair: blocked: {exc}",
+            file=sys.stderr,
+        )
+        return 2
 
     if moved != db.db_path(state_dir):
         print(f"repair: moved corrupt store to {moved.name}")

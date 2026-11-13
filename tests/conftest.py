@@ -159,11 +159,17 @@ def holding_writer():
             yield proc
         finally:
             if proc.poll() is None:
-                proc.terminate()
+                try:
+                    proc.terminate()
+                except ProcessLookupError:
+                    pass
                 try:
                     proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait(timeout=10)
+            if proc.stderr is not None:
+                proc.stderr.close()
+            ready.unlink(missing_ok=True)
 
     return hold
