@@ -1,0 +1,16 @@
+# Known-flaky pytest tests, one `classname::name` per line.
+#
+# A test listed here may flip from pass to fail on a head that did not touch it,
+# and the suite comparison will record it as `flakyRetriedOk` instead of a
+# regression. It has to be a real, observed flake in this repo.
+#
+# This is a committed file on purpose. The list used to be an argument to
+# `compare_suite_runs`, which meant whoever called the tool could declare any
+# regression a flake and pass the gate with it.
+#
+# Format: `classname::name`, exactly as JUnit reports them. `#` starts a
+# comment. Blank lines are ignored. An unparseable line fails the load instead
+# of being skipped silently.
+
+# (empty: no test in this repo has been observed to flip yet. Add lines as they
+# are proven, with the PR and run where the flip was seen in the comment above.)
