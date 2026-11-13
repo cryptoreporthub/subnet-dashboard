@@ -87,11 +87,18 @@ def on_prediction_resolved(
         "judges": {},
     }
 
-    from internal.judges.portfolios import get_portfolio, portfolios_operation_deadline
+    from internal.judges.portfolios import (
+        holds_closed,
+        holds_open,
+        portfolios_operation_deadline,
+    )
 
+    pred_id = prediction.get("id")
     for judge in all_judges():
         with portfolios_operation_deadline():
-            closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
+            closed = None
+            if holds_open(judge.name, pred_id):
+                closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
         if closed and apply_judge_nudge:
             try:
                 from internal.council.grading import is_pump_desk_claim
@@ -153,11 +160,9 @@ def on_prediction_resolved(
         # Skip if this judge still has the id open (the close itself failed).
         if wrong:
             try:
-                still_open = any(
-                    pos.get("id") == prediction.get("id")
-                    for pos in (get_portfolio(judge.name).get("open_positions") or [])
-                )
-                if not still_open:
+                held = closed is not None or holds_closed(judge.name, pred_id)
+                still_open = holds_open(judge.name, pred_id)
+                if held and not still_open:
                     postmortem = judge.record_postmortem(prediction, actual_pct)
             except Exception:
                 postmortem = None

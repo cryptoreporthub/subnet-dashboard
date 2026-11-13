@@ -31,12 +31,9 @@ def _load() -> Dict[str, Any]:
 
 
 def _save(data: Dict[str, Any]) -> None:
-    try:
-        os.makedirs(os.path.dirname(PICK_HISTORY_PATH) or "data", exist_ok=True)
-        with open(PICK_HISTORY_PATH, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=2)
-    except Exception as exc:
-        logger.warning("pick_history save failed: %s", exc)
+    os.makedirs(os.path.dirname(PICK_HISTORY_PATH) or "data", exist_ok=True)
+    with open(PICK_HISTORY_PATH, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2)
 
 
 def _retire_active(store: Dict[str, Any], *, reason: str) -> None:
@@ -71,12 +68,14 @@ def record_hour_pick(
     if entry_price <= 0:
         return None
 
+    if prediction_id is None:
+        return None
+
     store = _load()
     active = store.get("active")
     if (
         isinstance(active, dict)
         and not active.get("finalized")
-        and prediction_id is not None
         and active.get("prediction_id") == prediction_id
     ):
         return active
@@ -129,6 +128,20 @@ def finalize_from_prediction(prediction: Dict[str, Any]) -> Optional[Dict[str, A
     store["active"] = None
     _save(store)
     return row
+
+
+def has_prediction(prediction_id: Any) -> bool:
+    """True when this prediction id is the active row or a finalized history row."""
+    if prediction_id is None:
+        return False
+    store = _load()
+    active = store.get("active")
+    if isinstance(active, dict) and active.get("prediction_id") == prediction_id:
+        return True
+    for row in store.get("history") or []:
+        if isinstance(row, dict) and row.get("prediction_id") == prediction_id:
+            return True
+    return False
 
 
 def get_history(limit: int = 20) -> Dict[str, Any]:

@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +30,20 @@ def _utcnow_iso() -> str:
 
 
 
-def _prediction_still_open(pred_id: object) -> bool:
-    """True when any judge still holds an open position for this prediction id."""
+def _prediction_still_open(pred_id: object, *, observation: Optional[dict] = None) -> bool:
+    """True when any judge still holds an open position, or the book is unobservable."""
     if pred_id is None:
         return False
     try:
-        from internal.judges.portfolios import get_portfolio
+        from internal.judges.portfolios import observe_portfolios
 
+        obs = observation if observation is not None else observe_portfolios()
+        if obs.get("kind") != "readable":
+            return True
+        data = obs.get("data") or {}
         for name in ("oracle", "echo", "pulse"):
-            for pos in get_portfolio(name).get("open_positions") or []:
+            judge = data.get(name) or {}
+            for pos in judge.get("open_positions") or []:
                 if pos.get("id") == pred_id:
                     return True
     except Exception:
@@ -61,6 +66,7 @@ def recover_expired_predictions(
     from internal.council.price_reference import price_at_resolve_at
     from internal.council import resolver
     from internal.council.grading import compute_actual_pct, grade_prediction, is_price_unit_mismatch
+    from internal.judges.portfolios import observe_portfolios
 
     recovered, skipped = 0, 0
     details: List[Dict[str, Any]] = []
@@ -79,8 +85,6 @@ def recover_expired_predictions(
         payload.update(extra)
         return payload
 
-    # OSError is belt-and-braces: load_predictions(fail_closed=True) already maps
-    # OSError to PredictionsLedgerUnreadable(kind="transient").
     try:
         data = load_predictions(fail_closed=True)
     except PredictionsLedgerUnreadable as exc:
@@ -88,8 +92,16 @@ def recover_expired_predictions(
     except OSError as exc:
         return _fail("ledger_unreadable", error=str(exc))
 
+    observation = observe_portfolios()
+    if not dry_run and observation.get("kind") != "readable":
+        return _fail(
+            "portfolio_unobservable",
+            error=str(observation.get("error") or observation.get("kind") or "unobservable"),
+        )
+
     before = deepcopy(data)
     resolved = data.get("resolved", []) or []
+    recovered_rows: List[Dict[str, Any]] = []
 
     for row in resolved:
         if recovered >= max_rows:
@@ -158,45 +170,28 @@ def recover_expired_predictions(
         from internal.council.capture import stamp_capture_fields
 
         capture = stamp_capture_fields(row, actual_pct)
-        expert, _ = resolver._stamp_and_nudge_expert(
-            row, correct=bool(correct), capture=capture
-        )
+        expert, _source = resolver._stamp_expert_attribution(row)
         resolver._ensure_subnet_snapshot(row)
-        if not resolver._skip_council_learning(row):
-            resolver._nudge_impact_strength(row, bool(correct))
-        warnings_before = list(row.get("side_effect_warnings") or [])
-        resolver.atomic_finalize_resolution(
-            row,
-            actual_pct=actual_pct,
-            outcome=new_outcome,
-            correct=bool(correct),
-            resolved_price=price,
-            resolved_at=resolve_at.isoformat().replace("+00:00", "Z"),
-            price_meta=meta,
-            apply_judge_nudge=False,
-        )
-        warnings_after = list(row.get("side_effect_warnings") or [])
-        fresh_close_warning = (
-            "on_prediction_resolved" in warnings_after
-            and "on_prediction_resolved" not in warnings_before
-        )
-        still_open = _prediction_still_open(row.get("id"))
-        if fresh_close_warning or still_open:
-            incomplete.append(row.get("id"))
-        if not resolver._skip_council_learning(row):
-            resolver._record_scenario_outcome(
-                row, actual_pct, new_outcome, bool(correct), expert
-            )
-            resolver._nudge_signal_weights(row, bool(correct), capture=capture)
-        else:
-            try:
-                from internal.learning.pump_calibration import maybe_adapt_after_resolve
-
-                maybe_adapt_after_resolve()
-            except Exception:
-                logger.exception("expired recovery pump calibration failed")
+        row["actual_pct"] = actual_pct
+        row["outcome"] = new_outcome
+        row["correct"] = bool(correct)
+        row["status"] = "resolved"
+        row["resolved_price"] = price
+        row["resolved_at"] = resolve_at.isoformat().replace("+00:00", "Z")
         row["recovered_at"] = _utcnow_iso()
         row["recovery"] = {"from": outcome, "price_source": meta.get("price_source")}
+        recovered_rows.append({
+            "row": row,
+            "actual_pct": actual_pct,
+            "new_outcome": new_outcome,
+            "correct": bool(correct),
+            "price": price,
+            "resolve_at": resolve_at,
+            "meta": meta,
+            "capture": capture,
+            "expert": expert,
+            "prior_outcome": outcome,
+        })
         recovered += 1
 
     if not dry_run and recovered:
@@ -219,7 +214,64 @@ def recover_expired_predictions(
                 recovered=0,
                 incomplete_ids=incomplete or None,
             )
-        recovered = len(result.committed_keys)
+        # APPLIED means the after-image (including recovered_rows) is on disk.
+        applied_rows = list(recovered_rows)
+        recovered = len(applied_rows)
+        try:
+            for item in applied_rows:
+                row = item["row"]
+                if not resolver._skip_council_learning(row):
+                    resolver._nudge_attributed_expert(
+                        row,
+                        correct=item["correct"],
+                        capture=item["capture"],
+                        stamped_expert=item["expert"],
+                    )
+                    resolver._nudge_impact_strength(row, item["correct"])
+                warnings_before = list(row.get("side_effect_warnings") or [])
+                resolver.atomic_finalize_resolution(
+                    row,
+                    actual_pct=item["actual_pct"],
+                    outcome=item["new_outcome"],
+                    correct=item["correct"],
+                    resolved_price=item["price"],
+                    resolved_at=item["resolve_at"].isoformat().replace("+00:00", "Z"),
+                    price_meta=item["meta"],
+                    apply_judge_nudge=False,
+                )
+                warnings_after = list(row.get("side_effect_warnings") or [])
+                fresh_close_warning = (
+                    "on_prediction_resolved" in warnings_after
+                    and "on_prediction_resolved" not in warnings_before
+                )
+                still_open = _prediction_still_open(row.get("id"), observation=observation)
+                if still_open:
+                    # Re-check after close so a pre-close readable book can complete.
+                    still_open = _prediction_still_open(row.get("id"))
+                    if observation.get("kind") != "readable":
+                        still_open = True
+                if fresh_close_warning or still_open:
+                    incomplete.append(row.get("id"))
+                if not resolver._skip_council_learning(row):
+                    resolver._record_scenario_outcome(
+                        row, item["actual_pct"], item["new_outcome"], item["correct"], item["expert"]
+                    )
+                    resolver._nudge_signal_weights(row, item["correct"], capture=item["capture"])
+                else:
+                    try:
+                        from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                        maybe_adapt_after_resolve()
+                    except Exception:
+                        logger.exception("expired recovery pump calibration failed")
+        except Exception as exc:
+            logger.exception("expired recovery post-commit effects failed")
+            return _fail(
+                "effects_incomplete",
+                error=str(exc),
+                recovered=recovered,
+                incomplete_ids=incomplete or None,
+            )
         logger.info("expired recovery: recovered=%s skipped=%s", recovered, skipped)
 
     if incomplete:

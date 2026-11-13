@@ -217,25 +217,54 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
             horizon_type="hour",
             market_context=market_context,
         )
-        ledger_committed = stored.kind == "committed" or (
-            stored.kind == "indeterminate"
+        stored_kind = getattr(stored.kind, "value", stored.kind)
+        prediction = stored.prediction
+        if stored_kind in ("skipped", "duplicate") and stored.reason == "duplicate":
+            from internal.learning.predictions_store import pending_hour_prediction
+
+            netuid = subnet_row.get("netuid") or pick.get("netuid")
+            if netuid is None and isinstance(pick.get("subnet"), dict):
+                netuid = pick["subnet"].get("netuid")
+            prediction = prediction or pending_hour_prediction(netuid)
+            pred_id = (prediction or {}).get("id") if isinstance(prediction, dict) else None
+            if pred_id and not pick_history.has_prediction(pred_id):
+                try:
+                    written = pick_history.record_hour_pick(pick, subnet_row, prediction_id=pred_id)
+                except Exception as exc:
+                    logger.warning("pick_history repair failed: %s", exc)
+                    return "indeterminate"
+                if written is None or not pick_history.has_prediction(pred_id):
+                    return "indeterminate"
+            elif pred_id and not pick_history.has_prediction(pred_id):
+                return "indeterminate"
+            return stored_kind
+        ledger_committed = stored_kind == "committed" or (
+            stored_kind == "indeterminate"
             and stored.reason == "positions_incomplete"
             and stored.prediction is not None
         )
         if ledger_committed:
+            pred_id = stored.prediction.get("id") if stored.prediction else None
+            if pred_id is None:
+                if stored_kind == "indeterminate":
+                    logger.warning("hour pick record indeterminate: %s", stored.reason)
+                return stored_kind
             try:
-                pick_history.record_hour_pick(
-                    pick, subnet_row, prediction_id=stored.prediction.get("id")
+                written = pick_history.record_hour_pick(
+                    pick, subnet_row, prediction_id=pred_id
                 )
             except Exception as exc:
                 logger.warning("pick_history record failed: %s", exc)
-        if stored.kind == "indeterminate":
+                return "indeterminate"
+            if written is None:
+                return "indeterminate"
+        if stored_kind == "indeterminate":
             logger.warning("hour pick record indeterminate: %s", stored.reason)
-        if stored.kind == "skipped" and (
+        if stored_kind == "skipped" and (
             stored.reason == "judge_evaluation_failed" or str(stored.reason).startswith("ledger_")
         ):
             return "failed"
-        return stored.kind
+        return stored_kind
     except Exception as exc:
         logger.warning("hour pick learning record failed: %s", exc)
         return "indeterminate"

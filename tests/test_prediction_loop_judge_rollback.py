@@ -66,13 +66,34 @@ def test_unreadable_portfolios_are_not_overwritten(tmp_path, monkeypatch):
 
 
 def test_close_before_open_prevents_reopening(tmp_path, monkeypatch):
+    """A real close (open then close) blocks a later open; close-without-open does not invent PnL."""
+    from internal.learning import predictions_store
+
     port_path = tmp_path / "judge_portfolios.json"
+    ledger = tmp_path / "predictions.json"
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(ledger))
     row = {"id": "pick-1", "netuid": 7, "reference_price": 12, "horizon_hours": 1}
-    portfolios.close_position("oracle", row, actual_pct=1, outcome="hit")
-    portfolios.open_position("oracle", row)
+    # Close-without-open must not invent a closed row or a tombstone.
+    assert portfolios.close_position("oracle", row, actual_pct=1, outcome="hit") is None
+    opened = portfolios.open_position("oracle", row)
+    assert opened is not None
+    # After a real close, a late open is refused.
+    assert portfolios.close_position("oracle", row, actual_pct=1, outcome="hit") is not None
+    assert portfolios.open_position("oracle", row) is None
     data = json.loads(port_path.read_text())
     assert data["oracle"]["open_positions"] == []
+    assert len(data["oracle"]["closed_positions"]) == 1
+
+    terminal = {
+        "id": "pick-term",
+        "netuid": 7,
+        "status": "resolved",
+        "outcome": "hit",
+        "correct": True,
+    }
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [terminal], "stats": {}}))
+    assert portfolios.open_position("oracle", terminal) is None
 
 
 def test_parallel_portfolio_updates_do_not_lose_a_judge(tmp_path, monkeypatch):
@@ -502,7 +523,10 @@ def test_postmortem_retries_after_durable_close(tmp_path, monkeypatch):
     pred_path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
     from internal.learning import predictions_store
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
-    _open_all_judges(row)
+    # Seed held closed positions via the rebuild backfill path. A post-resolve
+    # open would be refused by the terminal-ledger open rule.
+    for name in ("oracle", "echo", "pulse"):
+        portfolios.backfill_closed_position(name, row, actual_pct=-3.0, outcome="miss")
 
     real = postmortems.record
     calls = {"oracle": 0}

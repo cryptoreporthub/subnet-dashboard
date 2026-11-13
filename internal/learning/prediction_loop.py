@@ -490,40 +490,76 @@ def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
         open_positions_for_prediction(row, scores)
         reconciled += 1
 
+    from internal.judges.portfolios import observe_portfolios
+
+    observation = observe_portfolios()
     open_ids = set()
-    retry_ids = set()
-    for name in ("oracle", "echo", "pulse"):
-        portfolio = get_portfolio(name)
-        for pos in portfolio.get("open_positions") or []:
-            pred_id = pos.get("id")
-            if pred_id is not None:
-                open_ids.add(pred_id)
-        for pred_id in (portfolio.get("closed_prediction_ids") or {}):
-            retry_ids.add(pred_id)
-            try:
-                retry_ids.add(int(pred_id))
-            except (TypeError, ValueError):
-                pass
-        for closed in portfolio.get("closed_positions") or []:
-            pred_id = closed.get("id")
-            if pred_id is not None:
-                retry_ids.add(pred_id)
-                retry_ids.add(str(pred_id))
-    if not open_ids and not retry_ids:
-        return reconciled
-    for row in list(data.get("predictions") or []) + list(data.get("resolved") or []):
-        if not isinstance(row, dict):
-            continue
-        pred_id = row.get("id")
-        if pred_id not in open_ids and pred_id not in retry_ids and str(pred_id) not in retry_ids:
-            continue
-        if not _gradeable_for_judge_close(row):
-            continue
-        if pred_id not in open_ids and not _is_wrong_pick(row):
-            continue
-        on_prediction_resolved(row, apply_judge_nudge=False)
-        reconciled += 1
+    if observation.get("kind") == "readable":
+        for name in ("oracle", "echo", "pulse"):
+            judge = (observation.get("data") or {}).get(name) or {}
+            for pos in judge.get("open_positions") or []:
+                pred_id = pos.get("id")
+                if pred_id is not None:
+                    open_ids.add(pred_id)
+    if open_ids:
+        for row in list(data.get("predictions") or []) + list(data.get("resolved") or []):
+            if not isinstance(row, dict):
+                continue
+            pred_id = row.get("id")
+            if pred_id not in open_ids:
+                continue
+            if not _gradeable_for_judge_close(row):
+                continue
+            on_prediction_resolved(row, apply_judge_nudge=False)
+            reconciled += 1
+    retry_pending_postmortems(data, observation)
     return reconciled
+
+
+def retry_pending_postmortems(data: Optional[Dict[str, Any]] = None, observation: Optional[Dict[str, Any]] = None) -> int:
+    """Write missing postmortems only for judges that actually closed the pick."""
+    from internal.judges import postmortems
+    from internal.judges.portfolios import observe_portfolios
+
+    if data is None:
+        from internal.learning.predictions_store import load_predictions as _load_predictions
+
+        data = _load_predictions()
+    if observation is None:
+        observation = observe_portfolios()
+    if observation.get("kind") != "readable":
+        return 0
+    retried = 0
+    book = observation.get("data") or {}
+    rows = list(data.get("predictions") or []) + list(data.get("resolved") or [])
+    for name in ("oracle", "echo", "pulse"):
+        judge = book.get(name) or {}
+        held = {c.get("id") for c in judge.get("closed_positions") or [] if c.get("id") is not None}
+        if not held:
+            continue
+        try:
+            existing = {
+                entry.get("prediction_id")
+                for entry in postmortems.list_for_judge(name)
+                if isinstance(entry, dict) and entry.get("prediction_id") is not None
+            }
+        except Exception:
+            existing = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            pred_id = row.get("id")
+            if pred_id not in held or pred_id in existing:
+                continue
+            if not _gradeable_for_judge_close(row) or not _is_wrong_pick(row):
+                continue
+            try:
+                postmortems.record(name, row, actual_pct=row.get("actual_pct"))
+                retried += 1
+                existing.add(pred_id)
+            except Exception:
+                logger.exception("postmortem retry failed judge=%s id=%s", name, pred_id)
+    return retried
 
 
 def _link_scenario_memory(

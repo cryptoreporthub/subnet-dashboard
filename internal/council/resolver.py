@@ -487,18 +487,10 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     return normalize_expert(prediction)
 
 
-def _stamp_and_nudge_expert(
-    prediction: Dict[str, Any],
-    *,
-    correct: bool,
-    capture: Optional[CaptureResult] = None,
-) -> Tuple[Optional[str], Optional[str]]:
-    """Stamp rich attribution on the row; nudge the SAME attributed expert so
-    attribution stamping and weight nudging stay in agreement (fixes quant
-    sink / dark_horse starvation where legacy string normalization diverged)."""
+def _stamp_expert_attribution(prediction: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """Write persistable expert/evidence fields on the row. Does not nudge weights."""
     from internal.council.expert_attribution import resolve_expert_attribution
-    from internal.council.signal_expert import expert_for_replay_row
-    from internal.learning.evidence import evidence_population, stamp_evidence
+    from internal.learning.evidence import stamp_evidence
 
     stamped_expert, expert_source = resolve_expert_attribution(prediction)
     stamp_evidence(prediction)
@@ -506,8 +498,22 @@ def _stamp_and_nudge_expert(
         prediction["expert"] = stamped_expert
         if expert_source != "existing":
             prediction["expert_attribution_source"] = expert_source
-    # Outcome weights require both a published council row and attributable
-    # signal evidence. A bare legacy expert label is diagnostic only.
+    return stamped_expert, expert_source
+
+
+def _nudge_attributed_expert(
+    prediction: Dict[str, Any],
+    *,
+    correct: bool,
+    capture: Optional[CaptureResult] = None,
+    stamped_expert: Optional[str] = None,
+) -> Optional[str]:
+    """Nudge the same expert that was stamped. Call only after a successful persist."""
+    from internal.council.signal_expert import expert_for_replay_row
+    from internal.learning.evidence import evidence_population
+
+    if stamped_expert is None:
+        stamped_expert = prediction.get("expert")
     replay_expert = expert_for_replay_row(prediction)
     nudge_expert = (
         stamped_expert
@@ -519,6 +525,22 @@ def _stamp_and_nudge_expert(
         with _cycle_persist_guard_safe():
             if not _cycle_writes_revoked_safe():
                 _nudge_weights(bool(correct), nudge_expert, capture=capture)
+    return nudge_expert
+
+
+def _stamp_and_nudge_expert(
+    prediction: Dict[str, Any],
+    *,
+    correct: bool,
+    capture: Optional[CaptureResult] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Stamp rich attribution on the row; nudge the SAME attributed expert so
+    attribution stamping and weight nudging stay in agreement (fixes quant
+    sink / dark_horse starvation where legacy string normalization diverged)."""
+    stamped_expert, _expert_source = _stamp_expert_attribution(prediction)
+    nudge_expert = _nudge_attributed_expert(
+        prediction, correct=bool(correct), capture=capture, stamped_expert=stamped_expert
+    )
     return stamped_expert, nudge_expert
 
 

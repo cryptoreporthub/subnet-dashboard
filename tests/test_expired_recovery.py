@@ -6,6 +6,23 @@ from datetime import datetime, timezone
 
 from internal.learning.predictions_store import PersistOutcome, PersistReason, PersistResult
 
+import pytest
+from internal.judges import portfolios
+
+
+@pytest.fixture(autouse=True)
+def _readable_portfolios(tmp_path, monkeypatch):
+    """Recovery now fail-closes when the portfolio book is missing or unreadable."""
+    port_path = tmp_path / "judge_portfolios.json"
+    if not port_path.exists():
+        port_path.write_text("{}")
+    if not port_path.exists():
+        port_path.write_text("{}")
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    return port_path
+
+
+
 
 def test_recovery_uses_canonical_finalize_and_resolves_status(tmp_path, monkeypatch):
     from internal.council import resolver
@@ -41,6 +58,8 @@ def test_recovery_uses_canonical_finalize_and_resolves_status(tmp_path, monkeypa
         lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
     )
     monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_stamp_expert_attribution", lambda *args, **kwargs: ("quant", "existing"), raising=False)
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
     monkeypatch.setattr(resolver, "atomic_finalize_resolution", resolver.atomic_finalize_resolution)
@@ -138,6 +157,8 @@ def test_recovery_persist_refusal_uses_reason_value(tmp_path, monkeypatch):
         lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
     )
     monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_stamp_expert_attribution", lambda *args, **kwargs: ("quant", "existing"), raising=False)
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
     monkeypatch.setattr(
@@ -168,6 +189,8 @@ def test_recovery_continues_after_judge_close_warning(tmp_path, monkeypatch):
         lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
     )
     monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_stamp_expert_attribution", lambda *args, **kwargs: ("quant", "existing"), raising=False)
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
     real_finalize = resolver.atomic_finalize_resolution
@@ -206,6 +229,8 @@ def test_recovery_close_deadline_does_not_include_price_hydration(tmp_path, monk
     row = _expired_row("hydrate-1")
     path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    if not port_path.exists():
+        port_path.write_text("{}")
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
     monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(pm_dir))
     monkeypatch.setattr(portfolios, "PORTFOLIOS_LOCK_TIMEOUT_SECONDS", 0.25, raising=False)
@@ -226,6 +251,8 @@ def test_recovery_close_deadline_does_not_include_price_hydration(tmp_path, monk
 
     monkeypatch.setattr(price_reference, "price_at_resolve_at", slow_price)
     monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_stamp_expert_attribution", lambda *args, **kwargs: ("quant", "existing"), raising=False)
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
     result = expired_recovery.recover_expired_predictions()
@@ -247,6 +274,8 @@ def test_revoked_finalize_is_not_a_successful_recovery(tmp_path, monkeypatch):
     row = _expired_row("revoked-1")
     path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    if not port_path.exists():
+        port_path.write_text("{}")
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
     pending = {
         "id": "revoked-1",
@@ -264,6 +293,8 @@ def test_revoked_finalize_is_not_a_successful_recovery(tmp_path, monkeypatch):
         lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
     )
     monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_stamp_expert_attribution", lambda *args, **kwargs: ("quant", "existing"), raising=False)
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
     monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: True)
@@ -288,6 +319,8 @@ def test_stale_close_warning_does_not_fail_recovery_when_positions_closed(tmp_pa
     row["side_effect_warnings"] = ["on_prediction_resolved"]
     path.write_text(json.dumps({"predictions": [], "resolved": [row], "stats": {}}))
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    if not port_path.exists():
+        port_path.write_text("{}")
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
     pending = {
         "id": "stale-1",
@@ -305,6 +338,8 @@ def test_stale_close_warning_does_not_fail_recovery_when_positions_closed(tmp_pa
         lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
     )
     monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *args, **kwargs: ("quant", False))
+    monkeypatch.setattr(resolver, "_stamp_expert_attribution", lambda *args, **kwargs: ("quant", "existing"), raising=False)
+    monkeypatch.setattr(resolver, "_nudge_attributed_expert", lambda *args, **kwargs: None, raising=False)
     monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *args, **kwargs: None)
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: True)
     result = expired_recovery.recover_expired_predictions()

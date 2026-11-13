@@ -88,19 +88,114 @@ def _load() -> Dict[str, Any]:
         return {}
 
 def _load_checked() -> Dict[str, Any]:
-    try:
-        with open(PORTFOLIOS_PATH, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except FileNotFoundError:
+    obs = observe_portfolios()
+    if obs["kind"] == "missing":
         return {}
+    if obs["kind"] != "readable":
+        raise ValueError(obs.get("error") or "unreadable portfolios")
+    return obs["data"]
+
+
+def _shape_error(data: Any) -> Optional[str]:
     if not isinstance(data, dict):
-        raise ValueError("portfolios root must be an object")
+        return "portfolios root must be an object"
     for judge in data.values():
         if not isinstance(judge, dict) or any(
             not isinstance(judge.get(key, []), list) for key in ("open_positions", "closed_positions")
         ) or not isinstance(judge.get("closed_prediction_ids", {}), dict):
-            raise ValueError("invalid judge portfolio")
-    return data
+            return "invalid judge portfolio"
+    return None
+
+
+def observe_portfolios() -> Dict[str, Any]:
+    """Fail-closed portfolio readability: never use get_portfolio / _load()."""
+    try:
+        with open(PORTFOLIOS_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        return {"kind": "missing", "data": {}, "error": "missing"}
+    except Exception as exc:
+        return {"kind": "unreadable", "data": {}, "error": f"{type(exc).__name__}: {exc}"}
+    error = _shape_error(data)
+    if error:
+        return {"kind": "unreadable", "data": {}, "error": error}
+    return {"kind": "readable", "data": data, "error": None}
+
+
+def _prediction_is_terminal(pred_id: Any) -> bool:
+    if pred_id is None:
+        return False
+    try:
+        from internal.learning.predictions_store import prediction_is_terminal
+
+        return bool(prediction_is_terminal(pred_id))
+    except Exception:
+        return False
+
+
+def holds_open(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None) -> bool:
+    if pred_id is None:
+        return False
+    if data is None:
+        obs = observe_portfolios()
+        if obs["kind"] != "readable":
+            return False
+        data = obs["data"]
+    judge = data.get(str(judge_name).lower()) or {}
+    return any(pos.get("id") == pred_id for pos in judge.get("open_positions") or [])
+
+
+def holds_closed(judge_name: str, pred_id: Any, *, data: Optional[Dict[str, Any]] = None) -> bool:
+    if pred_id is None:
+        return False
+    if data is None:
+        obs = observe_portfolios()
+        if obs["kind"] != "readable":
+            return False
+        data = obs["data"]
+    judge = data.get(str(judge_name).lower()) or {}
+    return any(pos.get("id") == pred_id for pos in judge.get("closed_positions") or [])
+
+
+def _closed_row_from_prediction(
+    judge_name: str,
+    prediction: Dict[str, Any],
+    *,
+    position: Optional[Dict[str, Any]] = None,
+    actual_pct: Optional[float] = None,
+    outcome: Optional[str] = None,
+) -> Dict[str, Any]:
+    direction = (position or {}).get("direction") or prediction.get("direction", "up")
+    predicted_pct = float((position or {}).get("predicted_pct", prediction.get("predicted_pct", 0)) or 0)
+    if actual_pct is None:
+        ref = float(prediction.get("reference_price", 0) or 0)
+        resolved_price = float(prediction.get("resolved_price", 0) or 0)
+        if ref > 0 and resolved_price > 0:
+            actual_pct = (resolved_price - ref) / ref * 100
+        else:
+            actual_pct = 0.0
+    actual_pct = float(actual_pct or 0)
+    if position is None:
+        position = {
+            "id": prediction.get("id"),
+            "netuid": prediction.get("netuid"),
+            "name": prediction.get("name"),
+            "direction": direction,
+            "predicted_pct": predicted_pct,
+            "reference_price": float(prediction.get("reference_price", 0) or 0),
+            "size": 1.0,
+            "bucket": _bucket(prediction.get("horizon_hours")),
+            "horizon_hours": prediction.get("horizon_hours"),
+            "entered_at": prediction.get("created_at"),
+        }
+    pnl = _compute_pnl(direction, predicted_pct, actual_pct, judge_name)
+    return {
+        **position,
+        "actual_pct": round(actual_pct, 4),
+        "pnl_pct": round(pnl * position.get("size", 1.0), 4),
+        "outcome": outcome or prediction.get("outcome", "unknown"),
+        "closed_at": _utcnow(),
+    }
 
 @contextmanager
 def _portfolios_lock(*, deadline: Optional[float] = None) -> Iterator[None]:
@@ -226,8 +321,9 @@ def _open_position(data, judge_name, prediction, size):
     _prune_tombstones(judge)
     pred_id = prediction.get("id")
     if pred_id is not None and (
-        str(pred_id) in judge["closed_prediction_ids"]
+        str(pred_id) in judge.get("closed_prediction_ids", {})
         or any(pos.get("id") == pred_id for pos in judge.get("open_positions", []))
+        or any(pos.get("id") == pred_id for pos in judge.get("closed_positions", []))
     ):
         return None
     name_lower = judge_name.lower()
@@ -248,6 +344,8 @@ def _open_position(data, judge_name, prediction, size):
 
 @_portfolio_transaction
 def open_positions_for_prediction(prediction: Dict[str, Any], scores: Dict[str, Any]) -> None:
+    if _prediction_is_terminal(prediction.get("id")):
+        return
     data = _load_checked()
     changed = False
     for name in ("oracle", "echo", "pulse"):
@@ -257,13 +355,23 @@ def open_positions_for_prediction(prediction: Dict[str, Any], scores: Dict[str, 
         _save(data)
 
 
-@_portfolio_transaction
 def open_position(
     judge_name: str,
     prediction: Dict[str, Any],
     size: float = 1.0,
 ) -> Optional[Dict[str, Any]]:
     """Open a paper position for a judge when a prediction is created."""
+    if _prediction_is_terminal(prediction.get("id")):
+        return None
+    return _open_position_locked(judge_name, prediction, size)
+
+
+@_portfolio_transaction
+def _open_position_locked(
+    judge_name: str,
+    prediction: Dict[str, Any],
+    size: float = 1.0,
+) -> Optional[Dict[str, Any]]:
     data = _load_checked()
     position = _open_position(data, judge_name, prediction, size)
     if position is not None:
@@ -294,20 +402,24 @@ def close_position(
     actual_pct: Optional[float] = None,
     outcome: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Close an open paper position and move it to the closed ledger."""
-    data = _load_checked()
-    judge = _get_judge(data, judge_name)
+    """Close an open paper position and move it to the closed ledger.
+
+    Close-without-open is a no-op: no fabricated row, no tombstone, no new
+    judge key, and no file create.
+    """
+    obs = observe_portfolios()
+    if obs["kind"] != "readable":
+        return None
+    data = obs["data"]
+    name = judge_name.lower()
+    judge = data.get(name)
+    if not isinstance(judge, dict):
+        return None
     open_positions = judge.get("open_positions", [])
     pred_id = prediction.get("id")
     netuid = prediction.get("netuid")
     _prune_tombstones(judge)
-    # Tombstone first so a retried close is a no-op while the stamp lives
-    # (pruned after day_horizon_hours()+49). The closed_positions scan below
-    # is the post-prune fallback; do not delete the tombstone.
-    if pred_id is not None:
-        judge["closed_prediction_ids"][str(pred_id)] = _utcnow()
 
-    # A replayed resolution must not append a second closed entry or nudge the judge again.
     if pred_id is not None and any(
         c.get("id") == pred_id for c in judge.get("closed_positions", [])
     ):
@@ -315,7 +427,7 @@ def close_position(
         if len(remaining) != len(open_positions):
             judge["open_positions"] = remaining
             _recompute_summary(judge)
-        _save(data)
+            _save(data)
         return None
 
     idx = next(
@@ -326,49 +438,63 @@ def close_position(
         ),
         None,
     )
+    if idx is None:
+        return None
 
-    direction = prediction.get("direction", "up")
-    predicted_pct = float(prediction.get("predicted_pct", 0) or 0)
-
-    if actual_pct is None:
-        ref = float(prediction.get("reference_price", 0) or 0)
-        resolved_price = float(prediction.get("resolved_price", 0) or 0)
-        if ref > 0 and resolved_price > 0:
-            actual_pct = (resolved_price - ref) / ref * 100
-        else:
-            actual_pct = 0.0
-    actual_pct = float(actual_pct or 0)
-
-    if idx is not None:
-        position = open_positions.pop(idx)
-        direction = position.get("direction", direction)
-        predicted_pct = position.get("predicted_pct", predicted_pct)
-    else:
-        position = {
-            "id": pred_id,
-            "netuid": netuid,
-            "name": prediction.get("name"),
-            "direction": direction,
-            "predicted_pct": predicted_pct,
-            "reference_price": float(prediction.get("reference_price", 0) or 0),
-            "size": 1.0,
-            "bucket": _bucket(prediction.get("horizon_hours")),
-            "horizon_hours": prediction.get("horizon_hours"),
-            "entered_at": prediction.get("created_at"),
-        }
-
-    pnl = _compute_pnl(direction, predicted_pct, actual_pct, judge_name)
-    closed = {
-        **position,
-        "actual_pct": round(actual_pct, 4),
-        "pnl_pct": round(pnl * position.get("size", 1.0), 4),
-        "outcome": outcome or prediction.get("outcome", "unknown"),
-        "closed_at": _utcnow(),
-    }
+    position = open_positions.pop(idx)
+    closed = _closed_row_from_prediction(
+        name, prediction, position=position, actual_pct=actual_pct, outcome=outcome
+    )
+    if pred_id is not None:
+        judge.setdefault("closed_prediction_ids", {})[str(pred_id)] = _utcnow()
     judge.setdefault("closed_positions", []).append(closed)
     _recompute_summary(judge)
     _save(data)
     return closed
+
+
+@_portfolio_transaction
+def backfill_closed_position(
+    judge_name: str,
+    prediction: Dict[str, Any],
+    actual_pct: Optional[float] = None,
+    outcome: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Rebuild-only: record a closed position without going through live open."""
+    obs = observe_portfolios()
+    if obs["kind"] == "unreadable":
+        raise ValueError(obs.get("error") or "unreadable portfolios")
+    data = obs["data"] if obs["kind"] == "readable" else {}
+    name = judge_name.lower()
+    judge = _get_judge(data, name)
+    pred_id = prediction.get("id")
+    if pred_id is not None and any(
+        c.get("id") == pred_id for c in judge.get("closed_positions", [])
+    ):
+        remaining = [pos for pos in judge.get("open_positions", []) if pos.get("id") != pred_id]
+        if len(remaining) != len(judge.get("open_positions", [])):
+            judge["open_positions"] = remaining
+            _recompute_summary(judge)
+            _save(data)
+        return None
+    remaining = [pos for pos in judge.get("open_positions", []) if pos.get("id") != pred_id]
+    position = None
+    if len(remaining) != len(judge.get("open_positions", [])):
+        position = next(
+            (pos for pos in judge.get("open_positions", []) if pos.get("id") == pred_id),
+            None,
+        )
+        judge["open_positions"] = remaining
+    closed = _closed_row_from_prediction(
+        name, prediction, position=position, actual_pct=actual_pct, outcome=outcome
+    )
+    if pred_id is not None:
+        judge.setdefault("closed_prediction_ids", {})[str(pred_id)] = _utcnow()
+    judge.setdefault("closed_positions", []).append(closed)
+    _recompute_summary(judge)
+    _save(data)
+    return closed
+
 
 def get_portfolio(judge_name: str) -> Dict[str, Any]:
     """Return the full portfolio state for a judge."""

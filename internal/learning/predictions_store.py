@@ -475,6 +475,59 @@ def _write_predictions_unlocked(
         raise
 
 
+def prediction_is_terminal(pred_id: Any, *, path: Optional[str] = None) -> bool:
+    """True when a prediction id is already resolved/expired/ungradeable on the ledger.
+
+    Fail-open: an unreadable ledger does not block a new open.
+    """
+    if pred_id is None:
+        return False
+    try:
+        data = load_predictions(path=path)
+    except Exception:
+        return False
+    # Only a graded resolution blocks a late live open. Expired/ungradeable
+    # rows may still have (or need) open paper positions for recovery to close.
+    terminal_status = {"resolved"}
+    terminal_outcome = {"hit", "miss"}
+    for bucket in ("predictions", "resolved"):
+        for row in data.get(bucket) or []:
+            if not isinstance(row, dict):
+                continue
+            if row.get("id") != pred_id and str(row.get("id")) != str(pred_id):
+                continue
+            status = str(row.get("status") or "")
+            outcome = str(row.get("outcome") or "")
+            return status in terminal_status or outcome in terminal_outcome
+    return False
+
+
+def pending_hour_prediction(
+    netuid: Any,
+    *,
+    shadow: bool = False,
+    path: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return the pending hour-horizon ledger row for this netuid, if any."""
+    if netuid is None:
+        return None
+    want_shadow = bool(shadow)
+    try:
+        rows = load_predictions(path=path).get("predictions") or []
+    except Exception:
+        return None
+    for existing in rows:
+        if (
+            isinstance(existing, dict)
+            and existing.get("netuid") == netuid
+            and existing.get("horizon_type", "hour") == "hour"
+            and existing.get("status") == "pending"
+            and bool(existing.get("shadow") or existing.get("counterfactual")) == want_shadow
+        ):
+            return existing
+    return None
+
+
 def has_pending_duplicate(
     netuid: Any,
     horizon_type: str = "hour",
