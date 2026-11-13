@@ -13,30 +13,56 @@ logger = logging.getLogger(__name__)
 PICK_HISTORY_PATH = os.environ.get("PICK_HISTORY_PATH", os.path.join("data", "pick_history.json"))
 
 
+class PickHistoryUnreadable(Exception):
+    """Raised when the pick-history file exists but cannot be read."""
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _load() -> Dict[str, Any]:
+def observe_pick_history() -> Dict[str, Any]:
     try:
         with open(PICK_HISTORY_PATH, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-        if isinstance(data, dict):
-            data.setdefault("active", None)
-            data.setdefault("history", [])
-            return data
-    except Exception:
-        pass
+    except FileNotFoundError:
+        return {"kind": "missing", "data": {"active": None, "history": []}, "error": "missing"}
+    except Exception as exc:
+        return {"kind": "unreadable", "data": {}, "error": f"{type(exc).__name__}: {exc}"}
+    if not isinstance(data, dict):
+        return {"kind": "unreadable", "data": {}, "error": "pick history root must be an object"}
+    active = data.get("active", None)
+    history = data.get("history", [])
+    if active is not None and not isinstance(active, dict):
+        return {"kind": "unreadable", "data": {}, "error": "pick history active must be an object or null"}
+    if not isinstance(history, list):
+        return {"kind": "unreadable", "data": {}, "error": "pick history history must be a list"}
+    if "active" not in data or "history" not in data:
+        data = dict(data)
+        data.setdefault("active", None)
+        data.setdefault("history", [])
+    return {"kind": "readable", "data": data, "error": None}
+
+
+def _load() -> Dict[str, Any]:
+    """Degraded read for display: never raise, never rewrite a corrupt file."""
+    obs = observe_pick_history()
+    if obs.get("kind") == "readable":
+        return obs["data"]
     return {"active": None, "history": []}
 
 
+def _load_for_write() -> Dict[str, Any]:
+    obs = observe_pick_history()
+    if obs.get("kind") == "unreadable":
+        raise PickHistoryUnreadable(obs.get("error") or "unreadable pick history")
+    return obs.get("data") or {"active": None, "history": []}
+
+
 def _save(data: Dict[str, Any]) -> None:
-    try:
-        os.makedirs(os.path.dirname(PICK_HISTORY_PATH) or "data", exist_ok=True)
-        with open(PICK_HISTORY_PATH, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=2)
-    except Exception as exc:
-        logger.warning("pick_history save failed: %s", exc)
+    os.makedirs(os.path.dirname(PICK_HISTORY_PATH) or "data", exist_ok=True)
+    with open(PICK_HISTORY_PATH, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2)
 
 
 def _retire_active(store: Dict[str, Any], *, reason: str) -> None:
@@ -71,7 +97,17 @@ def record_hour_pick(
     if entry_price <= 0:
         return None
 
-    store = _load()
+    if prediction_id is None:
+        return None
+
+    store = _load_for_write()
+    active = store.get("active")
+    if (
+        isinstance(active, dict)
+        and not active.get("finalized")
+        and active.get("prediction_id") == prediction_id
+    ):
+        return active
     _retire_active(store, reason="replaced")
 
     row = {
@@ -96,7 +132,7 @@ def finalize_from_prediction(prediction: Dict[str, Any]) -> Optional[Dict[str, A
     if str(prediction.get("horizon_type") or "") != "hour":
         return None
 
-    store = _load()
+    store = _load_for_write()
     active = store.get("active")
     if not isinstance(active, dict) or active.get("finalized"):
         return None
@@ -121,6 +157,23 @@ def finalize_from_prediction(prediction: Dict[str, Any]) -> Optional[Dict[str, A
     store["active"] = None
     _save(store)
     return row
+
+
+def has_prediction(prediction_id: Any) -> bool:
+    """True when this prediction id is the active row or a finalized history row."""
+    if prediction_id is None:
+        return False
+    obs = observe_pick_history()
+    if obs.get("kind") == "unreadable":
+        raise PickHistoryUnreadable(obs.get("error") or "unreadable pick history")
+    store = obs.get("data") or {"active": None, "history": []}
+    active = store.get("active")
+    if isinstance(active, dict) and active.get("prediction_id") == prediction_id:
+        return True
+    for row in store.get("history") or []:
+        if isinstance(row, dict) and row.get("prediction_id") == prediction_id:
+            return True
+    return False
 
 
 def get_history(limit: int = 20) -> Dict[str, Any]:

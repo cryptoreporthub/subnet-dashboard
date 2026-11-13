@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import copy
+import enum
 import fcntl
+import hashlib
 import json
 import logging
 import os
@@ -11,7 +13,8 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Iterator, Literal, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,57 @@ _cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 # same-process staleness. Matches this repo's existing `SOMETHING_CACHE_TTL`
 # env var convention (see internal/council/hourly_pick.py, internal/cockpit/picks_snapshot.py).
 _CACHE_TTL = int(os.environ.get("SOUL_MAP_CACHE_TTL", "5"))
+
+_SOUL_MAP_LOCK_DEADLINE_SECONDS = 5.0
+_SIDECAR_CAP = 3
+_SIDECAR_HASH_BYTES = 65536
+
+_read_log_guard: Dict[str, float] = {}
+
+
+class WriteOutcome(enum.Enum):
+    APPLIED = "applied"
+    DECLINED = "declined"
+    REPLACE_FAILED = "replace_failed"
+    OWNERSHIP_UNKNOWN = "ownership_unknown"
+    UNREADABLE_BLOB = "unreadable_blob"
+    LOCK_WAIT_FAILED = "lock_wait_failed"
+    READ_FAILED = "read_failed"
+
+    def __bool__(self) -> bool:
+        raise TypeError("compare WriteOutcome explicitly, never use it as a boolean")
+
+
+@dataclass(frozen=True)
+class WriteResult:
+    outcome: WriteOutcome
+    blob: Optional[Dict[str, Any]] = None
+    detail: str = ""
+
+    @property
+    def committed(self) -> bool:
+        return self.outcome is WriteOutcome.APPLIED
+
+
+@dataclass(frozen=True)
+class BlobRead:
+    kind: Literal["missing", "loaded", "unreadable", "transient"]
+    blob: Optional[Dict[str, Any]]
+    error: str = ""
+
+
+class StateUnreadable(Exception):
+    """Soul-map or auxiliary JSON could not be read for cycle work."""
+
+    def __init__(self, kind: str, path: str, *, error: str = "") -> None:
+        super().__init__(f"{kind} read failed for {path}: {error}")
+        self.kind = kind
+        self.path = path
+        self.error = error
+
+
+class SoulMapLockWaitTimeout(TimeoutError):
+    """Timed out acquiring .writers, flock, or reader mutex within the write deadline."""
 
 
 def _resolve_path(path: Optional[str]) -> str:
@@ -44,86 +98,164 @@ def _lock_for(path: str) -> threading.Lock:
         return _locks[path]
 
 
+def read_blob_checked(path: str) -> BlobRead:
+    """Classify on-disk JSON once at the file boundary."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        return BlobRead("missing", {})
+    except UnicodeDecodeError:
+        return BlobRead("unreadable", None, error="encoding")
+    except (OSError, MemoryError) as exc:
+        return BlobRead("transient", None, error=str(exc))
+    except Exception as exc:
+        return BlobRead("transient", None, error=str(exc))
+
+    if not raw.strip():
+        return BlobRead("unreadable", None, error="empty")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return BlobRead("unreadable", None, error="parse")
+    except UnicodeDecodeError:
+        return BlobRead("unreadable", None, error="parse")
+    except (OSError, MemoryError) as exc:
+        return BlobRead("transient", None, error=str(exc))
+
+    if not isinstance(data, dict):
+        return BlobRead("unreadable", None, error="not_dict")
+    return BlobRead("loaded", data)
+
+
+def _log_read_once(path: str, kind: str, message: str) -> bool:
+    key = f"{path}:{kind}"
+    now = time.monotonic()
+    last = _read_log_guard.get(key, 0.0)
+    if now - last < 60.0:
+        return False
+    _read_log_guard[key] = now
+    logger.warning("%s", message)
+    return True
+
+
+def _sidecar_paths(path: str) -> list[str]:
+    directory = os.path.dirname(path) or "."
+    base = os.path.basename(path)
+    prefix = base + ".corrupt-"
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return []
+    return [os.path.join(directory, n) for n in names if n.startswith(prefix)]
+
+
+def _quarantine_corrupt(path: str) -> str:
+    """Copy unreadable bytes to a content-hash sidecar; never mutates the original."""
+    try:
+        sidecars = _sidecar_paths(path)
+        if len(sidecars) >= _SIDECAR_CAP:
+            return "sidecar=capped"
+
+        digest = hashlib.sha256()
+        size = 0
+        with open(path, "rb") as src:
+            while True:
+                chunk = src.read(_SIDECAR_HASH_BYTES)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                size += len(chunk)
+        digest_hex = digest.hexdigest()
+        name = f"{os.path.basename(path)}.corrupt-{digest_hex[:16]}"
+        directory = os.path.dirname(path) or "."
+        dest = os.path.join(directory, name)
+        if os.path.exists(dest):
+            return f"sidecar={name}"
+
+        try:
+            st = os.statvfs(directory)
+            free = st.f_bavail * st.f_frsize
+            if free < size * 2:
+                return "sidecar=copy_failed"
+        except (OSError, AttributeError):
+            pass
+
+        fd, temp_path = tempfile.mkstemp(dir=directory, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "wb") as out, open(path, "rb") as src:
+                while True:
+                    chunk = src.read(_SIDECAR_HASH_BYTES)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+            if os.path.getsize(temp_path) != size:
+                os.unlink(temp_path)
+                return "sidecar=copy_failed"
+            os.replace(temp_path, dest)
+            return f"sidecar={name}"
+        except OSError:
+            if os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+            return "sidecar=copy_failed"
+    except OSError:
+        return "sidecar=copy_failed"
+
+
+def _canonical_blob_json(blob: Dict[str, Any]) -> str:
+    return json.dumps(blob, sort_keys=True, separators=(",", ":"))
+
+
 @contextmanager
-def _locked_soul_map_file(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
-    """Cross-process lock for soul_map read-modify-replace."""
+def _acquire_write_locks(path: str, deadline: float) -> Iterator[None]:
+    """One deadline for .writers, flock, and reader mutex."""
+    writers = _lock_for(path + ".writers")
+    reader = _lock_for(path)
+    writers_acquired = False
+    reader_acquired = False
+    flock_released = False
     lock_path = path + ".lock"
     os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
-    with open(lock_path, "a+", encoding="utf-8") as lock_file:
-        deadline = time.monotonic() + timeout_seconds
-        acquired = False
+    lock_file = open(lock_path, "a+", encoding="utf-8")
+    try:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not writers.acquire(timeout=max(0.0, remaining)):
+            raise SoulMapLockWaitTimeout(f"Timed out waiting for writers lock on {path}")
+        writers_acquired = True
+
         while time.monotonic() < deadline:
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                acquired = True
                 break
-            except (BlockingIOError, OSError):
+            except BlockingIOError:
                 time.sleep(0.01)
-        if not acquired:
-            raise TimeoutError(
-                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
-            )
+        else:
+            raise SoulMapLockWaitTimeout(f"Timed out waiting for flock on {lock_path}")
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not reader.acquire(timeout=max(0.0, remaining)):
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            flock_released = True
+            raise SoulMapLockWaitTimeout(f"Timed out waiting for reader lock on {path}")
+        reader_acquired = True
         try:
             yield
         finally:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-
-
-_READER_LOCK_WAIT_SECONDS = 0.05
-
-
-@contextmanager
-def _file_and_reader_locks(
-    path: str, *, retry_file_lock_timeouts: bool = True
-) -> Iterator[None]:
-    """Acquire cross-process file lock then per-path reader mutex for RMW.
-
-    When ``retry_file_lock_timeouts`` is True (default), a timeout from
-    :func:`_locked_soul_map_file` while the reader lock is still free is treated
-    as transient contention: we retry after a short sleep so writers can wait
-    for another process to release the flock.
-
-    When False (used for ``write_soul_map(..., with_status=True)``), the first
-    file-lock deadline failure propagates so callers can return a non-committed
-    result instead of spinning forever — e.g. tests that replace the lock with an
-    immediate timeout.
-    """
-    reader = _lock_for(path)
-    while True:
-        acquired_reader = False
-        try:
-            with _locked_soul_map_file(path):
-                acquired_reader = reader.acquire(timeout=_READER_LOCK_WAIT_SECONDS)
-                if acquired_reader:
-                    try:
-                        yield
-                    finally:
-                        reader.release()
-                    return
-        except TimeoutError:
-            # 5s file-lock poll expired. Retry on this loop until the holder releases.
-            if acquired_reader:
-                raise
-            if not retry_file_lock_timeouts:
-                raise
-        time.sleep(_READER_LOCK_WAIT_SECONDS)
-
-
-def _read_blob(path: str) -> Dict[str, Any]:
-    try:
-        with open(path, "r") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+            if reader_acquired:
+                reader.release()
+            if not flock_released:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    finally:
+        lock_file.close()
+        if writers_acquired:
+            writers.release()
 
 
 def _cache_get_fresh(path: str, now: float) -> Optional[Dict[str, Any]]:
-    """Return the cached blob for `path` if younger than `_CACHE_TTL`, else None.
-
-    Returns the live cache entry (not a copy). Caller MUST hold the lock for
-    `path` and MUST NOT mutate the returned dict unless it deep-copies first.
-    """
+    """Return the cached blob for `path` if younger than `_CACHE_TTL`, else None."""
     entry = _cache.get(path)
     if entry is None:
         return None
@@ -134,23 +266,19 @@ def _cache_get_fresh(path: str, now: float) -> Optional[Dict[str, Any]]:
 
 
 def _cache_put(path: str, blob: Dict[str, Any], now: float) -> None:
-    """Store a deep copy of `blob` in the cache for `path` with timestamp `now`.
-    Caller MUST hold the lock for `path` before calling this."""
+    """Store a deep copy of `blob` in the cache for `path` with timestamp `now`."""
     _cache[path] = (now, copy.deepcopy(blob))
 
 
 def read_soul_map(path: Optional[str] = None, *, copy_blob: bool = True) -> Dict[str, Any]:
     """Thread-safe read of the whole soul_map blob.
 
-    Resolves path=None to weights.SOUL_MAP_PATH (lazy import).
-    Returns {} on missing/invalid/non-dict; never raises.
-    May return a cached copy up to SOUL_MAP_CACHE_TTL seconds old; writes made
-    through write_soul_map() are always immediately visible regardless of the cache.
+    Returns {} on missing/invalid/non-dict or transient read failure; never raises.
+    Unreadable/transient results are not cached.
 
     copy_blob=True (default): return an independent deep copy (safe to mutate).
     copy_blob=False: return the cached blob for read-only use. Scoring hot paths
-    must use this — deepcopy-per-subnet of soul_map starved Fly's single worker
-    (simivision/judges hung while deepcopy ran ~280× per universe score).
+    must use this — deepcopy-per-subnet of soul_map starved Fly's single worker.
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved):
@@ -158,121 +286,134 @@ def read_soul_map(path: Optional[str] = None, *, copy_blob: bool = True) -> Dict
         hit = _cache_get_fresh(resolved, now)
         if hit is not None:
             return copy.deepcopy(hit) if copy_blob else hit
-        blob = _read_blob(resolved)
-        _cache_put(resolved, blob, now)
-        cached = _cache[resolved][1]
-        return copy.deepcopy(cached) if copy_blob else cached
+
+        checked = read_blob_checked(resolved)
+        if checked.kind == "loaded" and checked.blob is not None:
+            _cache_put(resolved, checked.blob, now)
+            cached = _cache[resolved][1]
+            return copy.deepcopy(cached) if copy_blob else cached
+        if checked.kind == "missing":
+            empty: Dict[str, Any] = {}
+            _cache_put(resolved, empty, now)
+            return copy.deepcopy(empty) if copy_blob else empty
+
+        msg = (
+            f"soul_map read classified as {checked.kind} path={resolved} error={checked.error}"
+        )
+        _log_read_once(resolved, checked.kind, msg)
+        return {}
 
 
 def write_soul_map(
     mutator: Callable[[Dict[str, Any]], None],
     path: Optional[str] = None,
     *,
-    with_status: bool = False,
+    raise_on_lock_timeout: bool = True,
     pre_replace: Optional[Callable[[], None]] = None,
-) -> Union[Dict[str, Any], Tuple[Dict[str, Any], bool]]:
-    """Thread-safe read-modify-write under a per-path lock.
-
-    Resolves path=None to weights.SOUL_MAP_PATH (lazy import).
-    Acquires a lock for this path, reads current blob ({} if missing/bad),
-    calls mutator(blob) which mutates the dict in place, then atomically
-    writes it back. Exceptions from mutator propagate. Never raises from I/O.
-    On a disk-write failure, logs a warning and returns the pre-mutation blob
-    without updating the cache. Successful writes immediately refresh the
-    in-process cache, so a write followed by a read in the same process
-    always sees the new data.
-
-    When ``with_status`` is True, returns ``(blob, committed)`` where
-    ``committed`` is False when the durable replace failed and callers must
-    not treat a successful mutator run as durable state.
-    """
+) -> WriteResult:
+    """Thread-safe read-modify-write under per-path locks with typed outcomes."""
     resolved = _resolve_path(path)
-    with _lock_for(resolved + ".writers"):
-        locks_held = False
-        try:
-            with _file_and_reader_locks(
-                resolved, retry_file_lock_timeouts=not with_status
-            ):
-                locks_held = True
-                # Read disk under lock (not stale cache) so concurrent writers' rows are visible.
-                blob = _read_blob(resolved)
-                prior = copy.deepcopy(blob)
-                try:
-                    mutator(blob)
-                except TimeoutError:
-                    raise
+    deadline = time.monotonic() + _SOUL_MAP_LOCK_DEADLINE_SECONDS
+    try:
+        with _acquire_write_locks(resolved, deadline):
+            checked = read_blob_checked(resolved)
+            if checked.kind == "transient":
+                return WriteResult(
+                    WriteOutcome.READ_FAILED,
+                    None,
+                    detail=checked.error or "read_failed",
+                )
+            if checked.kind == "unreadable":
+                detail = _quarantine_corrupt(resolved)
+                return WriteResult(WriteOutcome.UNREADABLE_BLOB, None, detail=detail)
+
+            if checked.kind == "missing":
+                blob: Dict[str, Any] = {}
+            elif checked.kind == "loaded" and checked.blob is not None:
+                blob = copy.deepcopy(checked.blob)
+            else:
+                return WriteResult(
+                    WriteOutcome.READ_FAILED,
+                    None,
+                    detail=checked.error or "read_failed",
+                )
+            prior = copy.deepcopy(blob)
+            mutator(blob)
+
+            if _canonical_blob_json(blob) == _canonical_blob_json(prior):
+                return WriteResult(WriteOutcome.DECLINED, prior)
+
+            temp_path = ""
+            try:
+                os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
+                fd, temp_path = tempfile.mkstemp(
+                    dir=os.path.dirname(resolved) or ".", suffix=".tmp"
+                )
+                with os.fdopen(fd, "w") as f:
+                    json.dump(blob, f, indent=2)
+                if pre_replace is not None:
+                    pre_replace()
+                os.replace(temp_path, resolved)
                 temp_path = ""
-                committed = False
                 try:
-                    os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
-                    fd, temp_path = tempfile.mkstemp(
-                        dir=os.path.dirname(resolved) or ".", suffix=".tmp"
-                    )
-                    with os.fdopen(fd, "w") as f:
-                        json.dump(blob, f, indent=2)
-                    if pre_replace is not None:
-                        pre_replace()
-                    os.replace(temp_path, resolved)
-                    temp_path = ""
-                    committed = True
-                    try:
-                        _cache_put(resolved, blob, time.monotonic())
-                    except Exception as exc:
-                        _cache.pop(resolved, None)
-                        logger.warning(
-                            "soul_map cache refresh failed after commit path=%s error_type=%s error=%s",
-                            resolved,
-                            type(exc).__name__,
-                            exc,
-                        )
+                    _cache_put(resolved, blob, time.monotonic())
                 except Exception as exc:
+                    _cache.pop(resolved, None)
                     logger.warning(
-                        "soul_map persistence failed path=%s error_type=%s error=%s",
+                        "soul_map cache refresh failed after commit path=%s error_type=%s error=%s",
                         resolved,
                         type(exc).__name__,
                         exc,
-                        extra={
-                            "event": "soul_map_persistence_failed",
-                            "path": resolved,
-                            "error_type": type(exc).__name__,
-                            "error": str(exc),
-                        },
                     )
-                    if with_status:
-                        return prior, False
-                    return prior
-                finally:
-                    if temp_path and os.path.exists(temp_path):
-                        try:
-                            os.unlink(temp_path)
-                        except Exception:
-                            pass
-                if with_status:
-                    return blob, committed
-                return blob
-        except TimeoutError as exc:
-            if locks_held:
-                raise
-            logger.warning(
-                "soul_map lock wait timed out path=%s error=%s",
-                resolved,
-                exc,
-                extra={
-                    "event": "soul_map_lock_wait_timeout",
-                    "path": resolved,
-                    "error": str(exc),
-                },
-            )
-            if with_status:
-                return _read_blob(resolved), False
+                return WriteResult(WriteOutcome.APPLIED, blob)
+            except Exception as exc:
+                logger.warning(
+                    "soul_map persistence failed path=%s error_type=%s error=%s",
+                    resolved,
+                    type(exc).__name__,
+                    exc,
+                    extra={
+                        "event": "soul_map_persistence_failed",
+                        "path": resolved,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                return WriteResult(
+                    WriteOutcome.REPLACE_FAILED,
+                    None,
+                    detail=str(exc),
+                )
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
+    except SoulMapLockWaitTimeout as exc:
+        logger.warning(
+            "soul_map lock wait timed out path=%s error=%s",
+            resolved,
+            exc,
+            extra={
+                "event": "soul_map_lock_wait_timeout",
+                "path": resolved,
+                "error": str(exc),
+            },
+        )
+        if raise_on_lock_timeout:
             raise
+        return WriteResult(WriteOutcome.LOCK_WAIT_FAILED, None, detail=str(exc))
 
 
 def write_soul_map_committed(
     mutator: Callable[[Dict[str, Any]], None],
     path: Optional[str] = None,
-) -> Tuple[bool, Dict[str, Any]]:
-    """Like ``write_soul_map(..., with_status=True)`` but returns ``(committed, blob)``."""
-    out = write_soul_map(mutator, path, with_status=True)
-    blob, committed = out  # type: ignore[misc]
-    return committed, blob
+) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Return ``(committed, blob)``; ``blob`` is ``None`` unless applied or declined."""
+    out = write_soul_map(mutator, path, raise_on_lock_timeout=False)
+    blob = out.blob if out.outcome in (
+        WriteOutcome.APPLIED,
+        WriteOutcome.DECLINED,
+    ) else None
+    return out.committed, blob

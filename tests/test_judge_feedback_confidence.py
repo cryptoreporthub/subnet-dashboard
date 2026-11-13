@@ -6,7 +6,7 @@ from internal.council.conviction_bands import judge_calibration_hit_rate, judge_
 def test_judge_calibration_empty_without_data(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"resolved": [], "predictions": []},
+        lambda *_a, **_k: {"resolved": [], "predictions": []},
     )
     cal = judge_calibration_hit_rate()
     assert cal["n"] == 0

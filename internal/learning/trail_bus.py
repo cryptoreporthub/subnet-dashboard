@@ -52,7 +52,7 @@ def emit_weight_change(
     reason: str,
     correct: Optional[bool] = None,
     extra: Optional[Dict[str, Any]] = None,
-) -> None:
+) -> Any:
     evidence = {
         "before": before,
         "after": after,
@@ -62,7 +62,7 @@ def emit_weight_change(
     }
     if extra:
         evidence.update(extra)
-    emit_trail_event(
+    return emit_trail_event(
         "weight_change",
         judge=expert,
         evidence=evidence,

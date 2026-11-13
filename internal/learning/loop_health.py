@@ -98,7 +98,12 @@ def _daily_pick_today(path: Optional[str] = None) -> Dict[str, Any]:
     return out
 
 
-def _day_ledger_present(netuid: Any, data: Optional[Dict[str, Any]] = None) -> bool:
+def _day_ledger_present(
+    netuid: Any,
+    data: Optional[Dict[str, Any]] = None,
+    *,
+    predictions_path: Optional[str] = None,
+) -> bool:
     """True if predictions.json has a pending or resolved day row for netuid."""
     if netuid is None:
         return False
@@ -106,7 +111,10 @@ def _day_ledger_present(netuid: Any, data: Optional[Dict[str, Any]] = None) -> b
         want = int(netuid)
     except (TypeError, ValueError):
         return False
-    payload = data if isinstance(data, dict) else load_predictions()
+    if isinstance(data, dict):
+        payload = data
+    else:
+        payload = load_predictions(path=predictions_path)
     for bucket in ("predictions", "resolved"):
         for row in payload.get(bucket) or []:
             if not isinstance(row, dict):

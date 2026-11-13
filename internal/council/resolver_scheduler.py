@@ -34,7 +34,7 @@ from typing import Any, Callable, ContextManager, Dict, Iterator, Optional, Tupl
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import WriteOutcome, WriteResult, write_soul_map
 
 from internal.liveness import LivenessTracker
 from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
@@ -174,13 +174,28 @@ class SchedulerRunId:
 class PersistResult:
     """Typed outcome for soul_map writes (M1)."""
 
-    __slots__ = ("committed",)
+    __slots__ = ("outcome", "skipped_not_owner", "detail")
 
-    def __init__(self, *, committed: bool) -> None:
-        self.committed = committed
+    def __init__(
+        self,
+        *,
+        outcome: Optional[WriteOutcome] = None,
+        skipped_not_owner: bool = False,
+        detail: str = "",
+    ) -> None:
+        self.outcome = outcome
+        self.skipped_not_owner = skipped_not_owner
+        self.detail = detail
+
+    @property
+    def committed(self) -> bool:
+        return self.outcome is WriteOutcome.APPLIED
 
     def __repr__(self) -> str:  # pragma: no cover - debug only
-        return f"PersistResult(committed={self.committed!r})"
+        return (
+            f"PersistResult(outcome={self.outcome!r}, "
+            f"skipped_not_owner={self.skipped_not_owner!r})"
+        )
 
 
 _active_cycle_ctx_var: ContextVar[Optional[_CycleContext]] = ContextVar(
@@ -283,13 +298,19 @@ def _cancel_resolver_jobs(job_ids: Tuple[str, ...]) -> Dict[str, bool]:
 
 
 def _load_json(path: str) -> Dict[str, Any]:
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
+    """Bootstrap/cycle reads degrade like the legacy API (never wedge the scheduler)."""
+    from internal.store.soul_map_io import read_blob_checked
+
+    checked = read_blob_checked(path)
+    if checked.kind == "loaded" and checked.blob is not None:
+        return checked.blob
     return {}
+
+
+def _soul_map_read_kind(path: str) -> str:
+    from internal.store.soul_map_io import read_blob_checked
+
+    return read_blob_checked(path).kind
 
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
@@ -580,6 +601,15 @@ def cycle_persist_guard() -> ContextManager[Any]:
     timing = _cycle_timing.get()
     sched = timing.owner_sched() if timing is not None else None
     return sched._release_guard if sched is not None else nullcontext()
+
+
+def _cycle_ok(result: Dict[str, Any]) -> bool:
+    return (
+        result.get("ledger_persist_outcome") == "applied"
+        and result.get("summary_persist_outcome") in ("applied", "declined")
+        and not result.get("skipped")
+        and not result.get("error")
+    )
 
 
 class PredictionResolverScheduler:
@@ -911,6 +941,7 @@ class PredictionResolverScheduler:
         else:
             self.liveness.record_skip(reason=str(result.get("skipped") or "cycle_skipped"))
 
+        persist_outcome = result.get("persist_outcome")
         with self._lock:
             self._last_run_error = result.get("error")
             self._last_resolved = result.get("resolved_now", 0)
@@ -921,12 +952,18 @@ class PredictionResolverScheduler:
             if result.get("ok"):
                 self._consecutive_failures = 0
                 self._backoff_minutes = self.refresh_minutes
-            else:
+            elif result.get("error"):
                 self._consecutive_failures += 1
-                self._backoff_minutes = min(
-                    self.refresh_minutes * (2 ** self._consecutive_failures),
-                    self.max_backoff_minutes,
-                )
+                if persist_outcome == WriteOutcome.OWNERSHIP_UNKNOWN.value:
+                    self._backoff_minutes = self.refresh_minutes
+                else:
+                    self._backoff_minutes = min(
+                        self.refresh_minutes * (2 ** self._consecutive_failures),
+                        self.max_backoff_minutes,
+                    )
+            else:
+                self._backoff_minutes = self.refresh_minutes
+                self._consecutive_failures = 0
             next_interval = self._backoff_minutes
             if "cycle_timeout" in str(result.get("error") or ""):
                 # ponytail: hung cycle abandoned — retry soon while last success still fresh
@@ -1032,14 +1069,16 @@ class PredictionResolverScheduler:
             block.update(state)
 
         try:
-            _blob, committed = write_soul_map(  # type: ignore[misc]
+            wr = write_soul_map(
                 _mutator,
                 self.soul_map_path,
-                with_status=True,
+                raise_on_lock_timeout=False,
             )
-            return PersistResult(committed=bool(committed))
-        except Exception:
-            return PersistResult(committed=False)
+            return PersistResult(outcome=wr.outcome, detail=wr.detail)
+        except Exception as exc:
+            return PersistResult(
+                outcome=WriteOutcome.REPLACE_FAILED, detail=str(exc)
+            )
 
     def _release_cycle_lock_if_owner(self, gen: int) -> bool:
         """Release ``_cycle_lock`` only if generation ``gen`` still owns it.
@@ -1087,15 +1126,31 @@ class PredictionResolverScheduler:
     def _ensure_cycle_generation_seeded(self) -> None:
         if self._cycle_generation_seeded:
             return
-        data = _load_json(self.soul_map_path)
-        sched = data.get("prediction_resolver_scheduler", {})
-        last = sched.get("last_cycle") if isinstance(sched.get("last_cycle"), dict) else {}
+        from internal.store.soul_map_io import read_blob_checked
+
+        checked = read_blob_checked(self.soul_map_path)
+        kind = checked.kind
+        if kind in ("unreadable", "transient"):
+            return
+        if kind == "missing":
+            self._cycle_generation_seeded = True
+            return
+        if kind != "loaded" or not isinstance(checked.blob, dict):
+            return
+        data = checked.blob
+        sched = data.get("prediction_resolver_scheduler")
+        if not isinstance(sched, dict):
+            return
+        last = sched.get("last_cycle")
+        if not isinstance(last, dict):
+            self._cycle_generation_seeded = True
+            return
         persisted = last.get("cycle_generation")
         if persisted is not None:
             try:
                 self._cycle_generation = max(self._cycle_generation, int(persisted))
             except (TypeError, ValueError):
-                pass
+                return
         self._cycle_generation_seeded = True
 
     def _stamp_owned_cycle_context(
@@ -1321,6 +1376,7 @@ class PredictionResolverScheduler:
             "expired_now": 0,
             "pending": 0,
             "error": None,
+            "ledger_persist_outcome": "applied",
         }
         if cycle_ctx is not None:
             self._stamp_owned_cycle_context(result, cycle_ctx)
@@ -1356,17 +1412,43 @@ class PredictionResolverScheduler:
                 timing.mark_checkpoint("t1_5")
                 persist_partial()
 
+            def _neutral_heal_summary() -> Dict[str, Any]:
+                return {"healed": False}
+
+            heal_summary: Dict[str, Any] = _neutral_heal_summary()
             with timing.stage("ledger_heal", _persist_after_ledger):
+                from internal.learning.predictions_store import (
+                    PredictionsLedgerUnreadable,
+                    load_predictions,
+                )
+
                 try:
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
-
-                    heal_daily_pick_ledger(dry_run=False)
+                    load_predictions(path=resolver.PREDICTIONS_PATH, fail_closed=True)
+                    raw_heal = heal_daily_pick_ledger(dry_run=False)
+                    heal_summary = (
+                        raw_heal if isinstance(raw_heal, dict) else _neutral_heal_summary()
+                    )
+                except PredictionsLedgerUnreadable as heal_exc:
+                    heal_summary = {
+                        "ok": False,
+                        "reason": "ledger_unreadable",
+                        "error": str(heal_exc),
+                    }
                 except Exception as heal_exc:
                     import logging
                     logging.getLogger(__name__).warning(
                         "ledger heal in resolver tick failed: %s", heal_exc
                     )
+                    heal_summary = {"ok": False, "reason": str(heal_exc)}
             timing.mark_checkpoint("t2")
+
+            ledger_unreadable = heal_summary.get("reason") == "ledger_unreadable"
+            if ledger_unreadable:
+                result["ok"] = False
+                result["error"] = "ledger_unreadable"
+                result["ledger_persist_outcome"] = "refused"
+                result["ledger_persist_reason"] = "unreadable"
 
             with timing.stage("subnet_provider", persist_partial):
                 subnets = self._subnet_provider() or []
@@ -1400,53 +1482,74 @@ class PredictionResolverScheduler:
                 "stats": {},
                 "watchdog": None,
             }
-            with timing.stage("resolve_due", persist_partial):
-                # Phase 3 mid-guard: stop computing once abandoned.
-                if timing.is_abandoned() or (
-                    timing.owner_gen() is not None
-                    and timing.owner_gen() != self._cycle_generation
-                ):
-                    result["skipped"] = "cycle_abandoned"
-                else:
-                    resolved = self._resolve_with_timing(subnets, timing)
-            timing.mark_checkpoint("t6")
-            result["resolved_now"] = len(resolved.get("resolved_now", []))
-            expired_count = len(resolved.get("expired_now", []))
+            if not ledger_unreadable:
+                with timing.stage("resolve_due", persist_partial):
+                    # Phase 3 mid-guard: stop computing once abandoned.
+                    if timing.is_abandoned() or (
+                        timing.owner_gen() is not None
+                        and timing.owner_gen() != self._cycle_generation
+                    ):
+                        result["skipped"] = "cycle_abandoned"
+                    else:
+                        resolved = self._resolve_with_timing(subnets, timing)
+                timing.mark_checkpoint("t6")
+                result["resolved_now"] = len(resolved.get("resolved_now", []))
+                expired_count = len(resolved.get("expired_now", []))
 
-            # 2. Safety net: retire any predictions that are past due with no
-            #    resolvable price so the registry never fills with ungradeable
-            #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
-            #    Most are already retired in step 1; this catches stragglers
-            #    (e.g. corrupt records that step 1 skipped).
-            expired: Dict[str, Any] = {"expired_now": [], "stats": {}, "watchdog": None}
-            with timing.stage("expire_stale", persist_partial):
-                if timing.is_abandoned() or (
-                    timing.owner_gen() is not None
-                    and timing.owner_gen() != self._cycle_generation
-                ):
-                    result["skipped"] = result.get("skipped") or "cycle_abandoned"
-                else:
-                    expired = resolver.expire_stale_predictions()
-            expired_count += len(expired.get("expired_now", []))
-            result["expired_now"] = expired_count
-            result["pending"] = expired.get("stats", {}).get("pending", 0)
-            result["watchdog"] = resolved.get("watchdog") or expired.get("watchdog")
+                # 2. Safety net: retire any predictions that are past due with no
+                #    resolvable price so the registry never fills with ungradeable
+                #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
+                expired: Dict[str, Any] = {
+                    "expired_now": [],
+                    "stats": {},
+                    "watchdog": None,
+                }
+                with timing.stage("expire_stale", persist_partial):
+                    if timing.is_abandoned() or (
+                        timing.owner_gen() is not None
+                        and timing.owner_gen() != self._cycle_generation
+                    ):
+                        result["skipped"] = result.get("skipped") or "cycle_abandoned"
+                    else:
+                        expired = resolver.expire_stale_predictions()
+                expired_count += len(expired.get("expired_now", []))
+                result["expired_now"] = expired_count
+                result["pending"] = expired.get("stats", {}).get("pending", 0)
+                result["watchdog"] = resolved.get("watchdog") or expired.get("watchdog")
 
-            # B1b t7: immediately before ok=True.
-            timing.mark_checkpoint("t7")
-            result["ok"] = True
-            result["stats"] = expired.get("stats", resolved.get("stats", {}))
+                # B1b t7: immediately before ok=True.
+                timing.mark_checkpoint("t7")
+                result["ok"] = not bool(result.get("skipped"))
+                if result.get("skipped"):
+                    result["ledger_persist_outcome"] = "skipped_abandoned"
+                result["stats"] = expired.get("stats", resolved.get("stats", {}))
 
-            # N3: optional env-gated auto-retrain after resolver (non-blocking).
-            with timing.stage("auto_retrain", persist_partial):
-                try:
-                    from internal.calibration.scheduler import maybe_trigger_auto_retrain
+                # N3: optional env-gated auto-retrain after resolver (non-blocking).
+                if not result.get("skipped"):
+                    with timing.stage("auto_retrain", persist_partial):
+                        try:
+                            from internal.calibration.scheduler import (
+                                maybe_trigger_auto_retrain,
+                            )
 
-                    result["auto_retrain"] = maybe_trigger_auto_retrain(
-                        resolved_now=result.get("resolved_now", 0)
-                    )
-                except Exception as exc:
-                    result["auto_retrain"] = {"triggered": False, "error": str(exc)}
+                            result["auto_retrain"] = maybe_trigger_auto_retrain(
+                                resolved_now=result.get("resolved_now", 0)
+                            )
+                        except Exception as exc:
+                            result["auto_retrain"] = {
+                                "triggered": False,
+                                "error": str(exc),
+                            }
+        except resolver.LedgerPersistSkipped as exc:
+            result["ok"] = False
+            result["skipped"] = "abandoned_cycle_persist"
+            result["ledger_persist_outcome"] = exc.result.outcome.value
+            result["ledger_persist_reason"] = exc.result.reason.value if exc.result.reason else None
+        except resolver.LedgerPersistFailure as exc:
+            result["ok"] = False
+            result["ledger_persist_outcome"] = exc.result.outcome.value
+            result["ledger_persist_reason"] = exc.result.reason.value if exc.result.reason else None
+            result["error"] = str(exc)
         except Exception as exc:
             result["error"] = str(exc)
         finally:
@@ -1466,7 +1569,9 @@ class PredictionResolverScheduler:
                 self._apply_cycle_timing(result, timing)
                 if cycle_ctx is not None:
                     self._stamp_owned_cycle_context(result, cycle_ctx)
-                self._persist_cycle_summary(result, owner_gen=owner)
+                persist = self._persist_cycle_summary(result, owner_gen=owner)
+                self._apply_persist_honesty(result, persist)
+                result["ok"] = _cycle_ok(result)
         return result
 
     def _persist_cycle_summary(
@@ -1488,17 +1593,20 @@ class PredictionResolverScheduler:
             owned_cycle = True
         acquired = self._persist_lock.acquire(timeout=_PERSIST_LOCK_WAIT_SECONDS)
         if not acquired:
-            return PersistResult(committed=False)
+            return PersistResult(
+                outcome=WriteOutcome.LOCK_WAIT_FAILED,
+                detail=f"persist_lock_wait>{_PERSIST_LOCK_WAIT_SECONDS}s",
+            )
         try:
             if not force and owner_gen is not None:
                 if self._persist_owner_gen is None:
-                    return PersistResult(committed=False)
+                    return PersistResult(outcome=WriteOutcome.OWNERSHIP_UNKNOWN)
                 if self._persist_owner_gen != owner_gen:
-                    return PersistResult(committed=False)
+                    return PersistResult(skipped_not_owner=True)
             pub_gen = result.get("cycle_generation")
             if force and pub_gen is not None and self._persist_owner_gen is not None:
                 if int(pub_gen) != int(self._persist_owner_gen):
-                    return PersistResult(committed=False)
+                    return PersistResult(skipped_not_owner=True)
             return self._persist_cycle_summary_locked(
                 result, force=force, owned_cycle=owned_cycle
             )
@@ -1752,30 +1860,64 @@ class PredictionResolverScheduler:
         try:
             if owned_cycle:
 
-                def _write_owned() -> Tuple[Any, bool]:
-                    return write_soul_map(  # type: ignore[misc]
+                def _write_owned() -> WriteResult:
+                    return write_soul_map(
                         _mutator,
                         self.soul_map_path,
-                        with_status=True,
+                        raise_on_lock_timeout=False,
                         pre_replace=pre,
                     )
 
                 with self._release_guard:
-                    _blob, committed = _write_owned()
+                    wr = _write_owned()
             else:
-                _blob, committed = write_soul_map(  # type: ignore[misc]
+                wr = write_soul_map(
                     _mutator,
                     self.soul_map_path,
-                    with_status=True,
+                    raise_on_lock_timeout=False,
                     pre_replace=pre,
                 )
             if timing is not None:
                 timing.record_persist_subtimer(
                     "summary_rmw", (time.perf_counter() - t_rmw) * 1000
                 )
-            return PersistResult(committed=bool(committed))
-        except Exception:
-            return PersistResult(committed=False)
+            return PersistResult(outcome=wr.outcome, detail=wr.detail)
+        except Exception as exc:
+            return PersistResult(
+                outcome=WriteOutcome.REPLACE_FAILED, detail=str(exc)
+            )
+
+    def _apply_persist_honesty(
+        self, result: Dict[str, Any], persist: PersistResult
+    ) -> None:
+        """Fold summary persist outcome into the cycle row the tick reads."""
+        had_cycle_error = bool(result.get("error"))
+        if persist.skipped_not_owner:
+            result["persist_outcome"] = "skipped_not_owner"
+            result["summary_persist_outcome"] = "skipped_not_owner"
+            result["skipped"] = result.get("skipped") or "persist_skipped"
+            result["ok"] = False
+            if not had_cycle_error:
+                result.pop("error", None)
+            return
+        if persist.outcome is WriteOutcome.DECLINED:
+            result["persist_outcome"] = persist.outcome.value
+            result["summary_persist_outcome"] = persist.outcome.value
+            return
+        if persist.outcome is WriteOutcome.APPLIED:
+            result["persist_outcome"] = persist.outcome.value
+            result["summary_persist_outcome"] = persist.outcome.value
+            return
+        if persist.outcome is None:
+            return
+        result["persist_outcome"] = persist.outcome.value
+        result["summary_persist_outcome"] = persist.outcome.value
+        result["ok"] = False
+        if not had_cycle_error:
+            msg = f"persist_refused:{persist.outcome.value}"
+            if persist.detail:
+                msg = f"{msg} {persist.detail}"
+            result["error"] = msg
 
 
 def _default_subnets() -> Any:

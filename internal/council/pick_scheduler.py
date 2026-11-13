@@ -179,12 +179,12 @@ def _market_context(subnets: Any) -> Dict[str, Any]:
         return {}
 
 
-def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[str, Any]) -> None:
+def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[str, Any]) -> Optional[str]:
     if not pick:
         return
     try:
         from internal.council import pick_history
-        from internal.learning.prediction_loop import record_hold_decision, record_pick_prediction
+        from internal.learning.prediction_loop import record_hold_decision, record_pick
 
         netuid = None
         sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
@@ -211,21 +211,70 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
 
         if float(subnet_row.get("price", 0) or 0) <= 0:
             return
-        stored = record_pick_prediction(
+        stored = record_pick(
             pick,
             subnet_row,
             horizon_type="hour",
             market_context=market_context,
         )
-        if stored:
+        stored_kind = getattr(stored.kind, "value", stored.kind)
+        prediction = stored.prediction
+        if stored_kind in ("skipped", "duplicate") and stored.reason == "duplicate":
+            from internal.learning.predictions_store import pending_hour_prediction
+            from internal.council.pick_history import PickHistoryUnreadable
+
+            netuid = subnet_row.get("netuid") or pick.get("netuid")
+            if netuid is None and isinstance(pick.get("subnet"), dict):
+                netuid = pick["subnet"].get("netuid")
+            prediction = prediction or pending_hour_prediction(netuid)
+            pred_id = (prediction or {}).get("id") if isinstance(prediction, dict) else None
             try:
-                pick_history.record_hour_pick(
-                    pick, subnet_row, prediction_id=stored.get("id")
+                if pred_id and not pick_history.has_prediction(pred_id):
+                    try:
+                        written = pick_history.record_hour_pick(pick, subnet_row, prediction_id=pred_id)
+                    except Exception as exc:
+                        logger.warning("pick_history repair failed: %s", exc)
+                        return "indeterminate"
+                    if written is None or not pick_history.has_prediction(pred_id):
+                        return "indeterminate"
+                elif pred_id and not pick_history.has_prediction(pred_id):
+                    return "indeterminate"
+                elif not pred_id:
+                    return "indeterminate"
+            except PickHistoryUnreadable as exc:
+                logger.warning("pick_history unreadable: %s", exc)
+                return "indeterminate"
+            return stored_kind
+        ledger_committed = stored_kind == "committed" or (
+            stored_kind == "indeterminate"
+            and stored.reason == "positions_incomplete"
+            and stored.prediction is not None
+        )
+        if ledger_committed:
+            pred_id = stored.prediction.get("id") if stored.prediction else None
+            if pred_id is None:
+                if stored_kind == "indeterminate":
+                    logger.warning("hour pick record indeterminate: %s", stored.reason)
+                return stored_kind
+            try:
+                written = pick_history.record_hour_pick(
+                    pick, subnet_row, prediction_id=pred_id
                 )
             except Exception as exc:
                 logger.warning("pick_history record failed: %s", exc)
+                return "indeterminate"
+            if written is None:
+                return "indeterminate"
+        if stored_kind == "indeterminate":
+            logger.warning("hour pick record indeterminate: %s", stored.reason)
+        if stored_kind == "skipped" and (
+            stored.reason == "judge_evaluation_failed" or str(stored.reason).startswith("ledger_")
+        ):
+            return "failed"
+        return stored_kind
     except Exception as exc:
         logger.warning("hour pick learning record failed: %s", exc)
+        return "indeterminate"
 
 
 def _record_ab_benchmark(subnets: Any, market_context: Dict[str, Any], source: str) -> Optional[str]:
@@ -239,6 +288,21 @@ def _record_ab_benchmark(subnets: Any, market_context: Dict[str, Any], source: s
     except Exception as exc:
         logger.warning("A/B benchmark snapshot failed: %s", exc)
         return None
+
+
+def _reconcile_judge_positions_for_tick(result: Dict[str, Any]) -> None:
+    """Best-effort reconcile; a lock timeout must not drop the pick."""
+    from internal.judges.portfolios import PortfolioLockTimeout
+    from internal.learning.prediction_loop import reconcile_judge_positions
+
+    try:
+        reconcile_judge_positions()
+        result["reconcile_ok"] = True
+    except Exception as exc:
+        kind = "timed out" if isinstance(exc, PortfolioLockTimeout) else "failed"
+        logger.warning("judge position reconcile %s: %s", kind, exc)
+        result["reconcile_ok"] = False
+        result["reconcile_error"] = str(exc)
 
 
 class DailyPickScheduler:
@@ -326,6 +390,8 @@ class DailyPickScheduler:
         today_ready = False
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
+
+            _reconcile_judge_positions_for_tick(result)
 
             with _rss_bookend("daily_pick_scheduler:load_subnets"):
                 subnets = _load_subnets()
@@ -523,7 +589,11 @@ class HourPickScheduler:
                     subnets, ctx, "hour-pick-scheduler"
                 )
                 pick = select_hourly_pick(subnets, ctx)
-                _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
+                _reconcile_judge_positions_for_tick(result)
+                pick_outcome = _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
+                result["pick_record_outcome"] = pick_outcome
+                if pick_outcome in ("indeterminate", "failed"):
+                    raise RuntimeError(f"pick_record_{pick_outcome}")
                 result["ok"] = True
                 sn = (pick or {}).get("subnet") if isinstance(pick, dict) else {}
                 if isinstance(sn, dict):

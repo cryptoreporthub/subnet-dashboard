@@ -14,35 +14,8 @@ import internal.learning.outcome_snapshot_scheduler as sched
 
 
 @pytest.fixture(autouse=True)
-def isolate_liveness_persistence(tmp_path, monkeypatch):
-    """Point internal.liveness soul-map IO at a per-test JSON file (atomic)."""
-    from internal import liveness as _liv_mod
-
-    sm_path = tmp_path / "liveness_soul_map.json"
-
-    def _read():
-        try:
-            return json.loads(sm_path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-
-    def _write(mutator):
-        blob = _read() or {}
-        mutator(blob)
-        fd, tmp = tempfile.mkstemp(dir=str(sm_path.parent), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(blob, f)
-            os.replace(tmp, sm_path)
-        finally:
-            if os.path.exists(tmp):
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-
-    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
-    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+def isolate_liveness_persistence(liveness_real_soul_map):
+    return liveness_real_soul_map
 
 
 def test_council_health_score_watch_at_33pct():
@@ -114,3 +87,30 @@ def test_outcome_snapshot_tracker_is_liveness_compliant():
         return sched.OutcomeSnapshotScheduler().liveness
 
     assert_liveness_compliant(factory)
+
+
+
+def test_scheduler_records_recovery_failure_without_failing_snapshot(monkeypatch):
+    """T8: recovery refusal is a separate signal; the snapshot still runs and succeeds."""
+    snapshot_calls = []
+
+    def fake_snapshot(save=True):
+        snapshot_calls.append(save)
+        return {"alert_level": "ok", "council_health": {"health_score": 1.0, "escalation": None}, "path": "x"}
+
+    monkeypatch.setattr(
+        "internal.learning.expired_recovery.recover_expired_predictions",
+        lambda: {"ok": False, "reason": "judge_close_incomplete", "recovered": 1, "skipped": 0},
+    )
+    monkeypatch.setattr("internal.learning.outcome_snapshot.run_snapshot", fake_snapshot)
+    scheduler = sched.OutcomeSnapshotScheduler()
+    result = scheduler.run_once()
+    assert snapshot_calls == [True]
+    assert result["ok"] is True
+    assert result["recovery_ok"] is False
+    assert result["recovery_reason"] == "judge_close_incomplete"
+    assert scheduler.liveness.snapshot().get("consecutive_failures", 0) == 0
+    rec = scheduler.recovery_liveness.snapshot()
+    assert rec.get("consecutive_failures", 0) >= 1
+    state = scheduler.state()
+    assert "recovery_liveness" in state

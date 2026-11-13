@@ -42,7 +42,7 @@ def test_effectiveness_summary_pick_source_buckets(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: preds,
+        lambda *_a, **_k: preds,
     )
 
     summary = combined_ledger.build_effectiveness_summary()
@@ -83,7 +83,7 @@ def test_effectiveness_links_call_to_prediction(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"resolved": [_resolved_row("pred99", correct=True, pick_source="pump_combined_exp")], "predictions": []},
+        lambda *_a, **_k: {"resolved": [_resolved_row("pred99", correct=True, pick_source="pump_combined_exp")], "predictions": []},
     )
 
     summary = combined_ledger.build_effectiveness_summary()

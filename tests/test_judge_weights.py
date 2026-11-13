@@ -87,7 +87,8 @@ def test_nudge_judge_skips_trail_when_clamped_unchanged(tmp_path, monkeypatch):
         path=str(soul_path),
     )
     after = nudge_judge("oracle", False, path=str(soul_path))
-    assert after == _LEARNING_MIN_WEIGHT
+    assert after is None
+    assert load_judge_weights(path=str(soul_path))["oracle"] == _LEARNING_MIN_WEIGHT
     assert emitted == []
 
 def test_load_judge_weights_returns_defaults_when_key_missing(tmp_path):
@@ -104,7 +105,10 @@ def test_nudge_judge_correct_increases_weight_within_bounds(tmp_path):
     prev = load_judge_weights(path=str(soul_path))["oracle"]
     for _ in range(100):
         after = nudge_judge("oracle", True, path=str(soul_path))
-        assert after is not None
+        if after is None:
+            assert prev == _LEARNING_MAX_WEIGHT
+            assert load_judge_weights(path=str(soul_path))["oracle"] == prev
+            continue
         assert after >= prev
         assert after <= _LEARNING_MAX_WEIGHT
         prev = after
@@ -116,7 +120,10 @@ def test_nudge_judge_wrong_decreases_weight_within_bounds(tmp_path):
     prev = load_judge_weights(path=str(soul_path))["oracle"]
     for _ in range(100):
         after = nudge_judge("oracle", False, path=str(soul_path))
-        assert after is not None
+        if after is None:
+            assert prev == _LEARNING_MIN_WEIGHT
+            assert load_judge_weights(path=str(soul_path))["oracle"] == prev
+            continue
         assert after <= prev
         assert after >= _LEARNING_MIN_WEIGHT
         prev = after

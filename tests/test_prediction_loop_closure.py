@@ -60,13 +60,13 @@ def isolate_paths(tmp_path, monkeypatch):
     orig_load = predictions_store.load_predictions
     orig_save = predictions_store.save_predictions
 
-    def locked_load():
+    def locked_load(**kwargs):
         with _store_lock:
-            return orig_load()
+            return orig_load(**kwargs)
 
-    def locked_save(data):
+    def locked_save(data, **kwargs):
         with _store_lock:
-            return orig_save(data)
+            return orig_save(data, **kwargs)
 
     monkeypatch.setattr(predictions_store, "load_predictions", locked_load)
     monkeypatch.setattr(predictions_store, "save_predictions", locked_save)

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import errno
 import json
+import select
 import subprocess
 import sys
 import threading
@@ -10,9 +12,43 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
+
 import internal.store.soul_map_io as soul_map_io
 from internal.council.mindmap_bridge import MindmapBridge
-from internal.store.soul_map_io import read_soul_map, write_soul_map
+from internal.store.soul_map_io import WriteOutcome, read_soul_map, write_soul_map
+
+
+def _applied_blob(result):
+    assert result.outcome is WriteOutcome.APPLIED
+    return result.blob
+
+
+@contextmanager
+def _hold_path_flock(path: str, timeout_seconds: float = 5.0):
+    """Test-only: hold cross-process flock like an external writer."""
+    lock_path = path + ".lock"
+    soul_map_io.os.makedirs(soul_map_io.os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        acquired = False
+        while time.monotonic() < deadline:
+            try:
+                soul_map_io.fcntl.flock(
+                    lock_file.fileno(), soul_map_io.fcntl.LOCK_EX | soul_map_io.fcntl.LOCK_NB
+                )
+                acquired = True
+                break
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+        if not acquired:
+            raise TimeoutError(
+                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
+            )
+        try:
+            yield
+        finally:
+            soul_map_io.fcntl.flock(lock_file.fileno(), soul_map_io.fcntl.LOCK_UN)
 
 
 def test_write_soul_map_concurrent_increments_no_lost_updates(tmp_path):
@@ -117,14 +153,14 @@ def test_read_soul_map_cache_skips_disk_within_ttl(monkeypatch, tmp_path):
     with open(soul_path, "w") as f:
         json.dump({"cached": True}, f)
 
-    original = soul_map_io._read_blob
+    original = soul_map_io.read_blob_checked
     call_count = {"n": 0}
 
-    def counting(*a, **kw):
+    def counting(path):
         call_count["n"] += 1
-        return original(*a, **kw)
+        return original(path)
 
-    monkeypatch.setattr(soul_map_io, "_read_blob", counting)
+    monkeypatch.setattr(soul_map_io, "read_blob_checked", counting)
 
     read_soul_map(str(soul_path))
     read_soul_map(str(soul_path))
@@ -148,7 +184,7 @@ def test_write_soul_map_waits_for_file_lock(tmp_path):
     release = threading.Event()
 
     def hold():
-        with soul_map_io._locked_soul_map_file(str(soul_path)):
+        with _hold_path_flock(str(soul_path)):
             started.set()
             assert release.wait(timeout=5)
 
@@ -159,9 +195,11 @@ def test_write_soul_map_waits_for_file_lock(tmp_path):
     outcome = {}
 
     def write():
-        outcome["returned"] = write_soul_map(
-            lambda blob: blob.__setitem__("v", 99),
-            path=str(soul_path),
+        outcome["returned"] = _applied_blob(
+            write_soul_map(
+                lambda blob: blob.__setitem__("v", 99),
+                path=str(soul_path),
+            )
         )
 
     writer = threading.Thread(target=write)
@@ -199,7 +237,7 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, t
     monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_signalling_contention)
 
     def hold():
-        with soul_map_io._locked_soul_map_file(str(soul_path)):
+        with _hold_path_flock(str(soul_path)):
             started.set()
             release.wait(timeout=10)
 
@@ -209,8 +247,10 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, t
     written = {}
 
     def write():
-        written["blob"] = write_soul_map(
-            lambda blob: blob.__setitem__("v", 2), path=str(soul_path)
+        written["blob"] = _applied_blob(
+            write_soul_map(
+                lambda blob: blob.__setitem__("v", 2), path=str(soul_path)
+            )
         )
 
     writer = threading.Thread(target=write)
@@ -247,22 +287,20 @@ def test_a_writer_completes_when_the_file_lock_is_held_past_the_poll(monkeypatch
     monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_signalling_contention)
 
     def hold():
-        with soul_map_io._locked_soul_map_file(str(soul_path)):
+        with _hold_path_flock(str(soul_path)):
             started.set()
             if writer_blocked.wait(timeout=5):
                 time.sleep(6.0)
 
-    errors = []
     written = {}
 
     def write():
         t0 = time.monotonic()
-        try:
-            written["blob"] = write_soul_map(
-                lambda blob: blob.__setitem__("v", 2), path=str(soul_path)
-            )
-        except Exception as exc:
-            errors.append(exc)
+        written["result"] = write_soul_map(
+            lambda blob: blob.__setitem__("v", 2),
+            path=str(soul_path),
+            raise_on_lock_timeout=False,
+        )
         written["elapsed"] = time.monotonic() - t0
 
     holder = threading.Thread(target=hold)
@@ -273,33 +311,23 @@ def test_a_writer_completes_when_the_file_lock_is_held_past_the_poll(monkeypatch
     assert writer_blocked.wait(timeout=5)
     writer.join(timeout=15)
     holder.join(timeout=15)
-    assert errors == []
-    assert written["elapsed"] > 5.0
-    assert written["blob"] == {"v": 2}
-    assert read_soul_map(str(soul_path))["v"] == 2
+    assert written["elapsed"] <= 6.5
+    assert written["result"].outcome is WriteOutcome.LOCK_WAIT_FAILED
+    assert read_soul_map(str(soul_path))["v"] == 1
 
 
-def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(monkeypatch, tmp_path):
+def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(tmp_path):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"n": 0}), encoding="utf-8")
-    real_lock = soul_map_io._locked_soul_map_file
-    timed_out = threading.Event()
-
-    @contextmanager
-    def short_timeout(path, timeout_seconds=0.3):
-        try:
-            with real_lock(path, timeout_seconds=timeout_seconds):
-                yield
-        except TimeoutError:
-            timed_out.set()
-            raise
-
-    monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", short_timeout)
     errors = []
 
     def write():
         try:
-            write_soul_map(lambda blob: blob.update(n=blob["n"] + 1), path=str(soul_path))
+            result = write_soul_map(
+                lambda blob: blob.update(n=blob["n"] + 1), path=str(soul_path)
+            )
+            if result.outcome is not WriteOutcome.APPLIED:
+                errors.append(result.outcome)
         except Exception as exc:
             errors.append(exc)
 
@@ -307,7 +335,7 @@ def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(monk
     with soul_map_io._lock_for(str(soul_path)):
         for writer in writers:
             writer.start()
-        timed_out.wait(timeout=2)
+        time.sleep(0.2)
     for writer in writers:
         writer.join(timeout=10)
 
@@ -316,46 +344,79 @@ def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(monk
 
 
 WRITER_IN_OTHER_PROCESS = """
+import fcntl
+import time
 import sys
-import internal.store.soul_map_io as m
-real = m._locked_soul_map_file
-m._locked_soul_map_file = lambda p, timeout_seconds=2.0: real(p, timeout_seconds=timeout_seconds)
-m.write_soul_map(lambda b: b.update(b=1), path=sys.argv[1])
+from internal.store.soul_map_io import WriteOutcome, write_soul_map
+original = fcntl.flock
+announced = False
+def observed(fd, operation):
+    global announced
+    try:
+        return original(fd, operation)
+    except BlockingIOError:
+        if not announced:
+            print("LOCK_WAITING", flush=True)
+            announced = True
+        raise
+fcntl.flock = observed
+r = write_soul_map(lambda b: b.update(b=1), path=sys.argv[1])
+if r.outcome is not WriteOutcome.APPLIED:
+    raise SystemExit(f"write failed: {r.outcome}")
 """
 
 
-def test_a_writer_in_another_process_is_not_starved_by_a_slow_reader(monkeypatch, tmp_path):
+def test_a_writer_in_another_process_is_not_starved_by_a_slow_reader(tmp_path):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"a": 0}), encoding="utf-8")
-    real_lock = soul_map_io._locked_soul_map_file
-    flock_taken = threading.Event()
+    started = threading.Event()
+    release = threading.Event()
+    parent_waiting = threading.Event()
 
-    @contextmanager
-    def signalling(path, timeout_seconds=2.0):
-        with real_lock(path, timeout_seconds=timeout_seconds):
-            flock_taken.set()
-            yield
+    def hold_flock():
+        with _hold_path_flock(str(soul_path), timeout_seconds=10.0):
+            started.set()
+            release.wait(timeout=10)
 
-    monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", signalling)
+    holder = threading.Thread(target=hold_flock)
+    holder.start()
+    assert started.wait(timeout=5)
+
+    original_flock = soul_map_io.fcntl.flock
+
+    def observe_parent_attempt(fd, operation):
+        try:
+            return original_flock(fd, operation)
+        except BlockingIOError:
+            parent_waiting.set()
+            raise
+
+    soul_map_io.fcntl.flock = observe_parent_attempt
     writer_a = threading.Thread(
-        target=write_soul_map,
-        args=(lambda blob: blob.update(a=1),),
-        kwargs={"path": str(soul_path)},
+        target=lambda: _applied_blob(
+            write_soul_map(lambda blob: blob.update(a=1), path=str(soul_path))
+        ),
     )
-    slow_reader = soul_map_io._lock_for(str(soul_path))
-    with slow_reader:
-        writer_a.start()
-        assert flock_taken.wait(timeout=5)
-        other = subprocess.run(
-            [sys.executable, "-c", WRITER_IN_OTHER_PROCESS, str(soul_path)],
-            cwd=Path(__file__).resolve().parents[1],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    writer_a.join(timeout=10)
+    writer_a.start()
+    other = subprocess.Popen(
+        [sys.executable, "-c", WRITER_IN_OTHER_PROCESS, str(soul_path)],
+        cwd=Path(__file__).resolve().parents[1],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert parent_waiting.wait(timeout=5)
+        ready, _, _ = select.select([other.stdout], [], [], 5)
+        assert ready and other.stdout.readline().strip() == "LOCK_WAITING"
+    finally:
+        release.set()
+        soul_map_io.fcntl.flock = original_flock
+    other_stdout, other_stderr = other.communicate(timeout=30)
+    writer_a.join(timeout=15)
+    holder.join(timeout=15)
 
-    assert other.returncode == 0, other.stderr
+    assert other.returncode == 0, other_stderr or other_stdout
     assert json.loads(soul_path.read_text(encoding="utf-8")) == {"a": 1, "b": 1}
 
 
@@ -370,3 +431,36 @@ def test_write_soul_map_failed_io_does_not_poison_cache(monkeypatch, tmp_path):
 
     write_soul_map(lambda blob: blob.__setitem__("v", 2), path=str(soul_path))
     assert read_soul_map(str(soul_path))["v"] == 1
+
+def test_a_hard_flock_error_is_not_reported_as_a_lock_timeout(monkeypatch, tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"v": 1}), encoding="utf-8")
+    real_flock = soul_map_io.fcntl.flock
+    exclusive_calls = {"n": 0}
+
+    def flock_einval(fd, operation):
+        if operation & soul_map_io.fcntl.LOCK_EX:
+            exclusive_calls["n"] += 1
+            raise OSError(errno.EINVAL, "Invalid argument")
+        return real_flock(fd, operation)
+
+    monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_einval)
+    started = time.monotonic()
+    with pytest.raises(OSError) as caught:
+        write_soul_map(
+            lambda blob: blob.__setitem__("v", 2),
+            path=str(soul_path),
+            raise_on_lock_timeout=False,
+        )
+    elapsed = time.monotonic() - started
+    assert caught.value.errno == errno.EINVAL
+    assert exclusive_calls["n"] == 1
+    assert elapsed < 1.0
+    monkeypatch.setattr(soul_map_io.fcntl, "flock", real_flock)
+    result = write_soul_map(
+        lambda blob: blob.__setitem__("v", 3),
+        path=str(soul_path),
+        raise_on_lock_timeout=False,
+    )
+    assert result.outcome is WriteOutcome.APPLIED
+    assert read_soul_map(str(soul_path))["v"] == 3

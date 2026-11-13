@@ -42,6 +42,10 @@ class Judge:
         """Close the matching paper position."""
         return portfolios.close_position(self.name, prediction, actual_pct=actual_pct, outcome=outcome)
 
+    def discard_open_position(self, prediction_id: Any) -> bool:
+        """Drop an open position when a ledger append did not land."""
+        return portfolios.discard_open_position(self.name, prediction_id)
+
     def record_postmortem(
         self,
         prediction: Dict[str, Any],

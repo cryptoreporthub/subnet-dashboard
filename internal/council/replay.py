@@ -12,7 +12,7 @@ from internal.council.resolver import (
     PREDICTIONS_PATH,
     _compute_stats,
     _load_json,
-    _save_json,
+    _commit_ledger_changes,
     replay_mode,
     resolve_prediction_at_horizon,
 )
@@ -61,15 +61,32 @@ def rebuild_judge_portfolios_from_stream(
             stream,
             key=lambda p: _parse_dt(p.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
         )
+        from internal.judges import postmortems
+
         for pred in sorted_stream:
             if not isinstance(pred, dict):
                 continue
             status = str(pred.get("status", "pending"))
             if status in {"duplicate", "expired"} and pred.get("outcome") == "duplicate":
                 continue
-            on_prediction_created(pred)
             if status in {"resolved", "expired", "ungradeable"}:
-                on_prediction_resolved(pred)
+                actual_pct = pred.get("actual_pct")
+                outcome = pred.get("outcome")
+                for name in ("oracle", "echo", "pulse"):
+                    jp.backfill_closed_position(
+                        name, pred, actual_pct=actual_pct, outcome=outcome
+                    )
+                stored_correct = pred.get("correct")
+                if stored_correct is None:
+                    stored_correct = str(outcome or "").lower() == "hit"
+                if not stored_correct and outcome not in {"expired", "ungradeable", "unknown", None}:
+                    for name in ("oracle", "echo", "pulse"):
+                        try:
+                            postmortems.record(name, pred, actual_pct=actual_pct)
+                        except Exception:
+                            continue
+                continue
+            on_prediction_created(pred)
         return jp.all_portfolios()
     finally:
         jp.PORTFOLIOS_PATH = old_path
@@ -133,7 +150,10 @@ def replay_predictions(
         out["replay"]["after_stats"] = dict(out["stats"])
 
         if persist:
-            _save_json(predictions_path, out)
+            result = _commit_ledger_changes(
+                data, out, path=predictions_path, caller="replay", trigger="replay"
+            )
+            out["persist_outcome"] = result.outcome.value
         return out
 
 

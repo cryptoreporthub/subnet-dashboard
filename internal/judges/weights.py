@@ -46,8 +46,8 @@ def load_judge_weights(path: Optional[str] = None) -> Dict[str, float]:
     return normalize_judge_weights(data.get("judge_weights"))
 
 
-def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:
-    from internal.store.soul_map_io import write_soul_map
+def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) -> bool:
+    from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
     canonical = normalize_judge_weights(weights)
     rounded = {k: round(float(v), 4) for k, v in canonical.items()}
@@ -55,7 +55,8 @@ def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) ->
     def _mutate(blob: Dict[str, Any]) -> None:
         blob["judge_weights"] = rounded
 
-    write_soul_map(_mutate, path=path or SOUL_MAP_PATH)
+    result = write_soul_map(_mutate, path=path or SOUL_MAP_PATH)
+    return result.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
 
 
 def nudge_judge(
@@ -71,8 +72,9 @@ def nudge_judge(
 ) -> Optional[float]:
     if not judge_name or judge_name not in DEFAULT_JUDGE_WEIGHTS:
         return None
+    from internal.store.soul_map_io import WriteOutcome, write_soul_map
+
     resolved_path = path or SOUL_MAP_PATH
-    weights = load_judge_weights(resolved_path)
     move_scale = max(0.0, float(scale))
     base = (
         (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
@@ -80,13 +82,20 @@ def nudge_judge(
         else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
     )
     delta = round(base * move_scale, 4)
-    before = float(weights[judge_name])
-    after = round(
-        max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
-        4,
-    )
-    weights[judge_name] = after
-    save_judge_weights(weights, resolved_path)
+    updated: Dict[str, float] = {}
+
+    def _mutate(blob: Dict[str, Any]) -> None:
+        weights = normalize_judge_weights(blob.get("judge_weights"))
+        before = weights[judge_name]
+        after = round(max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)), 4)
+        weights[judge_name] = after
+        blob["judge_weights"] = weights
+        updated.update(before=before, after=after)
+
+    result = write_soul_map(_mutate, path=resolved_path)
+    if result.outcome is not WriteOutcome.APPLIED:
+        return None
+    before, after = updated["before"], updated["after"]
     if after != before:
         try:
             from internal.learning.trail_bus import emit_weight_change

@@ -11,6 +11,7 @@ Usage (via fly ssh console / SSH workflow, cwd=/app):
 
 Exit codes: 0 ok | 2 dry-run/arg failure | 3 verify failed (restored)
             4 quiescence gate (nothing written) | 5 settle recheck failed (restored)
+            6 write_soul_map refused (live file not restored)
 """
 
 from __future__ import annotations
@@ -119,8 +120,17 @@ def execute(path: str, backup: str) -> int:
     # server - the RMW lock is process-local and cannot see us; cross-process
     # safety comes from the quiescence gate + Step B-prime settle recheck below.
     sys.path.insert(0, REPO_ROOT)
-    from internal.store.soul_map_io import write_soul_map
-    write_soul_map(_mutator, path=path)
+    from internal.store.soul_map_io import SoulMapLockWaitTimeout, WriteOutcome, write_soul_map
+
+    try:
+        write_result = write_soul_map(_mutator, path=path)
+    except SoulMapLockWaitTimeout:
+        print("COMPACTION_FAILED reason=lock_timeout; backup not restored")
+        return 6
+    if write_result.outcome not in (WriteOutcome.APPLIED, WriteOutcome.DECLINED):
+        detail = write_result.detail or write_result.outcome.value
+        print(f"COMPACTION_FAILED reason=write_soul_map_{write_result.outcome.value}:{detail}")
+        return 6
 
     # Step B - direct-from-disk parse (NOT read_soul_map: 5s TTL cache)
     try:

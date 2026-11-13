@@ -7,10 +7,12 @@ weights, atomic ledger resolution, and dedupe before resolve.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import math
 import os
+from copy import deepcopy
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -244,7 +246,24 @@ def _is_shadow(prediction: Dict[str, Any]) -> bool:
     return bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
 
-def _load_json(path: str, default: Any) -> Any:
+def _load_json(path: str, default: Any, *, fail_closed: bool = False) -> Any:
+    from internal.store.soul_map_io import StateUnreadable, read_blob_checked
+
+    checked = read_blob_checked(path)
+    if checked.kind in ("unreadable", "transient"):
+        ledger = os.path.normpath(path) == os.path.normpath(PREDICTIONS_PATH)
+        if ledger and fail_closed:
+            raise StateUnreadable(checked.kind, path, error=checked.error)
+        if ledger:
+            logger.warning(
+                "predictions ledger read-only degraded kind=%s path=%s error=%s",
+                checked.kind,
+                path,
+                checked.error or "",
+            )
+            return copy.deepcopy(default) if isinstance(default, dict) else default
+        return default
+
     now = datetime.now(timezone.utc)
     file_bytes = 0
     mtime_iso: Optional[str] = None
@@ -259,8 +278,10 @@ def _load_json(path: str, default: Any) -> Any:
         )
         mtime_age_seconds = max(0.0, now.timestamp() - stat.st_mtime)
         file_bytes = stat.st_size
-        with open(path, "r", encoding="utf-8") as f:
-            result = json.load(f)
+        if checked.kind == "missing":
+            result = default
+        else:
+            result = checked.blob if checked.blob is not None else default
         partial_parse = False
         if isinstance(result, dict):
             parse_scope = path + ":" + "|".join(sorted(str(k) for k in result.keys()))
@@ -309,6 +330,43 @@ def _cycle_persist_guard_safe():
         return cycle_persist_guard()
     except Exception:
         return nullcontext()
+
+
+def _commit_predictions_mutation(fn, *, path, caller, trigger):
+    from internal.learning.predictions_store import (
+        PersistOutcome, PersistReason, PersistResult, mutate_predictions,
+    )
+
+    with _cycle_persist_guard_safe():
+        if _cycle_writes_revoked_safe():
+            return PersistResult(PersistOutcome.SKIPPED_ABANDONED, PersistReason.REVOKED)
+        return mutate_predictions(fn, path=path, caller=caller, trigger=trigger)
+
+
+class LedgerPersistFailure(Exception):
+    def __init__(self, result):
+        self.result = result
+        super().__init__(f"ledger_persist_{result.outcome.value}:{result.reason}")
+
+
+class LedgerPersistSkipped(LedgerPersistFailure):
+    pass
+
+
+def _commit_ledger_changes(before, after, *, path, caller, trigger):
+    from internal.learning.predictions_store import PersistOutcome, merge_ledger_changes
+
+    result = merge_ledger_changes(
+        before, after, path=path, caller=caller, trigger=trigger,
+        commit=_commit_predictions_mutation, stats_fn=_compute_stats,
+    )
+    if result.conflicts:
+        logger.warning("ledger commit conflicts trigger=%s keys=%s", trigger, result.conflicts)
+    if result.outcome is PersistOutcome.SKIPPED_ABANDONED:
+        raise LedgerPersistSkipped(result)
+    if result.outcome is not PersistOutcome.APPLIED:
+        raise LedgerPersistFailure(result)
+    return result
 
 
 def _save_json(
@@ -429,18 +487,10 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     return normalize_expert(prediction)
 
 
-def _stamp_and_nudge_expert(
-    prediction: Dict[str, Any],
-    *,
-    correct: bool,
-    capture: Optional[CaptureResult] = None,
-) -> Tuple[Optional[str], Optional[str]]:
-    """Stamp rich attribution on the row; nudge the SAME attributed expert so
-    attribution stamping and weight nudging stay in agreement (fixes quant
-    sink / dark_horse starvation where legacy string normalization diverged)."""
+def _stamp_expert_attribution(prediction: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """Write persistable expert/evidence fields on the row. Does not nudge weights."""
     from internal.council.expert_attribution import resolve_expert_attribution
-    from internal.council.signal_expert import expert_for_replay_row
-    from internal.learning.evidence import evidence_population, stamp_evidence
+    from internal.learning.evidence import stamp_evidence
 
     stamped_expert, expert_source = resolve_expert_attribution(prediction)
     stamp_evidence(prediction)
@@ -448,8 +498,22 @@ def _stamp_and_nudge_expert(
         prediction["expert"] = stamped_expert
         if expert_source != "existing":
             prediction["expert_attribution_source"] = expert_source
-    # Outcome weights require both a published council row and attributable
-    # signal evidence. A bare legacy expert label is diagnostic only.
+    return stamped_expert, expert_source
+
+
+def _nudge_attributed_expert(
+    prediction: Dict[str, Any],
+    *,
+    correct: bool,
+    capture: Optional[CaptureResult] = None,
+    stamped_expert: Optional[str] = None,
+) -> Optional[str]:
+    """Nudge the same expert that was stamped. Call only after a successful persist."""
+    from internal.council.signal_expert import expert_for_replay_row
+    from internal.learning.evidence import evidence_population
+
+    if stamped_expert is None:
+        stamped_expert = prediction.get("expert")
     replay_expert = expert_for_replay_row(prediction)
     nudge_expert = (
         stamped_expert
@@ -461,6 +525,22 @@ def _stamp_and_nudge_expert(
         with _cycle_persist_guard_safe():
             if not _cycle_writes_revoked_safe():
                 _nudge_weights(bool(correct), nudge_expert, capture=capture)
+    return nudge_expert
+
+
+def _stamp_and_nudge_expert(
+    prediction: Dict[str, Any],
+    *,
+    correct: bool,
+    capture: Optional[CaptureResult] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Stamp rich attribution on the row; nudge the SAME attributed expert so
+    attribution stamping and weight nudging stay in agreement (fixes quant
+    sink / dark_horse starvation where legacy string normalization diverged)."""
+    stamped_expert, _expert_source = _stamp_expert_attribution(prediction)
+    nudge_expert = _nudge_attributed_expert(
+        prediction, correct=bool(correct), capture=capture, stamped_expert=stamped_expert
+    )
     return stamped_expert, nudge_expert
 
 
@@ -970,10 +1050,18 @@ def atomic_finalize_resolution(
         with _cycle_persist_guard_safe():
             if _cycle_writes_revoked_safe():
                 return prediction
-            on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
-    except Exception:
-        logger.exception("atomic_finalize: on_prediction_resolved failed")
-        warnings.append("on_prediction_resolved")
+            summary = on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
+            if isinstance(summary, dict) and summary.get("portfolios_unobservable"):
+                warnings.append("portfolios_unobservable")
+    except Exception as exc:
+        from internal.judges.portfolios import PortfolioUnreadable
+
+        if isinstance(exc, PortfolioUnreadable):
+            logger.exception("atomic_finalize: portfolios unreadable")
+            warnings.append("portfolios_unobservable")
+        else:
+            logger.exception("atomic_finalize: on_prediction_resolved failed")
+            warnings.append("on_prediction_resolved")
 
     try:
         from internal.council.prediction_trace import record_prediction_resolved
@@ -1394,7 +1482,9 @@ def expire_stale_predictions(
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
+        fail_closed=True,
     )
+    before = copy.deepcopy(data)
     predictions: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     now = datetime.now(timezone.utc)
@@ -1417,7 +1507,9 @@ def expire_stale_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
-    _save_json(PREDICTIONS_PATH, data, caller="resolver")
+    _commit_ledger_changes(
+        before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="expire"
+    )
 
     return {
         "expired_now": expired_now,
@@ -1430,7 +1522,7 @@ def expire_stale_predictions(
 
 def _merge_regraded_resolved(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Re-sync rows regrade_expired_predictions updated on disk (RF-3 follow-up)."""
-    fresh = _load_json(PREDICTIONS_PATH, {}).get("resolved") or []
+    fresh = _load_json(PREDICTIONS_PATH, {}, fail_closed=True).get("resolved") or []
     by_id = {
         str(row.get("id")): row
         for row in fresh
@@ -1471,13 +1563,18 @@ def _resolve_due_predictions(
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
+        fail_closed=True,
     )
+    before = copy.deepcopy(data)
     now = datetime.now(timezone.utc)
     restored_now = _restore_recently_expired_predictions(data, now=now)
     if restored_now:
         # ``regrade_expired_predictions`` reads the ledger independently, so
         # make the repair visible to that pass before it runs.
-        _save_json(PREDICTIONS_PATH, data, caller="resolver")
+        _commit_ledger_changes(
+            before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="restore"
+        )
+        before = copy.deepcopy(data)
     raw_pending: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     pending, duplicate_rows = dedupe_predictions(raw_pending)
@@ -1617,7 +1714,9 @@ def _resolve_due_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
-    _save_json(PREDICTIONS_PATH, data, caller="resolver")
+    _commit_ledger_changes(
+        before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="resolve"
+    )
 
     # Cold-cache spike alert — log at WARNING level so operators see it without
     # log diving.  Emitted once per resolver run when the ratio exceeds threshold.
@@ -1670,7 +1769,9 @@ def regrade_expired_predictions(
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {}},
+        fail_closed=True,
     )
+    before = deepcopy(data)
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     regraded: List[Dict[str, Any]] = []
     attempted = 0
@@ -1767,7 +1868,9 @@ def regrade_expired_predictions(
     if needs_save:
         data["resolved"] = resolved
         data["stats"] = _compute_stats(data)
-        _save_json(PREDICTIONS_PATH, data, caller="resolver")
+        _commit_ledger_changes(
+            before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="regrade"
+        )
 
     return {
         "attempted": attempted,

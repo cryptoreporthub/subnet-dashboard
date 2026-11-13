@@ -10,12 +10,32 @@ import logging
 import os
 import json
 import threading
+import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from internal.store.soul_map_io import read_soul_map, write_soul_map_committed
+from internal.store.soul_map_io import (
+    WriteOutcome,
+    read_soul_map,
+    write_soul_map,
+    write_soul_map_committed,
+)
 
 logger = logging.getLogger(__name__)
+
+class TrailKind(str, Enum):
+    COMMITTED = "committed"
+    BUFFERED = "buffered"
+    EVICTED = "evicted"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class TrailAppend:
+    kind: TrailKind
+    event_id: str
 
 # Mirror CYCLE_HISTORY_MAX=10 / learning_trail[-200:] — memory-only heal; on-disk
 # shrink is the compaction operation (Runbook v4), not this constant alone.
@@ -87,14 +107,17 @@ def _trail_key(entry: Any) -> Optional[Tuple[str, ...]]:
 
     A resolution is keyed by its prediction id: two resolutions can share one timestamp.
     """
-    if isinstance(entry, dict) and entry.get("time") is not None:
+    if isinstance(entry, dict):
         event_type = str(entry.get("event_type"))
         evidence = entry.get("evidence")
         if event_type == "prediction_resolved" and isinstance(evidence, dict):
             prediction_id = evidence.get("prediction_id")
             if prediction_id is not None:
                 return event_type, "prediction_id", str(prediction_id)
-        return event_type, "time", str(entry["time"])
+        if entry.get("event_id") is not None:
+            return "event_id", str(entry["event_id"])
+        if entry.get("time") is not None:
+            return event_type, "time", str(entry["time"])
     return None
 
 
@@ -202,15 +225,17 @@ class MindmapBridge:
         if committed:
             _drop_pending_through(key, flushed["through"])
 
-    def append_learning_trail(self, entry: Dict[str, Any], *, resolved_prediction_id: Any = None) -> None:
+    def append_learning_trail(self, entry: Dict[str, Any], *, resolved_prediction_id: Any = None) -> TrailAppend:
         """Append a mind-map learning trail row (pick/resolve/rotation events).
 
         A resolved prediction id is also recorded in ``resolved_prediction_ids`` in the same save.
         That ledger is never truncated, so a replay still matches after the trail window moves on.
         """
         key = _pending_key(self.persistence_path)
+        entry.setdefault("event_id", uuid.uuid4().hex)
+        event_id = str(entry["event_id"])
         _enqueue_pending(key, entry, resolved_prediction_id)
-        flushed = {"through": 0}
+        flushed = {"through": 0, "target": False, "duplicate": False}
 
         def _apply(blob: Dict[str, Any]) -> None:
             # Mutate the latest on-disk blob under the save lock, not this bridge's
@@ -221,27 +246,63 @@ class MindmapBridge:
                 blob["soul_map_state"] = state
             through, rows, resolved = _snapshot_pending(key)
             flushed["through"] = through
+            target_key = _trail_key(entry)
+            present = {_trail_key(row) for row in state.get("learning_trail", []) if isinstance(row, dict)}
+            for row, _rid in rows:
+                if row.get("event_id") == event_id:
+                    flushed["target"] = True
+                    flushed["duplicate"] = target_key in present
+                    break
+                present.add(_trail_key(row))
             _record_resolved_ids(state, resolved)
             _replay_trail_rows(state, rows)
 
-        committed, result = write_soul_map_committed(_apply, self.persistence_path)
-        if committed:
-            # The disk write landed. Drop only the rows this commit carried, then sync the rows
-            # and ledger to the merged on-disk state, so rows other bridges appended since this
-            # bridge loaded are visible here too.
+        try:
+            result = write_soul_map(_apply, self.persistence_path, raise_on_lock_timeout=False)
+        except Exception:
+            _through, rows, _resolved = _snapshot_pending(key)
+            return TrailAppend(
+                TrailKind.BUFFERED if any(row.get("event_id") == event_id for row, _ in rows) else TrailKind.EVICTED,
+                event_id,
+            )
+        if result.outcome is WriteOutcome.APPLIED:
             _drop_pending_through(key, flushed["through"])
-            committed_state = result.get("soul_map_state")
+            committed_state = (result.blob or {}).get("soul_map_state")
             committed_state = committed_state if isinstance(committed_state, dict) else {}
             for field in ("learning_trail", "resolved_prediction_ids"):
                 if field in committed_state:
                     self.soul_map_state[field] = committed_state[field]
                 else:
                     self.soul_map_state.pop(field, None)
+        elif result.outcome is WriteOutcome.DECLINED:
+            _drop_pending_through(key, flushed["through"])
         else:
             # The disk write failed. Keep this row in memory; the returned blob is the
             # pre-append snapshot and would drop it. Earlier failed rows are already in
             # memory from their own attempts, so only this row is added here.
             _replay_trail_rows(self.soul_map_state, [(entry, resolved_prediction_id)])
+            _through, rows, _resolved = _snapshot_pending(key)
+            return TrailAppend(
+                TrailKind.BUFFERED if any(row.get("event_id") == event_id for row, _ in rows) else TrailKind.EVICTED,
+                event_id,
+            )
+        from internal.store.soul_map_io import read_blob_checked
+
+        checked = read_blob_checked(self.persistence_path)
+        if checked.kind != "loaded" or not isinstance(checked.blob, dict):
+            return TrailAppend(TrailKind.FAILED, event_id)
+        state = checked.blob.get("soul_map_state")
+        trail = state.get("learning_trail", []) if isinstance(state, dict) else []
+        if isinstance(trail, list) and any(
+            isinstance(row, dict) and row.get("event_id") == event_id for row in trail
+        ):
+            return TrailAppend(TrailKind.COMMITTED, event_id)
+        kind = (
+            TrailKind.EVICTED
+            if flushed["target"] and not flushed["duplicate"] and isinstance(trail, list) and len(trail) >= 200
+            else TrailKind.FAILED
+        )
+        return TrailAppend(kind, event_id)
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

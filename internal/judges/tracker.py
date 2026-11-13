@@ -41,16 +41,26 @@ def on_prediction_created(
 
     Returns the judge scores so callers can store them on the prediction.
     """
-    scores = {
+    scores = evaluate_prediction(
+        prediction, signal_impact=signal_impact, subnet=subnet, expert_weights=expert_weights
+    )
+    from internal.judges.portfolios import open_positions_for_prediction
+
+    open_positions_for_prediction(prediction, scores)
+    return scores
+
+
+def evaluate_prediction(
+    prediction: Dict[str, Any],
+    signal_impact: Optional[Dict[str, Any]] = None,
+    subnet: Optional[Dict[str, Any]] = None,
+    expert_weights: Optional[Dict[str, float]] = None,
+) -> Dict[str, Any]:
+    return {
         "oracle": oracle_judge.evaluate(prediction, signal_impact=signal_impact, subnet=subnet),
         "echo": echo_judge.evaluate(prediction, signal_impact=signal_impact, expert_weights=expert_weights),
         "pulse": pulse_judge.evaluate(prediction, signal_impact=signal_impact, subnet=subnet),
     }
-    for judge in all_judges():
-        block = scores.get(judge.name) or {}
-        conf = float(block.get("confidence", 0.5) or 0.5)
-        judge.open_position(prediction, size=0.5 + 0.5 * conf)
-    return scores
 
 
 def on_prediction_resolved(
@@ -64,7 +74,10 @@ def on_prediction_resolved(
     """
     actual_pct = _actual_pct(prediction)
     outcome = prediction.get("outcome", "unknown")
-    wrong = not prediction.get("correct", outcome == "hit")
+    stored_correct = prediction.get("correct")
+    if stored_correct is None:
+        stored_correct = str(outcome).lower() == "hit"
+    wrong = not stored_correct
 
     summary: Dict[str, Any] = {
         "prediction_id": prediction.get("id"),
@@ -74,8 +87,24 @@ def on_prediction_resolved(
         "judges": {},
     }
 
+    from internal.judges.portfolios import (
+        PortfolioUnreadable,
+        holds_closed,
+        holds_open,
+        portfolios_operation_deadline,
+    )
+
+    pred_id = prediction.get("id")
+    netuid = prediction.get("netuid")
+    portfolios_unobservable = False
     for judge in all_judges():
-        closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
+        with portfolios_operation_deadline():
+            closed = None
+            try:
+                closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
+            except PortfolioUnreadable:
+                portfolios_unobservable = True
+                closed = None
         if closed and apply_judge_nudge:
             try:
                 from internal.council.grading import is_pump_desk_claim
@@ -133,9 +162,19 @@ def on_prediction_resolved(
             except Exception:
                 pass
         postmortem = None
-        # close_position returns None only on replay, so a replay must not append a second postmortem.
-        if wrong and closed:
-            postmortem = judge.record_postmortem(prediction, actual_pct)
+        # Replay returns None after a durable close; still retry a missing postmortem.
+        # Skip if this judge still has the id open (the close itself failed).
+        if wrong and not portfolios_unobservable:
+            try:
+                held = closed is not None or holds_closed(judge.name, pred_id, netuid=netuid, row=prediction)
+                still_open = holds_open(judge.name, pred_id, netuid=netuid, row=prediction)
+                if held and not still_open:
+                    postmortem = judge.record_postmortem(prediction, actual_pct)
+            except PortfolioUnreadable:
+                portfolios_unobservable = True
+                postmortem = None
+            except Exception:
+                postmortem = None
         summary["judges"][judge.name] = {
             "closed": closed,
             "postmortem": postmortem,
@@ -149,4 +188,6 @@ def on_prediction_resolved(
         except Exception:
             pass
 
+    if portfolios_unobservable:
+        summary["portfolios_unobservable"] = True
     return summary

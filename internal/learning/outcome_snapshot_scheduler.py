@@ -75,6 +75,12 @@ class OutcomeSnapshotScheduler:
             staleness_factor=2,
             persist=True,
         )
+        self.recovery_liveness = LivenessTracker(
+            name="learning_expired_recovery",
+            interval_seconds=_interval_seconds(),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def _is_registered(self) -> bool:
         with _lock:
@@ -108,6 +114,7 @@ class OutcomeSnapshotScheduler:
             "last_result": self._last_result,
             "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
             "liveness": snap,
+            "recovery_liveness": self.recovery_liveness.snapshot(),
         }
 
     def run_once(self) -> Dict[str, Any]:
@@ -128,9 +135,24 @@ class OutcomeSnapshotScheduler:
             try:
                 from internal.learning.expired_recovery import recover_expired_predictions
 
-                recovery = recover_expired_predictions()
+                try:
+                    recovery = recover_expired_predictions()
+                except Exception as rec_exc:
+                    logger.warning("expired recovery failed: %s", rec_exc)
+                    recovery = {"ok": False, "reason": "exception", "error": str(rec_exc)}
+
+                recovery_ok = recovery.get("ok") is not False
+                result["recovery_ok"] = recovery_ok
+                result["recovery_reason"] = recovery.get("reason")
                 result["recovered"] = recovery.get("recovered", 0)
                 result["recovery_skipped"] = recovery.get("skipped", 0)
+                if recovery_ok:
+                    self.recovery_liveness.record_success(
+                        evidence={"recovered": result["recovered"], "op": "expired_recovery"}
+                    )
+                else:
+                    reason = recovery.get("reason") or "error"
+                    self.recovery_liveness.record_failure(error=f"expired_recovery_{reason}")
 
                 from internal.learning.outcome_snapshot import run_snapshot
 

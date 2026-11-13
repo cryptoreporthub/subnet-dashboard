@@ -119,6 +119,7 @@ def measure_archive(path: str) -> Tuple[Dict[str, Any], str]:
     archive = load_archive(path)
     rows = iter_resolved(archive)
     summary = build_summary(rows, path)
+    summary["archive_errors"] = archive.get("archive_errors", [])
     return summary, render_markdown(summary)
 
 
@@ -154,6 +155,9 @@ def main() -> int:
     with open(args.out_md, "w", encoding="utf-8") as handle:
         handle.write(report)
 
+    if summary["archive_errors"]:
+        print(json.dumps({"ok": False, "archive_errors": summary["archive_errors"]}), file=sys.stderr)
+        return 1
     print(json.dumps({"ok": True, "n": summary["overall"]["n"], "out_json": args.out_json, "out_md": args.out_md}))
     return 0
 

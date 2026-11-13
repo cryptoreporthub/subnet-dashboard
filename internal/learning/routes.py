@@ -31,7 +31,6 @@ from internal.council.resolver_scheduler import (
 from internal.learning.predictions_store import (
     count_unclassified,
     load_predictions,
-    save_predictions,
     update_stats,
 )
 
@@ -1610,7 +1609,7 @@ async def api_pump_lead_recover(request: Request, dry_run: bool = False, hydrate
         summary = recover_overdue_pump_leads(
             dry_run=bool(dry_run), hydrate=bool(hydrate)
         )
-        return {"status": "success", "data": summary}
+        return {"status": "success" if summary.get("ok") is True else "degraded", "data": summary}
     except Exception as exc:
         logger.warning("pump_lead recover failed: %s", exc)
         return {"status": "error", **public_error(exc, code="pump_lead_recover_failed")}

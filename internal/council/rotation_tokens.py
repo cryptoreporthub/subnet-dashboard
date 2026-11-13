@@ -89,7 +89,8 @@ def _mirror_rotation_snapshot_to_soul_map(tokens: List[Dict[str, Any]]) -> bool:
             "tokens": tokens,
             "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
-        _save_raw(data, SOUL_MAP_PATH)
+        if not _save_raw(data, SOUL_MAP_PATH):
+            return False
 
         from internal.learning.trail_events import emit_rotation_tokens_snapshot
 

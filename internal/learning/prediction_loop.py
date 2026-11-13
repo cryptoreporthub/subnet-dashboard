@@ -7,14 +7,29 @@ memory, and the Soul-Map / Mindmap trail so outcomes feed the next scoring pass.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Dict, Optional
 
 from internal.council.state_vector import build_prediction_statement
 from internal.council.weights import load_weights
-from internal.learning.predictions_store import append_prediction, has_pending_duplicate
+from internal.learning.predictions_store import PersistOutcome, append_prediction_result, has_pending_duplicate
 
 logger = logging.getLogger(__name__)
+
+
+class PickRecordKind(str, Enum):
+    COMMITTED = "committed"
+    SKIPPED = "skipped"
+    INDETERMINATE = "indeterminate"
+
+
+@dataclass(frozen=True)
+class PickRecord:
+    kind: PickRecordKind
+    prediction: Optional[Dict[str, Any]] = None
+    reason: Optional[str] = None
 
 
 from internal.council.expert_display import (
@@ -191,14 +206,15 @@ def _predicted_pct_from_pick(pick: Dict[str, Any], subnet: Dict[str, Any]) -> tu
         return round(signed, 4), "market_momentum"
 
 
-def record_pick_prediction(
+def record_pick(
     pick: Dict[str, Any],
     subnet: Dict[str, Any],
     *,
     horizon_type: str = "hour",
     market_context: Optional[Dict[str, Any]] = None,
     shadow: bool = False,
-) -> Optional[Dict[str, Any]]:
+    predictions_path: Optional[str] = None,
+) -> PickRecord:
     """Persist a Council pick as a pending prediction and open judge positions.
 
     When ``shadow=True`` (HOLD counterfactual), the row is gradeable for
@@ -207,7 +223,7 @@ def record_pick_prediction(
     Returns the stored prediction dict, or None when skipped (duplicate / invalid).
     """
     if not isinstance(pick, dict) or not isinstance(subnet, dict):
-        return None
+        return PickRecord(PickRecordKind.SKIPPED, reason="invalid_pick")
 
     netuid = subnet.get("netuid")
     if netuid is None:
@@ -215,24 +231,24 @@ def record_pick_prediction(
         if isinstance(subnet_info, dict):
             netuid = subnet_info.get("netuid")
     if netuid is None:
-        return None
+        return PickRecord(PickRecordKind.SKIPPED, reason="missing_netuid")
     try:
         from internal.subnets.tradable import is_tradable_subnet
 
         check = dict(subnet)
         check.setdefault("netuid", netuid)
         if not is_tradable_subnet(check):
-            return None
+            return PickRecord(PickRecordKind.SKIPPED, reason="untradable")
     except Exception:
         if int(netuid) <= 0:
-            return None
+            return PickRecord(PickRecordKind.SKIPPED, reason="untradable")
 
-    if has_pending_duplicate(netuid, horizon_type, shadow=shadow):
-        return None
+    if has_pending_duplicate(netuid, horizon_type, shadow=shadow, path=predictions_path):
+        return PickRecord(PickRecordKind.SKIPPED, reason="duplicate")
 
     ref_price = float(subnet.get("price", 0) or 0)
     if ref_price <= 0:
-        return None
+        return PickRecord(PickRecordKind.SKIPPED, reason="invalid_price")
 
     expert = dominant_expert_for_learning(pick)
     expert_contributions = pick.get("expert_contributions") or {}
@@ -354,12 +370,12 @@ def record_pick_prediction(
         logger.warning("Prediction trace on create failed: %s", exc)
 
     try:
-        from internal.judges.tracker import on_prediction_created
+        from internal.judges.tracker import evaluate_prediction
 
         if isinstance(signal_impact, dict):
             prediction["signal_impact"] = signal_impact
 
-        judge_scores = on_prediction_created(
+        judge_scores = evaluate_prediction(
             prediction,
             signal_impact=signal_impact,
             subnet=subnet,
@@ -367,10 +383,24 @@ def record_pick_prediction(
         )
         prediction["judge_scores_at_creation"] = judge_scores
     except Exception as exc:
-        logger.warning("Judge on_prediction_created failed: %s", exc)
+        logger.warning("Judge evaluation failed: %s", exc)
+        return PickRecord(PickRecordKind.SKIPPED, reason="judge_evaluation_failed")
 
-    if not append_prediction(prediction):
-        return None
+    persisted = append_prediction_result(prediction, path=predictions_path)
+    if persisted.outcome is PersistOutcome.INDETERMINATE:
+        return PickRecord(PickRecordKind.INDETERMINATE, prediction, "ledger_indeterminate")
+    if persisted.outcome is not PersistOutcome.APPLIED:
+        return PickRecord(PickRecordKind.SKIPPED, reason=f"ledger_{persisted.outcome.value}")
+    if not persisted.committed_keys:
+        return PickRecord(PickRecordKind.SKIPPED, reason="duplicate")
+
+    try:
+        from internal.judges.portfolios import open_positions_for_prediction
+
+        open_positions_for_prediction(prediction, judge_scores)
+    except Exception as exc:
+        logger.warning("Committed pick needs portfolio reconciliation: %s", exc)
+        return PickRecord(PickRecordKind.INDETERMINATE, prediction, "positions_incomplete")
 
     _append_mindmap_trail(pick, prediction, horizon_type)
     _mirror_pick_to_soul_map(pick, prediction, horizon_type)
@@ -404,7 +434,132 @@ def record_pick_prediction(
     except Exception as exc:
         logger.warning("Pick trail emission failed: %s", exc)
 
-    return prediction
+    return PickRecord(PickRecordKind.COMMITTED, prediction)
+
+
+def record_pick_prediction(*args, **kwargs) -> Optional[Dict[str, Any]]:
+    result = record_pick(*args, **kwargs)
+    return result.prediction if result.kind is PickRecordKind.COMMITTED else None
+
+
+def _gradeable_for_judge_close(row: Dict[str, Any]) -> bool:
+    """True when a resolved row has a real grade, including legacy rows without `correct`."""
+    outcome = str(row.get("outcome") or "").lower()
+    return outcome in {"hit", "miss"} and row.get("actual_pct") is not None
+
+
+def _is_wrong_pick(row: Dict[str, Any]) -> bool:
+    """Match tracker: missing or null `correct` falls back to outcome == hit."""
+    stored = row.get("correct")
+    if stored is None:
+        stored = str(row.get("outcome") or "").lower() == "hit"
+    return not stored
+
+
+def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
+    from internal.judges.portfolios import get_portfolio, open_positions_for_prediction
+    from internal.judges.tracker import on_prediction_resolved
+    from internal.learning.pick_horizon import day_horizon_hours
+    from internal.learning.predictions_store import load_predictions
+
+    data = load_predictions(path=predictions_path, fail_closed=True)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=day_horizon_hours() + 1)
+    reconciled = 0
+    for row in data["predictions"]:
+        if row.get("pick_source") != "council" or row.get("shadow") or row.get("counterfactual"):
+            continue
+        if row.get("status", "pending") != "pending" or row.get("id") is None:
+            continue
+        try:
+            created = datetime.fromisoformat(str(row["created_at"]).replace("Z", "+00:00"))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+        except (KeyError, ValueError):
+            logger.warning("Cannot reconcile pick with invalid creation time id=%s", row.get("id"))
+            continue
+        if created < cutoff:
+            continue
+        scores = row.get("judge_scores_at_creation")
+        if not isinstance(scores, dict):
+            from internal.judges.tracker import evaluate_prediction
+
+            scores = evaluate_prediction(
+                row, signal_impact=row.get("signal_impact"),
+                subnet=row.get("subnet_snapshot"), expert_weights=row.get("weights_at_creation"),
+            )
+        open_positions_for_prediction(row, scores)
+        reconciled += 1
+
+    from internal.judges.portfolios import observe_portfolios
+
+    observation = observe_portfolios()
+    open_ids = set()
+    if observation.get("kind") == "readable":
+        for name in ("oracle", "echo", "pulse"):
+            judge = (observation.get("data") or {}).get(name) or {}
+            for pos in judge.get("open_positions") or []:
+                pred_id = pos.get("id")
+                if pred_id is not None:
+                    open_ids.add(pred_id)
+    if open_ids:
+        for row in list(data.get("predictions") or []) + list(data.get("resolved") or []):
+            if not isinstance(row, dict):
+                continue
+            pred_id = row.get("id")
+            if pred_id not in open_ids:
+                continue
+            if not _gradeable_for_judge_close(row):
+                continue
+            on_prediction_resolved(row, apply_judge_nudge=False)
+            reconciled += 1
+    retry_pending_postmortems(data, observation)
+    return reconciled
+
+
+def retry_pending_postmortems(data: Optional[Dict[str, Any]] = None, observation: Optional[Dict[str, Any]] = None) -> int:
+    """Write missing postmortems only for judges that actually closed the pick."""
+    from internal.judges import postmortems
+    from internal.judges.portfolios import observe_portfolios
+
+    if data is None:
+        from internal.learning.predictions_store import load_predictions as _load_predictions
+
+        data = _load_predictions()
+    if observation is None:
+        observation = observe_portfolios()
+    if observation.get("kind") != "readable":
+        return 0
+    retried = 0
+    book = observation.get("data") or {}
+    rows = list(data.get("predictions") or []) + list(data.get("resolved") or [])
+    for name in ("oracle", "echo", "pulse"):
+        judge = book.get(name) or {}
+        held = {c.get("id") for c in judge.get("closed_positions") or [] if c.get("id") is not None}
+        if not held:
+            continue
+        try:
+            existing = {
+                entry.get("prediction_id")
+                for entry in postmortems.list_for_judge(name)
+                if isinstance(entry, dict) and entry.get("prediction_id") is not None
+            }
+        except Exception:
+            existing = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            pred_id = row.get("id")
+            if pred_id not in held or pred_id in existing:
+                continue
+            if not _gradeable_for_judge_close(row) or not _is_wrong_pick(row):
+                continue
+            try:
+                postmortems.record(name, row, actual_pct=row.get("actual_pct"))
+                retried += 1
+                existing.add(pred_id)
+            except Exception:
+                logger.exception("postmortem retry failed judge=%s id=%s", name, pred_id)
+    return retried
 
 
 def _link_scenario_memory(
@@ -511,7 +666,8 @@ def _mirror_pick_to_soul_map(
             "prediction_id": prediction.get("id"),
             "updated_at": prediction.get("created_at"),
         }
-        _save_raw(data)
+        if not _save_raw(data):
+            logger.warning("Soul-map pick mirror refused write")
     except Exception as exc:
         logger.warning("Soul-map pick mirror failed: %s", exc)
 
@@ -582,7 +738,8 @@ def record_hold_decision(
         }
         sms[f"last_{horizon_type}_pick"] = entry
         sms[f"last_{horizon_type}_hold"] = entry
-        _save_raw(data)
+        if not _save_raw(data):
+            logger.warning("HOLD soul-map mirror refused write")
     except Exception as exc:
         logger.warning("HOLD soul-map mirror failed: %s", exc)
 

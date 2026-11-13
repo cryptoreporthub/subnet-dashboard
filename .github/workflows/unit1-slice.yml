@@ -1,0 +1,88 @@
+# Path-filtered Unit 1 slice (predictions ledger + soul-map write honesty).
+# Skips entirely when the PR does not touch these paths.
+name: Unit 1 slice
+
+on:
+  pull_request:
+    branches: [main]
+    paths: &unit1_slice_paths
+      - "internal/learning/**"
+      - "internal/store/**"
+      - "internal/council/**"
+      - "internal/judges/**"
+      - "internal/accuracy_lift/**"
+      - "internal/background_boot.py"
+      - "scripts/compact_soul_map.py"
+      - "scripts/reset_accuracy_epoch.py"
+      - "scripts/measure_accuracy_archive.py"
+      - "tests/test_predictions_store_patch_contract.py"
+      - "tests/test_predictions_store_contract.py"
+      - "tests/test_expiry_ledger.py"
+      - "tests/test_acc0_ledger_heal.py"
+      - "tests/test_resolver_corrupt_ledger_tick.py"
+      - "tests/test_compact_soul_map.py"
+      - "tests/test_soul_map_io.py"
+      - "tests/test_soul_map_io_failure.py"
+      - "tests/test_soul_map_write_honesty.py"
+      - "tests/test_judge_weight_write_honesty.py"
+      - "tests/test_prediction_loop_judge_rollback.py"
+      - "tests/test_mindmap_pending_declined.py"
+      - "tests/test_resolver_predictions_unreadable.py"
+      - "tests/test_resolver_persist_honesty_outcomes.py"
+      - "tests/test_resolver_soul_map_read_wedge.py"
+      - "tests/test_1578_plan_v31_weights_ledger.py"
+      - "tests/test_1578_ci_lists_in_sync.py"
+      - "tests/test_1578_ledger_single_writer.py"
+      - "tests/test_1578_single_ledger_writer_boundary.py"
+      - "tests/test_1578_commit_then_learn.py"
+      - "tests/test_1578_archive_readers.py"
+      - "tests/test_1578_redesign.py"
+      - ".github/workflows/unit1-slice.yml"
+      - ".github/workflows/ci-smoke.yml"
+  push:
+    branches: [main]
+    paths: *unit1_slice_paths
+
+jobs:
+  unit1-slice:
+    name: unit1-slice
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
+      - name: Unit 1 predictions and soul-map slice
+        env:
+          DISABLE_BACKGROUND_SCANS: "1"
+        run: |
+          python -m pytest -q \
+            tests/test_predictions_store_patch_contract.py \
+            tests/test_predictions_store_contract.py \
+            tests/test_expiry_ledger.py \
+            tests/test_acc0_ledger_heal.py \
+            tests/test_resolver_corrupt_ledger_tick.py \
+            tests/test_compact_soul_map.py \
+            tests/test_soul_map_io.py \
+            tests/test_soul_map_io_failure.py \
+            tests/test_soul_map_write_honesty.py \
+            tests/test_judge_weight_write_honesty.py \
+            tests/test_prediction_loop_judge_rollback.py \
+            tests/test_mindmap_pending_declined.py \
+            tests/test_resolver_predictions_unreadable.py \
+            tests/test_resolver_persist_honesty_outcomes.py \
+            tests/test_resolver_soul_map_read_wedge.py \
+            tests/test_1578_plan_v31_weights_ledger.py \
+            tests/test_1578_ci_lists_in_sync.py \
+            tests/test_1578_ledger_single_writer.py \
+            tests/test_1578_single_ledger_writer_boundary.py \
+            tests/test_1578_commit_then_learn.py \
+            tests/test_1578_archive_readers.py \
+            tests/test_1578_redesign.py

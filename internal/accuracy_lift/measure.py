@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional
@@ -18,6 +19,7 @@ from internal.accuracy_lift.populations import (
 from internal.council.grading import direction_correct
 
 NOISE_MAGNITUDE_PCT = 1.0
+ARCHIVE_NAME = re.compile(r"^pre-epoch-\d{4}-\d{2}-\d{2}T\d{6}Z(-[0-9a-f]{8}\.json)?$")
 
 
 def _parse_utc_iso(ts: str) -> Optional[datetime]:
@@ -34,27 +36,43 @@ def _parse_utc_iso(ts: str) -> Optional[datetime]:
 def _load_json(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as handle:
         data = json.load(handle)
-    return data if isinstance(data, dict) else {"predictions": data, "resolved": []}
+    if not isinstance(data, dict):
+        raise ValueError("archive root must be an object")
+    return data
 
 
 def load_archive(path: str) -> Dict[str, Any]:
     """Load archive file or merge all files under a pre-epoch directory."""
     if os.path.isfile(path):
-        return _load_json(path)
+        try:
+            blob = _load_json(path)
+            if not isinstance(blob.get("predictions", []), list) or not isinstance(blob.get("resolved", []), list):
+                raise ValueError("archive buckets must be lists")
+            return blob
+        except (OSError, ValueError) as exc:
+            return {"predictions": [], "resolved": [], "archive_errors": [
+                {"file": os.path.basename(path), "error": str(exc)}
+            ]}
     if not os.path.isdir(path):
         raise FileNotFoundError(path)
 
-    merged: Dict[str, Any] = {"predictions": [], "resolved": []}
+    merged: Dict[str, Any] = {"predictions": [], "resolved": [], "archive_errors": []}
     names = sorted(
         entry
         for entry in os.listdir(path)
-        if entry.startswith("pre-epoch-") and os.path.isfile(os.path.join(path, entry))
+        if ARCHIVE_NAME.fullmatch(entry) and os.path.isfile(os.path.join(path, entry))
     )
     if not names:
         raise FileNotFoundError(f"no pre-epoch-* files in {path}")
 
     for name in names:
-        blob = _load_json(os.path.join(path, name))
+        try:
+            blob = _load_json(os.path.join(path, name))
+            if not isinstance(blob.get("predictions", []), list) or not isinstance(blob.get("resolved", []), list):
+                raise ValueError("archive buckets must be lists")
+        except (OSError, ValueError) as exc:
+            merged["archive_errors"].append({"file": name, "error": str(exc)})
+            continue
         merged["predictions"].extend(blob.get("predictions") or [])
         merged["resolved"].extend(blob.get("resolved") or [])
     merged["archive_files"] = names

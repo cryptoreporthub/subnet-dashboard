@@ -67,6 +67,43 @@ def _backup_pair(tmp_path: Path, **kwargs):
     return path, bak
 
 
+def test_real_lock_timeout_exits_six_without_overwriting_live_file(tmp_path, monkeypatch, capsys):
+    from internal.store import soul_map_io
+
+    path, bak = _backup_pair(tmp_path)
+    lock = soul_map_io._lock_for(str(path) + ".writers")
+    entered = threading.Event()
+    done = threading.Event()
+
+    def hold_lock():
+        with lock:
+            entered.set()
+            done.wait(5)
+
+    holder = threading.Thread(target=hold_lock)
+    holder.start()
+    assert entered.wait(2)
+    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.15)
+    original_write = soul_map_io.write_soul_map
+
+    def concurrent_write(*args, **kwargs):
+        current = json.loads(path.read_text())
+        current["newer_writer"] = True
+        path.write_text(json.dumps(current))
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(soul_map_io, "write_soul_map", concurrent_write)
+    monkeypatch.setattr("sys.argv", ["compact_soul_map", "--execute", "--path", str(path), "--backup", str(bak)])
+    try:
+        rc = compact.main()
+    finally:
+        done.set()
+        holder.join(5)
+    assert rc == 6
+    assert "lock_timeout" in capsys.readouterr().out.lower()
+    assert json.loads(path.read_text())["newer_writer"] is True
+
+
 def test_a_compacts_429_to_le_10_all_keys_survive(tmp_path, monkeypatch):
     path, bak = _backup_pair(tmp_path)
     monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
@@ -137,11 +174,13 @@ def test_d_missing_required_key_aborts_and_restores(tmp_path, monkeypatch):
     _age_file(bak)
 
     def evil_write(mutator, path=None):
+        from internal.store.soul_map_io import WriteOutcome, WriteResult
+
         blob = json.loads(Path(path).read_text(encoding="utf-8"))
         mutator(blob)
         del blob["expert_weights"]  # drop after mutator
         Path(path).write_text(json.dumps(blob, indent=2), encoding="utf-8")
-        return blob
+        return WriteResult(WriteOutcome.APPLIED, blob)
 
     monkeypatch.setattr(
         "internal.store.soul_map_io.write_soul_map",
@@ -213,3 +252,88 @@ def test_import_write_soul_map_no_crash():
     from internal.store.soul_map_io import write_soul_map
 
     assert callable(write_soul_map)
+
+
+def test_execute_write_refusal_exits_6_without_restore(tmp_path, monkeypatch, capsys):
+    path, bak = _backup_pair(tmp_path)
+    before_bytes = path.read_bytes()
+    monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    from internal.store import soul_map_io as smio
+
+    def _refuse(*_a, **_k):
+        return smio.WriteResult(smio.WriteOutcome.REPLACE_FAILED, None, detail="test")
+
+    monkeypatch.setattr(smio, "write_soul_map", _refuse)
+    rc = compact.execute(str(path), str(bak))
+    out = capsys.readouterr().out
+    assert rc == 6
+    assert "COMPACTION_FAILED" in out
+    assert "COMPACTION_FAILED_RESTORED" not in out
+    assert path.read_bytes() == before_bytes
+
+
+def test_execute_lock_wait_timeout_exits_6_without_restore(tmp_path, monkeypatch, capsys):
+    path, bak = _backup_pair(tmp_path)
+    before_bytes = path.read_bytes()
+    monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    from internal.store import soul_map_io as smio
+
+    def _lock_timeout(*_a, **_k):
+        return smio.WriteResult(smio.WriteOutcome.LOCK_WAIT_FAILED, None, detail="test")
+
+    monkeypatch.setattr(smio, "write_soul_map", _lock_timeout)
+    rc = compact.execute(str(path), str(bak))
+    out = capsys.readouterr().out
+    assert rc == 6
+    assert "COMPACTION_FAILED" in out
+    assert "COMPACTION_FAILED_RESTORED" not in out
+    assert path.read_bytes() == before_bytes
+
+
+def test_execute_unreadable_live_no_restore(tmp_path, monkeypatch, capsys):
+    path, bak = _backup_pair(tmp_path)
+    before = path.read_bytes()
+    monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    from internal.store import soul_map_io as smio
+
+    def _unreadable(*_a, **_k):
+        return smio.WriteResult(smio.WriteOutcome.UNREADABLE_BLOB, None, detail="sim")
+
+    monkeypatch.setattr(smio, "write_soul_map", _unreadable)
+    rc = compact.execute(str(path), str(bak))
+    out = capsys.readouterr().out
+    assert rc == 6
+    assert "COMPACTION_FAILED" in out
+    assert "COMPACTION_FAILED_RESTORED" not in out
+    assert path.read_bytes() == before
+
+
+def test_execute_read_failed_live_no_restore(tmp_path, monkeypatch, capsys):
+    path, bak = _backup_pair(tmp_path)
+    live = json.loads(path.read_text(encoding="utf-8"))
+    live["operator_mutated"] = True
+    path.write_text(json.dumps(live, indent=2), encoding="utf-8")
+    shutil.copy2(path, bak)
+    _age_file(path)
+    _age_file(bak)
+    before = path.read_bytes()
+    monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    from internal.store import soul_map_io as smio
+
+    def _read_failed(*_a, **_k):
+        return smio.WriteResult(smio.WriteOutcome.READ_FAILED, None, detail="sim")
+
+    monkeypatch.setattr(smio, "write_soul_map", _read_failed)
+    rc = compact.execute(str(path), str(bak))
+    out = capsys.readouterr().out
+    assert rc == 6
+    assert "COMPACTION_FAILED" in out
+    assert path.read_bytes() == before
