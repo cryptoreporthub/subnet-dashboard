@@ -2,9 +2,14 @@
 
 The reader never writes a heartbeat, so it cannot roll one back. It opens the
 store with `connect_reader` (`mode=ro`, `PRAGMA query_only`) and never rewrites
-the `latest` view or applies schema changes. The store is WAL, so SQLite still
-needs to create or write the `-shm` wal-index beside the database; run it with
-write access to the state directory unless a valid `-shm` already exists.
+the `latest` view or applies schema changes, so it does not repair a missing or
+legacy view.
+
+Read-only describes the SQL, not the filesystem. The store is WAL and SQLite
+maps the `-shm` wal-index even for a read, so the process still needs write
+access to the state directory. Run the dead-man with the same filesystem access
+as the writer; a read-only directory fails with "attempt to write a readonly
+database" unless another process keeps the `-shm` open.
 """
 
 from __future__ import annotations

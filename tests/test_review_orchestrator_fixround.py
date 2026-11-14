@@ -512,7 +512,7 @@ def test_ensure_view_preserves_error_when_transaction_already_ended(
         conn.close()
 
 
-def _store_with_view(tmp_path: Path, *statements: str) -> Path:
+def _store_with_schema_objects(tmp_path: Path, *statements: str) -> Path:
     """Seed a store through the writer, then plant schema objects by hand."""
     persist.run_tick(tmp_path, tick_id="view-seed", noop=True)
     store = db.db_path(tmp_path)
@@ -530,6 +530,8 @@ def _store_with_view(tmp_path: Path, *statements: str) -> Path:
 @pytest.mark.parametrize(
     ("statements", "kept"),
     [
+        # A view whose base table was dropped cannot be read or written: every
+        # statement on it fails before SQLite reports a single table access.
         pytest.param(
             (
                 "CREATE TABLE gone (x TEXT)",
@@ -544,27 +546,34 @@ def _store_with_view(tmp_path: Path, *statements: str) -> Path:
             True,
             id="missing-column",
         ),
+        # 'ticks' inside a string literal is a value, never a schema object.
         pytest.param(
             ("CREATE VIEW lit AS SELECT 'ticks' AS a FROM aux JOIN nosuch ON 1",),
             True,
-            id="un-preparable-literal-only",
+            id="literal-names-ticks",
         ),
+        # An `AS` alias is a column label, not a table reference.
         pytest.param(
-            ("CREATE VIEW hides AS SELECT seq FROM ticks",),
-            False,
-            id="reads-ticks",
+            ("CREATE VIEW alias AS SELECT v AS ticks FROM aux JOIN nosuch ON 1",),
+            True,
+            id="alias-names-ticks",
         ),
         pytest.param(
             ("CREATE VIEW broken AS SELECT seq FROM ticks JOIN nosuch ON 1",),
             False,
-            id="un-preparable-names-ticks",
+            id="dangling-view-reads-ticks",
+        ),
+        pytest.param(
+            ("CREATE VIEW hides AS SELECT seq FROM ticks",),
+            False,
+            id="readable-view-reads-ticks",
         ),
     ],
 )
-def test_repair_judges_un_preparable_views_by_their_identifiers(
+def test_repair_keeps_only_un_preparable_views_that_cannot_reach_ticks(
     tmp_path: Path, statements: tuple[str, ...], kept: bool
 ) -> None:
-    store = _store_with_view(tmp_path, *statements)
+    store = _store_with_schema_objects(tmp_path, *statements)
 
     repaired = persist.repair_store(tmp_path, stamp="view")
 
@@ -575,3 +584,23 @@ def test_repair_judges_un_preparable_views_by_their_identifiers(
     else:
         assert repaired == tmp_path / "orchestrator.sqlite.corrupt-view"
         assert not store.exists()
+
+
+def test_repair_does_not_crash_on_a_trigger_over_an_un_preparable_view(
+    tmp_path: Path,
+) -> None:
+    # The trigger's target cannot be inspected while the view will not prepare,
+    # so its accesses cannot be proven harmless; the store is quarantined, and
+    # repair still returns instead of raising StoreUnavailableError.
+    store = _store_with_schema_objects(
+        tmp_path,
+        "CREATE TABLE gone (x TEXT)",
+        "CREATE VIEW dangling AS SELECT * FROM gone",
+        "DROP TABLE gone",
+        "CREATE TRIGGER t INSTEAD OF INSERT ON dangling BEGIN DELETE FROM ticks; END",
+    )
+
+    repaired = persist.repair_store(tmp_path, stamp="trigger-view")
+
+    assert repaired == tmp_path / "orchestrator.sqlite.corrupt-trigger-view"
+    assert not store.exists()

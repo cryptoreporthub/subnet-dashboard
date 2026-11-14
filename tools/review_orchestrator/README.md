@@ -92,10 +92,19 @@ row and returns one reason:
 
 The staleness reasons outrank `tick_failed`, which outranks alert-status reasons.
 
-The dead-man does not repair the reader view: a store with no `latest` view, or a
+The dead-man does not repair the reader view. A store with no `latest` view, or a
 legacy view without `last_alert_ok`, reports `heartbeat_unreadable` until the first
-writer (`db.connect` / `run_tick`) connects, so a dead-man alarm before the first
+writer (`db.connect` or `run_tick`) connects, so a dead-man alarm before the first
 tick is expected.
+
+An unrelated view that will not prepare at all (its base table was dropped, or it
+names a column that does not exist) cannot be read or written, so repair judges it
+by its own definition instead of by what it reaches. It is kept unless the
+definition names `ticks`, `latest`, or `sqlite_sequence` as an identifier. A string
+literal or an `AS` alias does not count as a table name. A trigger on a view that
+will not prepare quarantines the store, because its target cannot be inspected.
+Repair runs only on demand, so this judgment is not repeated if a later writer
+recreates the missing table.
 
 The completion time is derived as `started_at + duration_ms`; there is no separate
 heartbeat file. The CLI prints the reason and exits 0/1, or 3 on an unexpected error.

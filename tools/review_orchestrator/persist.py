@@ -521,7 +521,12 @@ def _trigger_target_uses_protected_objects(
     )
 
     quoted_table = _quote_identifier(table_name)
-    columns = conn.execute(f"PRAGMA table_xinfo({quoted_table})").fetchall()
+    try:
+        columns = conn.execute(f"PRAGMA table_xinfo({quoted_table})").fetchall()
+    except sqlite3.Error:
+        # A view that no longer resolves (dropped base table) reports no
+        # columns, so its trigger proves nothing about what it reaches.
+        return True
     writable_columns = [
         _quote_identifier(str(row[1]))
         for row in columns
@@ -590,23 +595,39 @@ def _view_prepares(conn: sqlite3.Connection, name: str) -> bool:
     return True
 
 
+def _un_preparable_view_reaches_protected_object(sql: str) -> bool:
+    """Judge a view that will not prepare by its own tokens.
+
+    SQLite resolves the whole statement before it reports a single access, so
+    the authorizer observes nothing while a view is un-preparable. What is left
+    is the text. A string literal is a value and an `AS` alias is a column
+    label, so neither can name a table; every other identifier is treated as if
+    it could.
+    """
+    body = _view_body(sql)
+    if not body:
+        return True
+    previous = None
+    for kind, value in body:
+        if (
+            kind == "ident"
+            and value in _PROTECTED_SQL_OBJECTS
+            and previous != ("ident", "as")
+        ):
+            return True
+        previous = (kind, value)
+    return False
+
+
 def _unrelated_view_is_safe(
     conn: sqlite3.Connection, name: str, sql: object
 ) -> bool:
     if not isinstance(sql, str):
         return False
-    query = f"SELECT * FROM {_quote_identifier(name)} LIMIT 0"
     if _view_prepares(conn, name):
+        query = f"SELECT * FROM {_quote_identifier(name)} LIMIT 0"
         return not _statement_uses_protected_objects(conn, query)
-    # An un-preparable view (dangling base table, unknown column) cannot be
-    # read or written at all until its missing objects exist, so the
-    # authorizer never sees its accesses. Judge it by its identifiers: a
-    # string literal can never resolve to a schema object.
-    tokens = _sql_tokens(sql)
-    return bool(tokens) and not any(
-        kind == "ident" and value in _PROTECTED_SQL_OBJECTS
-        for kind, value in tokens
-    )
+    return not _un_preparable_view_reaches_protected_object(sql)
 
 
 def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
