@@ -583,6 +583,9 @@ class TelegramListener:
         if len(content.strip()) < 3:
             return None
 
+        if sender is not None and bool(getattr(sender, "bot", False)):
+            return None
+
         normalized: Dict[str, Any] = {
             "source": "telegram",
             "group_id": str(chat_id),
@@ -600,6 +603,11 @@ class TelegramListener:
             "timestamp": self._message_timestamp(msg),
             "message_id": str(msg.id),
         }
+
+        from internal.message_intel.rollup import is_desk_message_row
+
+        if is_desk_message_row(normalized):
+            return None
 
         reply_to = getattr(msg, "reply_to", None)
         if reply_to is not None:
