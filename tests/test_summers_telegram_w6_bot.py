@@ -96,10 +96,10 @@ def test_format_summary_includes_desk_link(monkeypatch, intel_env):
     text = summary_bot.format_summary_message(build_24h_summary(db=intel_env))
     assert "Subnet Summers" in text
     assert "https://example.test/subnetsummer" in text
-    assert "Top" in text
-    narrative_at = text.find("</b>")
-    bonus_at = text.find("<i>")
-    assert narrative_at != -1 and bonus_at != -1 and narrative_at < bonus_at
+    assert "Chatter" in text
+    title_at = text.find("Subnet Summers")
+    pulse_at = text.find("<i>")
+    assert title_at != -1 and pulse_at != -1 and title_at < pulse_at
 
 
 def test_format_summary_includes_what_mentions_are_about():
@@ -121,7 +121,8 @@ def test_format_summary_includes_what_mentions_are_about():
 
     assert "SN7 Allways (3 mentions)" in text
     assert "Validators discussed a new release" in text
-    assert text.find("Validators discussed a new release") < text.find("<i>")
+    assert "<b>Chatter</b>" in text
+    assert "People argued" not in text
 
 
 def test_format_summary_includes_hour_price_change():
@@ -142,6 +143,7 @@ def test_format_summary_includes_hour_price_change():
     )
 
     assert "SN28 gm (2 mentions, +4.8% 1h)" in text
+    assert "<b>Chatter</b>" in text
 
 
 def test_format_summary_includes_trending_topics_today():
@@ -160,11 +162,11 @@ def test_format_summary_includes_trending_topics_today():
         }
     )
 
-    assert "People argued over whether Teutonic (SN3) validator rotation" in text
-    assert "TAO price still has a dip bid" in text
-    assert "Allways (SN7) APY" in text
-    assert "chatter stuck on" not in text.lower()
-    assert "took most of the airtime" not in text.lower()
+    assert "People argued over whether Teutonic (SN3) validator rotation" not in text
+    assert "TAO price still has a dip bid" not in text
+    assert "Allways (SN7) APY" not in text
+    assert "<b>Chatter</b>" in text
+    assert "SN3 Teutonic (5 mentions)" in text
     assert "<b>Topics</b>" not in text
 
 
@@ -190,17 +192,15 @@ def test_format_summary_stats_use_labeled_sections():
         }
     )
 
-    assert "<b>Top</b>" in text
-    assert "<b>Movers</b>" in text
-    assert "• SN35 OxMarkets (9 mentions)" in text
-    assert "• SN91 cascade (4 mentions)" in text
-    assert "• SN35 OxMarkets ↑9" in text
-    assert "Top SN35" not in text
-    assert "Movers SN35" not in text
+    assert "<b>Chatter</b>" in text
+    assert "<b>Top</b>" not in text
+    assert "<b>Movers</b>" not in text
+    assert "SN35 OxMarkets (9 mentions)" in text
+    assert "SN91 cascade (4 mentions)" in text
+    assert "↑9" not in text
     pulse_at = text.find("358 msgs")
-    top_at = text.find("<b>Top</b>")
-    movers_at = text.find("<b>Movers</b>")
-    assert pulse_at != -1 and pulse_at < top_at < movers_at
+    chatter_at = text.find("<b>Chatter</b>")
+    assert pulse_at != -1 and pulse_at < chatter_at
 
 
 def test_format_summary_includes_reaction_leaders_in_usage_order():
@@ -210,6 +210,7 @@ def test_format_summary_includes_reaction_leaders_in_usage_order():
             "message_count": 12,
             "high_conviction_count": 4,
             "today_lines": ["People argued over whether Teutonic (SN3) validator rotation is free money."],
+            "top_subnets": [{"netuid": 3, "name": "Teutonic", "mentions": 5}],
             "reaction_leaders": [
                 "Fire Queen leads Firestarter with 8 🔥's",
                 "Papichi leads ThumbWar god with 3 👍's",
@@ -218,19 +219,81 @@ def test_format_summary_includes_reaction_leaders_in_usage_order():
         }
     )
 
-    assert "Leading in reactions" in text
-    assert "<b>Leading in reactions</b>" in text
-    assert "• Fire Queen leads Firestarter" in text
+    assert "<b>Reactions</b>" in text
+    assert "Fire Queen leads Firestarter" in text
     fire_at = text.find("Fire Queen leads Firestarter")
     thumb_at = text.find("Papichi leads ThumbWar god")
     heart_at = text.find("Jane doe leads Hearteater")
-    recap_at = text.find("People argued over whether Teutonic")
-    bonus_at = text.find("<i>")
-    assert recap_at != -1 and recap_at < fire_at < thumb_at < heart_at < bonus_at
-    assert "Hearteater" in text
+    chatter_at = text.find("<b>Chatter</b>")
+    assert chatter_at != -1 and chatter_at < fire_at < thumb_at
+    assert heart_at == -1  # 2 hearts is below the display floor
     assert "&#x27;" not in text
-    assert "❤️'s" in text
-    assert text.find("Leading in reactions") > recap_at
+    assert "❤️'s" not in text
+
+
+def test_format_summary_skips_single_reaction_leaders():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "top_subnets": [{"netuid": 55, "name": "NIOME", "mentions": 6}],
+            "reaction_leaders": [
+                "Gavin leads Firestarter with 1 🔥",
+                "David leads ThumbWar god with 1 👍",
+            ],
+        }
+    )
+    assert "<b>Reactions</b>" not in text
+    assert "Firestarter" not in text
+
+
+def test_format_summary_includes_gainers_calls_and_pick():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 78,
+            "high_conviction_count": 30,
+            "group_pulse": {"sentiment": "Cautious"},
+            "top_subnets": [
+                {
+                    "netuid": 55,
+                    "name": "NIOME",
+                    "mentions": 6,
+                    "price_change_24h": 4.2,
+                    "mention_context": "SN55 validators rotating tonight after the unlock",
+                }
+            ],
+            "gainers": [
+                {"netuid": 64, "name": "Chutes", "price_change_24h": 18.25, "price": 0.041},
+            ],
+            "calls": [
+                {
+                    "netuid": 55,
+                    "subnet_name": "NIOME",
+                    "direction": "up",
+                    "conviction": 88,
+                    "content": "SN55 still printing after the unlock",
+                }
+            ],
+            "daily_pick": {
+                "action": "LONG",
+                "pick": {"netuid": 73, "name": "Parked", "confidence": 0.72},
+            },
+        }
+    )
+    assert "Subnet Summers · 24h" in text
+    assert "Cautious · 78 msgs · 30 high-conviction" in text
+    assert "SN55 NIOME (6 mentions, +4.2% 24h)" in text
+    assert "SN55 validators rotating tonight" in text
+    assert "<b>Gainers 24h</b>" in text
+    assert "SN64 Chutes · +18.2%" in text
+    assert "<b>Calls</b>" in text
+    assert "UP SN55 NIOME · 88%" in text
+    assert "<b>Council pick</b>" in text
+    assert "SN73 Parked · LONG · 72%" in text
+    assert "People argued" not in text
+    assert "/gainers" in text
 
 
 def test_rate_limit_per_chat(intel_env):
