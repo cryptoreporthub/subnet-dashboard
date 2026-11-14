@@ -8,15 +8,18 @@ import internal.message_intel.outcome_loop as outcome_loop
 import internal.signals.routes as signal_routes
 
 
-def test_empty_signal_cache_regenerates(monkeypatch):
+def test_stale_cache_is_served_without_inline_refresh(monkeypatch):
+    """Hydrate GET on a stale store: cached truth now, regen off-thread."""
+
     class Store:
         def query(self, **kwargs):
             return []
 
-        def cache_is_stale(self):
-            return True
+        def load(self):
+            return {"refreshed_at": None}
 
     calls = []
+    kicks = []
     monkeypatch.setattr(signal_routes, "_get_store", lambda: Store())
     monkeypatch.setattr(
         signal_routes,
@@ -24,63 +27,18 @@ def test_empty_signal_cache_regenerates(monkeypatch):
         lambda persist=True: calls.append(persist)
         or {"signals": [{"subnet_id": 1}], "meta": {"count": 1}, "changed_signals": []},
     )
-    monkeypatch.setattr(signal_routes, "_get_alerts", lambda: type("Alerts", (), {
-        "check_system_alerts": lambda self: [],
-        "record_signal_changes": lambda self, rows: [],
-        "evaluate_correlation_alerts": lambda self, rows: [],
-    })())
-    monkeypatch.setattr(signal_routes, "get_signal_hub", lambda: type("Hub", (), {
-        "broadcast": lambda self, *args: asyncio.sleep(0),
-    })())
-    monkeypatch.setattr(signal_routes, "_to_thread_timeout", lambda fn, timeout_s, label: _run(fn))
+    monkeypatch.setattr(signal_routes, "_kick_background_refresh", lambda: kicks.append(1))
 
     async def run():
-        return await signal_routes.api_signals(refresh=False, subnet_id=None)
-
-    async def _run(fn):
-        return fn()
+        return await signal_routes.api_signals(refresh=False, subnet_id=None, since=None)
 
     result = asyncio.run(run())
-    assert result["signals"][0]["subnet_id"] == 1
-    assert calls == [True]
-
-
-def test_signal_regeneration_is_single_flight(monkeypatch):
-    class Store:
-        def query(self, **kwargs):
-            return []
-
-        def cache_is_stale(self):
-            return True
-
-    calls = []
-
-    def generate(persist=True):
-        calls.append(persist)
-        time.sleep(0.05)
-        return {"signals": [{"subnet_id": 1}], "meta": {"count": 1}, "changed_signals": []}
-
-    monkeypatch.setattr(signal_routes, "_get_store", lambda: Store())
-    monkeypatch.setattr(signal_routes, "generate_signals", generate)
-    monkeypatch.setattr(signal_routes, "_get_alerts", lambda: type("Alerts", (), {
-        "check_system_alerts": lambda self: [],
-        "record_signal_changes": lambda self, rows: [],
-        "evaluate_correlation_alerts": lambda self, rows: [],
-    })())
-    monkeypatch.setattr(signal_routes, "get_signal_hub", lambda: type("Hub", (), {
-        "broadcast": lambda self, *args: asyncio.sleep(0),
-    })())
-
-    async def run():
-        return await asyncio.gather(
-            signal_routes.api_signals(refresh=False, subnet_id=None),
-            signal_routes.api_signals(refresh=False, subnet_id=None),
-        )
-
-    results = asyncio.run(run())
-    assert len(calls) == 1
-    assert any(result["signals"][0]["subnet_id"] == 1 for result in results)
-    assert any(result["meta"].get("source") == "refreshing" for result in results)
+    assert result["status"] == "success"
+    assert result["signals"] == []
+    assert result["meta"]["stale"] is True
+    assert result["meta"]["cached"] is True
+    assert kicks == [1]
+    assert calls == []  # regeneration never ran inline
 
 
 def test_signal_name_refresh_timeout_keeps_event_loop_responsive(monkeypatch):

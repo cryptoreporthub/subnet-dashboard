@@ -61,7 +61,28 @@ def test_build_signal_shape():
     assert row["evidence"]
 
 
-def test_api_signals_and_summary(client):
+def test_api_signals_and_summary(client, tmp_path, monkeypatch):
+    """The endpoint serves the persisted store through the HTTP layer."""
+    path = str(tmp_path / "seeded-signals.json")
+    store = SignalStore(path=path)
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    store.append_many(
+        [
+            {
+                "subnet_id": sid,
+                "name": f"SN{sid}",
+                "signal_type": ("buy", "sell", "neutral")[sid % 3],
+                "confidence": 0.5,
+                "source_expert": "quant",
+                "timestamp": now,
+                "evidence": "seed",
+            }
+            for sid in range(1, 111)
+        ]
+    )
+    monkeypatch.setattr(routes, "_store", store)
+    monkeypatch.setattr(routes, "_kick_background_refresh", lambda: None)
+
     resp = client.get("/api/signals")
     assert resp.status_code == 200
     body = resp.json()
@@ -77,45 +98,143 @@ def test_api_signals_and_summary(client):
     assert "total_signals" in s
 
 
-def test_api_signals_refreshes_empty_cache_once(client, tmp_path, monkeypatch):
-    """The homepage's refresh=false read repairs an empty signal cache."""
+def test_api_signals_stale_cache_is_honest_and_kicks_refresh(client, tmp_path, monkeypatch):
+    """Hydrate GETs get the cached truth instantly; a background refresh warms.
+
+    Replaces the old inline-regen contract: under a hydrate burst the
+    regeneration must never block the GET (G0/rev3 30s timeout).
+    """
     path = str(tmp_path / "empty-signals.json")
+    monkeypatch.setattr(routes, "_store", SignalStore(path=path))
+
+    def _no_inline_regen(*_a, **_k):
+        raise AssertionError("plain GET must not regenerate inline")
+
+    monkeypatch.setattr(routes, "generate_signals", _no_inline_regen)
+    kicks = []
+    monkeypatch.setattr(routes, "_kick_background_refresh", lambda: kicks.append(1))
+
+    first = client.get("/api/signals?refresh=false")
+    assert first.status_code == 200
+    assert first.json()["signals"] == []
+    assert first.json()["meta"]["cached"] is True
+    assert first.json()["meta"]["stale"] is True
+    assert len(kicks) == 1
+
+    # The background refresh lands: second GET serves the warmed store.
+    store = routes._store
+    store.append_many(
+        [
+            {
+                "subnet_id": 7,
+                "name": "Alpha",
+                "signal_type": "buy",
+                "confidence": 0.8,
+                "source_expert": "quant",
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "evidence": "warmed",
+            }
+        ]
+    )
+    store.mark_refreshed(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    second = client.get("/api/signals?refresh=false")
+    assert second.status_code == 200
+    assert second.json()["signals"][0]["subnet_id"] == 7
+    assert second.json()["meta"].get("stale") is not True
+    assert len(kicks) == 1  # fresh store: no further kick
+
+
+def test_fresh_store_skips_background_kick(client, tmp_path, monkeypatch):
+    path = str(tmp_path / "fresh-signals.json")
+    store = SignalStore(path=path)
+    store.append_many(
+        [
+            {
+                "subnet_id": 1,
+                "signal_type": "neutral",
+                "confidence": 0.5,
+                "timestamp": datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+            }
+        ]
+    )
+    store.mark_refreshed(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    monkeypatch.setattr(routes, "_store", store)
+    kicks = []
+    monkeypatch.setattr(routes, "_kick_background_refresh", lambda: kicks.append(1))
+
+    resp = client.get("/api/signals?refresh=false")
+    assert resp.status_code == 200
+    assert resp.json()["signals"]
+    assert resp.json()["meta"].get("stale") is not True
+    assert kicks == []
+
+
+def test_kick_background_refresh_single_flight_warms_store(tmp_path, monkeypatch):
+    """Real background kick: store warmed off-thread, guard single-flights."""
+    import time as _time
+
+    path = str(tmp_path / "bg-signals.json")
     monkeypatch.setattr(routes, "_store", SignalStore(path=path))
     generated = [
         {
-            "subnet_id": 7,
-            "name": "Alpha",
-            "signal_type": "buy",
-            "confidence": 0.8,
-            "source_expert": "quant",
+            "subnet_id": 8,
+            "name": "Beta",
+            "signal_type": "neutral",
+            "confidence": 0.5,
+            "source_expert": "technical",
             "timestamp": "2099-01-01T00:00:00Z",
             "evidence": "test",
         }
     ]
     calls = []
 
+    class FakeAlerts:
+        def check_system_alerts(self):
+            return []
+
+        def record_signal_changes(self, _signals):
+            return []
+
+        def evaluate_correlation_alerts(self, _signals):
+            return []
+
     def fake_generate(persist=True):
         calls.append(persist)
+        _time.sleep(0.05)
         routes._get_store().append_many(generated)
         routes._get_store().mark_refreshed("2099-01-01T00:00:00Z")
-        return {
-            "signals": generated,
-            "changed_signals": generated,
-            "meta": {"count": 1, "appended": 1},
-        }
+        return {"signals": generated, "changed_signals": generated}
 
     monkeypatch.setattr(routes, "generate_signals", fake_generate)
+    monkeypatch.setattr(routes, "_get_alerts", lambda: FakeAlerts())
 
-    first = client.get("/api/signals?refresh=false")
-    second = client.get("/api/signals?refresh=false")
+    routes._kick_background_refresh()
+    routes._kick_background_refresh()  # guard held by first worker: no second thread
 
-    assert first.status_code == 200
-    assert first.json()["signals"][0]["subnet_id"] == 7
-    assert first.json()["signals"][0]["confidence"] == 0.8
-    assert first.json()["meta"].get("cached") is not True
-    assert second.json()["signals"][0]["subnet_id"] == 7
-    assert second.json()["signals"][0]["confidence"] == 0.8
+    deadline = _time.time() + 5
+    while _time.time() < deadline:
+        if routes._store_is_fresh(routes._get_store()):
+            break
+        _time.sleep(0.01)
+
+    assert routes._store_is_fresh(routes._get_store()) is True
+    assert routes._get_store().query(subnet_id=8)[0]["subnet_id"] == 8
     assert len(calls) == 1
+
+    # guard released after the regen completes (poll: release races mark_refreshed)
+    released = False
+    deadline = _time.time() + 5
+    while _time.time() < deadline:
+        if routes._bg_refresh_guard.acquire(blocking=False):
+            routes._bg_refresh_guard.release()
+            released = True
+            break
+        _time.sleep(0.01)
+    assert released, "background refresh guard never released"
 
 
 def test_signal_refresh_is_single_flight(tmp_path, monkeypatch):
