@@ -1075,11 +1075,15 @@ def unpack_score_learning_fields(score_payload: Optional[Dict[str, Any]]) -> Dic
     signal_impact = score_payload.get("signal_impact")
     if not isinstance(signal_impact, dict):
         signal_impact = None
+    score_breakdown = score_payload.get("score_breakdown")
+    if not isinstance(score_breakdown, dict):
+        score_breakdown = None
     return {
         "experts": experts,
         "signal_contributions": signal_contributions,
         "active_signals": active_signals,
         "signal_impact": signal_impact,
+        "score_breakdown": score_breakdown,
     }
 
 
@@ -1147,6 +1151,9 @@ def attach_council_prediction(
         active_signals=fields["active_signals"] or None,
     )
     prediction["pick_source"] = "council"
+    if fields["score_breakdown"]:
+        # Stored on the ledger row so adjuster lift can be measured against graded outcomes.
+        prediction["score_breakdown"] = fields["score_breakdown"]
     from internal.learning.evidence import stamp_evidence
 
     stamp_evidence(prediction)
@@ -1746,6 +1753,11 @@ def score_subnet_for_hour(
         memory_adj = 0.0
     total = round((weighted + momentum_boost) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
+    breakdown: Dict[str, Any] = {
+        "base_pts": round((weighted + momentum_boost) * 100, 2),
+        "memory_pts": round(float(memory_adj), 2),
+        "after_memory": total,
+    }
     pump_overlay = None
     if not (market_context or {}).get("skip_pump_overlay"):
         try:
@@ -1757,6 +1769,8 @@ def score_subnet_for_hour(
             )
         except Exception:
             pass
+    breakdown["pump_pts"] = round(total - breakdown["after_memory"], 2)
+    breakdown["final_total"] = total
 
     confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
@@ -1780,6 +1794,7 @@ def score_subnet_for_hour(
         "signal_impact": signal_impact,
         "recovery_context": recovery_context,
         "pump_overlay": pump_overlay,
+        "score_breakdown": breakdown,
     }
 
 
@@ -1890,7 +1905,14 @@ def score_subnet_for_day(
         memory_adj = 0.0
     total = round((weighted + value_boost + flow_boost + size_tilt) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
+    # Per-step score trail so each adjuster's effect can be evaluated against outcomes later.
+    breakdown: Dict[str, Any] = {
+        "base_pts": round((weighted + value_boost + flow_boost + size_tilt) * 100, 2),
+        "memory_pts": round(float(memory_adj), 2),
+        "after_memory": total,
+    }
     telegram_calibration = None
+    breakdown["telegram_pts"] = 0.0
     try:
         # Lazy, read-only boundary: Telegram history never changes council weights
         # and is default-off until operators explicitly enable it.
@@ -1906,12 +1928,14 @@ def score_subnet_for_day(
             conviction_index=(market_context or {}).get("telegram_conviction_index"),
         )
         total = min(100.0, max(0.0, round(total + telegram_calibration["adjustment_points"], 2)))
+        breakdown["telegram_pts"] = round(float(telegram_calibration.get("adjustment_points") or 0.0), 2)
     except Exception:
         telegram_calibration = {
             "active": False, "applied": False, "adjustment_points": 0.0,
             "withheld_reasons": ["calibration_unavailable"],
         }
     pump_overlay = None
+    breakdown["after_telegram"] = total
     if not (market_context or {}).get("skip_pump_overlay"):
         try:
             from internal.council.pump_overlay import apply_pump_score_overlay
@@ -1922,6 +1946,7 @@ def score_subnet_for_day(
             )
         except Exception:
             pass
+    breakdown["pump_pts"] = round(total - breakdown["after_telegram"], 2)
 
     # Long-pick guard: distinguish recovery from correction.  A subnet with a
     # prolonged downtrend, lower lows, bearish technicals, and no positive flow
@@ -1934,6 +1959,10 @@ def score_subnet_for_day(
         risk_adjustment["score_before"] = total
         total = round(max(0.0, total * (1.0 - risk_adjustment["haircut"])), 2)
         risk_adjustment["score_after"] = total
+    breakdown["recovery_haircut"] = (
+        round(float(risk_adjustment["haircut"]), 4) if risk_adjustment["applied"] else 0.0
+    )
+    breakdown["final_total"] = total
 
     confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
@@ -1959,6 +1988,7 @@ def score_subnet_for_day(
         "recovery_risk_adjustment": risk_adjustment,
         "pump_overlay": pump_overlay,
         "telegram_evidence_calibration": telegram_calibration,
+        "score_breakdown": breakdown,
     }
 
 
