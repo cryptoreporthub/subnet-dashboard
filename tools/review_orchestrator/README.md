@@ -92,5 +92,10 @@ row and returns one reason:
 
 The staleness reasons outrank `tick_failed`, which outranks alert-status reasons.
 
+The dead-man does not repair the reader view: a store with no `latest` view, or a
+legacy view without `last_alert_ok`, reports `heartbeat_unreadable` until the first
+writer (`db.connect` / `run_tick`) connects, so a dead-man alarm before the first
+tick is expected.
+
 The completion time is derived as `started_at + duration_ms`; there is no separate
 heartbeat file. The CLI prints the reason and exits 0/1, or 3 on an unexpected error.

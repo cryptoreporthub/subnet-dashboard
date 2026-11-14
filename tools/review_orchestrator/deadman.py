@@ -1,9 +1,10 @@
 """v1a dead-man check: read the store's `latest` row only.
 
-The reader never writes a heartbeat, so it cannot roll one back. It needs write
-access to the state directory: the store is WAL, and a reader must be able to
-create or write the `-shm` wal-index beside the database. Run it with the same
-filesystem access as the writer.
+The reader never writes a heartbeat, so it cannot roll one back. It opens the
+store with `connect_reader` (`mode=ro`, `PRAGMA query_only`) and never rewrites
+the `latest` view or applies schema changes. The store is WAL, so SQLite still
+needs to create or write the `-shm` wal-index beside the database; run it with
+write access to the state directory unless a valid `-shm` already exists.
 """
 
 from __future__ import annotations

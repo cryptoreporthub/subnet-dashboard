@@ -510,3 +510,68 @@ def test_ensure_view_preserves_error_when_transaction_already_ended(
             db._ensure_view(RolledBackThenFailed())
     finally:
         conn.close()
+
+
+def _store_with_view(tmp_path: Path, *statements: str) -> Path:
+    """Seed a store through the writer, then plant schema objects by hand."""
+    persist.run_tick(tmp_path, tick_id="view-seed", noop=True)
+    store = db.db_path(tmp_path)
+    conn = sqlite3.connect(store)
+    try:
+        conn.execute("CREATE TABLE aux (v TEXT)")
+        for statement in statements:
+            conn.execute(statement)
+        conn.commit()
+    finally:
+        conn.close()
+    return store
+
+
+@pytest.mark.parametrize(
+    ("statements", "kept"),
+    [
+        pytest.param(
+            (
+                "CREATE TABLE gone (x TEXT)",
+                "CREATE VIEW dangling AS SELECT * FROM gone",
+                "DROP TABLE gone",
+            ),
+            True,
+            id="dangling",
+        ),
+        pytest.param(
+            ("CREATE VIEW badcol AS SELECT nosuchcol FROM aux",),
+            True,
+            id="missing-column",
+        ),
+        pytest.param(
+            ("CREATE VIEW lit AS SELECT 'ticks' AS a FROM aux JOIN nosuch ON 1",),
+            True,
+            id="un-preparable-literal-only",
+        ),
+        pytest.param(
+            ("CREATE VIEW hides AS SELECT seq FROM ticks",),
+            False,
+            id="reads-ticks",
+        ),
+        pytest.param(
+            ("CREATE VIEW broken AS SELECT seq FROM ticks JOIN nosuch ON 1",),
+            False,
+            id="un-preparable-names-ticks",
+        ),
+    ],
+)
+def test_repair_judges_un_preparable_views_by_their_identifiers(
+    tmp_path: Path, statements: tuple[str, ...], kept: bool
+) -> None:
+    store = _store_with_view(tmp_path, *statements)
+
+    repaired = persist.repair_store(tmp_path, stamp="view")
+
+    if kept:
+        assert repaired == store
+        assert persist.read_latest_tick(tmp_path)["tick_id"] == "view-seed"
+        assert persist.run_tick(tmp_path, tick_id="after-view", noop=True).seq == 2
+    else:
+        assert repaired == tmp_path / "orchestrator.sqlite.corrupt-view"
+        assert not store.exists()

@@ -582,13 +582,31 @@ def _view_body(sql: str) -> list[tuple[str, str]] | None:
     return tokens[as_index + 1 :]
 
 
+def _view_prepares(conn: sqlite3.Connection, name: str) -> bool:
+    try:
+        conn.execute(f"EXPLAIN SELECT * FROM {_quote_identifier(name)} LIMIT 0")
+    except sqlite3.Error:
+        return False
+    return True
+
+
 def _unrelated_view_is_safe(
     conn: sqlite3.Connection, name: str, sql: object
 ) -> bool:
     if not isinstance(sql, str):
         return False
     query = f"SELECT * FROM {_quote_identifier(name)} LIMIT 0"
-    return not _statement_uses_protected_objects(conn, query)
+    if _view_prepares(conn, name):
+        return not _statement_uses_protected_objects(conn, query)
+    # An un-preparable view (dangling base table, unknown column) cannot be
+    # read or written at all until its missing objects exist, so the
+    # authorizer never sees its accesses. Judge it by its identifiers: a
+    # string literal can never resolve to a schema object.
+    tokens = _sql_tokens(sql)
+    return bool(tokens) and not any(
+        kind == "ident" and value in _PROTECTED_SQL_OBJECTS
+        for kind, value in tokens
+    )
 
 
 def _latest_object_is_usable(conn: sqlite3.Connection) -> bool:
