@@ -95,6 +95,9 @@ def test_display_name_tmc_sn23_trishool(monkeypatch):
 
 def test_display_name_prefers_enriched_row(monkeypatch):
     monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
     row = {"netuid": 40, "name": "Chunking", "source": "taomarketcap"}
     name = display_name_for_netuid(40, subnet_row=row, use_taostats_fallback=False)
     assert name == "Chunking"
@@ -149,6 +152,10 @@ def test_canonical_display_override_wins(monkeypatch):
 
 
 def test_load_subnets_for_display_uses_council_feed(monkeypatch):
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
     monkeypatch.setattr(
         "internal.subnets.feed.get_council_subnet_feed",
         lambda timeout=None: ([{"netuid": 16, "name": "BitKoop", "source": "taomarketcap"}], "taomarketcap"),
