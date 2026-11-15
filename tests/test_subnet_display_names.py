@@ -33,6 +33,7 @@ def test_display_name_tmc_sn6_numinous(monkeypatch):
         "internal.subnet_names._remote_registry",
         lambda: {"6": {"name": "Infinite Games"}},
     )
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
     name = display_name_for_netuid(6, use_taostats_fallback=False)
     assert name == "Numinous"
 
@@ -58,6 +59,7 @@ def test_display_name_override_sn39_deprecated(monkeypatch):
 
 def test_display_name_override_sn6_numinous_when_tmc_empty(monkeypatch):
     """Curator override wins over stale registry when TMC is empty."""
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {"6": "Numinous"})
     monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
     monkeypatch.setattr(
         "internal.subnet_names._remote_registry",
@@ -76,6 +78,7 @@ def test_display_name_tmc_sn16_fast_thinker(monkeypatch):
         "internal.subnet_names._tmc_display_names",
         lambda: {16: "Fast Thinker"},
     )
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
     name = display_name_for_netuid(16, use_taostats_fallback=False)
     assert name == "Fast Thinker"
 
@@ -85,6 +88,7 @@ def test_display_name_tmc_sn23_trishool(monkeypatch):
         "internal.subnet_names._tmc_display_names",
         lambda: {23: "Trishool"},
     )
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
     name = display_name_for_netuid(23, use_taostats_fallback=False)
     assert name == "Trishool"
 
@@ -100,6 +104,10 @@ def test_display_name_skips_stale_tmc_ralph(monkeypatch):
     """With no override, a stale row name is skipped, not surfaced."""
     monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
     monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr(
+        "internal.subnet_names._remote_registry", lambda: {"40": {"name": "Chunking"}}
+    )
     name = display_name_for_netuid(
         40,
         subnet_row={"netuid": 40, "name": "Ralph", "source": "registry"},

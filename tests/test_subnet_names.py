@@ -10,13 +10,14 @@ def test_resolve_prefers_tmc_over_stale_remote():
     remote = {"6": {"name": "Infinite Games"}}
     local = {"6": {"name": "Infinite Games"}}
     with patch("internal.subnet_names._tmc_display_names", return_value={6: "Numinous"}):
-        name = resolve_subnet_name(
-            6,
-            local=local,
-            remote=remote,
-            tmc_name="Numinous",
-            use_taostats=False,
-        )
+        with patch("internal.subnet_names._load_name_overrides", return_value={}):
+            name = resolve_subnet_name(
+                6,
+                local=local,
+                remote=remote,
+                tmc_name="Numinous",
+                use_taostats=False,
+            )
     assert name == "Numinous"
 
 
@@ -89,14 +90,18 @@ def test_dpick_shortlist_uses_canonical_names():
 def test_sn28_tmc_beats_on_chain_lol():
     """SN28 on-chain/taostat identity is 'LOL'; TMC lists gm."""
     remote = {"28": {"name": "LOL", "bittensor_id": "dalet"}}
-    name = resolve_subnet_name(28, remote=remote, local={"28": {"name": "LOL"}}, tmc_name="gm", use_taostats=False)
+    with patch("internal.subnet_names._tmc_display_names", return_value={}):
+        with patch("internal.subnet_names._load_name_overrides", return_value={}):
+            name = resolve_subnet_name(28, remote=remote, local={"28": {"name": "LOL"}}, tmc_name="gm", use_taostats=False)
     assert name == "gm"
 
 
 def test_sn15_tmc_beats_stale_remote_de_val():
     """SN15 is ORO on TMC; taostat GitHub still lists De-Val."""
     remote = {"15": {"name": "De-Val", "bittensor_id": "omicron"}}
-    name = resolve_subnet_name(15, remote=remote, local={"15": {"name": "De-Val"}}, tmc_name="ORO", use_taostats=False)
+    with patch("internal.subnet_names._tmc_display_names", return_value={}):
+        with patch("internal.subnet_names._load_name_overrides", return_value={}):
+            name = resolve_subnet_name(15, remote=remote, local={"15": {"name": "De-Val"}}, tmc_name="ORO", use_taostats=False)
     assert name == "ORO"
 
 
@@ -107,6 +112,7 @@ def test_pump_alert_resolves_sn28_not_lol(monkeypatch):
         "internal.subnet_names._tmc_display_names",
         lambda: {28: "gm"},
     )
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
     row = build_alert_row(
         {"netuid": 28, "name": "LOL", "phase": "PUMPING", "composite_score": 0.75},
         {"netuid": 28, "name": "LOL", "market_cap": 60000, "price": 0.015},
@@ -117,7 +123,8 @@ def test_pump_alert_resolves_sn28_not_lol(monkeypatch):
 
 def test_resolve_bad_name_falls_back_to_sn():
     with patch("internal.subnet_names._tmc_display_names", return_value={}):
-        name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
+        with patch("internal.subnet_names._load_name_overrides", return_value={}):
+            name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
     assert name == "SN63"
 
 
@@ -137,10 +144,11 @@ def test_tmc_display_names_uses_tao_table_not_live_feed():
 def test_tmc_cache_beats_stale_row_hint():
     """Blockmachine rows can carry stale names; TMC cache must win."""
     with patch("internal.subnet_names._tmc_display_names", return_value={6: "Numinous"}):
-        row = enrich_subnet_row(
-            {"netuid": 6, "name": "Infinite Games", "source": "blockmachine"},
-            use_taostats=False,
-        )
+        with patch("internal.subnet_names._load_name_overrides", return_value={}):
+            row = enrich_subnet_row(
+                {"netuid": 6, "name": "Infinite Games", "source": "blockmachine"},
+                use_taostats=False,
+            )
     assert row["name"] == "Numinous"
 
 
@@ -152,7 +160,11 @@ def test_enrich_subnet_row_sets_netuid():
 
 def test_enrich_subnet_row_skips_taostats_by_default():
     with patch("fetchers.taostats_client.get_subnet_identity") as identity:
-        row = enrich_subnet_row({"netuid": 99, "name": "SN99"})
+        with patch("internal.subnet_names._load_name_overrides", return_value={}):
+            with patch("internal.subnet_names._tmc_display_names", return_value={}):
+                with patch("internal.subnet_names._load_local_registry", return_value={}):
+                    with patch("internal.subnet_names._remote_registry", return_value={}):
+                        row = enrich_subnet_row({"netuid": 99, "name": "SN99"})
     identity.assert_not_called()
     assert row["name"] == "SN99"
 
