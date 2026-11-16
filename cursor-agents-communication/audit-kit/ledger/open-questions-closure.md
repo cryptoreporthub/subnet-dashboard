@@ -66,7 +66,7 @@ Revision 1 tracked **14** open production questions (O1–O14). Revision 2 close
 | **EOQ-O6** | O6 | `/api/soul-map` `prediction_resolver_scheduler.cycle_history` — 15m cadence |
 | **EOQ-O7** | O7 | Historical stretch UNVERIFIED; O6 closes current state |
 | **EOQ-O8** | O8 | 2026-10-02: `/api/subnets` 168 vs readiness `registry_count` 75 / `live_cache` 124 / `tmc_cache` 129 |
-| **EOQ-O8-WS5** | O8 | 2026-10-06T03:36Z live: 168 / 75 / 75 / 129 — four layers by design; receipt `evidence/ws5-o5-o8-o9-closure-2026-10-06T03:36:18Z.txt` |
+| **EOQ-O8-WS5** | O8 | 2026-10-06T03:36Z live: 168 / 75 / 75 / 129 — four layers by design; receipt `evidence/ws5-o5-o8-o9-closure-2026-10-06T03-36-18Z.txt` |
 | **EOQ-O9** | O9 | PR #1293 + `netuid_of()` anchor at pin |
 | **EOQ-O5-WS5** | O5 | 2026-10-06T03:36Z warm-state 168 subnets; boot empty-cache mechanism static-confirmed; cold window NOT_OBSERVABLE |
 | **EOQ-O9-WS5** | O9 | 2026-10-06T03:36Z live: 168/168 id==netuid; static residual sites enumerated; prod divergence closed |
