@@ -43,6 +43,35 @@ def test_record_pick_keeps_preattached_id_when_statement_is_rebuilt(predictions_
     assert [row["id"] for row in stored["predictions"]] == ["pick-id-123"]
 
 
+def test_record_pick_refuses_a_preattached_id_already_owned_by_another_row(predictions_file):
+    """Replit r4 follow-up: a kept id must not duplicate an id already in the ledger."""
+    Path(predictions_file).write_text(
+        json.dumps(
+            {
+                **predictions_store._default_data(),
+                "predictions": [
+                    {"id": "reused-id", "netuid": 8, "horizon_type": "hour",
+                     "status": "pending", "shadow": False}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    pick = {
+        "prediction": {"id": "reused-id", "predicted_pct": 2.5, "horizon_hours": 1},
+    }
+    subnet = {"netuid": 7, "price": 1.0, "name": "sn7"}
+
+    record = record_pick(
+        pick, subnet, horizon_type="hour", predictions_path=predictions_file
+    )
+
+    assert record.kind is not PickRecordKind.COMMITTED
+    stored = json.loads(Path(predictions_file).read_text(encoding="utf-8"))
+    assert [row["id"] for row in stored["predictions"]] == ["reused-id"]
+    assert [row["netuid"] for row in stored["predictions"]] == [8]
+
+
 def test_persist_lifecycle_non_storage_exception_is_persist_error(
     tmp_path, monkeypatch
 ):

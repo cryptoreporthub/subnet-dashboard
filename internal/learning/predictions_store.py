@@ -578,6 +578,15 @@ def append_prediction_result(
 
     def append(data, _raw):
         pending = data.get("predictions", [])
+        pred_id = prediction.get("id")
+        if pred_id and any(
+            row.get("id") == pred_id
+            for bucket in ("predictions", "resolved")
+            for row in data.get(bucket, [])
+        ):
+            # An id is the key every later update matches on, so a second row
+            # with the same id would make those updates ambiguous.
+            return data, [], [("id", pred_id)]
         for existing in pending:
             if (
                 existing.get("netuid") == netuid
