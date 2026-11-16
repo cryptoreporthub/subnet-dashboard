@@ -46,6 +46,7 @@ class WriteOutcome(enum.Enum):
     UNREADABLE_BLOB = "unreadable_blob"
     LOCK_WAIT_FAILED = "lock_wait_failed"
     READ_FAILED = "read_failed"
+    PERSIST_ERROR = "persist_error"
 
     def __bool__(self) -> bool:
         raise TypeError("compare WriteOutcome explicitly, never use it as a boolean")

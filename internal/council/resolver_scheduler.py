@@ -1076,8 +1076,12 @@ class PredictionResolverScheduler:
             )
             return PersistResult(outcome=wr.outcome, detail=wr.detail)
         except Exception as exc:
+            # Only storage failures are typed REPLACE_FAILED. Anything else is a
+            # bug in the caller or the mutator, so it stays loud and distinct.
+            logger.exception("summary persist raised outside storage")
             return PersistResult(
-                outcome=WriteOutcome.REPLACE_FAILED, detail=str(exc)
+                outcome=WriteOutcome.PERSIST_ERROR,
+                detail=f"{type(exc).__name__}: {exc}",
             )
 
     def _release_cycle_lock_if_owner(self, gen: int) -> bool:
@@ -1883,8 +1887,12 @@ class PredictionResolverScheduler:
                 )
             return PersistResult(outcome=wr.outcome, detail=wr.detail)
         except Exception as exc:
+            # Only storage failures are typed REPLACE_FAILED. Anything else is a
+            # bug in the caller or the mutator, so it stays loud and distinct.
+            logger.exception("summary persist raised outside storage")
             return PersistResult(
-                outcome=WriteOutcome.REPLACE_FAILED, detail=str(exc)
+                outcome=WriteOutcome.PERSIST_ERROR,
+                detail=f"{type(exc).__name__}: {exc}",
             )
 
     def _apply_persist_honesty(

@@ -305,6 +305,10 @@ def record_pick(
             horizon_type=horizon_type,
             active_signals=active_signals or None,
         )
+        # A pre-attached prediction without a statement gets a rebuilt one. Keep
+        # its id so the stored row is still the pick the caller meant.
+        if existing_pred and existing_pred.get("id"):
+            prediction["id"] = existing_pred["id"]
     prediction["pick_source"] = "council_shadow" if shadow else "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
