@@ -369,7 +369,7 @@
         "mission-control",
         "joshua"
       ],
-      "notes": "WS1 closure: live_status CONFIRMED 2026-10-06T03:28:50Z (HTTP 200, pin match, 0.136s). Outage window bounded ~2026-10-05T22:46Z\u20132026-10-06T03:28:49Z (curl exit 28). Receipt: audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "notes": "WS1 closure: live_status CONFIRMED 2026-10-06T03:28:50Z (HTTP 200, pin match, 0.136s). Outage window bounded ~2026-10-05T22:46Z\u20132026-10-06T03:28:49Z (curl exit 28). Receipt: audit-kit/evidence/ws1-live-probes-2026-10-06T03-28-49Z.txt",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742132"
@@ -680,7 +680,7 @@
     "workstream": "1 of 5",
     "probe_batch_utc": "2026-10-06T03:28:49Z",
     "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-    "receipt": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03-28-49Z.txt",
     "probes": [
       {
         "endpoint": "/health",
@@ -782,7 +782,7 @@
     "workstream": "Mission Control phase 2",
     "probe_batch_utc": "2026-10-06T03:36:37Z",
     "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-    "receipt": "cursor-agents-communication/audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03-36-37Z.txt",
     "methods": [
       "flyctl-status",
       "flyctl-logs-buffer",

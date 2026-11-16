@@ -88,5 +88,5 @@
   "persist_hydrate_bundle": "L2-PERSIST-HYDRATE-001",
   "persist_hydrate_status": "BOUNDED_UNKNOWN",
   "persist_hydrate_verdict": "Direct web ASGI loop block by resolver persist/hydrate REFUTED at pin (INLINE_WORKER split); cross-process flock ≤5s + VM I/O/GIL contention PLAUSIBLE UNVERIFIED",
-  "log_gap": "Grok rev3 (2026-10-06T12:00Z): flyctl logs buffer 100 lines earliest 2026-10-06T11:33:11Z (current) / 04:38:56Z (prior pull c2c0b4dd…); --start unsupported flyctl v0.4.99; no LogShipper/drain; logs API skipped (token extract blocked). Phase2: buffer earliest 2026-10-06T03:27:01Z + HTTP logs API 401. None cover 2026-10-05 08:29–11:54Z incident windows. Receipt: audit-kit/evidence/grok-fly-triage-rev3-2026-10-06.md; prior phase2: audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt"
+  "log_gap": "Grok rev3 (2026-10-06T12:00Z): flyctl logs buffer 100 lines earliest 2026-10-06T11:33:11Z (current) / 04:38:56Z (prior pull c2c0b4dd…); --start unsupported flyctl v0.4.99; no LogShipper/drain; logs API skipped (token extract blocked). Phase2: buffer earliest 2026-10-06T03:27:01Z + HTTP logs API 401. None cover 2026-10-05 08:29–11:54Z incident windows. Receipt: audit-kit/evidence/grok-fly-triage-rev3-2026-10-06.md; prior phase2: audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03-36-37Z.txt"
 }

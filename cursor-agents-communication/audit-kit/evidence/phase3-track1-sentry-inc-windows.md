@@ -33,7 +33,7 @@ Retroactive Oct-5 **app logs** cannot be recovered. This ladder documents what r
 
 | # | Method | INC-A | INC-B | INC-C | Receipt |
 |---|---|---|---|---|---|
-| 1 | **GHA workflow logs** | **PARTIAL** — run `37283988892` (0-byte `/health`, `/api/ops/live`, curl timeouts @ 08:43Z) | No GHA run in 11:41–11:47Z window | N/A (static burst only) | [`l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt`](l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt); [`L2-INC-A-001.json`](../findings/L2-INC-A-001.json) |
+| 1 | **GHA workflow logs** | **PARTIAL** — run `37283988892` (0-byte `/health`, `/api/ops/live`, curl timeouts @ 08:43Z) | No GHA run in 11:41–11:47Z window | N/A (static burst only) | [`l2-inc-phase2-multi-method-2026-10-06T03-36-37Z.txt`](l2-inc-phase2-multi-method-2026-10-06T03-36-37Z.txt); [`L2-INC-A-001.json`](../findings/L2-INC-A-001.json) |
 | 2 | **Fly flyctl buffer** | **NOT_OBSERVABLE** | **NOT_OBSERVABLE** | **NOT_OBSERVABLE** | ~100 lines / ~20 min retention; 0 overlap with Oct-5 windows — [`grok-fly-triage-rev3-2026-10-06.md`](grok-fly-triage-rev3-2026-10-06.md) |
 | 3 | **Gate C read-only prod state** | Live state only (not historical logs) | Same | Same | Track 2 style — Finding D netuids named @ `796a37ed`; does not recover incident-time logs — [`phase3-finding-d-netuids-2026-10-06.md`](phase3-finding-d-netuids-2026-10-06.md) |
 | 4 | **Track 3 log drain** | Forward prevention only | Forward prevention only | Forward prevention only | Cannot retroactively recover Oct-5 — [`phase3-track3-log-drain-proposal.md`](phase3-track3-log-drain-proposal.md) |

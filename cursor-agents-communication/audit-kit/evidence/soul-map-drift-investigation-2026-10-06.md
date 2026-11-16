@@ -20,7 +20,7 @@ The −2,415 B delta is a point-in-time comparison of the **live mutable** `data
 | 2026-10-06T03:29Z | L2.3 `wc -c /app/data/soul_map.json` (blind) | 851,941 | — | yes |
 | ~2026-10-05T22:55Z | L2.3 `wc -c` (MC bundle) | 854,356 | — | yes |
 
-Receipts: [`ws1-live-probes-2026-10-06T03:28:49Z.txt`](ws1-live-probes-2026-10-06T03:28:49Z.txt), [`ws4-soul-map-live-probes-2026-10-06T03:37:10Z.txt`](ws4-soul-map-live-probes-2026-10-06T03:37:10Z.txt).
+Receipts: [`ws1-live-probes-2026-10-06T03-28-49Z.txt`](ws1-live-probes-2026-10-06T03-28-49Z.txt), [`ws4-soul-map-live-probes-2026-10-06T03-37-10Z.txt`](ws4-soul-map-live-probes-2026-10-06T03-37-10Z.txt).
 
 ### Metric distinction (root cause of apparent “conflict”)
 
@@ -58,7 +58,7 @@ All disk writes funnel through `internal/store/soul_map_io.py:write_soul_map` �
 |---|---|---|
 | [`L2-PERSIST-HYDRATE-001.json`](../findings/L2-PERSIST-HYDRATE-001.json) | 854,356 B volume @ MC audit; flock ≤5s PLAUSIBLE | Yes — MC timestamp earlier; size still ~852 KB band |
 | [`ditto-blind-l1l2-results.md`](../ledger/ditto-blind-l1l2-results.md) | 851,941 B @ 03:29Z; flagged `conflicts_with` | Yes — later read, same metric, normal drift |
-| [`ws1-live-probes` receipt](ws1-live-probes-2026-10-06T03:28:49Z.txt) | API 453,990 B; pin match; responsive 0.384s | Yes — compact layer; ×1.87 ≈ blind volume |
+| [`ws1-live-probes` receipt](ws1-live-probes-2026-10-06T03-28-49Z.txt) | API 453,990 B; pin match; responsive 0.384s | Yes — compact layer; ×1.87 ≈ blind volume |
 | [`open-questions-closure.md`](../ledger/open-questions-closure.md) O3 | Prior Ditto probe ~840 KB refutes 24 MB bloat | Yes — same ~850 KB band, not contradiction |
 
 ## Bounded unknown (explicit)
