@@ -17,9 +17,21 @@ import pytest
 import internal.council.resolver as resolver
 import internal.council.resolver_scheduler as resolver_scheduler
 import internal.council.weights as weights
+from internal.learning.predictions_store import PersistReason
 
 
 NETUID = 7
+
+
+def _resolve_cycle(*, revoked: bool) -> None:
+    """Run one resolver pass. A revoked pass must refuse its ledger commit, and that refusal raises."""
+    subnets = [{"netuid": NETUID, "price": 110.0}]
+    if not revoked:
+        resolver._resolve_due_predictions(subnets=subnets)
+        return
+    with pytest.raises(resolver.LedgerPersistSkipped) as raised:
+        resolver._resolve_due_predictions(subnets=subnets)
+    assert raised.value.result.reason is PersistReason.REVOKED
 
 
 @pytest.fixture
@@ -100,7 +112,7 @@ def _run_cycle(
 
     monkeypatch.setattr(resolver, "nudge_impact_strength", spy_nudge)
     try:
-        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+        _resolve_cycle(revoked=abandon_on_first_nudge)
     finally:
         resolver_scheduler._cycle_timing.reset(token)
 
@@ -155,7 +167,7 @@ def test_revoked_cycle_applies_no_later_learning_write(harness, monkeypatch, rev
     monkeypatch.setattr(resolver, "_nudge_signal_weights", recorder("signal"))
     monkeypatch.setattr(resolver, "atomic_finalize_resolution", recorder("finalize"))
     try:
-        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+        _resolve_cycle(revoked=True)
     finally:
         resolver_scheduler._cycle_timing.reset(token)
 
@@ -189,7 +201,7 @@ def test_abandon_cannot_revoke_between_impact_check_and_write(harness, monkeypat
 
     monkeypatch.setattr(resolver, "nudge_impact_strength", impact_while_abandon_races)
     try:
-        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+        _resolve_cycle(revoked=True)
     finally:
         resolver_scheduler._cycle_timing.reset(token)
     abandon_thread.join(5)
