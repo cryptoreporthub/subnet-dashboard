@@ -1,0 +1,2 @@
+bug_id	confirmed_by	evidence_kind	evidence_link	confirmed_at
+1515_horizon_overflow	joshua	rtr_test	tests/test_resolver_grace_multiple.py::test_overflowing_horizon_threshold_falls_back_to_the_default_threshold	2026-10-26T20:11:30Z

@@ -1,0 +1,5 @@
+reviewer_id	display_name	system	model_version	model_known	notes
+cursor_auto	Cursor (Auto-Review)	cursor	automation	yes	e211187d-cff6-11f1-89ee-7aa6f0729b11
+ditto	Ditto (GitHub)	ditto	router-v2	yes	
+coderabbit	CodeRabbit (free)	coderabbit	advanced	yes	
+mc_github	Joshua / MC (GitHub)	github	human	yes	Posts as cryptoreporthub

@@ -337,7 +337,23 @@ def _fork_after_in_child() -> None:
         pass
 
 
-os.register_at_fork(before=_fork_before, after_in_child=_fork_after_in_child)
+def _fork_after_in_parent() -> None:
+    """Release the RLock ``_fork_before`` acquired in the parent after fork.
+
+    Without this, a fork from a non-main thread leaves that thread holding
+    ``_acquire_rlock``, which can block interpreter shutdown.
+    """
+    try:
+        _acquire_rlock.release()
+    except RuntimeError:
+        pass
+
+
+os.register_at_fork(
+    before=_fork_before,
+    after_in_parent=_fork_after_in_parent,
+    after_in_child=_fork_after_in_child,
+)
 
 
 def _schedule_terminal_exit() -> None:

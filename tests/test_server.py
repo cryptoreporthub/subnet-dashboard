@@ -42,6 +42,8 @@ def test_registry_route_uses_live_feed_when_local_registry_is_absent(
         "load_subnets_source",
         lambda timeout=None: [{"netuid": 42, "name": "Live fallback"}],
     )
+    # Test must not depend on live TaoMarketCap names; SN42 was renamed to CADmind.
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
 
     response = client.get("/api/registry")
 

@@ -66,7 +66,7 @@
       "quote": "Cannot correlate persist_summary_rmw_ms inside incident windows — flyctl logs buffer earliest ~17:31Z; HTTP logs API 401 Unauthorized. Pin-anchored code paths are Lane 1 candidates; runtime proof requires historical log access."
     },
     {
-      "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03-28-49Z.txt",
       "lines": "n/a",
       "quote": "WS1 bounding receipt 2026-10-06T03:28:49Z: GET /api/soul-map HTTP 200 0.384s (hydrate path responsive); GET /api/daily-pick HTTP 200 0.636s. Incident-window persist timings remain NOT_OBSERVABLE; causation hypothesis unverified."
     }

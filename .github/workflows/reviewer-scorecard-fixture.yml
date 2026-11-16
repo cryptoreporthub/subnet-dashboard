@@ -1,0 +1,25 @@
+name: Reviewer scorecard fixture
+
+on:
+  pull_request:
+    paths:
+      - "tools/reviewer_scorecard/**"
+      - "tests/test_reviewer_scorecard_v33.py"
+  push:
+    branches: [main]
+    paths:
+      - "tools/reviewer_scorecard/**"
+      - "tests/test_reviewer_scorecard_v33.py"
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test tools
+        run: pip install pytest
+      - name: Run reviewer scorecard tests
+        run: pytest tests/test_reviewer_scorecard_v33.py -q

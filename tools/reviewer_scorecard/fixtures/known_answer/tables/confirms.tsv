@@ -1,0 +1,4 @@
+bug_id	confirmed_by	evidence_kind	evidence_link	confirmed_at
+s1_alpha	joshua	rtr_test	tests/test_s1_alpha.py	2026-01-01T00:00:00Z
+s1_beta	joshua	rtr_test	tests/test_s1_beta.py	2026-01-01T00:00:00Z
+bug_cross	joshua	rtr_test	tests/test_bug_cross.py	2026-01-01T00:00:00Z

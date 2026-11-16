@@ -1,0 +1,6 @@
+bug_id	head_sha	state	scope	introducing_commit_sha
+s1_alpha	syn_h0001	present	diff	commit_a
+s1_beta	syn_h0001	present	diff	commit_b
+bug_cross	syn_h0002	present	diff	commit_c
+bug_cross	syn_h0003	present	diff	commit_c
+bug_cross	syn_h0004	absent	diff	commit_d
