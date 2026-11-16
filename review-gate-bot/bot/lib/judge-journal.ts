@@ -1,14 +1,18 @@
-// Append-only judge journal for the AI judge verdict cache (PR 1522).
+// Append-only judge journal for the judge verdict cache (PR 1522).
 //
-// Each record is written as a newline followed by one JSON line, in a single write call.
-// Replay splits on newlines. Blank lines are skipped silently. Unparseable lines are
-// skipped and counted. The last valid record per key wins.
+// Each record is one line, written in a single O_APPEND write:
+//   "\n" + JSON.stringify({ body, sum })
+// where body is the record's JSON text and sum is the first 16 hex digits of its SHA-256.
+// Replay splits on newlines. Blank lines are skipped silently. A line that does not parse,
+// does not verify its sum, or has no string key is skipped and counted. The last valid record
+// per key wins. A damaged line therefore reads as a miss, never as a different record.
 //
 // Durability is cache-only and never fsyncs. A successful append may not survive a crash,
 // and the cache can always be regenerated.
-// Multi-writer safety rests on O_APPEND. Local filesystems are tested. Network filesystems
-// are allowed, but a line damaged by concurrent appends must replay as a miss, never as a
-// different record. The one-eval-process rule still applies.
+// Multi-writer safety rests on O_APPEND. Local filesystems are tested. Network filesystems are
+// allowed, and the checksum is the guard against damaged lines.
+// The one-eval-process rule still applies.
+import { createHash } from "node:crypto";
 import { closeSync, constants, openSync, readFileSync, writeSync } from "node:fs";
 
 export const JOURNAL_OPEN_FLAGS = constants.O_APPEND | constants.O_WRONLY | constants.O_CREAT;
@@ -38,6 +42,16 @@ export interface AppendOptions {
   maxBytes?: number;
 }
 
+function checksum(body: string): string {
+  return createHash("sha256").update(body, "utf8").digest("hex").slice(0, 16);
+}
+
+/** The exact text appendRecord writes for a record, including the leading newline. */
+export function encodeRecord(record: JournalRecord): string {
+  const body = JSON.stringify(record);
+  return "\n" + JSON.stringify({ body, sum: checksum(body) });
+}
+
 /**
  * Append one record. Throws if the record is over the byte cap (before touching the file),
  * if the open fails, or if the write is short. A short write is never retried, because a
@@ -46,7 +60,7 @@ export interface AppendOptions {
 export function appendRecord(path: string, record: JournalRecord, options: AppendOptions = {}): void {
   const io = options.io ?? realIo;
   const maxBytes = options.maxBytes ?? MAX_RECORD_BYTES;
-  const buf = Buffer.from("\n" + JSON.stringify(record), "utf8");
+  const buf = Buffer.from(encodeRecord(record), "utf8");
   if (buf.length > maxBytes) {
     throw new Error(`judge journal record is ${buf.length} bytes, over the ${maxBytes}-byte cap`);
   }
@@ -74,8 +88,30 @@ export function appendRecord(path: string, record: JournalRecord, options: Appen
 export interface ReplayResult {
   /** Last valid record per key. A key not present here is a miss. */
   hits: Map<string, JournalRecord>;
-  /** Count of unparseable or malformed lines, anywhere in the file. Blank lines are not counted. */
+  /** Count of unparseable, unverified, or malformed lines, anywhere in the file. Blank lines are not counted. */
   skipped: number;
+}
+
+function decodeLine(line: string): JournalRecord | undefined {
+  let envelope: unknown;
+  try {
+    envelope = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  if (typeof envelope !== "object" || envelope === null) return undefined;
+  const { body, sum } = envelope as { body?: unknown; sum?: unknown };
+  if (typeof body !== "string" || typeof sum !== "string" || checksum(body) !== sum) return undefined;
+  let record: unknown;
+  try {
+    record = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  if (typeof record !== "object" || record === null || typeof (record as { key?: unknown }).key !== "string") {
+    return undefined;
+  }
+  return record as JournalRecord;
 }
 
 /** Replay the journal. A missing file replays as empty. */
@@ -93,18 +129,11 @@ export function replayJournal(path: string): ReplayResult {
   let skipped = 0;
   for (const line of text.split("\n")) {
     if (line.trim() === "") continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
+    const record = decodeLine(line);
+    if (record === undefined) {
       skipped += 1;
       continue;
     }
-    if (typeof parsed !== "object" || parsed === null || typeof (parsed as { key?: unknown }).key !== "string") {
-      skipped += 1;
-      continue;
-    }
-    const record = parsed as JournalRecord;
     hits.set(record.key, record);
   }
   return { hits, skipped };
