@@ -23,6 +23,7 @@ from internal.learning import predictions_store
 logger = logging.getLogger(__name__)
 
 DAILY_PICKS_PATH = os.environ.get("DAILY_PICKS_PATH", "data/daily_picks.json")
+PUBLISH_LOCK_TIMEOUT_SECONDS = 5.0
 ARCHIVE_DIR = os.environ.get("PREDICTIONS_ARCHIVE_DIR", "data/predictions_archive")
 
 
@@ -197,8 +198,17 @@ def _sync_directory(path: str) -> None:
 def _publish_epoch_archive(dest_dir: str, receipt: Dict[str, Any]) -> str:
     final = os.path.join(dest_dir, receipt["archive_name"])
     stage = os.path.join(dest_dir, f".staging-{receipt['reset_request_id']}.json")
-    with open(os.path.join(dest_dir, ".publish.lock"), "a+", encoding="utf-8") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+    lock_path = os.path.join(dest_dir, ".publish.lock")
+    with open(lock_path, "a+", encoding="utf-8") as lock:
+        deadline = time.monotonic() + PUBLISH_LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"publish lock {lock_path} timed out after {PUBLISH_LOCK_TIMEOUT_SECONDS}s")
+                time.sleep(0.05)
         if os.path.exists(final):
             if _archive_digest(final) != receipt["archive_sha256"]:
                 raise ValueError("archive_hash_mismatch")

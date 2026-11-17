@@ -249,6 +249,36 @@ def test_reset_script_times_out_instead_of_blocking_on_held_lock(tmp_path, monke
     assert not (tmp_path / "data" / ".pending_reset_id").exists()
 
 
+
+def test_publish_archive_times_out_instead_of_blocking_on_held_lock(tmp_path, monkeypatch):
+    import fcntl
+    from internal.learning import ledger_heal
+
+    monkeypatch.setattr(ledger_heal, "PUBLISH_LOCK_TIMEOUT_SECONDS", 0.2)
+    dest = tmp_path / "archive"
+    dest.mkdir()
+    receipt = {
+        "archive_name": "pre-epoch-2026-01-01T000000Z-11111111.json",
+        "reset_request_id": "11111111-1111-4111-8111-111111111111",
+        "archive_sha256": "0" * 64,
+    }
+    outcome = {}
+
+    def publish():
+        try:
+            ledger_heal._publish_epoch_archive(str(dest), receipt)
+        except BaseException as exc:
+            outcome["exc"] = exc
+
+    with open(dest / ".publish.lock", "a+", encoding="utf-8") as holder:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        worker = threading.Thread(target=publish, daemon=True)
+        worker.start()
+        worker.join(5)
+        assert not worker.is_alive(), "publish lock wait is unbounded"
+    assert isinstance(outcome.get("exc"), TimeoutError)
+
+
 def test_epoch_does_not_delete_recent_uncommitted_stage(tmp_path):
     preds, archive = tmp_path / "predictions.json", tmp_path / "archive"
     archive.mkdir()
