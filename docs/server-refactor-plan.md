@@ -82,7 +82,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] `scripts/route_manifest.py` writes the ordered list of all 198 routes as method, path, and endpoint module, plus the SHA-256 of the OpenAPI JSON.
 - [ ] `tests/test_server_route_shapes.py` records the top-level and second-level keys of every JSON route that `server.py` defines today, and fails when a key set changes.
-- [ ] `tests/test_server_budget.py` holds three numbers that later PRs may lower and never raise. They start at 3489 lines in `server.py`, 21 lines outside `tests/` that import `server`, and 81 test sites that patch a `server` attribute.
+- [ ] `tests/test_server_budget.py` holds three numbers that later PRs may lower and never raise. Take the starting numbers from `scripts/server_inventory.py` after #1591 lands. On `8cb247e` they are 3489 lines in `server.py`, 21 lines outside `tests/` that import `server`, and 81 test sites that patch a `server` attribute. #1591 adds 5 patch sites.
+- [ ] Record in the fixture docstring why the contract test wrote files. `GET /api/signals` regenerates signals inline when the store is stale, at `internal/signals/routes.py:196`. The fixture contains the write. This PR does not change the route.
 - [ ] Add an autouse fixture in `tests/conftest.py` that copies `data/` and `config/` to `tmp_path`, sets `DATA_DIR`, and changes the working directory, so that no test writes a tracked file.
 - [ ] List every writer the contract test reaches that ignores `DATA_DIR`. Route each one through `internal/data_volume.py`.
 
@@ -137,6 +138,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Delete `_resolve_index_context`, `_build_index_context`, `_degraded_index_context`, `_home_hero_context`, `_shell_pump_and_picks`, `_safe_brain_letter_context`, `_safe_mindmap_graph_context`, `_pump_alerts_context`, `_simileads_context`, `_pick_netuid_from_daily_payload`, and `_DEGRADED_INDEX_CACHE` from `server.py`. No production code calls the first one, and the rest are reachable only through it.
 - [ ] Delete `_subnets_for_spotlight_lite`, `_enrich_daily_pick_payload`, and the `safe_list` Jinja filter. Nothing in production or in `templates/` uses them.
 - [ ] Reduce `_message_intel_shell_context` to its skeleton. After the deletions every caller passes `fast=True`.
+- [ ] Delete `build_learning_dashboard_context` and `_pick_sections` from `internal/learning/dashboard_context.py`. Their only callers are the functions deleted above. This removes the page-render path that scored every subnet and wrote predictions, which #1330 tried to make read-only.
 - [ ] Delete the unused imports `get_or_create_today_pick` and `populate_author_reliability` from `server.py`.
 - [ ] Delete the tests that exercise only the deleted functions. Remove the 6 test patches of `server.get_or_create_today_pick`, which patch a name that `server.py` never calls, and keep each test only if it still fails when its behavior breaks.
 - [ ] Lower the line budget in `tests/test_server_budget.py` to the new count.
@@ -202,7 +204,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **You see.**
 
-- [ ] `git grep -nE "from server import" -- internal` prints only the lines for `_safe_simivision_payload`, `_ordered_hour_picks`, `import server as srv`, and the `import server` in `internal/council/build_seed_snapshot.py`.
+- [ ] `git grep -nE "from server import" -- internal` prints only the lines for `_safe_simivision_payload`, `import server as srv`, and the `import server` in `internal/council/build_seed_snapshot.py`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -698,13 +700,15 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Build.**
 
-- [ ] Commit the failing tests first, one per bug D1 to D7 in Appendix F.
+- [ ] Commit the failing tests first, one per bug D1 to D9 in Appendix F.
 - [ ] D1. Read `record_hold_decision` and `record_pick_prediction` and record whether either one rejects a `static-fallback` row. Then delete `STATIC_SUBNETS`. When the feed fails, the source returns no rows and the pick routes return their `pending` shape.
 - [ ] D2. Check whether `internal/council/pick_scheduler.py` already records the hour pick. If it does, delete the recording from `GET /api/top-pick/hour`. If it does not, move the recording to the scheduler. A GET must not write learning state.
 - [ ] D3. Replace `datetime.now(timezone.utc).isoformat() + "Z"` in all 3 production sites with the `.replace("+00:00", "Z")` form the file already uses elsewhere.
 - [ ] D4. In `GET /api/subnet/{subnet_id}`, skip a row whose `netuid` is not an integer and keep scanning.
 - [ ] D5. In `POST /api/mindmap/feedback`, test `subnet_id is not None`, so that netuid 0 is accepted.
 - [ ] D6. `GET /api/summary` and `GET /api/stats` read the subnets cache. Today each request rebuilds every row.
+- [ ] D8. `_prime_emergency_home_html` must return at its timeout. Create the executor without a `with` block and call `shutdown(wait=False)`, as `_safe_brain_letter_context` did. Today the `with` block waits for the hung render.
+- [ ] D9. Apply the same change to `fast_shell_dashboard_context` at `internal/learning/dashboard_context.py:120`, and keep one worker in flight at a time so that repeated timeouts cannot stack threads. The second half answers the review blocker that parked #1330.
 - [ ] D7. `GET /` renders the cold shell in the request executor with a timeout and falls back to `_INSTANT_HOME_SHELL`. Today the async handler renders Jinja on the event loop.
 
 **You see.**
@@ -713,7 +717,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `tests/test_data_integrity_bugs.py` gains 7 cases that fail on the parent commit and pass on the fix commit. Run it with the four pin files.
+- [ ] `tests/test_data_integrity_bugs.py` gains 9 cases that fail on the parent commit and pass on the fix commit. Run it with the four pin files.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
@@ -764,6 +768,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Set the final budgets. `server.py` has at most 150 lines, `from server import` appears only in `asgi_entry.py` and `scripts/restless_openapi.py`, and tests patch no `server` attribute.
 - [ ] Add a budget case that fails when any file under `internal/` imports `server`.
 - [ ] Update the sections of `AGENTS.md` that describe `server.py`. The conflict line for the two agents becomes the table in `internal/app/routers.py`.
+- [ ] Add the one rule from #1186 that still applies. New logic goes in a module under `internal/`, and `tests/test_server_budget.py` enforces it.
 - [ ] Delete the probe script. Its cases now live in the two bug test files.
 
 **You see.**
@@ -839,6 +844,10 @@ P9 index() is async: True | calls _ultra_minimal_index_html inline: True
 P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 ```
 
+**The freeze never held.** `server.py` had 3,349 lines on 2026-09-03 when #1186 proposed the freeze, 3,421 on 2026-10-06, and 3,489 on 2026-11-15. The rule was never merged.
+
+**A fix from #1330 that `main` still needs.** With the render patched to hang for 20 seconds, `_prime_emergency_home_html` returned after 20.3 seconds. Its timeout is 8 seconds.
+
 **Tests write tracked files.** `git status --short` was empty, then `pytest tests/test_endpoint_contract.py` passed 149 cases and left 6 modified files under `data/`.
 
 **Unproven.** These stay open and each has a box in the plan that settles it.
@@ -869,11 +878,12 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **Open decisions for the operator.** Each has a default that the plan applies unless you say otherwise.
 
-- R1 deletes the full homepage build because nothing calls it. If you want the full server-side render back, say so, and it becomes a feature PR after R7 in place of the deletion.
+- Settled on 2026-11-17. R1 deletes the full homepage build, because nothing calls it.
 - R10 changes status codes from 200 to 400 or 503 on errors. If an outside client depends on the 200 replies, say so, and R10 keeps 200 and only removes the exception text.
-- PR #1186 proposes a freeze rule for `server.py`. This plan edits the file in 12 PRs. Close #1186 or exempt this program before R1.
+- Close PR #1186. Its rule against campaigns contradicts this program, its diff adds three lines of fetch debris to the top of `AGENTS.md`, and its planned exception points at #1060, which closed on 2026-11-03 as an audit. R12 carries the one rule that still applies.
+- Close PR #1330. It was parked on 2026-10-16 with three review blockers, and its patch no longer applies to `main`. The plan carries its fixes that `main` still lacks as R1, D8, and D9.
 
-**Open PRs that touch the same code.** #1591 stubs network calls in server tests. Land or close it before R1, or the owner of R1 and R2 rebases over it. #1330 also touches homepage SSR, but the operator ruled it too old to matter. The inventory script shows any new `server` import they add.
+**Open PRs that touch the same code.** #1591 is test-only and applies cleanly to `main`. It adds 5 test patches of `server` attributes. Land it before R0, so that the R0 budgets count them and R2, R5, and R7 repoint them.
 
 **Route order.** FastAPI matches routes in registration order. The manifest in R0 compares the ordered list, so a router included at the wrong position fails lane 1.
 
@@ -951,7 +961,7 @@ Evidence is `measured` when a probe ran it and `read` when it comes from reading
 
 | Id | Bug | Evidence | Where today | PR |
 |---|---|---|---|---|
-| T1 | The contract test modifies 6 tracked files under `data/` | measured | test setup | R0 |
+| T1 | The contract test modifies 6 tracked files under `data/`. A stale signal store makes `GET /api/signals` regenerate inline | measured, cause read from #1330 and `internal/signals/routes.py:196` | test setup | R0 |
 | B1 | A timeout payload from `/api/subnets` is sent with `Cache-Control` set to `public, max-age=300`, so a CDN can serve the failure for 5 minutes | measured, P2 | `server.py:659` | R10 |
 | B2 | Error replies use HTTP 200 and include the exception text | measured, P6 and P7 | `server.py:2366`, `3154`, `3221`, `3340`, `3357`, `3442` | R10 |
 | B3 | `/api/simivision` returns two different shapes, cold and warm | measured, P5 | `server.py:3023`, `3036` | R10 |
@@ -965,4 +975,6 @@ Evidence is `measured` when a probe ran it and `read` when it comes from reading
 | D5 | `/api/mindmap/feedback` ignores feedback for netuid 0 | read | `server.py:2373` | R11 |
 | D6 | `/api/summary` and `/api/stats` rebuild every subnet row on each request | measured, P3b | `server.py:2110`, `2257` | R11 |
 | D7 | The async `GET /` handler renders Jinja on the event loop on a cold start | measured, P9 | `server.py:1761` | R11 |
+| D8 | The emergency homepage render waits for a hung worker past its 8 second timeout, because the `with` block joins the thread | measured, 20.3 seconds | `server.py:837` | R11 |
+| D9 | The same `with` block bug sits on the live homepage path, in the learning-metrics load | read | `internal/learning/dashboard_context.py:120` | R11 |
 | S1 | 73 broad `except Exception` handlers, many of which hide the failure behind a default | measured count | whole file | each move PR narrows the handlers it touches only when the caught state is illegitimate |
