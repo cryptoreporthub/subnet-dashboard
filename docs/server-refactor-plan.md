@@ -26,7 +26,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
   - [ ] `git show origin/main:docs/server-refactor-plan.md`
   - [ ] `git show origin/main:cursor-agents-communication/board.md`
   - [ ] `git show origin/main:.cursor/rules/ponytail.mdc`
-  - [ ] The local skill files `playbooks/autopilot-stack.md`, `playbooks/autopilot-full.md`, `playbooks/opening-a-pr.md`, and `swarm/SKILL.md`.
+  - [ ] The skill files `playbooks/autopilot-stack.md`, `playbooks/autopilot-full.md`, `playbooks/opening-a-pr.md`, and `swarm/SKILL.md`. They live in the agent's skills directory, not in this repo.
 - [ ] On the operator's go, arm the audit tick as `/loop 1h` with the tick prompt below. Never leave the cadence to memory.
 - [ ] Use this tick prompt, verbatim. "Re-read the execution playbook and this plan. Audit the operation against them and fix drift in this tick. Probe every active lane and judge progress by side effects only. Stand down a stuck lane and dispatch its replacement now. Then post a short status message to the operator in chat only when the audit found a tracked change that no earlier status message reported. Name every such change and nothing else. If the audit found none, end the turn with no reply text. Either way, log this tick's row in the decision trail."
 - [ ] On the operator's hold or stand-down, send every owner a zero-writes order at once.
@@ -37,15 +37,17 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Follow this dependency graph. Each PR branches from its parent's branch.
   - [ ] R0 is first and branches from `main`.
   - [ ] R1 to R12 each follow the PR before them.
-- [ ] Hold the file boundaries. R0 to R9 change no response body, status code, or header, except the one fix that R5 names. R10 and R11 touch no file that R0 to R9 did not create or edit.
-- [ ] Post on the agent board before R2, R3, and R6. They edit import lines in packages that Agent A and Agent B own.
+- [ ] Hold the file boundaries. R0 to R9 change no response body, status code, or header, except the one fix that R5 names. R10 and R11 edit only the files their sections list.
+- [ ] Post on the agent board before R1, R2, R3, R6, R8, and R11. They edit files in packages that Agent A and Agent B own.
 - [ ] Stop a move PR that cannot keep `tests/test_server_golden.py` unchanged. Revert it, split it, and report the body that changed. Do not edit a stored golden file in R1 to R9, except the one `/api/stats` case that R5 names.
 - [ ] Hold the review gate. R10 and R11 change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
 
 ### PR mechanics, for every PR
 
-- [ ] Use the GitHub MCP tools for every PR operation. This environment has no `gh` or `origin` CLI.
+- [ ] Use the GitHub MCP tools for every PR operation, as this environment's rules require.
 - [ ] Open the PR ready, never draft. A stack child targets its parent branch.
+- [ ] Apply the operator's standing review rule of 2026-11-16 to every PR. Run its eleven skills, which are `code-review`, `poteto-mode`, and the nine principle skills it names. A Sonnet 5.5 subagent review is part of the gate. Replit posts its review as a PR comment, and Ditto reviews after each push.
+- [ ] Verify locally with `DATA_DIR` set to a temporary copy. A test run that writes the tracked `data/` directory trips the stop hook.
 - [ ] Run `pytest tests/test_endpoint_contract.py` once before the PR-facing push. Push with hooks on.
 - [ ] Rebase onto current trunk before the code-ready report. Rebase again only on a conflict with trunk or on a CI failure that comes from trunk.
 - [ ] Re-run `python scripts/server_inventory.py` after every rebase. An open PR that added a `server` import or patch shows up as a raised count.
@@ -60,7 +62,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 - [ ] The operator lands and deploys the stack in four batches, R0 to R1, R2 to R4, R5 to R9, and R10 to R12. A batch waits until the batch before it has run in production for 24 hours.
 - [ ] After each deploy, confirm that `GET /version` reports the landed SHA.
-- [ ] Watch four signals for 24 hours. They are the `/health` reply time, the count of 5xx replies in `/metrics`, new issues in Sentry, and the worker heartbeat in `GET /api/health`.
+- [ ] Watch four signals for 24 hours. They are the `/health` reply time, the count of 5xx replies in `/metrics`, new issues in Sentry, and the liveness report from `GET /api/ops/live`.
 - [ ] If any signal is worse than before the deploy, the operator redeploys the previous SHA through the Fly workflow. The owner then reproduces the fault before the batch lands again.
 
 ### Boot recipe, for every live lane
@@ -88,11 +90,12 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Build.**
 
-- [ ] `scripts/route_manifest.py` writes every route as method, path, and endpoint module, plus the SHA-256 of the OpenAPI JSON. The test compares the method and path pairs as a set. It checks order only for the 3 pairs of routes that can match the same request, and none of those is defined in `server.py`.
+- [ ] `scripts/route_manifest.py` writes every route as method, path, and endpoint module, plus the SHA-256 of the OpenAPI JSON. It also writes the `/metrics` route, the `/static` mount, and the middleware classes in the order of `app.user_middleware`, and the test compares that order exactly. The test compares the method and path pairs as a set. It checks order only for the 3 pairs of routes that can match the same request, and none of those is defined in `server.py`.
 - [ ] Add a `frozen_world` fixture. It stubs the subnet feed with 5 fixed rows, freezes the clock, points `DATA_DIR` at a seeded temporary copy, and blocks the network.
-- [ ] `tests/test_server_golden.py` requests every route that `server.py` defines inside `frozen_world` and compares the whole body with a stored file. It stores the HTML of `/` in the cold, emergency, and warm state. A move PR must leave every stored file unchanged.
+- [ ] `tests/test_server_golden.py` requests every route that `server.py` defines inside `frozen_world` and compares the whole body and four headers with a stored file. The headers are `Cache-Control`, `Access-Control-Allow-Origin`, `X-Frame-Options`, and whether `Server-Timing` is present. One case is a write that `check_write_auth` denies, so that a reply produced by a middleware is pinned too. It stores the HTML of `/` in the cold, emergency, and warm state. A move PR must leave every stored file unchanged.
+- [ ] Know what the stored files capture. `internal/instant_bailout.py:129` to `164` answers `GET /`, `/health`, `/api/health`, `/version`, and `/api/ops/live` before FastAPI runs. The stored bodies for those paths are the wrapper output. Add one case per path that calls the inner FastAPI app, so that the handlers the plan moves are pinned too.
 - [ ] Render `index.html` once with Jinja `StrictUndefined` and store the list of context keys the template reads. The app uses the default `Undefined`, which prints a missing key as an empty string.
-- [ ] `tests/test_server_budget.py` holds seven numbers that later PRs may lower and never raise. Four of them count across `server.py` and every module this plan creates. They are 135 function-level imports, 73 `except Exception` handlers, 29 `os.environ.get` reads, and 17 imports of a private name from another package. The other three follow. Take the starting numbers from `scripts/server_inventory.py` after #1591 lands. On `8cb247e` they are 3489 lines in `server.py`, 21 lines outside `tests/` that import `server`, and 81 test sites that patch a `server` attribute. #1591 adds 5 patch sites.
+- [ ] `tests/test_server_budget.py` holds eight numbers that later PRs may lower and never raise. Four of them count across `server.py` and every module this plan creates. They are 135 function-level imports, 73 `except Exception` handlers, 29 `os.environ.get` reads, and 17 imports of a private name from another package. A fifth counts every `server.<name>` or `srv.<name>` reference in `tests/` other than `app`, which is 231 today. Of those, 107 read or write a cache, lock, or flag directly. The other three follow. Take the starting numbers from `scripts/server_inventory.py` after #1591 lands. On `8cb247e` they are 3489 lines in `server.py`, 21 lines outside `tests/` that import `server`, and 81 test sites that patch a `server` attribute. #1591 adds 5 patch sites.
 - [ ] Record in the fixture docstring why the contract test wrote files. `GET /api/signals` regenerates signals inline when the store is stale, at `internal/signals/routes.py:196`. The fixture contains the write. This PR does not change the route.
 - [ ] Add an autouse fixture in `tests/conftest.py` that copies `data/` and `config/` to `tmp_path`, sets `DATA_DIR`, and changes the working directory, so that no test writes a tracked file.
 - [ ] List every writer the contract test reaches that ignores `DATA_DIR`. Route each one through `internal/data_volume.py`.
@@ -150,7 +153,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Delete `_subnets_for_spotlight_lite`, `_enrich_daily_pick_payload`, and the `safe_list` Jinja filter. Nothing in production or in `templates/` uses them.
 - [ ] Reduce `_message_intel_shell_context` to its skeleton. After the deletions every caller passes `fast=True`.
 - [ ] Delete `build_learning_dashboard_context` and `_pick_sections` from `internal/learning/dashboard_context.py`. Their only callers are the functions deleted above. This removes the page-render path that scored every subnet and wrote predictions, which #1330 tried to make read-only.
-- [ ] Delete the unused imports `get_or_create_today_pick` and `populate_author_reliability` from `server.py`.
+- [ ] Delete the unused import `populate_author_reliability` from `server.py`. Leave `get_or_create_today_pick` where it is. It sits inside the `_PICKS_ENGINE` guard, and removing it would change when that flag is true.
+- [ ] Delete the 9 panel helpers in `internal/learning/dashboard_context.py` that only `build_learning_dashboard_context` calls, about 150 lines. Confirm with a caller search that nothing else uses them.
 - [ ] Delete the tests that exercise only the deleted functions. Remove the 6 test patches of `server.get_or_create_today_pick`, which patch a name that `server.py` never calls, and keep each test only if it still fails when its behavior breaks.
 - [ ] Lower the line budget in `tests/test_server_budget.py` to the new count.
 
@@ -201,21 +205,24 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Create `internal/subnets/registry.py`.
 - [ ] Create `internal/council/market_context.py`.
 - [ ] Edit `server.py`.
-- [ ] Edit `internal/analytics/market_drivers.py`, `internal/analytics/report.py`, `internal/council/pick_audit_scheduler.py`, `internal/council/pick_scheduler.py`, `internal/council/score_snapshots.py`, `internal/dev_radar/service.py`, `internal/indicators/routes.py`, `internal/letter/brain_letter.py`, `internal/message_intel/routes.py`, `internal/oracle/routes.py`, `internal/share_pages/search.py`, `internal/simivision/chat_service.py`, and `internal/simivision/graded_context.py`.
+- [ ] Edit `internal/analytics/market_drivers.py`, `internal/analytics/report.py`, `internal/council/pick_audit_scheduler.py`, `internal/council/pick_scheduler.py`, `internal/council/score_snapshots.py`, `internal/dev_radar/service.py`, `internal/indicators/routes.py`, `internal/letter/brain_letter.py`, `internal/message_intel/routes.py`, `internal/oracle/routes.py`, `internal/share_pages/search.py`, `internal/simivision/chat_service.py`, `internal/simivision/graded_context.py`, and `internal/council/build_seed_snapshot.py`.
 - [ ] Edit every test that patches the moved names.
 
 **Build.**
 
 - [ ] Move `_get_subnets_with_source`, `_get_subnets_hydrate`, and `_STATIC_SUBNETS` to `internal/subnets/source.py` as `get_subnets_with_source`, `get_subnets_hydrate`, and `STATIC_SUBNETS`.
-- [ ] Move `_normalize_registry_subnet` to `internal/subnets/registry.py`. Replace `load_data` with `safe_read_json` from `internal/file_utils.py` where the behavior matches, and move it to `internal/subnets/registry.py` where it does not.
+- [ ] Move `_normalize_registry_subnet` to `internal/subnets/registry.py`.
 - [ ] Move `_market_mood_proxy`, `_market_context_with_weights`, and `_safe_macro_overlay` to `internal/council/market_context.py`.
 - [ ] Change the 13 production modules to import from the new modules. Change `server.py` to import the same names.
+- [ ] `internal/council/build_seed_snapshot.py:36` patches `server._get_subnets_hydrate` in production code. Point that patch at `internal.subnets.source.get_subnets_hydrate` and delete its `import server`. Then run `git grep -nE "patch.object.server|setattr.server" -- internal scripts` and repoint anything else it finds.
+- [ ] Move the weights import guard at `server.py:189` to `196` into `internal/council/market_context.py` unchanged. `_market_context_with_weights` depends on its fallback.
+- [ ] Move `load_data` to `internal/subnets/registry.py` unchanged. Do not replace it with `safe_read_json`, which hides a corrupt file that `load_data` reports.
 - [ ] Repoint the test patches of `_get_subnets_with_source` (10), `_market_context_with_weights` (6), `load_data` (4), and `_get_subnets_hydrate` (3) to the module that now calls the function. Leave no re-export in `server.py` for tests to patch.
 - [ ] Lower the import budget and the patch budget in `tests/test_server_budget.py`.
 
 **You see.**
 
-- [ ] `git grep -nE "from server import" -- internal` prints only the lines for `_safe_simivision_payload`, `import server as srv`, and the `import server` in `internal/council/build_seed_snapshot.py`.
+- [ ] `git grep -nE "from server import" -- internal` prints only the lines for `_safe_simivision_payload` and `import server as srv`.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -268,9 +275,12 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] Move `_ordered_hour_picks`, `_build_hour_pick_payload`, `_highest_emission_pick`, `_record_pick_in_learning_loop`, and `_subnet_for_pick` to `internal/council/hour_picks.py`.
 - [ ] Move `_enrich_daily_pick_payload_lite`, `_attach_daily_pick_meta`, the two hold builders, `_hydrate_daily_pick_lite`, `_coalesce_daily_pick_flight`, `_daily_pick_weighed_shortlist`, and their locks to `internal/council/daily_pick_read.py`.
+- [ ] Move `_read_shell_daily_pick` and `_today_daily_pick_for_board` to `internal/council/daily_pick_read.py` in this PR. `_simivision_build_inner` calls them, and leaving them for R7 would make `internal/simivision/board.py` import `server`.
+- [ ] Move the `_PICKS_ENGINE` import guard at `server.py:175` to `187` into `internal/council/hour_picks.py` with its import list unchanged. The flag must turn false under the same failures as today.
 - [ ] Move the top-picks builders and cache to `internal/council/top_picks_read.py`.
 - [ ] Move `_safe_simivision_payload`, `_simivision_build_inner`, `_simivision_weighing_rows_cached`, `_kick_simivision_background_refresh`, `_build_simivision_cached`, and the SimiVision cache to `internal/simivision/board.py`.
-- [ ] Move `_to_thread_timeout`, `_DASHBOARD_EXECUTOR`, and `_PICK_READ_EXECUTOR` into `internal/request_executor.py`, next to the pool that already copies the same pattern.
+- [ ] Move `_to_thread_timeout`, `_DASHBOARD_EXECUTOR`, and `_PICK_READ_EXECUTOR` into `internal/request_executor.py`. Name the moved helper `dashboard_to_thread_timeout` and keep `_DASHBOARD_EXECUTOR` as its default pool. The file already has a `to_thread_timeout` with a different default pool, so the two must not merge.
+- [ ] Move the two `atexit.register` calls at `server.py:588` and `691` with their pools. Without them the pool threads are joined at interpreter exit, which hung CI before.
 - [ ] Repoint the remaining importers and test patches. The route handlers stay in `server.py` and call the new modules.
 - [ ] Lower the three budgets in `tests/test_server_budget.py`. The import budget reaches the 2 lines in `asgi_entry.py` and `scripts/restless_openapi.py`.
 
@@ -382,7 +392,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] Move `GET /api/registry`, `/api/subnets`, `/api/subnet/{subnet_id}`, `/api/subnet/{subnet_id}/pool`, `/api/summary`, and `/api/stats` to a `subnets_router` in `internal/subnets/routes.py`. Route order is free here, because no route in `server.py` overlaps another route.
 - [ ] Move `_list_subnets_base_rows`, `_apply_subnets_query`, `_null_unfetched_metrics`, `_list_subnets_registry_fallback`, `_tag_subnet_row`, and `_consensus_map` to `internal/subnets/catalog.py`. The two functions that build rows share one row builder.
-- [ ] Put the status counts, totals, and ranking that `get_summary` and `get_stats` both compute into one pure function in `internal/subnets/stats.py`. Use the `None`-safe access from `get_summary`. This fixes bug B6 in Appendix F, so add its regression test in this PR.
+- [ ] Put the status counts and totals that `get_summary` and `get_stats` both compute into one pure function in `internal/subnets/stats.py`. The two routes rank and shape their lists differently, so each keeps its own ranking. Use the `None`-safe access from `get_summary`. This fixes bug B6 in Appendix F, so add its regression test in this PR.
 
 **You see.**
 
@@ -439,7 +449,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **You see.**
 
-- [ ] `grep -c "@app.get" server.py` drops by 7. `server.py` no longer contains the word `pick` outside an import.
+- [ ] `grep -c "@app.get" server.py` drops by 7.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -480,7 +490,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Files.**
 
-- [ ] Create `internal/app/templating.py`.
+- [ ] Create `internal/web/templating.py`.
 - [ ] Create `internal/home/shell.py`.
 - [ ] Create `internal/home/context.py`.
 - [ ] Create `internal/home/routes.py`.
@@ -488,7 +498,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Build.**
 
-- [ ] Move the Jinja environment, its filters, and its globals to `internal/app/templating.py`.
+- [ ] Move the Jinja environment, its filters, and its globals to `internal/web/templating.py`.
 - [ ] Put the homepage cache in one `HomeShell` object in `internal/home/shell.py`. It replaces `_HOMEPAGE_HTML_CACHE`, `_EMERGENCY_HOME_HTML`, `_HOMEPAGE_WARM_LOCK`, `_HOMEPAGE_WARMING`, and `_HOMEPAGE_RENDER_THREAD`, and it has three states, `cold`, `emergency`, and `warm`.
 - [ ] Build the homepage context in one function in `internal/home/context.py` that takes a tier. The ultra-minimal tier is the minimal tier without file reads. The three copies of the `signal_summary` and `pump_alerts` placeholders become one constant each.
 - [ ] Move `GET /` to `internal/home/routes.py`. Pass `HomeShell` methods to `wrap_instant_bailout` in `server.py`.
@@ -539,15 +549,16 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Files.**
 
 - [ ] Create `internal/preview/routes.py`.
-- [ ] Edit `internal/pump/routes.py`, `internal/health/routes.py`, and the router module in `internal/mindmap/`.
+- [ ] Create `internal/mindmap/soul_map_routes.py`.
+- [ ] Edit `internal/pump/routes.py` and `internal/health/routes.py`.
 - [ ] Edit `server.py`.
 
 **Build.**
 
 - [ ] Register the 6 `/preview/*` pages from one table of path, template, and context builder in `internal/preview/routes.py`.
-- [ ] Move `GET /pump`, `/Pump`, and `/api/pump-alerts` to `internal/pump/routes.py`.
-- [ ] Move `GET /health`, `/version`, `/robots.txt`, and `/favicon.ico` to `internal/health/routes.py`. Keep `/health` async. Import this router without a guard, because a missing `/health` fails the Fly health check.
-- [ ] Move `GET /api/soul-map`, `/api/recommendations`, `/api/daily-rotation`, and `POST /api/mindmap/feedback` to the mindmap router.
+- [ ] Move `GET /pump`, `/Pump`, and `/api/pump-alerts` to a new `pump_desk_router` in `internal/pump/routes.py`. Include it directly from `server.py`. The existing `pump_ladder_router` is included through the guarded analytics router, and these three routes have no guard today.
+- [ ] Move `GET /health`, `/version`, `/robots.txt`, and `/favicon.ico` to `internal/health/routes.py`. Keep `/health` async. The bailout wrapper answers `/health`, `/version`, and `/api/health` first, so these handlers serve only a request that reaches the inner app.
+- [ ] Move `GET /api/soul-map`, `/api/recommendations`, `/api/daily-rotation`, and `POST /api/mindmap/feedback` to a new `soul_map_router` in `internal/mindmap/soul_map_routes.py`. Include it directly from `server.py`. The existing mindmap router is optional and can be `None`.
 
 **You see.**
 
@@ -595,7 +606,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Create `internal/app/routers.py`.
 - [ ] Create `internal/app/lifespan.py`.
 - [ ] Create `internal/app/http_edge.py`.
-- [ ] Create `internal/app/settings.py`.
+- [ ] Create `internal/web/settings.py`.
 - [ ] Edit `server.py`.
 - [ ] Edit the tests that reference `server.templates` or `server._lifespan`.
 
@@ -604,7 +615,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Replace the 16 guarded import blocks with one table in `internal/app/routers.py`. Each row names the module, the router attribute, and whether the router is required. One loop imports and includes them in the manifest order and logs the same warning as today for an optional router that fails.
 - [ ] Move `_lifespan` and its boot helpers to `internal/app/lifespan.py`. Split it into one function for the worker boot and one for the web boot.
 - [ ] Move `_CACHE_PATHS`, `_ALLOWED_ORIGINS`, `add_cors_headers`, and the write-auth middleware to `internal/app/http_edge.py`.
-- [ ] Create `internal/app/settings.py` with one function per environment variable and one default per variable. Replace the 29 `os.environ.get` reads that started in `server.py`. Each function reads the environment when called, as the code does today. Keep both defaults of `HOMEPAGE_SHELL_CACHE_SECONDS` under two names, because R10 merges them.
+- [ ] Create `internal/web/settings.py` with one default per environment variable. Replace the 29 `os.environ.get` reads that started in `server.py`. The 17 that are read once at import stay module constants, and callers read them as `settings.NAME` at use, so that a test patches one place. The 12 that are read on each call become functions. Keep both defaults of `HOMEPAGE_SHELL_CACHE_SECONDS` under two names, because R10 merges them.
 - [ ] Keep the request log line on the logger named `server`. A log filter outside the repo may match that name.
 - [ ] Leave in `server.py` only the Sentry and logging setup, app creation, the calls that mount middleware and routers, the bailout and Restless wrappers, and `__main__`.
 - [ ] Lower the line budget in `tests/test_server_budget.py` to 150.
@@ -615,7 +626,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Add `tests/test_router_table.py`. One case makes an optional router fail to import and expects the app to boot without it, and one case makes a required router fail and expects the boot to raise. Run it with the four pin files.
+- [ ] Add `tests/test_router_table.py`. One case makes an optional router fail to import and expects the app to boot without it, and one case makes a required router fail and expects the boot to raise. The required rows are the routers that R5 to R8 create, and the test requests `/pump` and `/api/soul-map` to show they survive a failed analytics import. Run it with the four pin files.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
@@ -662,10 +673,10 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] B1. A timeout or error payload must not carry `Cache-Control: public`. The handler that builds a degraded payload sets `no-store`, and the middleware adds a public TTL only to a GET that returned 200.
 - [ ] B2. Stop sending exception text to clients. Log the exception and return a fixed error code in the `error` field.
 - [ ] B2 status codes. A payload the page can still use, with `status` set to `timeout`, `busy`, or `pending`, stays HTTP 200, because `fetchJson` in `static/js/cockpit_hydrate.js` throws away the body of any other status. A hard failure with no data returns 503. A bad request body on `POST /api/mindmap/feedback` returns 400.
-- [ ] Define the reply states once. Add a `PayloadStatus` literal type and a `degraded(status, body)` helper in `internal/app/http_edge.py`. The helper builds the reply and sets `no-store`. `server.py` spells 12 status strings by hand today. Replace each hand-built timeout, busy, pending, and error reply in the moved route modules with the helper.
+- [ ] Define the reply states once. Add a `PayloadStatus` literal type and a `degraded(status, body)` helper in `internal/web/replies.py`. The helper builds the reply and sets `no-store`. `server.py` spells 12 status strings by hand today. Replace each hand-built timeout, busy, pending, and error reply in the moved route modules with the helper.
 - [ ] B3. `GET /api/simivision` returns `status` and `data` in every branch, including the cold and timeout branch.
 - [ ] B4. Read `HOMEPAGE_SHELL_CACHE_SECONDS` once. The public `max-age` for `/` and the shell cache age use that one value.
-- [ ] B5. Report the routers that failed to import under a `routers` key in `GET /api/health`.
+- [ ] B5. Report the routers that failed to import under a `routers` key in the report that `fetch_ops_live_report` builds for `GET /api/ops/live`. The bailout wrapper answers `/api/health` with a constant, so a key there would never be seen.
 
 **You see.**
 
@@ -714,25 +725,25 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Files.**
 
-- [ ] Edit `internal/subnets/source.py`, `internal/council/hour_picks.py`, `internal/council/picks_routes.py`, `internal/subnets/routes.py`, `internal/simivision/board.py`, `internal/home/routes.py`, and the mindmap router.
+- [ ] Edit `internal/subnets/source.py`, `internal/subnets/stats.py`, `internal/subnets/routes.py`, `internal/council/hour_picks.py`, `internal/council/picks_routes.py`, `internal/council/pick_scheduler.py`, `internal/council/state_vector.py`, `internal/simivision/board.py`, `internal/home/routes.py`, `internal/home/shell.py`, `internal/learning/dashboard_context.py`, and `internal/mindmap/soul_map_routes.py`.
 - [ ] Create `tests/test_data_integrity_bugs.py`.
 
 **Build.**
 
 - [ ] Commit the failing tests first, one per bug D1 to D9 in Appendix F.
 - [ ] D1. Delete `STATIC_SUBNETS`. Neither recorder in `internal/learning/prediction_loop.py` checks where a row came from, so the invented rows would be stored. When the feed fails, the source returns no rows and the pick routes return their `pending` shape.
-- [ ] D2. Delete the call to `_record_pick_in_learning_loop` from the hour-pick read path. `internal/council/pick_scheduler.py:203` already records the audited hour pick and its hold. Move the near-miss shadow recording to the same scheduler function. A GET must not write learning state.
-- [ ] D3. Replace `datetime.now(timezone.utc).isoformat() + "Z"` in all 3 production sites with the `.replace("+00:00", "Z")` form the file already uses elsewhere.
+- [ ] D2. Delete the call to `_record_pick_in_learning_loop` from the hour-pick read path. `internal/council/pick_scheduler.py:203` already records the audited hour pick and its hold. Move the near-miss shadow recording and the fallback hold to the same scheduler function. This adds one `score_universe` call to each scheduler tick, so measure the tick time before and after. A GET must not write learning state.
+- [ ] D3. Replace `datetime.now(timezone.utc).isoformat() + "Z"` in all 3 production sites with the `.replace("+00:00", "Z")` form the file already uses elsewhere. The third site is `internal/council/state_vector.py:1313`, which writes a stored value. First show that every reader of that value parses both forms, and keep reading both.
 - [ ] D4. In `GET /api/subnet/{subnet_id}`, skip a row whose `netuid` is not an integer and keep scanning.
-- [ ] D5. In `POST /api/mindmap/feedback`, test `subnet_id is not None`, so that netuid 0 is accepted.
+- [ ] D5. In `POST /api/mindmap/feedback`, test `subnet_id is not None` on both lines that check it, `server.py:2373` and `2398`, so that netuid 0 is accepted once.
 - [ ] D6. `GET /api/summary` and `GET /api/stats` read the subnets cache. Today each request rebuilds every row.
 - [ ] D8. `_prime_emergency_home_html` must return at its timeout. Create the executor without a `with` block and call `shutdown(wait=False)`, as `_safe_brain_letter_context` did. Today the `with` block waits for the hung render.
 - [ ] D9. Apply the same change to `fast_shell_dashboard_context` at `internal/learning/dashboard_context.py:120`, and keep one worker in flight at a time so that repeated timeouts cannot stack threads. The second half answers the review blocker that parked #1330.
-- [ ] D7. `GET /` renders the cold shell in the request executor with a timeout and falls back to `_INSTANT_HOME_SHELL`. Today the async handler renders Jinja on the event loop.
+- [ ] D7. Give the homepage one code path. The bailout wrapper answers every `GET /`, so the `index` route handler is unreachable and its inline Jinja render never runs in production. Make the handler return the same `HomeShell` result the wrapper uses, and delete the inline render.
 
 **You see.**
 
-- [ ] `PYTHONPATH=. python scripts/server_refactor_probes.py` prints an empty `recorded` list on P8, `6 requests -> 1 full rebuilds` or fewer on P3b, and a timestamp ending in `Z` without `+00:00` on P1.
+- [ ] `PYTHONPATH=. python scripts/server_refactor_probes.py` prints an empty `recorded` list on P8, `6 requests -> 1 full rebuilds` or fewer on P3b, and a timestamp ending in `Z` without `+00:00` on P1. P9 no longer applies.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -740,7 +751,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `PYTHONPATH=. python scripts/server_refactor_probes.py` at trunk and at head. Save `/tmp/swarm-R11/worker-1/probes.diff`. Pass when only the P1, P3b, P8, and P9 lines differ and the route manifest is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `PYTHONPATH=. python scripts/server_refactor_probes.py` at trunk and at head. Save `/tmp/swarm-R11/worker-1/probes.diff`. Pass when only the P1, P3b, and P8 lines differ and the route manifest is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R11/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R11/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R11/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -788,9 +799,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] Set the final budgets. `server.py` has at most 150 lines, `from server import` appears only in `asgi_entry.py` and `scripts/restless_openapi.py`, and tests patch no `server` attribute.
 - [ ] Add a budget case that fails when any file under `internal/` imports `server`.
-- [ ] Add `tests/test_import_layers.py`. It parses every module and fails when a package other than `internal/app` and `internal/home` imports `internal.app` or `internal.home`, or when a route module imports another route module.
+- [ ] Add `tests/test_import_layers.py`. It parses every module and fails when anything except `server.py` imports `internal.app`, when `internal.web` imports a feature package, or when a route module imports another route module. `internal/web/` holds what feature packages share, which is templating, settings, and reply helpers.
 - [ ] Write `docs/architecture.md`. It holds the module tree from Appendix E, the import rules the two tests enforce, and where a new route, cache, or setting goes.
-- [ ] Add `internal/app/`, `internal/home/`, and `internal/subnets/` to the ownership table in `AGENTS.md`.
+- [ ] Add `internal/app/`, `internal/web/`, `internal/home/`, and `internal/subnets/` to the ownership table in `AGENTS.md`.
 - [ ] Update the sections of `AGENTS.md` that describe `server.py`. The conflict line for the two agents becomes the table in `internal/app/routers.py`.
 - [ ] Add the one rule from #1186 that still applies. New logic goes in a module under `internal/`, and `tests/test_server_budget.py` enforces it.
 - [ ] Delete the probe script. Its cases now live in the two bug test files.
@@ -888,10 +899,21 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **Settled by reading the code after the probes.** Neither recorder checks the source of a row, so D1 is real. The scheduler already records the audited hour pick at `internal/council/pick_scheduler.py:203`, so the write on the GET path is a duplicate.
 
+**Answers from Ditto.** The Ditto main agent failed twice with `generation_failed`, so these come from stored memories.
+
+- The shell-then-hydrate homepage is the intended design. A memory from 2026-08-26 records the empty server-rendered shell as expected behavior.
+- Tools outside the dashboard read the API. Memories record automation reading `/api/subnets` and Ditto Code fetching the alert, daily-pick, and health routes. This supports keeping HTTP 200 for usable replies in R10.
+- The operator set a standing review rule on 2026-11-16. The PR mechanics section applies it.
+- PR #1578 changes 83 files and none of them is `server.py`, so the soul-map work does not collide with this plan.
+
 **Unproven.** These stay open and each has a box in the plan that settles it.
 
-- Whether a live feed row can carry `staking_data` set to `None`. P3 proves the crash for that input, not that production sends it.
+- Whether production ever sends `staking_data` set to `None`. No code in the repo assigns `None` to it, so B6 is a latent fault, not a live one.
+- What the `#1060 family` in PR #1186 meant. No memory or issue explains it.
+- Whether a log filter outside the repo matches the logger name `server`. No memory records a log drain or an alert rule. Logs are pulled by hand with `flyctl`.
 - D4 and D5 come from reading the code. No probe ran them.
+
+**Independent review.** A Sonnet 5.5 subagent reviewed this plan against the code on 2026-11-17, as the standing review rule requires. It reported 3 blockers, 7 major findings, and 5 minor ones. Each was checked against the code and folded in. The blockers were the bailout wrapper that answers five paths before FastAPI, a production patch of `server` in `internal/council/build_seed_snapshot.py`, and helpers that R3 needed and no PR had assigned. The review confirmed the dead-code claims, the route counts, the free module names, and 10 of the bugs from the code. It did not run the probes, the tests, or the overlap script.
 
 ## Appendix B. Alternatives rejected
 
@@ -939,7 +961,7 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **No control skill.** The playbook expects `control-ui` or `control-cli`. Neither is installed here. Lanes use `curl` and Playwright as the boot recipe says.
 
-**Model names.** The lane model is the playbook default. Run `/setup-pstack` to change it. `AGENTS.md` forbids Claude Sonnet 4.5 and 4.6 as subagents.
+**Model names.** The lane model is the playbook default. Run `/setup-pstack` to change it. The standing review rule pins the review subagent to Sonnet 5.5. `AGENTS.md` forbids Claude Sonnet 4.5 and 4.6 as subagents.
 
 **Deploy.** No PR in this plan deploys. The operator runs the Fly workflow after landing, and the Deploy Guard runs the contract test again.
 
@@ -960,7 +982,7 @@ Line numbers are from commit `8cb247e`.
 | 1 to 197 | Imports, 16 guarded router imports, pick-engine and weights import guards | 197 | `internal/app/routers.py` | R9 |
 | 199 to 436 | Boot helpers and `_lifespan` for web boot, worker boot, and heartbeat | 238 | `internal/app/lifespan.py` | R9 |
 | 439 to 521 | App creation, load shed, worker proxy, metrics, rate limit, write auth, `include_router` calls | 83 | `server.py`, `internal/app/routers.py` | R9 |
-| 523 to 567 | Jinja environment, filters, globals, static mount | 45 | `internal/app/templating.py` | R7 |
+| 523 to 567 | Jinja environment, filters, globals, static mount | 45 | `internal/web/templating.py` | R7 |
 | 569 to 678 | `_CACHE_PATHS`, executor, `load_data`, row tagging, CORS and cache middleware | 110 | `internal/app/http_edge.py`, `internal/subnets/` | R2, R5, R9 |
 | 681 to 740 | Timeouts, two executors, five caches with their locks, `_to_thread_timeout` | 60 | `internal/request_executor.py`, `internal/swr_cache.py` | R3, R4 |
 | 743 to 1771 | Homepage shell, context builders, warm thread, `GET /` | 1029 | Delete about 410 lines, then `internal/home/` | R1, R7 |
@@ -973,11 +995,12 @@ Line numbers are from commit `8cb247e`.
 | 3026 to 3442 | Routes for simivision, top-picks, daily-pick, weighed, pick-explain, top-pick day and hour | 417 | `internal/council/picks_routes.py` and the read modules | R3, R6 |
 | 3445 to 3488 | Bailout wrapper, Restless wrapper, `__main__` | 44 | Stays in `server.py` | R9 |
 
-The target tree adds two packages and reuses six that exist.
+The target tree adds three packages and reuses six that exist.
 
 ```
 server.py                        app assembly only, 150 lines or fewer
-internal/app/                    new. routers.py, lifespan.py, http_edge.py, templating.py
+internal/app/                    new. routers.py, lifespan.py, http_edge.py. Only server.py imports it
+internal/web/                    new. templating.py, settings.py, replies.py. Shared by feature packages
 internal/home/                   new. shell.py, context.py, routes.py
 internal/swr_cache.py            new. one cache type
 internal/request_executor.py     exists. gains the dashboard and pick-read pools
@@ -1010,15 +1033,15 @@ Evidence is `measured` when a probe ran it and `read` when it comes from reading
 | B2 | Error replies use HTTP 200 and include the exception text | measured, P6 and P7 | `server.py:2366`, `3154`, `3221`, `3340`, `3357`, `3442` | R10 |
 | B3 | `/api/simivision` returns two different shapes, cold and warm | measured, P5 | `server.py:3023`, `3036` | R10 |
 | B4 | Two defaults for `HOMEPAGE_SHELL_CACHE_SECONDS`, 60 and 45 | measured, P10 | `server.py:571`, `682` | R10 |
-| B5 | A router that fails to import is dropped with one log line, and no endpoint reports it | read | `server.py:32` to `171` | R10 |
-| B6 | `/api/stats` returns 500 when a row has `staking_data` set to `None`, and `/api/summary` does not | measured, P3 | `server.py:2272` | R5 |
+| B5 | A router that fails to import is dropped with one log line, and no endpoint reports it. `/api/health` is a constant | read | `server.py:32` to `171` | R10 |
+| B6 | `/api/stats` returns 500 when a row has `staking_data` set to `None`, and `/api/summary` does not | measured for that input, P3. Latent, since no code assigns `None` | `server.py:2272` | R5 |
 | D1 | When the feed fails, three invented subnets with invented prices reach the hold and shadow-prediction recorders | measured with stubbed recorders, P8, and the recorders have no source check | `server.py:2603`, `2630` | R11 |
 | D2 | `GET /api/top-pick/hour` writes predictions to the learning loop | read | `server.py:2931`, `2954` | R11 |
 | D3 | Timestamps end in `+00:00Z`, which is not valid ISO 8601 | measured, P1 | `server.py:2405`, `2802`, and 1 more production site | R11 |
 | D4 | One row with a non-integer `netuid` stops the scan in `/api/subnet/{subnet_id}` and returns 404 for a real subnet | read | `server.py:2064` | R11 |
 | D5 | `/api/mindmap/feedback` ignores feedback for netuid 0 | read | `server.py:2373` | R11 |
 | D6 | `/api/summary` and `/api/stats` rebuild every subnet row on each request | measured, P3b | `server.py:2110`, `2257` | R11 |
-| D7 | The async `GET /` handler renders Jinja on the event loop on a cold start | measured, P9 | `server.py:1761` | R11 |
+| D7 | The `index` route handler is unreachable, because the bailout wrapper answers every `GET /`. Two homepage code paths exist and one never runs | read, found by the review | `server.py:1733`, `internal/instant_bailout.py:164` | R11 |
 | D8 | The emergency homepage render waits for a hung worker past its 8 second timeout, because the `with` block joins the thread | measured, 20.3 seconds | `server.py:837` | R11 |
 | D9 | The same `with` block bug sits on the live homepage path, in the learning-metrics load | read | `internal/learning/dashboard_context.py:120` | R11 |
 | S1 | 73 broad `except Exception` handlers, many of which hide the failure behind a default | measured count | whole file | each move PR narrows the handlers it touches only when the caught state is illegitimate |
@@ -1031,14 +1054,16 @@ Lines are estimates from the ranges in Appendix E. Test patch sites are exact co
 |---|---|---|---|
 | R0 | 0 | 0 | 0 |
 | R1 | about 435 deleted | 15 | 1 |
-| R2 | about 135 | 23 | 13 |
+| R2 | about 135 | 23 | 14 |
 | R3 | about 640 | 29 | 3 |
-| R4 | about 150 removed by the shared cache type | 1 | 0 |
+| R4 | about 150 removed by the shared cache type | 1, plus the direct references below | 0 |
 | R5 | about 520 | 0 | 0 |
 | R6 | about 250 | 0 | 0 |
 | R7 | about 620 | 13 | 0 |
 | R8 | about 270 | 0 | 0 |
 | R9 | about 520 | 0 | 0 |
 | R10 to R12 | Behavior fixes and tests, no moves | 0 | 0 |
+
+The patch-site column undercounts the test work. Tests also read or write the moved globals directly at 107 places. About 58 touch homepage state and land in R1 and R7, and about 49 touch the pick and SimiVision caches and land in R3 and R4. The reset fixtures in R4 and R7 replace most of them.
 
 R3 is the largest and riskiest PR. If its owner cannot keep the golden files unchanged in one pass, split it into the SimiVision board first and the pick modules second.
