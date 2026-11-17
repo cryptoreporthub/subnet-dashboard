@@ -57,6 +57,34 @@ def _isolate_readiness_cache():
 
 
 @pytest.fixture(autouse=True)
+def _cancel_background_jobs_armed_by_test():
+    """Drop shared-scheduler jobs a test armed and never cancelled.
+
+    A leaked resolver timer fires during a later test and takes the
+    process-wide heavy-job slot, so that test sees ``heavy_job_busy``.
+    """
+    from internal import job_scheduler
+
+    def _jobs():
+        sched = job_scheduler._scheduler
+        if sched is None:
+            return None, set()
+        try:
+            return sched, {job.id for job in sched.get_jobs()}
+        except Exception:
+            return None, set()
+
+    _, before = _jobs()
+    yield
+    sched, after = _jobs()
+    for job_id in after - before:
+        try:
+            sched.remove_job(job_id)
+        except Exception:
+            pass
+
+
+@pytest.fixture(autouse=True)
 def _clear_message_intel_load_cache():
     try:
         from internal.message_intel.load_guard import clear_message_intel_load_cache
