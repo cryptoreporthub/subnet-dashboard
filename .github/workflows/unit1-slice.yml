@@ -43,6 +43,9 @@ on:
     branches: [main]
     paths: *unit1_slice_paths
 
+permissions:
+  contents: read
+
 jobs:
   unit1-slice:
     name: unit1-slice
