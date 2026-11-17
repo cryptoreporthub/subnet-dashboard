@@ -353,3 +353,10 @@
 
 - **Wave 2:** `loop_health.py` worker-ok over web failure; daemon watcher assert fix in `test_resolver_revive.py`; pytest proofs (endpoint **149**, loop+revive **48**, scheduler **76**). Store: `internal/pr1571-wave2-review-triage-2026-11-07.md`, `internal/pr1571-wave1-evidence-2026-11-07.md`.
 - **Replit handoff:** short PR comment supersedes [#6700529886](https://github.com/cryptoreporthub/subnet-dashboard/pull/1571#issuecomment-6700529886); suggest `@ditto review` on tip (no in-repo trigger found). CI pending post-push. No merge/deploy.
+
+## 2026-11-09 — Resolver stack land (unsupervised #1557 → #1563 → #1567)
+
+- **main** `cd544217` ← squash **#1567** (`cb05fb20`); prior **#1563** `caa88142`, **#1557** `75f2bab2`; **persist-1724** `4d0ae186`; **#1556** closed (absorbed #1571).
+- **#1563:** 4-file replay idempotency + Replit SQLite / non-list trail fixes; merge `51901f69`/`ccf40bbd` line; Claude no explicit PASS (sandbox); Ditto stale dismissals + check PASS.
+- **#1567:** 5-file ledger + pending spill; in-memory 50-row ceiling accepted (PR body + 0b doc); smoke green at `cb05fb20`.
+- **Ditto** STATUS memory `d47d4720`; internal notes under `/cursor/stores/self/internal/resolver-stack-*`.
