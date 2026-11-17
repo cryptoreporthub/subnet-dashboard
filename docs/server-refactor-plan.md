@@ -39,6 +39,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
   - [ ] R1 to R12 each follow the PR before them.
 - [ ] Hold the file boundaries. R0 to R9 change no response body, status code, or header, except the one fix that R5 names. R10 and R11 touch no file that R0 to R9 did not create or edit.
 - [ ] Post on the agent board before R2, R3, and R6. They edit import lines in packages that Agent A and Agent B own.
+- [ ] Stop a move PR that cannot keep `tests/test_server_golden.py` unchanged. Revert it, split it, and report the body that changed. Do not edit a stored golden file in R1 to R9, except the one `/api/stats` case that R5 names.
 - [ ] Hold the review gate. R10 and R11 change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
 
 ### PR mechanics, for every PR
@@ -54,6 +55,13 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] A full swarm runs once, at the code-ready head. It has one gates lane, the ten live lanes from the PR's **Verify, live** block, the perf lane, and two audit lanes that read the diff and distrust the PR body.
 - [ ] Clean only when every lane is `PASS`. Findings go back to the owner. A new head gets a fresh verdict.
 - [ ] The root appends each clean PR to the stack. The operator lands the stack bottom-up and triggers the Fly deploy by `workflow_dispatch`.
+
+### Deploy checkpoints
+
+- [ ] The operator lands and deploys the stack in four batches, R0 to R1, R2 to R4, R5 to R9, and R10 to R12. A batch waits until the batch before it has run in production for 24 hours.
+- [ ] After each deploy, confirm that `GET /version` reports the landed SHA.
+- [ ] Watch four signals for 24 hours. They are the `/health` reply time, the count of 5xx replies in `/metrics`, new issues in Sentry, and the worker heartbeat in `GET /api/health`.
+- [ ] If any signal is worse than before the deploy, the operator redeploys the previous SHA through the Fly workflow. The owner then reproduces the fault before the batch lands again.
 
 ### Boot recipe, for every live lane
 
@@ -74,18 +82,21 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Create `scripts/route_manifest.py`.
 - [ ] Create `scripts/perf_probe.py`.
 - [ ] Create `tests/test_route_manifest.py` and `tests/fixtures/route_manifest.json`.
-- [ ] Create `tests/test_server_route_shapes.py` and `tests/fixtures/server_route_shapes.json`.
+- [ ] Create `tests/test_server_golden.py` and `tests/fixtures/server_golden/`.
 - [ ] Create `tests/test_server_budget.py`.
 - [ ] Edit `tests/conftest.py`.
 
 **Build.**
 
-- [ ] `scripts/route_manifest.py` writes the ordered list of all 198 routes as method, path, and endpoint module, plus the SHA-256 of the OpenAPI JSON.
-- [ ] `tests/test_server_route_shapes.py` records the top-level and second-level keys of every JSON route that `server.py` defines today, and fails when a key set changes.
-- [ ] `tests/test_server_budget.py` holds three numbers that later PRs may lower and never raise. Take the starting numbers from `scripts/server_inventory.py` after #1591 lands. On `8cb247e` they are 3489 lines in `server.py`, 21 lines outside `tests/` that import `server`, and 81 test sites that patch a `server` attribute. #1591 adds 5 patch sites.
+- [ ] `scripts/route_manifest.py` writes every route as method, path, and endpoint module, plus the SHA-256 of the OpenAPI JSON. The test compares the method and path pairs as a set. It checks order only for the 3 pairs of routes that can match the same request, and none of those is defined in `server.py`.
+- [ ] Add a `frozen_world` fixture. It stubs the subnet feed with 5 fixed rows, freezes the clock, points `DATA_DIR` at a seeded temporary copy, and blocks the network.
+- [ ] `tests/test_server_golden.py` requests every route that `server.py` defines inside `frozen_world` and compares the whole body with a stored file. It stores the HTML of `/` in the cold, emergency, and warm state. A move PR must leave every stored file unchanged.
+- [ ] Render `index.html` once with Jinja `StrictUndefined` and store the list of context keys the template reads. The app uses the default `Undefined`, which prints a missing key as an empty string.
+- [ ] `tests/test_server_budget.py` holds seven numbers that later PRs may lower and never raise. Four of them count across `server.py` and every module this plan creates. They are 135 function-level imports, 73 `except Exception` handlers, 29 `os.environ.get` reads, and 17 imports of a private name from another package. The other three follow. Take the starting numbers from `scripts/server_inventory.py` after #1591 lands. On `8cb247e` they are 3489 lines in `server.py`, 21 lines outside `tests/` that import `server`, and 81 test sites that patch a `server` attribute. #1591 adds 5 patch sites.
 - [ ] Record in the fixture docstring why the contract test wrote files. `GET /api/signals` regenerates signals inline when the store is stale, at `internal/signals/routes.py:196`. The fixture contains the write. This PR does not change the route.
 - [ ] Add an autouse fixture in `tests/conftest.py` that copies `data/` and `config/` to `tmp_path`, sets `DATA_DIR`, and changes the working directory, so that no test writes a tracked file.
 - [ ] List every writer the contract test reaches that ignores `DATA_DIR`. Route each one through `internal/data_volume.py`.
+- [ ] Download the `pytest-junit` artifact that `.github/workflows/full-suite-junit.yml` records for trunk. Store its failing test ids as `artifacts/server-refactor/baseline-failures.txt`. Every later PR compares its own artifact with this list.
 
 **You see.**
 
@@ -93,11 +104,11 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `tests/test_route_manifest.py` gains the manifest equality case. Run `pytest tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py tests/test_endpoint_contract.py`.
+- [ ] `tests/test_route_manifest.py` gains the manifest equality case. Run `pytest tests/test_route_manifest.py tests/test_server_golden.py tests/test_server_budget.py tests/test_endpoint_contract.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R0/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R0/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R0/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R0/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R0/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -111,9 +122,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R0/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R0 is not review-gated.
 
@@ -149,11 +160,11 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `tests/test_server_budget.py` gains the lowered line budget. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+- [ ] `tests/test_server_budget.py` gains the lowered line budget. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_golden.py tests/test_server_budget.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R1/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R1/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R1/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R1/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R1/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -167,9 +178,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R1/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R1 is not review-gated.
 
@@ -208,11 +219,11 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Add `tests/test_subnet_source.py` with one case per fallback branch of `get_subnets_with_source`. Run `pytest tests/test_subnet_source.py tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+- [ ] Add `tests/test_subnet_source.py` with one case per fallback branch of `get_subnets_with_source`. Run `pytest tests/test_subnet_source.py tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_golden.py tests/test_server_budget.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R2/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R2/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R2/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R2/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R2/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -226,9 +237,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R2/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R2 is not review-gated.
 
@@ -269,11 +280,11 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] Add one test file per new module that covers the cold, warm, and busy branch of its cache. Run those files plus `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+- [ ] Add one test file per new module that covers the cold, warm, and busy branch of its cache. Run those files plus `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_golden.py tests/test_server_budget.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R3/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R3/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R3/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R3/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R3/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -287,9 +298,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R3/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R3 is not review-gated.
 
@@ -316,6 +327,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Run the **architect** skill on the shape of `SwrCache` before coding. The type owns one payload, its age, one build lock, and one background-refresh flag, and a read returns the payload with a freshness of `fresh`, `stale`, or `miss`.
 - [ ] Replace the subnets, SimiVision, top-picks, hour-pick, and pump-alerts caches, one commit per cache, with the characterization test green after each commit.
 - [ ] Delete the 20 module globals that the five caches used.
+- [ ] Every `SwrCache` adds itself to one module-level list, and `reset_all()` empties them all. An autouse fixture in `tests/conftest.py` calls it, so that one test cannot leave a payload for the next.
 
 **You see.**
 
@@ -327,7 +339,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R4/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R4/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R4/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R4/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R4/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -341,9 +353,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R4/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R4 is not review-gated.
 
@@ -368,7 +380,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Build.**
 
-- [ ] Move `GET /api/registry`, `/api/subnets`, `/api/subnet/{subnet_id}`, `/api/subnet/{subnet_id}/pool`, `/api/summary`, and `/api/stats` to a `subnets_router` in `internal/subnets/routes.py`. Include it at the position that keeps the route order in the manifest.
+- [ ] Move `GET /api/registry`, `/api/subnets`, `/api/subnet/{subnet_id}`, `/api/subnet/{subnet_id}/pool`, `/api/summary`, and `/api/stats` to a `subnets_router` in `internal/subnets/routes.py`. Route order is free here, because no route in `server.py` overlaps another route.
 - [ ] Move `_list_subnets_base_rows`, `_apply_subnets_query`, `_null_unfetched_metrics`, `_list_subnets_registry_fallback`, `_tag_subnet_row`, and `_consensus_map` to `internal/subnets/catalog.py`. The two functions that build rows share one row builder.
 - [ ] Put the status counts, totals, and ranking that `get_summary` and `get_stats` both compute into one pure function in `internal/subnets/stats.py`. Use the `None`-safe access from `get_summary`. This fixes bug B6 in Appendix F, so add its regression test in this PR.
 
@@ -382,7 +394,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R5/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R5/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R5/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R5/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R5/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -396,9 +408,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R5/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R5 is not review-gated.
 
@@ -431,11 +443,11 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] The pin files cover the move. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py tests/test_api_handler_timeouts.py`.
+- [ ] The pin files cover the move. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_golden.py tests/test_server_budget.py tests/test_api_handler_timeouts.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R6/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R6/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R6/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R6/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R6/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -449,9 +461,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R6/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R6 is not review-gated.
 
@@ -480,6 +492,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Put the homepage cache in one `HomeShell` object in `internal/home/shell.py`. It replaces `_HOMEPAGE_HTML_CACHE`, `_EMERGENCY_HOME_HTML`, `_HOMEPAGE_WARM_LOCK`, `_HOMEPAGE_WARMING`, and `_HOMEPAGE_RENDER_THREAD`, and it has three states, `cold`, `emergency`, and `warm`.
 - [ ] Build the homepage context in one function in `internal/home/context.py` that takes a tier. The ultra-minimal tier is the minimal tier without file reads. The three copies of the `signal_summary` and `pump_alerts` placeholders become one constant each.
 - [ ] Move `GET /` to `internal/home/routes.py`. Pass `HomeShell` methods to `wrap_instant_bailout` in `server.py`.
+- [ ] Give `HomeShell` a `reset()` and call it from the same autouse fixture as `reset_all()`. Delete the hand-written reset helpers in `tests/test_fast_shell_context.py`.
+- [ ] Assert that the context builder returns every key in the stored `StrictUndefined` list, for each tier.
 
 **You see.**
 
@@ -491,7 +505,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R7/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R7/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R7/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R7/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R7/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -505,9 +519,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R7/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R7 is not review-gated.
 
@@ -541,11 +555,11 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] The pin files cover the move. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+- [ ] The pin files cover the move. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_golden.py tests/test_server_budget.py`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R8/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R8/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R8/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R8/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R8/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -559,9 +573,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R8/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R8 is not review-gated.
 
@@ -581,6 +595,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Create `internal/app/routers.py`.
 - [ ] Create `internal/app/lifespan.py`.
 - [ ] Create `internal/app/http_edge.py`.
+- [ ] Create `internal/app/settings.py`.
 - [ ] Edit `server.py`.
 - [ ] Edit the tests that reference `server.templates` or `server._lifespan`.
 
@@ -589,6 +604,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Replace the 16 guarded import blocks with one table in `internal/app/routers.py`. Each row names the module, the router attribute, and whether the router is required. One loop imports and includes them in the manifest order and logs the same warning as today for an optional router that fails.
 - [ ] Move `_lifespan` and its boot helpers to `internal/app/lifespan.py`. Split it into one function for the worker boot and one for the web boot.
 - [ ] Move `_CACHE_PATHS`, `_ALLOWED_ORIGINS`, `add_cors_headers`, and the write-auth middleware to `internal/app/http_edge.py`.
+- [ ] Create `internal/app/settings.py` with one function per environment variable and one default per variable. Replace the 29 `os.environ.get` reads that started in `server.py`. Each function reads the environment when called, as the code does today. Keep both defaults of `HOMEPAGE_SHELL_CACHE_SECONDS` under two names, because R10 merges them.
+- [ ] Keep the request log line on the logger named `server`. A log filter outside the repo may match that name.
 - [ ] Leave in `server.py` only the Sentry and logging setup, app creation, the calls that mount middleware and routers, the bailout and Restless wrappers, and `__main__`.
 - [ ] Lower the line budget in `tests/test_server_budget.py` to 150.
 
@@ -602,13 +619,13 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R9/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R9/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R9/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R9/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R9/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
 - [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R9/worker-5/picks.json`. Pass when each key set equals the trunk key set.
 - [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R9/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
-- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R9/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 7. Start the app through each entrypoint in turn. They are `uvicorn server:app`, `python scripts/run_web_with_guard.py`, `sh scripts/fly_worker_entrypoint.sh`, `python server.py`, and `python scripts/restless_openapi.py`. Save `/tmp/swarm-R9/worker-7/entrypoints.log`. Pass when the first four answer `OK` on `/health` and the last exits 0.
 - [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R9/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
 - [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R9/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
 - [ ] Lane 10. Boot with `RUN_MODE=worker`, then with `BACKGROUND_ON_WEB=off`, then with defaults. Save `/tmp/swarm-R9/worker-10/boot-modes.log`. Pass when the set of started thread names in each mode equals the trunk set.
@@ -616,9 +633,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R9/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R9 is not review-gated.
 
@@ -645,6 +662,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] B1. A timeout or error payload must not carry `Cache-Control: public`. The handler that builds a degraded payload sets `no-store`, and the middleware adds a public TTL only to a GET that returned 200.
 - [ ] B2. Stop sending exception text to clients. Log the exception and return a fixed error code in the `error` field.
 - [ ] B2 status codes. A payload the page can still use, with `status` set to `timeout`, `busy`, or `pending`, stays HTTP 200, because `fetchJson` in `static/js/cockpit_hydrate.js` throws away the body of any other status. A hard failure with no data returns 503. A bad request body on `POST /api/mindmap/feedback` returns 400.
+- [ ] Define the reply states once. Add a `PayloadStatus` literal type and a `degraded(status, body)` helper in `internal/app/http_edge.py`. The helper builds the reply and sets `no-store`. `server.py` spells 12 status strings by hand today. Replace each hand-built timeout, busy, pending, and error reply in the moved route modules with the helper.
 - [ ] B3. `GET /api/simivision` returns `status` and `data` in every branch, including the cold and timeout branch.
 - [ ] B4. Read `HOMEPAGE_SHELL_CACHE_SECONDS` once. The public `max-age` for `/` and the shell cache age use that one value.
 - [ ] B5. Report the routers that failed to import under a `routers` key in `GET /api/health`.
@@ -673,9 +691,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R10/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** The operator reviews before merge.
 
@@ -760,6 +778,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Files.**
 
 - [ ] Edit `tests/test_server_budget.py`.
+- [ ] Create `tests/test_import_layers.py`.
+- [ ] Create `docs/architecture.md`.
 - [ ] Edit `AGENTS.md`.
 - [ ] Edit `tests/test_endpoint_contract.py` docstring.
 - [ ] Delete `scripts/server_refactor_probes.py`.
@@ -768,6 +788,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] Set the final budgets. `server.py` has at most 150 lines, `from server import` appears only in `asgi_entry.py` and `scripts/restless_openapi.py`, and tests patch no `server` attribute.
 - [ ] Add a budget case that fails when any file under `internal/` imports `server`.
+- [ ] Add `tests/test_import_layers.py`. It parses every module and fails when a package other than `internal/app` and `internal/home` imports `internal.app` or `internal.home`, or when a route module imports another route module.
+- [ ] Write `docs/architecture.md`. It holds the module tree from Appendix E, the import rules the two tests enforce, and where a new route, cache, or setting goes.
+- [ ] Add `internal/app/`, `internal/home/`, and `internal/subnets/` to the ownership table in `AGENTS.md`.
 - [ ] Update the sections of `AGENTS.md` that describe `server.py`. The conflict line for the two agents becomes the table in `internal/app/routers.py`.
 - [ ] Add the one rule from #1186 that still applies. New logic goes in a module under `internal/`, and `tests/test_server_budget.py` enforces it.
 - [ ] Delete the probe script. Its cases now live in the two bug test files.
@@ -782,7 +805,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R12/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R12/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R12/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R12/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R12/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -796,9 +819,9 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
 - [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
-- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Probe. Run `python scripts/perf_probe.py` five times at trunk and five times at head, alternating, on the same machine. The probe counts every reply that is not 200 and reports the median and range.
 - [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R12/perf-trunk.json`.
-- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+- [ ] Rule. The PR fails when a head median is above the trunk median by more than 15 percent and by more than the trunk range, on any route or on import time. It also fails when the probe counts any reply that is not 200.
 
 **Review gate.** None. R12 is not review-gated.
 
@@ -849,6 +872,16 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **A fix from #1330 that `main` still needs.** With the render patched to hang for 20 seconds, `_prime_emergency_home_html` returned after 20.3 seconds. Its timeout is 8 seconds.
 
+**Route order does not constrain the moves.** A script matched a sample request for each of the 191 API routes against every other route. 3 ordered pairs overlap, none involves a route in `server.py`, and no method and path pair is defined twice.
+
+**The template hides missing keys.** The Jinja environment uses the default `Undefined`, so a context key lost in R7 would print as an empty string and no test would fail.
+
+**Import cost.** `import server` took 0.49, 0.49, and 0.52 seconds in 3 runs and loaded 1,103 modules at 93 MB. The 17 production modules that import it pay this cost on first use. The limiter was not profiled, so the perf rule compares medians against the run-to-run range.
+
+**Settings and reply states are scattered.** `server.py` reads the environment 29 times for 22 names. It reads `HYDRATE_SUBNETS_TIMEOUT_SECONDS` in 5 places and `HOMEPAGE_SHELL_CACHE_SECONDS` with two defaults. It spells 12 different `status` strings by hand.
+
+**Entrypoints.** Five commands import the app. They are `uvicorn server:app` in `.github/workflows/ci-smoke.yml`, `scripts/fly_worker_entrypoint.sh`, and `.replit`, then `asgi_entry:app` through `scripts/run_web_with_guard.py` and the `Procfile`, then `python server.py`, and `scripts/restless_openapi.py`.
+
 **Tests write tracked files.** `git status --short` was empty, then `pytest tests/test_endpoint_contract.py` passed 149 cases and left 6 modified files under `data/`.
 
 **Settled by reading the code after the probes.** Neither recorder checks the source of a row, so D1 is real. The scheduler already records the audited hour pick at `internal/council/pick_scheduler.py:203`, so the write on the GET path is a duplicate.
@@ -856,7 +889,6 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 **Unproven.** These stay open and each has a box in the plan that settles it.
 
 - Whether a live feed row can carry `staking_data` set to `None`. P3 proves the crash for that input, not that production sends it.
-- Whether moving a route into a router can keep the exact route order. R0 builds the manifest that answers this for each PR.
 - D4 and D5 come from reading the code. No probe ran them.
 
 ## Appendix B. Alternatives rejected
@@ -875,6 +907,12 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **Fixing bugs inside the move PRs.** Rejected, with one named exception in R5. A move PR that also changes behavior cannot be checked by comparing trunk and head output.
 
+**Typed response models on every route.** A FastAPI `response_model` drops any key the model does not list. The payloads here are large dictionaries built by many modules, so adding models during the move would change bodies in PRs that must not change them. The golden files in R0 pin the bodies instead. Models can follow later, one route at a time.
+
+**Holding all state on `app.state` with dependency injection.** It would touch every handler signature and every test. A registry with `reset_all()` gives tests the same isolation for a few lines.
+
+**Splitting the other large files in the same program.** Seven files under `internal/` have more than 1,500 lines. They need the same treatment, and they are a separate plan that can reuse the R0 tools.
+
 ## Appendix C. Risks
 
 **Decisions, all settled on 2026-11-17.** The operator asked for each open question to be answered by what is best for the repo.
@@ -887,13 +925,15 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **Open PRs that touch the same code.** #1591 is test-only and applies cleanly to `main`. It adds 5 test patches of `server` attributes. Land it before R0, so that the R0 budgets count them and R2, R5, and R7 repoint them.
 
-**Route order.** FastAPI matches routes in registration order. The manifest in R0 compares the ordered list, so a router included at the wrong position fails lane 1.
+**Route order.** FastAPI matches routes in registration order. Appendix A shows that no route in `server.py` overlaps another, and the manifest checks the order of the 3 pairs that do.
 
 **Two-agent ownership.** R2, R3, and R6 edit import lines inside packages that Agent A and Agent B own. The edits are one line each. Post them on the board first.
 
 **Worker mode.** `_lifespan` has a worker branch that no contract test boots. Lane 9 and the R9 lane 10 cover it, and the owner of R9 watches the worker log after deploy.
 
 **Cache behavior drift in R4.** The five caches differ in small ways that Appendix E lists. The characterization tests exist to catch a merged type that flattens a difference.
+
+**Logger names.** Moved code logs under its new module name. Only the request log line keeps the name `server`. A log filter outside the repo that matches other `server` lines would miss them, and nothing in the repo can show whether one exists.
 
 **No control skill.** The playbook expects `control-ui` or `control-cli`. Neither is installed here. Lanes use `curl` and Playwright as the boot recipe says.
 
@@ -980,3 +1020,23 @@ Evidence is `measured` when a probe ran it and `read` when it comes from reading
 | D8 | The emergency homepage render waits for a hung worker past its 8 second timeout, because the `with` block joins the thread | measured, 20.3 seconds | `server.py:837` | R11 |
 | D9 | The same `with` block bug sits on the live homepage path, in the learning-metrics load | read | `internal/learning/dashboard_context.py:120` | R11 |
 | S1 | 73 broad `except Exception` handlers, many of which hide the failure behind a default | measured count | whole file | each move PR narrows the handlers it touches only when the caught state is illegitimate |
+
+## Appendix G. Size of each PR
+
+Lines are estimates from the ranges in Appendix E. Test patch sites are exact counts from `scripts/server_inventory.py` and they sum to 81.
+
+| PR | Lines of `server.py` deleted or moved | Test patch sites to repoint or delete | Production importers to edit |
+|---|---|---|---|
+| R0 | 0 | 0 | 0 |
+| R1 | about 435 deleted | 15 | 1 |
+| R2 | about 135 | 23 | 13 |
+| R3 | about 640 | 29 | 3 |
+| R4 | about 150 removed by the shared cache type | 1 | 0 |
+| R5 | about 520 | 0 | 0 |
+| R6 | about 250 | 0 | 0 |
+| R7 | about 620 | 13 | 0 |
+| R8 | about 270 | 0 | 0 |
+| R9 | about 520 | 0 | 0 |
+| R10 to R12 | Behavior fixes and tests, no moves | 0 | 0 |
+
+R3 is the largest and riskiest PR. If its owner cannot keep the golden files unchanged in one pass, split it into the SimiVision board first and the pick modules second.
