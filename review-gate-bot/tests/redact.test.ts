@@ -622,3 +622,8 @@ test("the opaque-credential rule scrubs a megabyte of identifier characters quic
   redactSecrets(run);
   assert.ok(performance.now() - started < 500, "the rule must not backtrack across a long run");
 });
+
+test("a value ending in a backslash at end of input returns instead of looping", () => {
+  const result = redactSecrets("API_TOKEN=abc\\");
+  assert.match(result.text, /API_TOKEN=<redacted:API_TOKEN>/);
+});

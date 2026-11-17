@@ -84,7 +84,7 @@ export function downgradeIfStaleGreen(state: GateState, pair: Pick<LivePair, "he
     return { ...state, next: "run_suite", suiteDetail: GITHUB_PAIR_READ_DETAIL };
   }
   if (pair.headSha !== state.headSha) {
-    return { ...state, next: "run_suite", suiteDetail: GATE_HEAD_CHANGED_DETAIL };
+    return { ...state, headSha: pair.headSha, next: "run_suite", suiteDetail: GATE_HEAD_CHANGED_DETAIL };
   }
   return state;
 }
