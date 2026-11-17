@@ -268,3 +268,15 @@ test("a parseable line whose value was changed reads as a miss", () => {
   assert.equal(result.hits.has("judge:sha"), false);
   assert.equal(result.skipped, 1);
 });
+
+// 19. Documented stale case: if a newer record for a key is damaged, the older record for that key replays.
+test("a damaged newer record lets the older record for the same key replay (documented stale case)", () => {
+  const path = tempJournal();
+  appendRecord(path, { key: "judge:sha", verdict: "MODIFY" }, { io: realIo });
+  appendRecord(path, { key: "judge:sha", verdict: "PASS" }, { io: realIo });
+  // "PASS" appears only in the second record, so this damages the newer record and leaves the older one intact.
+  writeFileSync(path, readFileSync(path, "utf8").replace(/PASS/, "FAIL"));
+  const result = replayJournal(path);
+  assert.equal(result.hits.get("judge:sha")?.verdict, "MODIFY");
+  assert.equal(result.skipped, 1);
+});

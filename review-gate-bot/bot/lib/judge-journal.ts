@@ -5,7 +5,9 @@
 // where body is the record's JSON text and sum is the first 16 hex digits of its SHA-256.
 // Replay splits on newlines. Blank lines are skipped silently. A line that does not parse,
 // does not verify its sum, or has no string key is skipped and counted. The last valid record
-// per key wins. A damaged line therefore reads as a miss, never as a different record.
+// per key wins. A damaged line reads as a miss, never as a different record. But if a newer
+// record for a key is damaged or lost, replay falls back to the older record for that key,
+// so the cache can serve an older verdict for that key. Callers must accept that.
 //
 // Durability is cache-only and never fsyncs. A successful append may not survive a crash,
 // and the cache can always be regenerated.
@@ -17,7 +19,7 @@ import { closeSync, constants, openSync, readFileSync, writeSync } from "node:fs
 
 export const JOURNAL_OPEN_FLAGS = constants.O_APPEND | constants.O_WRONLY | constants.O_CREAT;
 
-/** Cap on the bytes written per append, measured with Buffer.byteLength (leading newline included). */
+/** Cap on the bytes written per append: the full encoded line, measured with Buffer.byteLength. */
 export const MAX_RECORD_BYTES = 4096;
 
 export interface JournalRecord {
