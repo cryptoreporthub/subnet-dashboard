@@ -1,0 +1,12 @@
+{
+  "number": 9001,
+  "title": "synthetic: add a debug script that prints the environment",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/9001",
+  "headSha": "5ec2e7ec0de0000000000000000000000000beef",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/council/resolver.py",
+    "scripts/print_env_debug.py"
+  ]
+}
