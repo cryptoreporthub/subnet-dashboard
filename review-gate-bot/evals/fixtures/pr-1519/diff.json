@@ -1,0 +1,35 @@
+{
+  "totalFiles": 4,
+  "files": [
+    {
+      "path": ".github/workflows/fly-enable-v2.yml",
+      "status": "removed",
+      "additions": 0,
+      "deletions": 36,
+      "patch": "@@ -1,36 +0,0 @@\n-name: Enable Worker Split v2\n-\n-on:\n-  workflow_dispatch:\n-    inputs:\n-      confirm:\n-        description: \"Type enable to run Phase C worker split v2 on prod\"\n-        required: true\n-        default: \"\"\n-  push:\n-    branches:\n-      - ops/trigger-enable-worker-v2\n-\n-jobs:\n-  enable-v2:\n-    name: Enable worker split v2\n-    runs-on: ubuntu-latest\n-    if: github.event_name == 'push' || github.event.inputs.confirm == 'enable'\n-    concurrency: deploy-group\n-    steps:\n-      - uses: actions/checkout@v4\n-      - uses: superfly/flyctl-actions/setup-flyctl@master\n-        with:\n-          version: latest\n-      - name: Run Phase C enablement\n-        run: |\n-          chmod +x scripts/fly_enable_worker_v2.sh scripts/fly_worker_split_v2_guard.sh\n-          ./scripts/fly_enable_worker_v2.sh\n-        env:\n-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}\n-          FLY_PRIMARY_REGION: sjc\n-      - name: Babysit Phase C\n-        run: |\n-          chmod +x scripts/babysit_phase.sh\n-          BASE=https://subnet-dashboard.fly.dev ./scripts/babysit_phase.sh c || true\n-        continue-on-error: true"
+    },
+    {
+      "path": "cursor-agents-communication/fly-worker-split-v2-lock.md",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 2,
+      "patch": "@@ -2,7 +2,7 @@\n \n **Status:** **ROLLED BACK to v1 canon** (2026-07-31)  \n **Prod canon:** `fly.toml` \u00b7 one web machine \u00b7 `data_volume` + **inline worker** \u00b7 `WORKER_SPLIT_V2` unset  \n-**v2:** opt-in only via `scripts/fly_enable_worker_v2.sh` / workflow Enable Worker Split v2  \n+**v2:** opt-in only via `scripts/fly_enable_worker_v2.sh`  \n **Rollback:** `scripts/fly_disable_worker_v2.sh` \u00b7 `split-v2-rollback-runbook.md`\n \n ## Why rolled back\n@@ -35,4 +35,4 @@ split_v2 put volume APIs behind web\u2192worker private HTTP. On this app that hop\n \n 1. Prove `scripts/fly_probe_worker_from_web.sh` from a temporary worker scale\n 2. Human approve\n-3. `./scripts/fly_enable_worker_v2.sh` or workflow **Enable Worker Split v2**\n+3. `./scripts/fly_enable_worker_v2.sh`"
+    },
+    {
+      "path": "cursor-agents-communication/split-v2-rollback-runbook.md",
+      "status": "modified",
+      "additions": 0,
+      "deletions": 2,
+      "patch": "@@ -44,8 +44,6 @@ fly secrets set MESSAGE_INTEL_LISTENER=auto --app subnet-dashboard\n Only after private HTTP is proven (probe from web machine succeeds for 24h):\n \n ```bash\n-# workflow: Enable Worker Split v2 (confirm=enable)\n-# or:\n ./scripts/fly_enable_worker_v2.sh\n ```\n "
+    },
+    {
+      "path": "scripts/fly_disable_worker_v2.sh",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -129,4 +129,4 @@ fi\n echo \"\"\n echo \"Done. Canon is v1 inline worker (fly.toml).\"\n echo \"Optional: MESSAGE_INTEL_LISTENER=auto after telegram session on volume.\"\n-echo \"Re-enable v2 only via workflow Enable Worker Split v2 / scripts/fly_enable_worker_v2.sh\"\n+echo \"Re-enable v2 only via scripts/fly_enable_worker_v2.sh (the workflow was removed in #1519)\""
+    }
+  ],
+  "truncated": false,
+  "omittedPaths": []
+}
