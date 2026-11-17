@@ -47,7 +47,8 @@ def backfill_expert_attribution(*, dry_run: bool = True) -> Dict[str, Any]:
             before, data, caller="expert_backfill", trigger="expert_backfill"
         )
         if result.outcome is not PersistOutcome.APPLIED:
-            return {"ok": False, "reason": str(result.reason), "updated": 0}
+            reason = result.reason.value if result.reason is not None else "persist_refused"
+            return {"ok": False, "reason": reason, "updated": 0}
         updated = len(result.committed_keys)
 
     return {

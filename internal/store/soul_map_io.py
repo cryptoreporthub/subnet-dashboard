@@ -117,9 +117,7 @@ def read_blob_checked(path: str) -> BlobRead:
         return BlobRead("unreadable", None, error="empty")
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return BlobRead("unreadable", None, error="parse")
-    except UnicodeDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
         return BlobRead("unreadable", None, error="parse")
     except (OSError, MemoryError) as exc:
         return BlobRead("transient", None, error=str(exc))

@@ -131,7 +131,7 @@ def test_writers_lock_joins_five_second_deadline(tmp_path):
     elapsed = time.monotonic() - t0
     release.set()
     holder.join(timeout=5)
-    assert elapsed < 6.5
+    assert soul_map_io._SOUL_MAP_LOCK_DEADLINE_SECONDS - 0.5 <= elapsed < 6.5
     assert result.outcome is WriteOutcome.LOCK_WAIT_FAILED
     assert result.blob is None
 
@@ -232,3 +232,13 @@ def test_rebalance_refused_write_returns_not_ok(tmp_path, monkeypatch):
     assert result["ok"] is False
     assert result["saved"] is False
     assert emits == []
+
+
+def test_read_blob_checked_classifies_deeply_nested_json_as_unreadable(tmp_path):
+    blob_path = tmp_path / "soul_map.json"
+    blob_path.write_text("[" * 200_000 + "]" * 200_000, encoding="utf-8")
+
+    checked = soul_map_io.read_blob_checked(str(blob_path))
+
+    assert checked.kind == "unreadable"
+    assert checked.blob is None
