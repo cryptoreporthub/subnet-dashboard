@@ -280,6 +280,25 @@ def test_failed_append_keeps_trail_row_and_ledger_in_bridge_memory(tmp_path, mon
     assert "p-failed" in bridge.soul_map_state["resolved_prediction_ids"]
 
 
+def test_trail_write_exception_is_logged_and_row_stays_buffered(tmp_path, monkeypatch, caplog):
+    import internal.council.mindmap_bridge as mindmap_bridge
+    from internal.council.mindmap_bridge import MindmapBridge, TrailKind
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+
+    def _boom(*_args, **_kwargs):
+        raise PermissionError("lock file unwritable")
+
+    monkeypatch.setattr(mindmap_bridge, "write_soul_map", _boom)
+    with caplog.at_level("WARNING", logger=mindmap_bridge.logger.name):
+        result = bridge.append_learning_trail({"event_type": "prediction_resolved", "evidence": {"seq": 1}})
+
+    assert result.kind is TrailKind.BUFFERED
+    assert any("learning trail write failed" in r.getMessage() and "PermissionError" in r.getMessage() for r in caplog.records)
+
+
 def test_successful_append_shows_other_bridges_rows_in_bridge_memory(tmp_path, monkeypatch):
     """A successful append must leave the bridge holding every row now on disk, not just its own.
 

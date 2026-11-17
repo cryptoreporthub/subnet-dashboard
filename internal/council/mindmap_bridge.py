@@ -259,7 +259,14 @@ class MindmapBridge:
 
         try:
             result = write_soul_map(_apply, self.persistence_path, raise_on_lock_timeout=False)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "learning trail write failed path=%s error_type=%s error=%s",
+                self.persistence_path,
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
             _through, rows, _resolved = _snapshot_pending(key)
             return TrailAppend(
                 TrailKind.BUFFERED if any(row.get("event_id") == event_id for row, _ in rows) else TrailKind.EVICTED,
