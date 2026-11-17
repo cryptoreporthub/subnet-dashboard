@@ -1,0 +1,968 @@
+# Server.py refactor plan
+
+This plan splits `server.py` into domain modules under `internal/` and fixes the bugs found on the way. It is for the operator who approves each PR and for the agent that runs it.
+`server.py` has 3,489 lines, 107 functions, 31 routes, and 49 module globals. 158 test files and 17 production modules import it.
+The program enforces one rule. Code moves with every caller and every test patch in the same PR, and `server.py` keeps no re-export.
+The PRs run in order as one stack, R0, R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12.
+R0 to R9 change structure only. R10 and R11 change behavior and wait for operator review.
+`server:app` stays the only entrypoint, as the single-foundation rule in `AGENTS.md` requires.
+
+## How to read this
+
+One box is one unit of work. Every box names the evidence that checks it. A nested box is a sub-step of the box above it. Check a box only when its evidence exists, a file, a log line, a screenshot, a test run, or a SHA. The body is a how-to. The appendices explain and record.
+
+The program runs `playbooks/autopilot-stack.md` from the poteto-mode skill. The agent builds and verifies the stack. The operator lands every PR, and R10 and R11 stop at merge-ready for review.
+
+Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+## Program checklist
+
+### Arm the program
+
+- [ ] State the protocol and this plan to the operator, then stop. Start execution only on the operator's explicit go.
+- [ ] Get the operator's answer to the three open decisions in Appendix C before R1 starts.
+- [ ] Read these from trunk at program start. Re-read them at every tick.
+  - [ ] `git show origin/main:AGENTS.md`
+  - [ ] `git show origin/main:docs/server-refactor-plan.md`
+  - [ ] `git show origin/main:cursor-agents-communication/board.md`
+  - [ ] `git show origin/main:.cursor/rules/ponytail.mdc`
+  - [ ] The local skill files `playbooks/autopilot-stack.md`, `playbooks/autopilot-full.md`, `playbooks/opening-a-pr.md`, and `swarm/SKILL.md`.
+- [ ] On the operator's go, arm the audit tick as `/loop 1h` with the tick prompt below. Never leave the cadence to memory.
+- [ ] Use this tick prompt, verbatim. "Re-read the execution playbook and this plan. Audit the operation against them and fix drift in this tick. Probe every active lane and judge progress by side effects only. Stand down a stuck lane and dispatch its replacement now. Then post a short status message to the operator in chat only when the audit found a tracked change that no earlier status message reported. Name every such change and nothing else. If the audit found none, end the turn with no reply text. Either way, log this tick's row in the decision trail."
+- [ ] On the operator's hold or stand-down, send every owner a zero-writes order at once.
+
+### Spawn owners
+
+- [ ] Spawn one owner per PR, one at a time. `AGENTS.md` forbids concurrent edits to the working tree.
+- [ ] Follow this dependency graph. Each PR branches from its parent's branch.
+  - [ ] R0 is first and branches from `main`.
+  - [ ] R1 to R12 each follow the PR before them.
+- [ ] Hold the file boundaries. R0 to R9 change no response body, status code, or header, except the one fix that R5 names. R10 and R11 touch no file that R0 to R9 did not create or edit.
+- [ ] Post on the agent board before R2, R3, and R6. They edit import lines in packages that Agent A and Agent B own.
+- [ ] Hold the review gate. R10 and R11 change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
+
+### PR mechanics, for every PR
+
+- [ ] Use the GitHub MCP tools for every PR operation. This environment has no `gh` or `origin` CLI.
+- [ ] Open the PR ready, never draft. A stack child targets its parent branch.
+- [ ] Run `pytest tests/test_endpoint_contract.py` once before the PR-facing push. Push with hooks on.
+- [ ] Rebase onto current trunk before the code-ready report. Rebase again only on a conflict with trunk or on a CI failure that comes from trunk.
+- [ ] Re-run `python scripts/server_inventory.py` after every rebase. An open PR that added a `server` import or patch shows up as a raised count.
+
+### Verdict and merge, for every PR
+
+- [ ] A full swarm runs once, at the code-ready head. It has one gates lane, the ten live lanes from the PR's **Verify, live** block, the perf lane, and two audit lanes that read the diff and distrust the PR body.
+- [ ] Clean only when every lane is `PASS`. Findings go back to the owner. A new head gets a fresh verdict.
+- [ ] The root appends each clean PR to the stack. The operator lands the stack bottom-up and triggers the Fly deploy by `workflow_dispatch`.
+
+### Boot recipe, for every live lane
+
+Each live lane runs at the PR head on its own checkout. No control skill is installed for this repo, so lanes drive the app with `curl` and with the preinstalled Playwright Chromium.
+
+- [ ] `git fetch origin <head-branch> && git checkout <head SHA>`.
+- [ ] `python -m venv .venv && .venv/bin/pip install -r requirements.txt pytest httpx`.
+- [ ] `PORT=5000 .venv/bin/python server.py`, then wait until `curl -s localhost:5000/health` prints `OK`.
+- [ ] Send input only through HTTP requests and Chromium page loads. Read state only from responses, the server log, and `git status`.
+- [ ] Save every artifact to `/tmp/swarm-<pr-id>/worker-<n>/<slug>` and return the paths with the report.
+
+## Pin the contract and make the tests hermetic (R0)
+
+**Depends on.** None.
+
+**Files.**
+
+- [ ] Create `scripts/route_manifest.py`.
+- [ ] Create `scripts/perf_probe.py`.
+- [ ] Create `tests/test_route_manifest.py` and `tests/fixtures/route_manifest.json`.
+- [ ] Create `tests/test_server_route_shapes.py` and `tests/fixtures/server_route_shapes.json`.
+- [ ] Create `tests/test_server_budget.py`.
+- [ ] Edit `tests/conftest.py`.
+
+**Build.**
+
+- [ ] `scripts/route_manifest.py` writes the ordered list of all 198 routes as method, path, and endpoint module, plus the SHA-256 of the OpenAPI JSON.
+- [ ] `tests/test_server_route_shapes.py` records the top-level and second-level keys of every JSON route that `server.py` defines today, and fails when a key set changes.
+- [ ] `tests/test_server_budget.py` holds three numbers that later PRs may lower and never raise. They start at 3489 lines in `server.py`, 21 lines outside `tests/` that import `server`, and 81 test sites that patch a `server` attribute.
+- [ ] Add an autouse fixture in `tests/conftest.py` that copies `data/` and `config/` to `tmp_path`, sets `DATA_DIR`, and changes the working directory, so that no test writes a tracked file.
+- [ ] List every writer the contract test reaches that ignores `DATA_DIR`. Route each one through `internal/data_volume.py`.
+
+**You see.**
+
+- [ ] `pytest tests/test_endpoint_contract.py` prints `149 passed` and `git status --short` prints nothing afterwards. Today the same run modifies 6 files under `data/`.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `tests/test_route_manifest.py` gains the manifest equality case. Run `pytest tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py tests/test_endpoint_contract.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R0/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R0/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R0/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R0/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R0/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R0/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R0/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R0/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R0/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Run the full `pytest` suite twice in a clean checkout. Save `/tmp/swarm-R0/worker-10/git-status.txt`. Pass when `git status --short` is empty after both runs and the failure list equals the trunk failure list.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R0/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R0 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Delete the unreachable homepage build and other dead code (R1)
+
+**Depends on.** R0.
+
+**Files.**
+
+- [ ] Edit `server.py`.
+- [ ] Edit `tests/test_fast_shell_context.py` and the other tests that `python scripts/server_inventory.py` lists for the deleted names.
+
+**Build.**
+
+- [ ] Delete `_resolve_index_context`, `_build_index_context`, `_degraded_index_context`, `_home_hero_context`, `_shell_pump_and_picks`, `_safe_brain_letter_context`, `_safe_mindmap_graph_context`, `_pump_alerts_context`, `_simileads_context`, `_pick_netuid_from_daily_payload`, and `_DEGRADED_INDEX_CACHE` from `server.py`. No production code calls the first one, and the rest are reachable only through it.
+- [ ] Delete `_subnets_for_spotlight_lite`, `_enrich_daily_pick_payload`, and the `safe_list` Jinja filter. Nothing in production or in `templates/` uses them.
+- [ ] Reduce `_message_intel_shell_context` to its skeleton. After the deletions every caller passes `fast=True`.
+- [ ] Delete the unused imports `get_or_create_today_pick` and `populate_author_reliability` from `server.py`.
+- [ ] Delete the tests that exercise only the deleted functions. Remove the 6 test patches of `server.get_or_create_today_pick`, which patch a name that `server.py` never calls, and keep each test only if it still fails when its behavior breaks.
+- [ ] Lower the line budget in `tests/test_server_budget.py` to the new count.
+
+**You see.**
+
+- [ ] `wc -l server.py` prints about 3050. `python scripts/server_inventory.py . /tmp/inv.json` prints `functions 94` or fewer.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `tests/test_server_budget.py` gains the lowered line budget. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R1/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R1/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R1/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R1/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R1/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R1/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R1/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R1/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R1/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Request `/` with `HOMEPAGE_BUILD_TIMEOUT=1` and a blocked network. Save `/tmp/swarm-R1/worker-10/home-degraded.png`. Pass when the page still contains `tribunal-hero`, the same as trunk.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R1/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R1 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Move the subnet source and market context out of server.py (R2)
+
+**Depends on.** R1.
+
+**Files.**
+
+- [ ] Create `internal/subnets/source.py`.
+- [ ] Create `internal/subnets/registry.py`.
+- [ ] Create `internal/council/market_context.py`.
+- [ ] Edit `server.py`.
+- [ ] Edit `internal/analytics/market_drivers.py`, `internal/analytics/report.py`, `internal/council/pick_audit_scheduler.py`, `internal/council/pick_scheduler.py`, `internal/council/score_snapshots.py`, `internal/dev_radar/service.py`, `internal/indicators/routes.py`, `internal/letter/brain_letter.py`, `internal/message_intel/routes.py`, `internal/oracle/routes.py`, `internal/share_pages/search.py`, `internal/simivision/chat_service.py`, and `internal/simivision/graded_context.py`.
+- [ ] Edit every test that patches the moved names.
+
+**Build.**
+
+- [ ] Move `_get_subnets_with_source`, `_get_subnets_hydrate`, and `_STATIC_SUBNETS` to `internal/subnets/source.py` as `get_subnets_with_source`, `get_subnets_hydrate`, and `STATIC_SUBNETS`.
+- [ ] Move `_normalize_registry_subnet` to `internal/subnets/registry.py`. Replace `load_data` with `safe_read_json` from `internal/file_utils.py` where the behavior matches, and move it to `internal/subnets/registry.py` where it does not.
+- [ ] Move `_market_mood_proxy`, `_market_context_with_weights`, and `_safe_macro_overlay` to `internal/council/market_context.py`.
+- [ ] Change the 13 production modules to import from the new modules. Change `server.py` to import the same names.
+- [ ] Repoint the test patches of `_get_subnets_with_source` (10), `_market_context_with_weights` (6), `load_data` (4), and `_get_subnets_hydrate` (3) to the module that now calls the function. Leave no re-export in `server.py` for tests to patch.
+- [ ] Lower the import budget and the patch budget in `tests/test_server_budget.py`.
+
+**You see.**
+
+- [ ] `git grep -nE "from server import" -- internal` prints only the lines for `_safe_simivision_payload`, `_ordered_hour_picks`, `import server as srv`, and the `import server` in `internal/council/build_seed_snapshot.py`.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Add `tests/test_subnet_source.py` with one case per fallback branch of `get_subnets_with_source`. Run `pytest tests/test_subnet_source.py tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R2/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R2/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R2/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R2/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R2/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R2/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R2/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R2/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R2/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Run `python -X importtime -c "import internal.council.pick_scheduler"` and call its subnet loader. Save `/tmp/swarm-R2/worker-10/scheduler-imports.txt`. Pass when `server` is absent from `sys.modules` after the call.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R2/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R2 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Move pick and SimiVision logic out of server.py (R3)
+
+**Depends on.** R2.
+
+**Files.**
+
+- [ ] Create `internal/council/hour_picks.py`.
+- [ ] Create `internal/council/daily_pick_read.py`.
+- [ ] Create `internal/council/top_picks_read.py`.
+- [ ] Create `internal/simivision/board.py`.
+- [ ] Edit `internal/request_executor.py`.
+- [ ] Edit `server.py`, `internal/learning/dashboard_context.py`, and `internal/learning/dpick_spotlight.py`.
+- [ ] Edit every test that patches the moved names.
+
+**Build.**
+
+- [ ] Move `_ordered_hour_picks`, `_build_hour_pick_payload`, `_highest_emission_pick`, `_record_pick_in_learning_loop`, and `_subnet_for_pick` to `internal/council/hour_picks.py`.
+- [ ] Move `_enrich_daily_pick_payload_lite`, `_attach_daily_pick_meta`, the two hold builders, `_hydrate_daily_pick_lite`, `_coalesce_daily_pick_flight`, `_daily_pick_weighed_shortlist`, and their locks to `internal/council/daily_pick_read.py`.
+- [ ] Move the top-picks builders and cache to `internal/council/top_picks_read.py`.
+- [ ] Move `_safe_simivision_payload`, `_simivision_build_inner`, `_simivision_weighing_rows_cached`, `_kick_simivision_background_refresh`, `_build_simivision_cached`, and the SimiVision cache to `internal/simivision/board.py`.
+- [ ] Move `_to_thread_timeout`, `_DASHBOARD_EXECUTOR`, and `_PICK_READ_EXECUTOR` into `internal/request_executor.py`, next to the pool that already copies the same pattern.
+- [ ] Repoint the remaining importers and test patches. The route handlers stay in `server.py` and call the new modules.
+- [ ] Lower the three budgets in `tests/test_server_budget.py`. The import budget reaches the 2 lines in `asgi_entry.py` and `scripts/restless_openapi.py`.
+
+**You see.**
+
+- [ ] `git grep -nE "from server import|import server" -- internal` prints only the comment in `internal/live_subnets_fetch_child.py`.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Add one test file per new module that covers the cold, warm, and busy branch of its cache. Run those files plus `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R3/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R3/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R3/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R3/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R3/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R3/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R3/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R3/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R3/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Hold `_get_subnets_with_source` for 10 seconds with a patch and request `/api/top-pick/hour` and `/api/daily-pick`. Save `/tmp/swarm-R3/worker-10/timeouts.json`. Pass when both answer inside their handler timeout with the same payload shape as trunk.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R3/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R3 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Replace the five hand-written caches with one cache type (R4)
+
+**Depends on.** R3.
+
+**Files.**
+
+- [ ] Create `internal/swr_cache.py`.
+- [ ] Create `tests/test_swr_cache.py`.
+- [ ] Edit `internal/simivision/board.py`, `internal/council/top_picks_read.py`, `internal/council/hour_picks.py`, `server.py`.
+
+**Build.**
+
+- [ ] Write a characterization test for each of the five caches before any change. Each test records what a fresh, stale, cold, and busy read returns today. Appendix E lists how the five differ.
+- [ ] Run the **architect** skill on the shape of `SwrCache` before coding. The type owns one payload, its age, one build lock, and one background-refresh flag, and a read returns the payload with a freshness of `fresh`, `stale`, or `miss`.
+- [ ] Replace the subnets, SimiVision, top-picks, hour-pick, and pump-alerts caches, one commit per cache, with the characterization test green after each commit.
+- [ ] Delete the 20 module globals that the five caches used.
+
+**You see.**
+
+- [ ] `git grep -n _BG_REFRESHING -- server.py internal` prints nothing. The five characterization tests pass unchanged.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `tests/test_swr_cache.py` gains fresh, stale, miss, busy, failed-build, and non-cacheable-payload cases with an injected clock. Run `pytest tests/test_swr_cache.py` plus the five characterization files and the four pin files.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R4/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R4/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R4/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R4/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R4/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R4/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R4/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R4/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R4/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Send 40 concurrent cold requests to `/api/pump-alerts` with the build patched to count calls. Save `/tmp/swarm-R4/worker-10/pump-builds.txt`. Pass when the build count is no higher than the trunk count.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R4/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R4 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Move the subnet catalog routes into internal/subnets (R5)
+
+**Depends on.** R4.
+
+**Files.**
+
+- [ ] Create `internal/subnets/routes.py`.
+- [ ] Create `internal/subnets/catalog.py`.
+- [ ] Create `internal/subnets/stats.py`.
+- [ ] Edit `server.py`.
+- [ ] Edit `tests/test_endpoint_contract.py` only if a comment names the old location.
+
+**Build.**
+
+- [ ] Move `GET /api/registry`, `/api/subnets`, `/api/subnet/{subnet_id}`, `/api/subnet/{subnet_id}/pool`, `/api/summary`, and `/api/stats` to a `subnets_router` in `internal/subnets/routes.py`. Include it at the position that keeps the route order in the manifest.
+- [ ] Move `_list_subnets_base_rows`, `_apply_subnets_query`, `_null_unfetched_metrics`, `_list_subnets_registry_fallback`, `_tag_subnet_row`, and `_consensus_map` to `internal/subnets/catalog.py`. The two functions that build rows share one row builder.
+- [ ] Put the status counts, totals, and ranking that `get_summary` and `get_stats` both compute into one pure function in `internal/subnets/stats.py`. Use the `None`-safe access from `get_summary`. This fixes bug B6 in Appendix F, so add its regression test in this PR.
+
+**You see.**
+
+- [ ] `grep -c "@app.get" server.py` drops by 6. `GET /api/stats` returns 200 for a row whose `staking_data` is `None`, where trunk returns 500.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Add `tests/test_subnet_stats.py` with the `staking_data` regression case and one case per ranking. Run it with the four pin files.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R5/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R5/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R5/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R5/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R5/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R5/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R5/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R5/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R5/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Request `/api/subnets` with `sort`, `order`, `limit`, `offset`, `fields`, and `status` in 12 combinations at trunk and head. Save `/tmp/swarm-R5/worker-10/subnets-matrix.json`. Pass when all 12 bodies are equal after removing `generated_at`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R5/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R5 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Move the pick and SimiVision routes into their packages (R6)
+
+**Depends on.** R5.
+
+**Files.**
+
+- [ ] Create `internal/council/picks_routes.py`.
+- [ ] Edit `internal/simivision/routes.py`.
+- [ ] Edit `server.py`.
+
+**Build.**
+
+- [ ] Move `GET /api/daily-pick`, `/api/daily-pick/weighed`, `/api/top-picks`, `/api/top-pick/day`, `/api/top-pick/hour`, and `/api/pick-explain/{netuid}` to a `picks_router` in `internal/council/picks_routes.py`.
+- [ ] Move `GET /api/simivision` to the existing router in `internal/simivision/routes.py`.
+- [ ] Post the import-line change on the agent board first. `internal/council/` belongs to Agent A.
+
+**You see.**
+
+- [ ] `grep -c "@app.get" server.py` drops by 7. `server.py` no longer contains the word `pick` outside an import.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] The pin files cover the move. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py tests/test_api_handler_timeouts.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R6/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R6/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R6/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R6/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R6/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R6/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R6/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R6/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R6/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Send 30 concurrent `GET /api/daily-pick` requests through `asyncio.gather` in one event loop. Save `/tmp/swarm-R6/worker-10/gather-burst.json`. Pass when all 30 resolve in under 2 seconds, which is the deadlock case the `wrap_future` comment guards.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R6/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R6 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Move the homepage into internal/home (R7)
+
+**Depends on.** R6.
+
+**Files.**
+
+- [ ] Create `internal/app/templating.py`.
+- [ ] Create `internal/home/shell.py`.
+- [ ] Create `internal/home/context.py`.
+- [ ] Create `internal/home/routes.py`.
+- [ ] Edit `server.py` and the tests that patch homepage names.
+
+**Build.**
+
+- [ ] Move the Jinja environment, its filters, and its globals to `internal/app/templating.py`.
+- [ ] Put the homepage cache in one `HomeShell` object in `internal/home/shell.py`. It replaces `_HOMEPAGE_HTML_CACHE`, `_EMERGENCY_HOME_HTML`, `_HOMEPAGE_WARM_LOCK`, `_HOMEPAGE_WARMING`, and `_HOMEPAGE_RENDER_THREAD`, and it has three states, `cold`, `emergency`, and `warm`.
+- [ ] Build the homepage context in one function in `internal/home/context.py` that takes a tier. The ultra-minimal tier is the minimal tier without file reads. The three copies of the `signal_summary` and `pump_alerts` placeholders become one constant each.
+- [ ] Move `GET /` to `internal/home/routes.py`. Pass `HomeShell` methods to `wrap_instant_bailout` in `server.py`.
+
+**You see.**
+
+- [ ] `grep -c "global " server.py` prints 0. `/` returns the same HTML as trunk for the cold, emergency, and warm state.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Add `tests/test_home_shell.py` with one case per state change of `HomeShell`. Run it with the four pin files and `pytest tests/test_visual_upgrade_polish.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R7/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R7/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R7/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R7/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R7/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R7/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R7/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R7/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R7/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Render `/` in the cold, emergency, and warm state at trunk and head. Save `/tmp/swarm-R7/worker-10/home-states.diff`. Pass when the three HTML bodies are equal after removing timestamps.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R7/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R7 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Move the small page and feedback routes (R8)
+
+**Depends on.** R7.
+
+**Files.**
+
+- [ ] Create `internal/preview/routes.py`.
+- [ ] Edit `internal/pump/routes.py`, `internal/health/routes.py`, and the router module in `internal/mindmap/`.
+- [ ] Edit `server.py`.
+
+**Build.**
+
+- [ ] Register the 6 `/preview/*` pages from one table of path, template, and context builder in `internal/preview/routes.py`.
+- [ ] Move `GET /pump`, `/Pump`, and `/api/pump-alerts` to `internal/pump/routes.py`.
+- [ ] Move `GET /health`, `/version`, `/robots.txt`, and `/favicon.ico` to `internal/health/routes.py`. Keep `/health` async. Import this router without a guard, because a missing `/health` fails the Fly health check.
+- [ ] Move `GET /api/soul-map`, `/api/recommendations`, `/api/daily-rotation`, and `POST /api/mindmap/feedback` to the mindmap router.
+
+**You see.**
+
+- [ ] `grep -cE "@app\.(get|post)" server.py` prints 0.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] The pin files cover the move. Run `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py tests/test_server_route_shapes.py tests/test_server_budget.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R8/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R8/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R8/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R8/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R8/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R8/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R8/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R8/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R8/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Load all 6 `/preview/*` pages in Chromium at trunk and head. Save `/tmp/swarm-R8/worker-10/previews.png`. Pass when each pair has a pixel difference of 0.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R8/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R8 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Reduce server.py to app assembly (R9)
+
+**Depends on.** R8.
+
+**Files.**
+
+- [ ] Create `internal/app/routers.py`.
+- [ ] Create `internal/app/lifespan.py`.
+- [ ] Create `internal/app/http_edge.py`.
+- [ ] Edit `server.py`.
+- [ ] Edit the tests that reference `server.templates` or `server._lifespan`.
+
+**Build.**
+
+- [ ] Replace the 16 guarded import blocks with one table in `internal/app/routers.py`. Each row names the module, the router attribute, and whether the router is required. One loop imports and includes them in the manifest order and logs the same warning as today for an optional router that fails.
+- [ ] Move `_lifespan` and its boot helpers to `internal/app/lifespan.py`. Split it into one function for the worker boot and one for the web boot.
+- [ ] Move `_CACHE_PATHS`, `_ALLOWED_ORIGINS`, `add_cors_headers`, and the write-auth middleware to `internal/app/http_edge.py`.
+- [ ] Leave in `server.py` only the Sentry and logging setup, app creation, the calls that mount middleware and routers, the bailout and Restless wrappers, and `__main__`.
+- [ ] Lower the line budget in `tests/test_server_budget.py` to 150.
+
+**You see.**
+
+- [ ] `wc -l server.py` prints 150 or fewer. `uvicorn server:app` and `uvicorn asgi_entry:app` both boot and print `lifespan_ready`.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Add `tests/test_router_table.py`. One case makes an optional router fail to import and expects the app to boot without it, and one case makes a required router fail and expects the boot to raise. Run it with the four pin files.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R9/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R9/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R9/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R9/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R9/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R9/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R9/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R9/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R9/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Boot with `RUN_MODE=worker`, then with `BACKGROUND_ON_WEB=off`, then with defaults. Save `/tmp/swarm-R9/worker-10/boot-modes.log`. Pass when the set of started thread names in each mode equals the trunk set.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R9/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R9 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Fix the HTTP edge bugs (R10)
+
+**Depends on.** R9.
+
+**Files.**
+
+- [ ] Edit `internal/app/http_edge.py`, `internal/app/routers.py`, `internal/council/picks_routes.py`, `internal/simivision/routes.py`, `internal/simivision/board.py`, `internal/mindmap/` router, `internal/health/routes.py`.
+- [ ] Edit `static/js/cockpit_hydrate.js` and `static/js/living_focus.js` if they read the old shapes.
+- [ ] Create `tests/test_http_edge_bugs.py`.
+
+**Build.**
+
+- [ ] Commit the failing tests first, one per bug B1 to B5 in Appendix F, copied from the probes in `scripts/server_refactor_probes.py`.
+- [ ] B1. A timeout or error payload must not carry `Cache-Control: public`. The handler that builds a degraded payload sets `no-store`, and the middleware adds a public TTL only to a GET that returned 200.
+- [ ] B2. Stop sending exception text to clients. Log the exception and return a fixed error code. Return 400 for a bad request body and 503 for a failed dependency.
+- [ ] B3. `GET /api/simivision` returns `status` and `data` in every branch, including the cold and timeout branch.
+- [ ] B4. Read `HOMEPAGE_SHELL_CACHE_SECONDS` once. The public `max-age` for `/` and the shell cache age use that one value.
+- [ ] B5. Report the routers that failed to import under a `routers` key in `GET /api/health`.
+
+**You see.**
+
+- [ ] `PYTHONPATH=. python scripts/server_refactor_probes.py` prints `no-store` on P2, the same key set twice on P5, status 400 on P6, and no exception text on P7.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `tests/test_http_edge_bugs.py` gains 5 cases that fail on the parent commit and pass on the fix commit. Run it with `pytest tests/test_endpoint_contract.py tests/test_route_manifest.py`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `PYTHONPATH=. python scripts/server_refactor_probes.py` at trunk and at head. Save `/tmp/swarm-R10/worker-1/probes.diff`. Pass when only the P2, P5, P6, P7, and P10 lines differ and the route manifest is identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R10/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R10/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R10/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R10/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` cold, warm, and with the build forced to time out. Save `/tmp/swarm-R10/worker-6/simivision-shapes.json`. Pass when all three have the keys `status` and `data`.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R10/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R10/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R10/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Load `/` in Chromium with `/api/simivision` and `/api/top-picks` forced to time out. Save `/tmp/swarm-R10/worker-10/home-timeouts.png`. Pass when the weighing room and picks panels show their busy state and the console shows zero errors.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R10/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] Copy the lane 6 and lane 10 screenshots into `artifacts/server-refactor/R10-review-shapes.png`.
+- [ ] Record a 30 to 60 second video of the homepage under forced timeouts on a lane VM. Save it as `artifacts/server-refactor/R10-review.mp4`.
+- [ ] Post the screenshots, the video, and the list of changed status codes in chat. Stop at merge-ready. Wait for the operator's click.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Fix the data and read-path bugs (R11)
+
+**Depends on.** R10.
+
+**Files.**
+
+- [ ] Edit `internal/subnets/source.py`, `internal/council/hour_picks.py`, `internal/council/picks_routes.py`, `internal/subnets/routes.py`, `internal/simivision/board.py`, `internal/home/routes.py`, and the mindmap router.
+- [ ] Create `tests/test_data_integrity_bugs.py`.
+
+**Build.**
+
+- [ ] Commit the failing tests first, one per bug D1 to D7 in Appendix F.
+- [ ] D1. Read `record_hold_decision` and `record_pick_prediction` and record whether either one rejects a `static-fallback` row. Then delete `STATIC_SUBNETS`. When the feed fails, the source returns no rows and the pick routes return their `pending` shape.
+- [ ] D2. Check whether `internal/council/pick_scheduler.py` already records the hour pick. If it does, delete the recording from `GET /api/top-pick/hour`. If it does not, move the recording to the scheduler. A GET must not write learning state.
+- [ ] D3. Replace `datetime.now(timezone.utc).isoformat() + "Z"` in all 3 production sites with the `.replace("+00:00", "Z")` form the file already uses elsewhere.
+- [ ] D4. In `GET /api/subnet/{subnet_id}`, skip a row whose `netuid` is not an integer and keep scanning.
+- [ ] D5. In `POST /api/mindmap/feedback`, test `subnet_id is not None`, so that netuid 0 is accepted.
+- [ ] D6. `GET /api/summary` and `GET /api/stats` read the subnets cache. Today each request rebuilds every row.
+- [ ] D7. `GET /` renders the cold shell in the request executor with a timeout and falls back to `_INSTANT_HOME_SHELL`. Today the async handler renders Jinja on the event loop.
+
+**You see.**
+
+- [ ] `PYTHONPATH=. python scripts/server_refactor_probes.py` prints an empty `recorded` list on P8, `6 requests -> 1 full rebuilds` or fewer on P3b, and a timestamp ending in `Z` without `+00:00` on P1.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `tests/test_data_integrity_bugs.py` gains 7 cases that fail on the parent commit and pass on the fix commit. Run it with the four pin files.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `PYTHONPATH=. python scripts/server_refactor_probes.py` at trunk and at head. Save `/tmp/swarm-R11/worker-1/probes.diff`. Pass when only the P1, P3b, P8, and P9 lines differ and the route manifest is identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R11/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R11/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R11/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R11/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R11/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R11/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent cold `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R11/worker-8/health-cold-burst.txt`. Pass when every `/health` reply arrives in under 200 ms, including during the first render.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R11/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Block the subnet feed, request `/api/top-pick/hour` 10 times, then diff `data/`. Save `/tmp/swarm-R11/worker-10/data-diff.txt`. Pass when no file under the data directory changed and every response has `status` set to `pending` or `busy`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. The standard latencies, plus p95 of `GET /api/stats` and `GET /api/summary`, and the longest event-loop stall during a cold `GET /`.
+- [ ] Probe. Run `python scripts/perf_probe.py --routes /api/stats,/api/summary --loop-stall` three times at trunk and three times at head, interleaved.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R11/perf-trunk.json`.
+- [ ] Rule. The PR fails when the head p95 of `/api/stats` or `/api/summary` is not lower than trunk, when the cold-render loop stall is above 50 ms, or when any standard route regresses by more than 15 percent.
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] Copy the lane 5 and lane 10 screenshots into `artifacts/server-refactor/R11-review-picks.png`.
+- [ ] Record a 30 to 60 second video of the homepage picks panels with the feed blocked on a lane VM. Save it as `artifacts/server-refactor/R11-review.mp4`.
+- [ ] Post the screenshots and the video in chat with the answer to the D1 and D2 checks. Stop at merge-ready. Wait for the operator's click.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Lock the budgets and update the agent docs (R12)
+
+**Depends on.** R11.
+
+**Files.**
+
+- [ ] Edit `tests/test_server_budget.py`.
+- [ ] Edit `AGENTS.md`.
+- [ ] Edit `tests/test_endpoint_contract.py` docstring.
+- [ ] Delete `scripts/server_refactor_probes.py`.
+
+**Build.**
+
+- [ ] Set the final budgets. `server.py` has at most 150 lines, `from server import` appears only in `asgi_entry.py` and `scripts/restless_openapi.py`, and tests patch no `server` attribute.
+- [ ] Add a budget case that fails when any file under `internal/` imports `server`.
+- [ ] Update the sections of `AGENTS.md` that describe `server.py`. The conflict line for the two agents becomes the table in `internal/app/routers.py`.
+- [ ] Delete the probe script. Its cases now live in the two bug test files.
+
+**You see.**
+
+- [ ] `pytest tests/test_server_budget.py` passes and fails again when you add `import server` to any file under `internal/`.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `tests/test_server_budget.py` gains the `internal/` import case. Run the full `pytest` suite and compare the failure list with the R0 list.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R12/worker-1/route-manifest.diff`. Pass when the ordered route list and the OpenAPI hash are identical.
+- [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R12/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
+- [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R12/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
+- [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R12/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
+- [ ] Lane 5. Request `/api/top-picks`, `/api/top-pick/hour`, `/api/top-pick/day`, and `/api/daily-pick/weighed`. Save `/tmp/swarm-R12/worker-5/picks.json`. Pass when each key set equals the trunk key set.
+- [ ] Lane 6. Request `/api/simivision` twice, 70 seconds apart. Save `/tmp/swarm-R12/worker-6/simivision.json`. Pass when the second response has the trunk key set and `data.meta.count` is above 0.
+- [ ] Lane 7. Load `/pump` in Chromium and request `/api/pump-alerts`. Save `/tmp/swarm-R12/worker-7/pump.png`. Pass when the page renders the desk and the JSON has a `status` key.
+- [ ] Lane 8. Send 50 concurrent `GET /` requests while polling `/health` every 100 ms. Save `/tmp/swarm-R12/worker-8/health-burst.txt`. Pass when every `/health` reply is `OK` in under 200 ms.
+- [ ] Lane 9. Boot with `RUN_MODE=worker` and wait 60 seconds. Save `/tmp/swarm-R12/worker-9/worker-boot.log`. Pass when the log has `lifespan_ready` and no traceback.
+- [ ] Lane 10. Run `python scripts/server_inventory.py . /tmp/inv.json` at trunk and head. Save `/tmp/swarm-R12/worker-10/inventory.txt`. Pass when head prints 150 lines or fewer, 0 routes in `server.py`, and 0 production importers besides `asgi_entry.py` and `scripts/restless_openapi.py`.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. p50 and p95 latency of warm `GET /`, `GET /api/subnets`, and `GET /api/daily-pick` over 200 requests each, plus the total of `python -X importtime -c "import server"`.
+- [ ] Probe. Run `python scripts/perf_probe.py` three times at trunk and three times at head, interleaved, on the same machine.
+- [ ] Baseline. Record the trunk values first in `artifacts/server-refactor/R12/perf-trunk.json`.
+- [ ] Rule. The PR fails when a head p95 is more than 15 percent above the trunk p95 on any route, or when the import time grows by more than 10 percent.
+
+**Review gate.** None. R12 is not review-gated.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Review comments triaged, each fixed or dismissed with a reason.
+- [ ] Rebased onto current trunk after the verdict, patch-id unchanged.
+- [ ] The root appends the PR to the stack and the operator lands it.
+
+## Close the program
+
+- [ ] Every box above is checked with its evidence.
+- [ ] `wc -l server.py` prints 150 or fewer, and `python scripts/route_manifest.py --print` differs from the R0 manifest only in endpoint module names.
+- [ ] Post one STATUS memory to Ditto and update board memory `f93f7202`, as `AGENTS.md` requires after a merge.
+- [ ] Reply to the operator with the report that `playbooks/autopilot-stack.md` names.
+
+## Appendix A. Prototype evidence
+
+Every number below was measured on 2026-11-17 at commit `8cb247e` unless the line says otherwise. Rerun the two scripts to check them.
+
+**Size.** `python scripts/server_inventory.py . /tmp/inv.json` prints 3,489 lines and 133,398 bytes, 107 functions, 31 route handlers, 1 class, 49 module globals, 27 top-level imports, 135 function-level imports from 68 modules, and 73 broad `except Exception` handlers. The app serves 198 routes, and `server.py` defines 31 of them. Ditto memory records the file at 179 KB on 2026-07-01 and 218 KB on 2026-07-05, before the FastAPI rebuild. The local clone is shallow, so git history cannot chart the growth since then.
+
+**Coupling.** 158 of 489 test files import `server`. 20 test files patch a `server` attribute at 81 sites. 17 production modules import `server` back, always inside a function, for 9 helper names. `_get_subnets_with_source` alone is imported by 8 production modules and patched by 10 tests.
+
+**The one fact that makes a move safe or unsafe.** A re-export does not keep test patches working. In a two-file prototype, `oldmod` re-exports `feed` and `route` from `newmod`, the test replaces `oldmod.feed`, and `route()` still returns the real value. So a move that leaves `from internal.x import name` in `server.py` keeps every import working and silently turns off every test that patches `server.name`. This is why each PR repoints its patch sites and why `tests/test_server_budget.py` counts them.
+
+**Dead code.** `_resolve_index_context` has no caller in production. It is the only caller of `_build_index_context` and `_degraded_index_context`, which are the only callers of 7 more helpers. The functions total about 410 lines. `GET /` serves only the minimal and ultra-minimal shell today.
+
+**Bugs confirmed by `scripts/server_refactor_probes.py`.** P1 to P10 map to the rows in Appendix F. The probe output on trunk was as follows.
+
+```
+P1 timestamp: 2026-11-17T05:02:34.529289+00:00Z
+ROUTES total: 198 | defined in server.py module: 31
+P2 /api/subnets on timeout -> (200, 'timeout', 'timeout', 'public, max-age=300')
+P3 staking_data=None -> ('stats', 500, 'summary', 200)
+P3b 6 requests -> 6 full rebuilds
+P5 /api/simivision shapes -> {'cold_keys': ['meta', 'top'], 'warm_keys': ['data', 'status']}
+P6 POST /api/mindmap/feedback bad body -> (200, '{"status":"error","detail":"JSON body required"}')
+P7 /api/pick-explain on failure -> (200, {'status': 'error', 'netuid': 5, 'error': 'secret /app/data/path leaked'})
+P8 static fallback -> {'source': 'static-fallback', 'rows': [('Coldint', 28.5), ('Inference', 15.2), ('Compute', 12.4)],
+   'recorded': [('hold', 'Coldint', 28.5, False), ('prediction', 'Compute', 12.4, True), ('prediction', 'Inference', 15.2, True)]}
+P9 index() is async: True | calls _ultra_minimal_index_html inline: True
+P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
+```
+
+**Tests write tracked files.** `git status --short` was empty, then `pytest tests/test_endpoint_contract.py` passed 149 cases and left 6 modified files under `data/`.
+
+**Unproven.** These stay open and each has a box in the plan that settles it.
+
+- Whether the real `record_hold_decision` and `record_pick_prediction` reject a `static-fallback` row. P8 stubbed both recorders. R11 box D1 reads them.
+- Whether the scheduler already records the hour pick, which decides how D2 is fixed.
+- Whether a live feed row can carry `staking_data` set to `None`. P3 proves the crash for that input, not that production sends it.
+- Whether moving a route into a router can keep the exact route order. R0 builds the manifest that answers this for each PR.
+- D4 and D5 come from reading the code. No probe ran them.
+
+## Appendix B. Alternatives rejected
+
+**A `server/` package with placeholder modules.** Tried on 2026-07-04. The agent built the layout and left every route as a placeholder. Ditto memory `d5edb12a` records it. `AGENTS.md` now forbids a parallel `server/` package.
+
+**A script that splits the file mechanically.** Tried on 2026-07-05. The split lost globals and truncated functions, the Fly deploy failed, and the fix was a shim back to the monolith. Ditto memory `cd5fea37` records it. A script cannot see the 81 test patches or the 49 shared globals, which is where this file is coupled.
+
+**A wrapper that imports the monolith and adds routes on top.** It hides the file and does not shrink it. Two foundations side by side caused the route-collision 422s that `AGENTS.md` describes.
+
+**Re-exports in `server.py` for compatibility.** Rejected by the prototype in Appendix A. They keep imports green and switch test patches off.
+
+**One large PR.** A break would be buried in a 3,000-line diff. Thirteen PRs each end in a state the route manifest can check.
+
+**Moving routes first and helpers later.** Rejected because 17 production modules import helpers from `server`. A router module that needs those helpers would import `server` too, and the circular import would move into every new file. R2 and R3 remove that dependency before any route moves.
+
+**Fixing bugs inside the move PRs.** Rejected, with one named exception in R5. A move PR that also changes behavior cannot be checked by comparing trunk and head output.
+
+## Appendix C. Risks
+
+**Open decisions for the operator.** Each has a default that the plan applies unless you say otherwise.
+
+- R1 deletes the full homepage build because nothing calls it. If you want the full server-side render back, say so, and it becomes a feature PR after R7 in place of the deletion.
+- R10 changes status codes from 200 to 400 or 503 on errors. If an outside client depends on the 200 replies, say so, and R10 keeps 200 and only removes the exception text.
+- PR #1186 proposes a freeze rule for `server.py`. This plan edits the file in 12 PRs. Close #1186 or exempt this program before R1.
+
+**Open PRs that touch the same code.** #1330 changes homepage SSR and #1591 stubs network calls in server tests. Land or close both before R1, or the owner of R1 and R2 rebases over them. The inventory script shows any new `server` import they add.
+
+**Route order.** FastAPI matches routes in registration order. The manifest in R0 compares the ordered list, so a router included at the wrong position fails lane 1.
+
+**Two-agent ownership.** R2, R3, and R6 edit import lines inside packages that Agent A and Agent B own. The edits are one line each. Post them on the board first.
+
+**Worker mode.** `_lifespan` has a worker branch that no contract test boots. Lane 9 and the R9 lane 10 cover it, and the owner of R9 watches the worker log after deploy.
+
+**Cache behavior drift in R4.** The five caches differ in small ways that Appendix E lists. The characterization tests exist to catch a merged type that flattens a difference.
+
+**No control skill.** The playbook expects `control-ui` or `control-cli`. Neither is installed here. Lanes use `curl` and Playwright as the boot recipe says.
+
+**Model names.** The lane model is the playbook default. Run `/setup-pstack` to change it. `AGENTS.md` forbids Claude Sonnet 4.5 and 4.6 as subagents.
+
+**Deploy.** No PR in this plan deploys. The operator runs the Fly workflow after landing, and the Deploy Guard runs the contract test again.
+
+## Appendix D. Links and reading list
+
+- Read `AGENTS.md`, `.cursor/rules/ponytail.mdc`, and `cursor-agents-communication/board.md` before editing.
+- Run the **how** skill before R3, R4, and R7. They move code with shared state.
+- Run the **architect** skill before R4 and the **interrogate** skill on the R4 and R7 diffs.
+- Keep the decision trail per the **show-me-your-work** skill in `artifacts/server-refactor/decisions.tsv`, and commit it.
+- Ditto memories used for history are `dc50b9e9`, `a7b7003b`, `cd5fea37`, and `d5edb12a`.
+
+## Appendix E. Map of server.py
+
+Line numbers are from commit `8cb247e`.
+
+| Lines | What the block holds | Size | Target | PR |
+|---|---|---|---|---|
+| 1 to 197 | Imports, 16 guarded router imports, pick-engine and weights import guards | 197 | `internal/app/routers.py` | R9 |
+| 199 to 436 | Boot helpers and `_lifespan` for web boot, worker boot, and heartbeat | 238 | `internal/app/lifespan.py` | R9 |
+| 439 to 521 | App creation, load shed, worker proxy, metrics, rate limit, write auth, `include_router` calls | 83 | `server.py`, `internal/app/routers.py` | R9 |
+| 523 to 567 | Jinja environment, filters, globals, static mount | 45 | `internal/app/templating.py` | R7 |
+| 569 to 678 | `_CACHE_PATHS`, executor, `load_data`, row tagging, CORS and cache middleware | 110 | `internal/app/http_edge.py`, `internal/subnets/` | R2, R5, R9 |
+| 681 to 740 | Timeouts, two executors, five caches with their locks, `_to_thread_timeout` | 60 | `internal/request_executor.py`, `internal/swr_cache.py` | R3, R4 |
+| 743 to 1771 | Homepage shell, context builders, warm thread, `GET /` | 1029 | Delete about 410 lines, then `internal/home/` | R1, R7 |
+| 1774 to 2354 | Registry, subnets, subnet, pool, summary, stats, soul-map, recommendations, daily-rotation | 581 | `internal/subnets/`, `internal/mindmap/` | R5, R8 |
+| 2357 to 2418 | `POST /api/mindmap/feedback` | 62 | `internal/mindmap/` | R8 |
+| 2421 to 2449 | Health, version, robots, favicon | 29 | `internal/health/routes.py` | R8 |
+| 2452 to 2591 | Six preview pages, pump page, pump alerts | 140 | `internal/preview/routes.py`, `internal/pump/routes.py` | R8 |
+| 2594 to 2706 | Static fallback rows, subnet source, market context | 113 | `internal/subnets/source.py`, `internal/council/market_context.py` | R2 |
+| 2709 to 3023 | Learning-loop recording, hour picks, SimiVision board and cache | 315 | `internal/council/hour_picks.py`, `internal/simivision/board.py` | R3 |
+| 3026 to 3442 | Routes for simivision, top-picks, daily-pick, weighed, pick-explain, top-pick day and hour | 417 | `internal/council/picks_routes.py` and the read modules | R3, R6 |
+| 3445 to 3488 | Bailout wrapper, Restless wrapper, `__main__` | 44 | Stays in `server.py` | R9 |
+
+The target tree adds two packages and reuses six that exist.
+
+```
+server.py                        app assembly only, 150 lines or fewer
+internal/app/                    new. routers.py, lifespan.py, http_edge.py, templating.py
+internal/home/                   new. shell.py, context.py, routes.py
+internal/swr_cache.py            new. one cache type
+internal/request_executor.py     exists. gains the dashboard and pick-read pools
+internal/subnets/                exists. gains source.py, registry.py, catalog.py, stats.py, routes.py
+internal/council/                exists. gains market_context.py, hour_picks.py, daily_pick_read.py,
+                                 top_picks_read.py, picks_routes.py
+internal/simivision/             exists. gains board.py, and routes.py gains /api/simivision
+internal/pump/, internal/preview/, internal/health/, internal/mindmap/
+                                 exist. each gains the small routes that belong to it
+```
+
+The five caches that R4 merges differ as follows.
+
+| Cache | Stale read | Cold read | Stores only if | Clock |
+|---|---|---|---|---|
+| Subnets | Serves stale and refreshes in a thread | Builds under a non-blocking lock, else registry fallback | Always | `time.time` |
+| SimiVision | Serves stale and refreshes in a thread | Returns a busy shape and refreshes in a thread | Always | `time.time` |
+| Top picks | Serves stale and refreshes in a thread | One caller builds, the rest read the disk snapshot | Payload has picks and no error | `time.time` |
+| Hour pick | Rebuilds inline under a non-blocking lock | Same as stale | Always | `time.time` |
+| Pump alerts | Rebuilds inline with no build lock | Same as stale | Status is not timeout or unavailable | `time.monotonic` |
+
+## Appendix F. Bug register
+
+Evidence is `measured` when a probe ran it and `read` when it comes from reading the code.
+
+| Id | Bug | Evidence | Where today | PR |
+|---|---|---|---|---|
+| T1 | The contract test modifies 6 tracked files under `data/` | measured | test setup | R0 |
+| B1 | A timeout payload from `/api/subnets` is sent with `Cache-Control` set to `public, max-age=300`, so a CDN can serve the failure for 5 minutes | measured, P2 | `server.py:659` | R10 |
+| B2 | Error replies use HTTP 200 and include the exception text | measured, P6 and P7 | `server.py:2366`, `3154`, `3221`, `3340`, `3357`, `3442` | R10 |
+| B3 | `/api/simivision` returns two different shapes, cold and warm | measured, P5 | `server.py:3023`, `3036` | R10 |
+| B4 | Two defaults for `HOMEPAGE_SHELL_CACHE_SECONDS`, 60 and 45 | measured, P10 | `server.py:571`, `682` | R10 |
+| B5 | A router that fails to import is dropped with one log line, and no endpoint reports it | read | `server.py:32` to `171` | R10 |
+| B6 | `/api/stats` returns 500 when a row has `staking_data` set to `None`, and `/api/summary` does not | measured, P3 | `server.py:2272` | R5 |
+| D1 | When the feed fails, three invented subnets with invented prices reach the hold and shadow-prediction recorders | measured with stubbed recorders, P8 | `server.py:2603`, `2630` | R11 |
+| D2 | `GET /api/top-pick/hour` writes predictions to the learning loop | read | `server.py:2931`, `2954` | R11 |
+| D3 | Timestamps end in `+00:00Z`, which is not valid ISO 8601 | measured, P1 | `server.py:2405`, `2802`, and 1 more production site | R11 |
+| D4 | One row with a non-integer `netuid` stops the scan in `/api/subnet/{subnet_id}` and returns 404 for a real subnet | read | `server.py:2064` | R11 |
+| D5 | `/api/mindmap/feedback` ignores feedback for netuid 0 | read | `server.py:2373` | R11 |
+| D6 | `/api/summary` and `/api/stats` rebuild every subnet row on each request | measured, P3b | `server.py:2110`, `2257` | R11 |
+| D7 | The async `GET /` handler renders Jinja on the event loop on a cold start | measured, P9 | `server.py:1761` | R11 |
+| S1 | 73 broad `except Exception` handlers, many of which hide the failure behind a default | measured count | whole file | each move PR narrows the handlers it touches only when the caught state is illegitimate |
