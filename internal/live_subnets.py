@@ -161,6 +161,11 @@ if _in_ci_or_test:
 
 _lock = threading.Lock()
 _sync_lock = threading.Lock()
+
+
+def live_subnets_sync_in_progress() -> bool:
+    """True while worker chain fetch + registry merge holds the sync lock."""
+    return _sync_lock.locked()
 _sync_loop_running = False
 
 
