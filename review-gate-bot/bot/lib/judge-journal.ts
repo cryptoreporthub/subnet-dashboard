@@ -11,8 +11,10 @@
 //
 // Durability is cache-only and never fsyncs. A successful append may not survive a crash,
 // and the cache can always be regenerated.
-// Multi-writer safety rests on O_APPEND. Local filesystems are tested. Network filesystems are
-// allowed, and the checksum is the guard against damaged lines.
+// Multi-writer safety rests on O_APPEND on local filesystems, and the tests exercise that case.
+// Network filesystems are allowed, but nothing here verifies them. O_APPEND is not guaranteed to
+// be atomic on network mounts, so concurrent appends there may interleave. The checksum keeps a
+// damaged line from replaying as a different record. It does not make concurrent writes safe.
 // The one-eval-process rule still applies.
 import { createHash } from "node:crypto";
 import { closeSync, constants, openSync, readFileSync, writeSync } from "node:fs";
