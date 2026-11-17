@@ -180,7 +180,7 @@ def build_help_text() -> str:
         "Your intel desk for Bittensor subnets — trending movers, subnet stats, and the people calling them.",
         "",
         "<b>Commands</b>",
-        "📊 /summary — market pulse: top movers, picks, desk stats",
+        "📊 /summary — 24h pulse: chatter, gainers, calls, council pick",
         "📊 /summary &lt;sn&gt; — deep-dive on one subnet (e.g. /summary 62)",
         "🔥 /trending — ChatterPower trending, last 24h",
         "🔥 /trending 1h — fast-moving 1-hour window",
@@ -209,15 +209,7 @@ def _format_gainers_reply(db=None) -> str:
     except Exception as exc:
         logger.warning("gainers fetch failed: %s", exc)
         rows = []
-    gainers = sorted(
-        (
-            r
-            for r in rows
-            if isinstance(r.get("price_change_24h"), (int, float)) and r["price_change_24h"] > 0
-        ),
-        key=lambda r: r["price_change_24h"],
-        reverse=True,
-    )[:5]
+    gainers = _top_gainers(rows)
     if not gainers:
         return _format_error("No 24h price-change data available right now — try again shortly.")
     lines = ["📈 <b>Top 5 gainers — last 24h</b>", ""]
@@ -393,141 +385,262 @@ def _format_subnet_chip(row: Dict[str, Any]) -> str:
     mentions = int(row.get("mentions") or 0)
     mention_word = "mention" if mentions == 1 else "mentions"
     bits = [f"{mentions} {mention_word}"]
-    price = row.get("price_change_1h")
-    if price is not None:
+    chg = row.get("price_change_24h")
+    if chg is None:
+        chg = row.get("price_change_1h")
+        suffix = " 1h"
+    else:
+        suffix = " 24h"
+    if chg is not None:
         try:
-            p = float(price)
+            p = float(chg)
             sign = "+" if p > 0 else ""
-            bits.append(f"{sign}{p:.1f}% 1h")
+            bits.append(f"{sign}{p:.1f}%{suffix}")
         except (TypeError, ValueError):
             pass
     return f"{label} ({', '.join(bits)})"
-
-
-def _compose_today_narrative(summary: Dict[str, Any]) -> str:
-    today = str(summary.get("today_narrative") or "").strip()
-    if today:
-        return today
-    top = summary.get("top_subnets") or []
-    topics = summary.get("today_topics") or []
-    labels = [str(t.get("label") or t.get("topic") or "").strip() for t in topics]
-    labels = [x for x in labels if x]
-    bits: list[str] = []
-    if labels:
-        if len(labels) == 1:
-            joined = labels[0]
-        elif len(labels) == 2:
-            joined = f"{labels[0]} and {labels[1]}"
-        else:
-            joined = ", ".join(labels[:-1]) + f", and {labels[-1]}"
-        sentence = f"{joined.lower()} took most of the airtime."
-        bits.append(sentence[:1].upper() + sentence[1:])
-    if top:
-        lead = top[0]
-        lead_name = lead.get("name") or f"SN{lead.get('netuid')}"
-        detail = f"{lead_name} led chatter"
-        if len(top) > 1:
-            runner = top[1]
-            detail += f", ahead of {runner.get('name') or f'SN{runner.get('netuid')}'}"
-        ctx = str(lead.get("mention_context") or "").strip()
-        if ctx:
-            detail += f" — {ctx}"
-        bits.append(detail + ".")
-    if bits:
-        return " ".join(bits)
-    pulse = summary.get("group_pulse") or {}
-    sentiment = str(pulse.get("sentiment") or "mixed").lower()
-    return f"Quiet recap — {summary.get('message_count', 0)} messages, {sentiment} mood."
 
 
 def _format_pulse_line(summary: Dict[str, Any]) -> str:
     pulse = summary.get("group_pulse") or {}
     sentiment = pulse.get("sentiment") or "Mixed"
     return (
+        f"{sentiment} · "
         f"{summary.get('message_count', 0)} msgs · "
-        f"{summary.get('high_conviction_count', 0)} high conv · "
-        f"{sentiment}"
+        f"{summary.get('high_conviction_count', 0)} high-conviction"
     )
 
 
-def _format_stats_block(summary: Dict[str, Any]) -> str:
-    """Scan-friendly stats: pulse on one line, top subnets and movers as bullets."""
-    lines = [f"<i>{html.escape(_format_pulse_line(summary), quote=False)}</i>"]
-    top = summary.get("top_subnets") or []
-    if top:
-        lines.extend(["", "<b>Top</b>"])
-        for row in top[:5]:
-            lines.append(f"• {_format_subnet_chip(row)}")
-    movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
-    if movers:
-        lines.extend(["", "<b>Movers</b>"])
-        for row in movers:
-            delta = int(row.get("change") or 0)
-            arrow = "↑" if delta > 0 else "↓"
-            name = html.escape(str(row.get("name") or f"SN{row.get('netuid')}"))
-            lines.append(f"• SN{row.get('netuid')} {name} {arrow}{abs(delta)}")
+def _pct_bit(value: Any, *, suffix: str = "") -> str:
+    try:
+        p = float(value)
+    except (TypeError, ValueError):
+        return ""
+    sign = "+" if p > 0 else ""
+    return f"{sign}{p:.1f}%{suffix}"
+
+
+def _useful_snippet(text: Any, *, max_len: int = 90) -> str:
+    raw = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(raw) < 24:
+        return ""
+    lowered = raw.lower()
+    if "not specified" in lowered or "people argued" in lowered or "people split" in lowered:
+        return ""
+    if raw.endswith("…") and ("which means" in lowered or "means there is" in lowered):
+        return ""
+    if len(raw) > max_len:
+        raw = raw[: max_len - 1].rstrip() + "…"
+    return raw
+
+
+def _price_rows() -> List[Dict[str, Any]]:
+    try:
+        from fetchers.merged_data import get_merged_subnet_rows_quick
+
+        return get_merged_subnet_rows_quick() or []
+    except Exception as exc:
+        logger.warning("summary price rows failed: %s", exc)
+        return []
+
+
+def _price_by_netuid(rows: Optional[List[Dict[str, Any]]] = None) -> Dict[int, Dict[str, Any]]:
+    out: Dict[int, Dict[str, Any]] = {}
+    for row in rows if rows is not None else _price_rows():
+        try:
+            netuid = int(row.get("netuid"))
+        except (TypeError, ValueError):
+            continue
+        out[netuid] = row
+    return out
+
+
+def _enrich_subnet_prices(rows: List[Dict[str, Any]], prices: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    enriched: List[Dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        try:
+            netuid = int(item.get("netuid"))
+        except (TypeError, ValueError):
+            enriched.append(item)
+            continue
+        px = prices.get(netuid) or {}
+        if item.get("price_change_24h") is None and px.get("price_change_24h") is not None:
+            item["price_change_24h"] = px.get("price_change_24h")
+        if item.get("price_change_1h") is None and px.get("price_change_1h") is not None:
+            item["price_change_1h"] = px.get("price_change_1h")
+        if item.get("price") is None and px.get("price") is not None:
+            item["price"] = px.get("price")
+        if not item.get("name") and px.get("name"):
+            item["name"] = px.get("name")
+        enriched.append(item)
+    return enriched
+
+
+def _top_gainers(rows: List[Dict[str, Any]], *, limit: int = 5) -> List[Dict[str, Any]]:
+    ranked = sorted(
+        (
+            r
+            for r in rows
+            if isinstance(r.get("price_change_24h"), (int, float)) and r["price_change_24h"] > 0
+        ),
+        key=lambda r: r["price_change_24h"],
+        reverse=True,
+    )
+    return ranked[:limit]
+
+
+def _published_daily_pick() -> Optional[Dict[str, Any]]:
+    try:
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        rec = _find_today(_load())
+    except Exception as exc:
+        logger.warning("summary daily pick read failed: %s", exc)
+        return None
+    return rec if isinstance(rec, dict) else None
+
+
+def _format_pick_block(rec: Optional[Dict[str, Any]]) -> str:
+    if not rec:
+        return ""
+    action = str(rec.get("action") or "").upper()
+    pick = rec.get("pick") if isinstance(rec.get("pick"), dict) else {}
+    if not pick:
+        cand = rec.get("candidate")
+        pick = cand if isinstance(cand, dict) else {}
+    subnet = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
+    netuid = subnet.get("netuid") or pick.get("netuid")
+    name = subnet.get("name") or pick.get("name")
+    conf = pick.get("confidence") or rec.get("confidence")
+    if action == "HOLD" or netuid is None:
+        reason = str(rec.get("reason") or rec.get("hold_reason") or "").strip()
+        line = "HOLD"
+        if reason:
+            line += f" · {html.escape(reason[:80])}"
+        return "\n".join(["<b>Council pick</b>", f"• {line}"])
+    conf_bit = ""
+    try:
+        if conf is not None:
+            c = float(conf)
+            conf_bit = f" · {int(round(c * 100)) if c <= 1 else int(round(c))}%"
+    except (TypeError, ValueError):
+        pass
+    return "\n".join(
+        [
+            "<b>Council pick</b>",
+            f"• {_subnet_label(netuid, name)} · {html.escape(action or 'LONG')}{conf_bit}",
+        ]
+    )
+
+
+def _format_calls_block(calls: List[Dict[str, Any]]) -> str:
+    if not calls:
+        return ""
+    lines = ["<b>Calls</b>"]
+    for row in calls[:3]:
+        direction = str(row.get("direction") or "call").upper()
+        if direction in ("UP", "BULLISH"):
+            direction = "UP"
+        elif direction in ("DOWN", "BEARISH"):
+            direction = "DOWN"
+        subnet = ""
+        if row.get("netuid") is not None:
+            subnet = f" {_subnet_label(row.get('netuid'), row.get('subnet_name'))}"
+        conv = row.get("conviction")
+        conv_bit = ""
+        try:
+            if conv is not None:
+                conv_bit = f" · {int(float(conv))}%"
+        except (TypeError, ValueError):
+            pass
+        snippet = _useful_snippet(row.get("content"), max_len=80)
+        line = f"• {html.escape(direction)}{subnet}{conv_bit}"
+        if snippet:
+            line += f"\n   <i>{html.escape(snippet, quote=False)}</i>"
+        lines.append(line)
     return "\n".join(lines)
 
 
-def _format_bonus_line(summary: Dict[str, Any]) -> str:
-    """Legacy single-line stats — prefer _format_stats_block for Telegram."""
-    pulse = summary.get("group_pulse") or {}
-    sentiment = pulse.get("sentiment") or "Mixed"
-    parts = [
-        f"{summary.get('message_count', 0)} msgs",
-        f"{summary.get('high_conviction_count', 0)} high conv",
-        str(sentiment),
-    ]
-    top = summary.get("top_subnets") or []
-    if top:
-        parts.append("Top " + " · ".join(_format_subnet_chip(row) for row in top[:5]))
-    movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
-    if movers:
-        mover_bits = []
-        for row in movers:
-            delta = int(row.get("change") or 0)
-            arrow = "↑" if delta > 0 else "↓"
-            name = html.escape(str(row.get("name") or f"SN{row.get('netuid')}"))
-            mover_bits.append(f"SN{row.get('netuid')} {name} {arrow}{abs(delta)}")
-        parts.append("Movers " + " · ".join(mover_bits))
-    return " · ".join(parts)
+def _format_gainers_block(gainers: List[Dict[str, Any]]) -> str:
+    if not gainers:
+        return ""
+    lines = ["<b>Gainers 24h</b>"]
+    for i, row in enumerate(gainers[:5], 1):
+        pct = _pct_bit(row.get("price_change_24h"))
+        price = _local_float(row.get("price"))
+        price_bit = f" · {price:g}τ" if price else ""
+        lines.append(f"{i}. {_subnet_label(row.get('netuid'), row.get('name'))} · {pct}{price_bit}")
+    return "\n".join(lines)
+
+
+def _format_chatter_block(top: List[Dict[str, Any]]) -> str:
+    if not top:
+        return ""
+    lines = ["<b>Chatter</b>"]
+    for i, row in enumerate(top[:5], 1):
+        lines.append(f"{i}. {_format_subnet_chip(row)}")
+        snippet = _useful_snippet(row.get("mention_context"))
+        if snippet:
+            lines.append(f"   <i>{html.escape(snippet, quote=False)}</i>")
+    return "\n".join(lines)
+
+
+def _reaction_count_from_line(line: str) -> int:
+    match = re.search(r"\bwith\s+(\d+)\b", line)
+    return int(match.group(1)) if match else 0
 
 
 def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] = None) -> str:
-    """Conversation recap first; stats in labeled sections below."""
+    """24h pulse: chatter + prices + calls + pick. Skip template recap."""
     desk = desk_url or _desk_url()
     if not summary.get("ready"):
         count = int(summary.get("message_count") or 0)
         need = int(summary.get("min_messages") or 10)
         return (
-            f"<b>Subnet Summers</b>\n"
+            f"<b>Subnet Summers · 24h</b>\n"
             f"Not enough chatter yet ({count}/{need} messages in 24h). "
             f"Check back when the group is active.\n"
             f'<a href="{desk}">Open the Subnet Summers desk</a>'
         )
 
-    today_lines = [str(x).strip() for x in (summary.get("today_lines") or []) if str(x).strip()]
-    if today_lines:
-        narrative = "\n\n".join(html.escape(line, quote=False) for line in today_lines[:3])
-    else:
-        narrative = html.escape(_compose_today_narrative(summary), quote=False)
-    leaders = [str(x).strip() for x in (summary.get("reaction_leaders") or []) if str(x).strip()]
-    leader_block = ""
+    blocks = [
+        "<b>Subnet Summers · 24h</b>",
+        f"<i>{html.escape(_format_pulse_line(summary), quote=False)}</i>",
+    ]
+    chatter = _format_chatter_block(summary.get("top_subnets") or [])
+    if chatter:
+        blocks.extend(["", chatter])
+    gainers = _format_gainers_block(summary.get("gainers") or [])
+    if gainers:
+        blocks.extend(["", gainers])
+    calls = _format_calls_block(summary.get("calls") or [])
+    if calls:
+        blocks.extend(["", calls])
+    pick = _format_pick_block(summary.get("daily_pick"))
+    if pick:
+        blocks.extend(["", pick])
+    leaders = [
+        str(x).strip()
+        for x in (summary.get("reaction_leaders") or [])
+        if str(x).strip() and _reaction_count_from_line(str(x)) >= 3
+    ]
     if leaders:
-        leader_block = (
-            "\n\n<b>Leading in reactions</b>\n"
-            + "\n".join(
-                f"• {html.escape(line, quote=False)}" for line in leaders[:3]
-            )
+        blocks.extend(
+            [
+                "",
+                "<b>Reactions</b>",
+                *[f"• {html.escape(line, quote=False)}" for line in leaders[:3]],
+            ]
         )
-    stats = _format_stats_block(summary)
-    return (
-        f"<b>Subnet Summers</b>\n\n"
-        f"{narrative}"
-        f"{leader_block}\n\n"
-        f"{stats}\n\n"
-        f'<a href="{desk}">Open the Subnet Summers desk</a>'
+    blocks.extend(
+        [
+            "",
+            "<i>Not financial advice · /gainers · /trending · /summary 55</i>",
+            f'<a href="{desk}">Open the Subnet Summers desk</a>',
+        ]
     )
+    return "\n".join(blocks)
 
 
 def _parse_iso(value: Any) -> Optional[datetime]:
@@ -727,17 +840,24 @@ def build_subnetsummers_text(*, db=None) -> str:
 def build_summary_text(*, db=None) -> str:
     from internal.message_intel.rollup import (
         build_24h_summary,
-        build_today_conversation_summary,
+        build_high_conviction_strip,
         build_today_reaction_leaders,
         format_today_reaction_leader_lines,
     )
 
     names = _registry_subnet_names()
     summary = build_24h_summary(registry_names=names, db=db)
-    today = build_today_conversation_summary(registry_names=names, db=db)
-    summary["today_narrative"] = today.get("narrative") or ""
-    summary["today_topics"] = today.get("topics") or []
-    summary["today_lines"] = today.get("lines") or []
+    prices = _price_by_netuid()
+    summary["top_subnets"] = _enrich_subnet_prices(summary.get("top_subnets") or [], prices)
+    summary["gainers"] = _top_gainers(list(prices.values()))
+    try:
+        summary["calls"] = build_high_conviction_strip(
+            limit=3, min_conviction=70.0, db=db, registry_names=names
+        )
+    except Exception as exc:
+        logger.warning("summary high-conviction strip failed: %s", exc)
+        summary["calls"] = []
+    summary["daily_pick"] = _published_daily_pick()
     summary["reaction_leaders"] = format_today_reaction_leader_lines(
         build_today_reaction_leaders(db=db)
     )
@@ -746,9 +866,9 @@ def build_summary_text(*, db=None) -> str:
 
 def _rate_limit_reply(chat_id: int) -> Optional[str]:
     now = time.monotonic()
-    last = _last_summary_at.get(chat_id, 0.0)
-    elapsed = now - last
-    if elapsed < _RATE_LIMIT_SECONDS:
+    last = _last_summary_at.get(chat_id)
+    elapsed = now - last if last is not None else _RATE_LIMIT_SECONDS
+    if last is not None and elapsed < _RATE_LIMIT_SECONDS:
         remaining = int(_RATE_LIMIT_SECONDS - elapsed)
         mins = max(1, (remaining + 59) // 60)
         return f"Rate limited — one /summary every 5 minutes. Try again in ~{mins} min."
