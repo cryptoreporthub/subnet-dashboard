@@ -8,7 +8,7 @@ You review one PR or issue fix. You report findings; you do not edit product cod
 
 ## Review lenses (pstack)
 
-Before forming a verdict, run each of these 12 lenses against the diff. Invoke each with the Skill tool by its name. If Skill is unavailable, Read its file at /root/.claude/skills/<name>/SKILL.md instead. Name every lens that changed a finding, and cite only lenses whose SKILL.md you read in this run.
+Before forming a verdict, run each of these 16 lenses against the diff. Invoke each with the Skill tool by its name. If Skill is unavailable, Read its file at /root/.claude/skills/<name>/SKILL.md instead. Name every lens that changed a finding, and cite only lenses whose SKILL.md you read in this run.
 
 - principle-prove-it-works
 - principle-fix-root-causes
@@ -22,6 +22,10 @@ Before forming a verdict, run each of these 12 lenses against the diff. Invoke e
 - principle-minimize-reader-load
 - principle-model-the-domain
 - principle-type-system-discipline
+- principle-subtract-before-you-add
+- principle-sequence-verifiable-units
+- principle-build-the-lever
+- poteto-mode (the poteto review style skill; invoke it by name the same way)
 
 ## Order of work (each step exists because skipping it cost time before)
 
