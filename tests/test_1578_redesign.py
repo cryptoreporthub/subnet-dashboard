@@ -1910,3 +1910,26 @@ def test_v12_l3_none_key_guard_does_not_follow_stale_receipt(tmp_path, monkeypat
     assert "pump" not in (disk[0]["learning_effects"].get("pending") or [])
     assert disk[1]["learning_effects"]["pending"] == ["pump"]
     assert "pump" not in (disk[1]["learning_effects"].get("done") or [])
+
+
+def test_pick_history_torn_save_leaves_prior_file_intact(tmp_path, monkeypatch):
+    import pytest
+
+    from internal.council import pick_history
+
+    hist_path = tmp_path / "pick_history.json"
+    monkeypatch.setattr(pick_history, "PICK_HISTORY_PATH", str(hist_path))
+    pick_history._save({"active": None, "history": [{"netuid": 7, "success": True}]})
+    before = hist_path.read_bytes()
+
+    def torn_dump(_obj, handle, *_args, **_kwargs):
+        handle.write('{"active": nu')
+        raise OSError("disk full mid-write")
+
+    monkeypatch.setattr(json, "dump", torn_dump)
+    with pytest.raises(OSError):
+        pick_history._save({"active": None, "history": [{"netuid": 8}]})
+
+    assert hist_path.read_bytes() == before
+    assert pick_history.observe_pick_history()["kind"] == "readable"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["pick_history.json"]

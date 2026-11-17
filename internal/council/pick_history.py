@@ -8,6 +8,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.file_utils import safe_write_json
+
 logger = logging.getLogger(__name__)
 
 PICK_HISTORY_PATH = os.environ.get("PICK_HISTORY_PATH", os.path.join("data", "pick_history.json"))
@@ -60,9 +62,7 @@ def _load_for_write() -> Dict[str, Any]:
 
 
 def _save(data: Dict[str, Any]) -> None:
-    os.makedirs(os.path.dirname(PICK_HISTORY_PATH) or "data", exist_ok=True)
-    with open(PICK_HISTORY_PATH, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2)
+    safe_write_json(PICK_HISTORY_PATH, data, indent=2)
 
 
 def _retire_active(store: Dict[str, Any], *, reason: str) -> None:
