@@ -458,7 +458,7 @@ def test_hour_history_failed_write_is_repaired_or_stays_not_ok(tmp_path, monkeyp
     assert pending, "expected a real ledger append"
     pred_id = pending[0]["id"]
     assert not good_hist.exists()
-    assert not Path(str(bad_hist)).exists() or Path(str(bad_hist)).is_dir() is False
+    assert blocked.read_text() == "not-a-dir"
 
     monkeypatch.setattr(pick_history, "PICK_HISTORY_PATH", str(good_hist))
     second = pick_scheduler.HourPickScheduler(refresh_minutes=15).run_once()
