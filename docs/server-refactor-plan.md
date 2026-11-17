@@ -882,6 +882,8 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **Entrypoints.** Five commands import the app. They are `uvicorn server:app` in `.github/workflows/ci-smoke.yml`, `scripts/fly_worker_entrypoint.sh`, and `.replit`, then `asgi_entry:app` through `scripts/run_web_with_guard.py` and the `Procfile`, then `python server.py`, and `scripts/restless_openapi.py`.
 
+**The local suite baseline is partial.** A full local run was stopped at 55 percent after about 25 minutes, with 2,794 passes and 83 failures. It also left 9 modified or new files under `data/` and `tests/`. PR #1591 reports 165 failures for the whole suite on `main`. R0 takes the full baseline from the CI artifact instead.
+
 **Tests write tracked files.** `git status --short` was empty, then `pytest tests/test_endpoint_contract.py` passed 149 cases and left 6 modified files under `data/`.
 
 **Settled by reading the code after the probes.** Neither recorder checks the source of a row, so D1 is real. The scheduler already records the audited hour pick at `internal/council/pick_scheduler.py:203`, so the write on the GET path is a duplicate.
