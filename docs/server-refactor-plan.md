@@ -20,7 +20,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 ### Arm the program
 
 - [ ] State the protocol and this plan to the operator, then stop. Start execution only on the operator's explicit go.
-- [ ] Get the operator's answer to the three open decisions in Appendix C before R1 starts.
+- [ ] Confirm that #1591 has landed and that #1186 and #1330 are closed. Appendix C records why.
 - [ ] Read these from trunk at program start. Re-read them at every tick.
   - [ ] `git show origin/main:AGENTS.md`
   - [ ] `git show origin/main:docs/server-refactor-plan.md`
@@ -643,7 +643,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] Commit the failing tests first, one per bug B1 to B5 in Appendix F, copied from the probes in `scripts/server_refactor_probes.py`.
 - [ ] B1. A timeout or error payload must not carry `Cache-Control: public`. The handler that builds a degraded payload sets `no-store`, and the middleware adds a public TTL only to a GET that returned 200.
-- [ ] B2. Stop sending exception text to clients. Log the exception and return a fixed error code. Return 400 for a bad request body and 503 for a failed dependency.
+- [ ] B2. Stop sending exception text to clients. Log the exception and return a fixed error code in the `error` field.
+- [ ] B2 status codes. A payload the page can still use, with `status` set to `timeout`, `busy`, or `pending`, stays HTTP 200, because `fetchJson` in `static/js/cockpit_hydrate.js` throws away the body of any other status. A hard failure with no data returns 503. A bad request body on `POST /api/mindmap/feedback` returns 400.
 - [ ] B3. `GET /api/simivision` returns `status` and `data` in every branch, including the cold and timeout branch.
 - [ ] B4. Read `HOMEPAGE_SHELL_CACHE_SECONDS` once. The public `max-age` for `/` and the shell cache age use that one value.
 - [ ] B5. Report the routers that failed to import under a `routers` key in `GET /api/health`.
@@ -701,8 +702,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Build.**
 
 - [ ] Commit the failing tests first, one per bug D1 to D9 in Appendix F.
-- [ ] D1. Read `record_hold_decision` and `record_pick_prediction` and record whether either one rejects a `static-fallback` row. Then delete `STATIC_SUBNETS`. When the feed fails, the source returns no rows and the pick routes return their `pending` shape.
-- [ ] D2. Check whether `internal/council/pick_scheduler.py` already records the hour pick. If it does, delete the recording from `GET /api/top-pick/hour`. If it does not, move the recording to the scheduler. A GET must not write learning state.
+- [ ] D1. Delete `STATIC_SUBNETS`. Neither recorder in `internal/learning/prediction_loop.py` checks where a row came from, so the invented rows would be stored. When the feed fails, the source returns no rows and the pick routes return their `pending` shape.
+- [ ] D2. Delete the call to `_record_pick_in_learning_loop` from the hour-pick read path. `internal/council/pick_scheduler.py:203` already records the audited hour pick and its hold. Move the near-miss shadow recording to the same scheduler function. A GET must not write learning state.
 - [ ] D3. Replace `datetime.now(timezone.utc).isoformat() + "Z"` in all 3 production sites with the `.replace("+00:00", "Z")` form the file already uses elsewhere.
 - [ ] D4. In `GET /api/subnet/{subnet_id}`, skip a row whose `netuid` is not an integer and keep scanning.
 - [ ] D5. In `POST /api/mindmap/feedback`, test `subnet_id is not None`, so that netuid 0 is accepted.
@@ -743,7 +744,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] Copy the lane 5 and lane 10 screenshots into `artifacts/server-refactor/R11-review-picks.png`.
 - [ ] Record a 30 to 60 second video of the homepage picks panels with the feed blocked on a lane VM. Save it as `artifacts/server-refactor/R11-review.mp4`.
-- [ ] Post the screenshots and the video in chat with the answer to the D1 and D2 checks. Stop at merge-ready. Wait for the operator's click.
+- [ ] Post the screenshots and the video in chat with the `data/` diff from lane 10. Stop at merge-ready. Wait for the operator's click.
 
 **Merge.**
 
@@ -850,10 +851,10 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 **Tests write tracked files.** `git status --short` was empty, then `pytest tests/test_endpoint_contract.py` passed 149 cases and left 6 modified files under `data/`.
 
+**Settled by reading the code after the probes.** Neither recorder checks the source of a row, so D1 is real. The scheduler already records the audited hour pick at `internal/council/pick_scheduler.py:203`, so the write on the GET path is a duplicate.
+
 **Unproven.** These stay open and each has a box in the plan that settles it.
 
-- Whether the real `record_hold_decision` and `record_pick_prediction` reject a `static-fallback` row. P8 stubbed both recorders. R11 box D1 reads them.
-- Whether the scheduler already records the hour pick, which decides how D2 is fixed.
 - Whether a live feed row can carry `staking_data` set to `None`. P3 proves the crash for that input, not that production sends it.
 - Whether moving a route into a router can keep the exact route order. R0 builds the manifest that answers this for each PR.
 - D4 and D5 come from reading the code. No probe ran them.
@@ -876,12 +877,13 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 
 ## Appendix C. Risks
 
-**Open decisions for the operator.** Each has a default that the plan applies unless you say otherwise.
+**Decisions, all settled on 2026-11-17.** The operator asked for each open question to be answered by what is best for the repo.
 
-- Settled on 2026-11-17. R1 deletes the full homepage build, because nothing calls it.
-- R10 changes status codes from 200 to 400 or 503 on errors. If an outside client depends on the 200 replies, say so, and R10 keeps 200 and only removes the exception text.
+- R1 deletes the full homepage build, because nothing calls it.
+- R10 keeps HTTP 200 for a payload the page can still use and returns 503 only for a hard failure. `fetchJson` throws on any status other than 200 and drops the body, so a 503 on a `timeout` or `busy` payload would blank a panel that shows stale data today. A 503 on a hard failure costs the page nothing, since that body carries no data, and it lets the request metrics count failures.
 - Close PR #1186. Its rule against campaigns contradicts this program, its diff adds three lines of fetch debris to the top of `AGENTS.md`, and its planned exception points at #1060, which closed on 2026-11-03 as an audit. R12 carries the one rule that still applies.
 - Close PR #1330. It was parked on 2026-10-16 with three review blockers, and its patch no longer applies to `main`. The plan carries its fixes that `main` still lacks as R1, D8, and D9.
+- D1 and D2 need no operator input. Reading `internal/learning/prediction_loop.py` and `internal/council/pick_scheduler.py` settled both.
 
 **Open PRs that touch the same code.** #1591 is test-only and applies cleanly to `main`. It adds 5 test patches of `server` attributes. Land it before R0, so that the R0 budgets count them and R2, R5, and R7 repoint them.
 
@@ -968,7 +970,7 @@ Evidence is `measured` when a probe ran it and `read` when it comes from reading
 | B4 | Two defaults for `HOMEPAGE_SHELL_CACHE_SECONDS`, 60 and 45 | measured, P10 | `server.py:571`, `682` | R10 |
 | B5 | A router that fails to import is dropped with one log line, and no endpoint reports it | read | `server.py:32` to `171` | R10 |
 | B6 | `/api/stats` returns 500 when a row has `staking_data` set to `None`, and `/api/summary` does not | measured, P3 | `server.py:2272` | R5 |
-| D1 | When the feed fails, three invented subnets with invented prices reach the hold and shadow-prediction recorders | measured with stubbed recorders, P8 | `server.py:2603`, `2630` | R11 |
+| D1 | When the feed fails, three invented subnets with invented prices reach the hold and shadow-prediction recorders | measured with stubbed recorders, P8, and the recorders have no source check | `server.py:2603`, `2630` | R11 |
 | D2 | `GET /api/top-pick/hour` writes predictions to the learning loop | read | `server.py:2931`, `2954` | R11 |
 | D3 | Timestamps end in `+00:00Z`, which is not valid ISO 8601 | measured, P1 | `server.py:2405`, `2802`, and 1 more production site | R11 |
 | D4 | One row with a non-integer `netuid` stops the scan in `/api/subnet/{subnet_id}` and returns 404 for a real subnet | read | `server.py:2064` | R11 |
