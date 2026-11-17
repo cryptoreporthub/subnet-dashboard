@@ -206,6 +206,49 @@ def test_reset_script_reuses_pending_request_after_failure(tmp_path, monkeypatch
     assert seen[0] and seen[0] == seen[1]
 
 
+def test_reset_script_rejects_invalid_request_id_without_persisting(tmp_path, monkeypatch, capsys):
+    import sys
+    import uuid
+    from scripts import reset_accuracy_epoch
+
+    monkeypatch.chdir(tmp_path)
+    seen = []
+
+    def reset(**kwargs):
+        seen.append(kwargs["reset_request_id"])
+        return {"ok": True}
+
+    monkeypatch.setattr(reset_accuracy_epoch, "archive_predictions_epoch", reset)
+    monkeypatch.setattr(sys, "argv", ["reset_accuracy_epoch.py", "--no-heal", "--request-id", "typo"])
+    assert reset_accuracy_epoch.main() == 1
+    assert not (tmp_path / "data" / ".pending_reset_id").exists()
+    assert seen == []
+    assert "invalid_reset_request_id" in capsys.readouterr().err
+    monkeypatch.setattr(sys, "argv", ["reset_accuracy_epoch.py", "--no-heal"])
+    assert reset_accuracy_epoch.main() == 0
+    assert uuid.UUID(seen[0])
+
+
+def test_reset_script_times_out_instead_of_blocking_on_held_lock(tmp_path, monkeypatch):
+    import fcntl
+    import sys
+    import pytest
+    from scripts import reset_accuracy_epoch
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("data")
+    seen = []
+    monkeypatch.setattr(reset_accuracy_epoch, "archive_predictions_epoch", lambda **kwargs: seen.append(kwargs) or {"ok": True})
+    monkeypatch.setattr(reset_accuracy_epoch, "LOCK_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setattr(sys, "argv", ["reset_accuracy_epoch.py", "--no-heal"])
+    with open("data/.pending_reset_id.lock", "a+", encoding="utf-8") as holder:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        with pytest.raises(TimeoutError):
+            reset_accuracy_epoch.main()
+    assert seen == []
+    assert not (tmp_path / "data" / ".pending_reset_id").exists()
+
+
 def test_epoch_does_not_delete_recent_uncommitted_stage(tmp_path):
     preds, archive = tmp_path / "predictions.json", tmp_path / "archive"
     archive.mkdir()
