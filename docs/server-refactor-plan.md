@@ -873,7 +873,7 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 - R10 changes status codes from 200 to 400 or 503 on errors. If an outside client depends on the 200 replies, say so, and R10 keeps 200 and only removes the exception text.
 - PR #1186 proposes a freeze rule for `server.py`. This plan edits the file in 12 PRs. Close #1186 or exempt this program before R1.
 
-**Open PRs that touch the same code.** #1330 changes homepage SSR and #1591 stubs network calls in server tests. Land or close both before R1, or the owner of R1 and R2 rebases over them. The inventory script shows any new `server` import they add.
+**Open PRs that touch the same code.** #1591 stubs network calls in server tests. Land or close it before R1, or the owner of R1 and R2 rebases over it. #1330 also touches homepage SSR, but the operator ruled it too old to matter. The inventory script shows any new `server` import they add.
 
 **Route order.** FastAPI matches routes in registration order. The manifest in R0 compares the ordered list, so a router included at the wrong position fails lane 1.
 
