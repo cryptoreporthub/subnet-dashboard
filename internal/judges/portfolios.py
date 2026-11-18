@@ -561,14 +561,17 @@ def backfill_closed_position(
             _recompute_summary(judge)
             _save(data)
         return None
-    remaining = [pos for pos in judge.get("open_positions", []) if pos.get("id") != pred_id]
-    position = None
-    if len(remaining) != len(judge.get("open_positions", [])):
-        position = next(
-            (pos for pos in judge.get("open_positions", []) if pos.get("id") == pred_id),
-            None,
-        )
-        judge["open_positions"] = remaining
+    open_positions = judge.get("open_positions", [])
+    netuid = prediction.get("netuid")
+    idx = next(
+        (
+            i
+            for i, pos in enumerate(open_positions)
+            if _position_matches(pos, pred_id, netuid, row=prediction)
+        ),
+        None,
+    )
+    position = open_positions.pop(idx) if idx is not None else None
     closed = _closed_row_from_prediction(
         name, prediction, position=position, actual_pct=actual_pct, outcome=outcome
     )

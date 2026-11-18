@@ -754,3 +754,26 @@ def test_disk_error_on_portfolio_save_fails_the_reconcile(tmp_path, monkeypatch)
     monkeypatch.setattr(portfolios, "_save", disk_full)
     with pytest.raises(OSError):
         prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+
+
+def test_backfill_idless_prediction_keeps_other_idless_open_positions(tmp_path, monkeypatch):
+    """Backfilling one id-less prediction must not drop or misattribute its siblings."""
+    port_path = tmp_path / "judge_portfolios.json"
+    stale = {
+        "id": None, "netuid": 7, "name": "Seven", "direction": "up",
+        "prediction_created_at": "2026-01-01T00:00:00Z", "horizon_type": "daily",
+    }
+    target = dict(stale, prediction_created_at="2026-01-02T00:00:00Z")
+    port_path.write_text(json.dumps({"oracle": {"open_positions": [stale, target]}}), encoding="utf-8")
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+
+    prediction = {
+        "id": None, "netuid": 7, "name": "Seven", "direction": "up",
+        "created_at": "2026-01-02T00:00:00Z", "horizon_type": "daily",
+    }
+    portfolios.backfill_closed_position("oracle", prediction, actual_pct=1.0, outcome="hit")
+
+    data = json.loads(port_path.read_text())
+    survivors = data["oracle"]["open_positions"]
+    assert [p["prediction_created_at"] for p in survivors] == ["2026-01-01T00:00:00Z"]
+    assert len(data["oracle"]["closed_positions"]) == 1

@@ -51,3 +51,52 @@ def test_pump_recovery_stores_resolver_stats(tmp_path, monkeypatch):
     final = json.loads(path.read_text())
     assert final["stats"], "recovery wrote an empty stats block"
     assert final["stats"] == resolver._compute_stats(final)
+
+
+def test_failed_learning_reconcile_keeps_committed_grade_counts(tmp_path, monkeypatch):
+    """A learning reconcile failure after committed grades must still report those grades."""
+    from internal.council import learning_effects
+    from internal.learning.predictions_store import PredictionsLedgerUnreadable
+
+    monkeypatch.chdir(tmp_path)
+    past = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+    path = tmp_path / "predictions.json"
+    path.write_text(json.dumps({
+        "predictions": [{
+            "id": "p1", "netuid": 5, "created_at": past, "resolve_at": past,
+            "horizon_type": "hour", "status": "pending", "pick_source": "pump_combined_exp",
+            "reference_price": 1.0, "predicted_pct": 2.0,
+        }],
+        "resolved": [],
+        "stats": {},
+    }))
+
+    def grade(pred, now=None, cache=None, hydrate=False):
+        out = dict(pred)
+        out.update(status="resolved", outcome="hit", correct=True, actual_pct=3.0,
+                   resolved_price=1.03, resolved_at=past)
+        return out
+
+    real_reconcile = learning_effects.reconcile_pump_learning
+    calls = {"n": 0}
+
+    def second_call_fails(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_reconcile(*args, **kwargs)
+        raise PredictionsLedgerUnreadable("ledger unreadable")
+
+    monkeypatch.setattr(pump_lead_recover, "grade_pump_lead_at_resolve_candle", grade)
+    monkeypatch.setattr(pump_lead_recover, "hydrate_overdue_pump_lead_netuids",
+                        lambda *a, **k: {"attempted": 0, "ready": 0, "fetched": 0, "netuids": []})
+    monkeypatch.setattr(price_reference, "_load_cache", lambda *a, **k: {})
+    monkeypatch.setattr(pump_lead_recover, "update_pump_horizon_outcomes", lambda *a, **k: 0)
+    monkeypatch.setattr(learning_effects, "reconcile_pump_learning", second_call_fails)
+
+    out = pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
+
+    assert out["ok"] is False
+    assert out["reason"] == "learning_reconcile_failed"
+    assert json.loads(path.read_text())["resolved"], "the grade should be durable"
+    assert out["graded"] == 1
+    assert out["hits"] == 1

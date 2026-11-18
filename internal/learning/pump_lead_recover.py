@@ -540,7 +540,7 @@ def recover_overdue_pump_leads(
             resolved_path, cycle_run_id=cycle_run_id, recovered=False
         )
     except (PredictionsLedgerUnreadable, OSError) as exc:
-        return {"ok": False, "reason": "learning_reconcile_failed", "error": str(exc)}
+        return {**summary, "ok": False, "reason": "learning_reconcile_failed", "error": str(exc)}
     for name in ("applied", "recovered", "indeterminate", "failed", "busy"):
         summary[f"learning_{name}"] = (
             max(learning_before[name], learning_after[name]) if name == "indeterminate"
