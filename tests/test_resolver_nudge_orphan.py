@@ -24,14 +24,14 @@ NETUID = 7
 
 
 def _resolve_cycle(*, revoked: bool) -> None:
-    """Run one resolver pass. A revoked pass must refuse its ledger commit, and that refusal raises."""
+    """Run one resolver pass.
+
+    Learning now runs after the ledger save. An abandon that lands during learning
+    therefore cannot refuse a save that already happened. It stops the learning
+    that has not run yet, and the pass returns normally.
+    """
     subnets = [{"netuid": NETUID, "price": 110.0}]
-    if not revoked:
-        resolver._resolve_due_predictions(subnets=subnets)
-        return
-    with pytest.raises(resolver.LedgerPersistSkipped) as raised:
-        resolver._resolve_due_predictions(subnets=subnets)
-    assert raised.value.result.reason is PersistReason.REVOKED
+    resolver._resolve_due_predictions(subnets=subnets)
 
 
 @pytest.fixture
@@ -165,7 +165,7 @@ def test_revoked_cycle_applies_no_later_learning_write(harness, monkeypatch, rev
     monkeypatch.setattr(resolver, "nudge_impact_strength", recorder("impact"))
     monkeypatch.setattr(resolver, "_record_scenario_outcome", recorder("scenario"))
     monkeypatch.setattr(resolver, "_nudge_signal_weights", recorder("signal"))
-    monkeypatch.setattr(resolver, "atomic_finalize_resolution", recorder("finalize"))
+    monkeypatch.setattr(resolver, "_finalize_effects", recorder("finalize"))
     try:
         _resolve_cycle(revoked=True)
     finally:
@@ -231,8 +231,8 @@ def test_revoked_cycle_skips_pump_calibration_write(harness, monkeypatch, tmp_pa
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *_a, **_k: True)
     monkeypatch.setattr(
         resolver,
-        "atomic_finalize_resolution",
-        lambda prediction, **_kwargs: prediction,
+        "_finalize_effects",
+        lambda prediction, **_kwargs: [],
     )
 
     pred = json.loads(harness.read_text(encoding="utf-8"))["predictions"][0]
