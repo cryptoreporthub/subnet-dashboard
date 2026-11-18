@@ -26,6 +26,8 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+from internal.file_utils import safe_write_json
+
 logger = logging.getLogger(__name__)
 
 _RETIRED = frozenset({"expired", "ungradeable"})
@@ -221,19 +223,7 @@ def write_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> Non
     with _receipts_lock(exclusive=True):
         data = _load_receipts()
         data[_receipt_token(row_key, effect)] = _utcnow_iso()
-        parent = os.path.dirname(path) or "data"
-        os.makedirs(parent, exist_ok=True)
-        tmp = f"{path}.tmp.{os.getpid()}.{uuid.uuid4().hex}"
-        try:
-            with open(tmp, "w", encoding="utf-8") as handle:
-                json.dump(data, handle, indent=2)
-            os.replace(tmp, path)
-        finally:
-            if os.path.exists(tmp):
-                try:
-                    os.remove(tmp)
-                except OSError:
-                    pass
+        safe_write_json(path, data, indent=2)
 
 
 def _pending_list(row: Dict[str, Any]) -> List[str]:

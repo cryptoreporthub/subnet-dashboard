@@ -108,3 +108,30 @@ def test_archive_lock_timeout_returns_not_ok_instead_of_raising(tmp_path, monkey
         archive_dir=str(tmp_path / "archives"),
     )
     assert result["ok"] is False
+
+
+def test_effect_receipt_is_fsynced_before_rename(tmp_path, monkeypatch):
+    """An effect receipt must reach disk before it replaces the old receipt journal."""
+    import os as _os
+
+    from internal.learning import expired_recovery
+
+    receipts = tmp_path / "receipts.json"
+    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", str(receipts))
+    events = []
+    real_fsync, real_replace = _os.fsync, _os.replace
+
+    def record_fsync(fd):
+        events.append("fsync")
+        return real_fsync(fd)
+
+    def record_replace(src, dst):
+        events.append("replace")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(_os, "fsync", record_fsync)
+    monkeypatch.setattr(_os, "replace", record_replace)
+    expired_recovery.write_effect_receipt(("id", "row-1"), "expert")
+
+    assert receipts.exists()
+    assert "fsync" in events and events.index("fsync") < events.index("replace"), events
