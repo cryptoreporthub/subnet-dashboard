@@ -19,6 +19,37 @@ exec python -m pytest -q \
   tests/test_1578_commit_then_learn.py \
   tests/test_1578_archive_readers.py \
   tests/test_1578_redesign.py \
+  tests/test_1578_review_fixes.py \
+  tests/test_background_boot.py \
+  tests/test_cold_cache_alert.py \
+  tests/test_contrarian_repair_once.py \
+  tests/test_daily_pick_stall_report.py \
+  tests/test_dev_radar_github_sync.py \
+  tests/test_expert_attribution.py \
+  tests/test_expired_recovery.py \
+  tests/test_fq4_combined_angles.py \
+  tests/test_judge_feedback_confidence.py \
+  tests/test_judge_weights.py \
+  tests/test_ledger_stats_preserved.py \
+  tests/test_names_deltas_fix.py \
+  tests/test_outcome_snapshot.py \
+  tests/test_pick_history_concurrent_writers.py \
+  tests/test_pick_scheduler_commit_truth.py \
+  tests/test_prediction_signal_impact_persist.py \
+  tests/test_predictions_ledger_fsync.py \
+  tests/test_proof_scout.py \
+  tests/test_pump_recover_stats.py \
+  tests/test_regrade_commit_before_learn.py \
+  tests/test_resolver_commit_before_learn.py \
+  tests/test_resolver_finalize_replay.py \
+  tests/test_resolver_lock_order_tripwire.py \
+  tests/test_resolver_nudge_orphan.py \
+  tests/test_resolver_seed_once.py \
+  tests/test_resolver_stop_repeat.py \
+  tests/test_server_pick_positions_incomplete.py \
+  tests/test_soul_map_empty_file.py \
+  tests/test_trust_stats.py \
+  tests/test_weighing_room.py \
   tests/test_resolver_scheduler.py \
   tests/test_resolver_soul_map_read_wedge.py \
   tests/test_resolver_predictions_unreadable.py \
