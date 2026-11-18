@@ -1,7 +1,7 @@
 ---
 name: lane-storage
 description: Storage and persistence lane for subnet-dashboard reviews. Use when a diff reads or writes SQLite or Postgres, runs a migration, touches on-disk JSON or snapshot files, adds cache, retention, prune or dedupe logic, or anywhere stored state can be lost, duplicated or reordered. Owns storage only and reports cross-surface overlaps to the parent reviewer.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Skill
 ---
 
 # Lane: storage
@@ -50,21 +50,22 @@ The count n in the output block is lenses loaded, not lenses listed.
 
 Probe in this order. For each lens, stop at the first hit.
 
-1. The Skill tool, if the runtime exposes it. Pass the lens name; a returned body counts as loaded.
+1. The Skill tool. Try `pstack:<lens>` first, then the bare `<lens>`. A skill that arrives through a Claude Code plugin loads namespaced, so the prefixed form is the one that resolves for a marketplace install; the bare form is the older spelling and still resolves in some setups. A returned body counts as loaded. Which argument the Skill tool itself accepts for a plugin-provided skill is not documented and not measured here, so attempt both before concluding the lens is absent.
 2. $HOME/.claude/skills/<lens>/SKILL.md
 3. /root/.claude/skills/<lens>/SKILL.md
-4. .claude/skills/<lens>/SKILL.md, relative to the repository root
-5. .local/custom_skills/<lens>/SKILL.md
-6. $HOME/.local/custom_skills/<lens>/SKILL.md
+4. The marketplace plugin cache: `${CLAUDE_CODE_PLUGIN_CACHE_DIR:-$HOME/.claude/plugins/cache}/<marketplace>/<plugin>/<version>/skills/<lens>/SKILL.md`, globbing the marketplace, plugin and version segments. The cache root is relocatable through `CLAUDE_CODE_PLUGIN_CACHE_DIR`, so hard-coding `$HOME/.claude/plugins` reports every lens absent on a host that sets it. A plugin installed with `--plugin-dir` loads in place at `<checkout>/plugins/<plugin>/skills/<lens>/SKILL.md` and never enters the cache; check there too.
+5. .claude/skills/<lens>/SKILL.md, relative to the repository root
+6. .local/custom_skills/<lens>/SKILL.md
+7. $HOME/.local/custom_skills/<lens>/SKILL.md
 
 A flat file named <lens>.md at any of those locations also counts. Read the body. A directory listing is not loading and neither is a truncated body.
 
 Print one line per lens as you go:
 
 LOADED principle-fix-root-causes (source: .claude/skills/principle-fix-root-causes/SKILL.md)
-NOT-LOADED principle-model-the-domain (probed 6 paths)
+NOT-LOADED principle-model-the-domain (probed 7 sources)
 
-Every NOT-LOADED lens is struck from your working set. Do not cite it, do not paraphrase it from memory, do not let it shape a finding, and do not silently substitute the nearest lense you did load. Struck lenses are named in the output block.
+Every NOT-LOADED lens is struck from your working set. Do not cite it, do not paraphrase it from memory, do not let it shape a finding, and do not silently substitute the nearest lens you did load. Struck lenses are named in the output block.
 
 If at least one lens failed to load, the second line of your output block is the degraded banner:
 
@@ -92,16 +93,27 @@ Nine, in the order they usually appear:
 
 ## Method
 
-1. Load lenses, print LOADED and NOT-LOADED, strike the unloaded ones.
-2. Read the diff for store-touching hunks only. List every write site with file and line.
-3. For each write site, trace backward to the first place the system could go wrong, and fix there.
-4. For each read site, ask what shape an old row can have, then check whether the code survives it.
-5. Prove it: quote the line. If you cannot point at it, it is not a finding.
-6. Emit findings tightest-first, blockers before minors.
+1. Confirm the tree is at the SHA the prompt gave you: `git rev-parse HEAD`. If it differs, return the SHA FAIL block described under Output and stop. A lane reviewing whatever happens to be checked out is reviewing a different commit from its siblings, and its block would then be merged under the panel's pinned SHA as if it belonged there.
+2. Load lenses, print LOADED and NOT-LOADED, strike the unloaded ones.
+3. Read the diff for store-touching hunks only. List every write site with file and line.
+4. For each write site, trace backward to the first place the system could go wrong, and fix there.
+5. For each read site, ask what shape an old row can have, then check whether the code survives it.
+6. Prove it: quote the line. If you cannot point at it, it is not a finding.
+7. Emit findings tightest-first, blockers before minors.
 
 ## Output
 
-Return exactly this block, and nothing before it:
+Return exactly this block as your returned text, and nothing else in it. It begins with the `LANE:` line.
+
+The `LOADED` and `NOT-LOADED` lines you print during the probe are scratch output: print them while you work if that helps, but they must not appear in the returned block. The `Pulled:` and `Lenses:` lines inside the block carry the same information.
+
+If Method step 1 found the tree at the wrong SHA, return only this and nothing else:
+
+LANE: <surface>
+SHA MISMATCH expected <sha> got <sha>
+FAIL
+
+The panel reads a `FAIL` block as a lane that did not review, never as a clean one.
 
 LANE: storage
 LENS DEGRADED n/9 — <unloaded lenses and what is therefore unsupported>
