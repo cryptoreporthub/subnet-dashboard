@@ -154,3 +154,18 @@ def test_impact_env_override_still_stamps_the_row_before_save(monkeypatch):
     row = _due_row()
     resolver._stage_impact_strength(row, True, resolver._LearningDeferral())
     assert row["impact_strength_after"] == 1.5
+
+
+def test_impact_staging_error_skips_only_that_row(monkeypatch):
+    """A failure while staging must not abort the cycle, and must queue nothing for the row."""
+    def boom(*_a, **_kw):
+        raise RuntimeError("soul map unreadable")
+
+    monkeypatch.setattr(resolver, "_stage_impact_strength", boom)
+    deferral = resolver._LearningDeferral()
+    token = resolver._learning_deferral.set(deferral)
+    try:
+        resolver._stage_or_run_impact(_due_row(), True)
+    finally:
+        resolver._learning_deferral.reset(token)
+    assert deferral.items == []

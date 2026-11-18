@@ -308,8 +308,27 @@ def _stage_or_run_impact(prediction: Dict[str, Any], correct: bool) -> None:
     if deferral is None:
         _apply_impact_guarded(prediction, correct)
         return
-    _stage_impact_strength(prediction, correct, deferral)
+    try:
+        _stage_impact_strength(prediction, correct, deferral)
+    except Exception:
+        # The old nudge swallowed errors. Skip this row's impact rather than abort the cycle.
+        logger.exception("impact staging failed, row impact not learned id=%s", prediction.get("id"))
+        return
     _queue_effect(prediction, deferral, lambda: _apply_impact_guarded(prediction, correct))
+
+
+def _queue_mark() -> Optional[Tuple[int, Optional[float]]]:
+    deferral = _learning_deferral.get()
+    return None if deferral is None else (len(deferral.items), deferral.impact_value)
+
+
+def _drop_queued_after(mark: Optional[Tuple[int, Optional[float]]]) -> None:
+    """Discard effects queued since ``mark``, so a row that failed to grade queues nothing."""
+    deferral = _learning_deferral.get()
+    if mark is None or deferral is None:
+        return
+    del deferral.items[mark[0]:]
+    deferral.impact_value = mark[1]
 
 
 def _finalize_effects_deferred(prediction: Dict[str, Any], *, apply_judge_nudge: bool) -> None:
@@ -345,8 +364,11 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
     if deferral is None:
         return
     conflicted = set(getattr(commit_result, "conflicts", None) or ())
+    # A row with no key cannot be matched to a conflict, so an unidentified conflict
+    # means any keyless row may be one the save did not apply. Skip those rows too.
+    unidentified = any(isinstance(k, tuple) and k and k[0] == "unidentified" for k in conflicted)
     for key, effect in deferral.items:
-        if key is not None and key in conflicted:
+        if (key is not None and key in conflicted) or (key is None and unidentified):
             logger.warning("learning skipped for ledger row the save did not apply key=%s", key)
             continue
         if _cycle_writes_revoked_safe():
@@ -1850,6 +1872,7 @@ def _resolve_due_predictions_body(
                 # Reload only after a dispatched fetch. A rate-limit or a zero
                 # hydration budget writes nothing, and parsing the whole cache
                 # again keeps the previous copy resident.
+                _late_mark = _queue_mark()
                 try:
                     if hydrate_candles_for_netuid(uid):
                         cache = _load_json(PRICE_CACHE_PATH, {})
@@ -1875,7 +1898,8 @@ def _resolve_due_predictions_body(
                     # not genuine expiry, before the existing expiry handling.
                     pred["price_data_unavailable"] = True
                 except Exception:
-                    pass
+                    # The row is expired below, so no learning from this grade may run.
+                    _drop_queued_after(_late_mark)
             _expire_prediction(pred, now)
             resolved.append(pred)
             expired_now.append(pred)

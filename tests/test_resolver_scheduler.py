@@ -402,6 +402,9 @@ def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler,
                 # council_published population + attributable signal evidence
                 # (the rogue guard rejects bare expert stamps), so the weight
                 # nudge fires for the stamped expert.
+                # Keyed row: a real ledger row always has an id. Without one the save
+                # reports it as unidentified and skips its learning, as it should.
+                "id": "scheduler-quant-1",
                 "pick_source": "council",
                 "signal_source": "emission_momentum",
                 "netuid": 1,
