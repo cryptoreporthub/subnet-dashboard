@@ -398,13 +398,14 @@ def record_pick(
     if not persisted.committed_keys:
         return PickRecord(PickRecordKind.SKIPPED, reason="duplicate")
 
+    positions_failed = False
     try:
         from internal.judges.portfolios import open_positions_for_prediction
 
         open_positions_for_prediction(prediction, judge_scores)
     except Exception as exc:
         logger.warning("Committed pick needs portfolio reconciliation: %s", exc)
-        return PickRecord(PickRecordKind.INDETERMINATE, prediction, "positions_incomplete")
+        positions_failed = True
 
     _append_mindmap_trail(pick, prediction, horizon_type)
     _mirror_pick_to_soul_map(pick, prediction, horizon_type)
@@ -438,6 +439,8 @@ def record_pick(
     except Exception as exc:
         logger.warning("Pick trail emission failed: %s", exc)
 
+    if positions_failed:
+        return PickRecord(PickRecordKind.INDETERMINATE, prediction, "positions_incomplete")
     return PickRecord(PickRecordKind.COMMITTED, prediction)
 
 
