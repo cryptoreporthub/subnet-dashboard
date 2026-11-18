@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 from internal.accuracy_lift.measure import load_archive
@@ -63,3 +64,28 @@ def test_single_corrupt_archive_reports_error_without_crashing(tmp_path):
     result = load_archive(str(broken))
     assert result["resolved"] == []
     assert result["archive_errors"][0]["file"] == broken.name
+
+
+def test_one_bad_epoch_receipt_does_not_block_later_epochs(tmp_path):
+    """A missing archive for an older epoch must not stop a newer staged archive from publishing."""
+    from internal.learning import ledger_heal, predictions_store
+
+    dest = tmp_path / "archives"
+    dest.mkdir()
+    newer = b'{"predictions": [], "resolved": []}'
+    newer_sha = hashlib.sha256(newer).hexdigest()
+    (dest / ".staging-r2.json").write_bytes(newer)
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({
+        "predictions": [], "resolved": [], "stats": {},
+        "epoch_history": [
+            {"reset_request_id": "r1", "archive_name": "pre-epoch-old.json", "archive_sha256": "0" * 64},
+            {"reset_request_id": "r2", "archive_name": "pre-epoch-new.json", "archive_sha256": newer_sha},
+        ],
+    }))
+
+    result = ledger_heal.reconcile_epoch_archives(predictions_path=str(ledger), archive_dir=str(dest))
+
+    assert (dest / "pre-epoch-new.json").read_bytes() == newer, "newer epoch was not published"
+    assert result["ok"] is False
+    assert [f["reset_request_id"] for f in result["failures"]] == ["r1"]

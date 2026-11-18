@@ -246,8 +246,15 @@ def reconcile_epoch_archives(*, predictions_path: Optional[str] = None, archive_
             data = predictions_store.load_predictions(path=src, fail_closed=True)
             history = data.get("epoch_history") or []
             _remove_old_uncommitted_stages(dest_dir, history)
+            # One bad receipt must not stop later epochs from publishing.
+            failures: List[Dict[str, Any]] = []
             for receipt in history:
-                _publish_epoch_archive(dest_dir, receipt)
+                try:
+                    _publish_epoch_archive(dest_dir, receipt)
+                except (OSError, ValueError, KeyError) as exc:
+                    failures.append({"reset_request_id": receipt.get("reset_request_id"), "error": str(exc)})
+            if failures:
+                return {"ok": False, "reason": "archive_publish_failed", "failures": failures}
     except predictions_store.FileLockTimeout:
         return {"ok": False, "reason": "lock_timeout"}
     except (OSError, ValueError, KeyError, predictions_store.PredictionsLedgerUnreadable) as exc:
