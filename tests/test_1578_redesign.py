@@ -1153,7 +1153,7 @@ def test_malformed_but_parseable_pick_history_is_not_rewritten(tmp_path, monkeyp
         )
     except Exception:
         result = None
-    assert result in {None, False} or (isinstance(result, dict) and result.get("kind") == "unreadable")
+    assert result is None or result is False or (isinstance(result, dict) and result.get("kind") == "unreadable")
     assert hist_path.read_bytes() == before
 
 
