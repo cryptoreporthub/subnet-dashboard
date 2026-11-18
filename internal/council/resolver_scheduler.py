@@ -748,11 +748,14 @@ class PredictionResolverScheduler:
             if lifecycle_run_id is not None and self._tick_run_id == lifecycle_run_id:
                 self._tick_run_id = None
         cancel_results = _cancel_resolver_jobs(cancel_ids)
+        # DECLINED means the blob already holds this state (a repeated stop), so it counts
+        # as persisted, the same rule weights._persist_ok uses.
+        persisted = lifecycle.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
         out: Dict[str, Any] = {
             "stopped": True,
-            "lifecycle_persisted": lifecycle.committed,
+            "lifecycle_persisted": persisted,
         }
-        if not lifecycle.committed:
+        if not persisted:
             out["pending"] = True
         if not all(cancel_results.values()):
             out["cancel_pending"] = True
