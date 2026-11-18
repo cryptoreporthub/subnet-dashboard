@@ -148,6 +148,24 @@ def test_conflicted_row_runs_no_learning(ledger, sinks, monkeypatch):
     assert _sink_calls(sinks) == [], f"learning ran for a conflicted row: {sinks}"
 
 
+def test_conflicted_row_is_not_reported_as_resolved(ledger, sinks, monkeypatch):
+    """A row whose write conflicted stays pending, so the cycle must not report it resolved."""
+    real_commit = resolver._commit_ledger_changes
+
+    def other_writer_then_commit(before, after, **kwargs):
+        disk = json.loads(ledger.read_text())
+        for row in disk["predictions"]:
+            if row.get("id") == "r1":
+                row["note"] = "other writer"
+        ledger.write_text(json.dumps(disk))
+        return real_commit(before, after, **kwargs)
+
+    monkeypatch.setattr(resolver, "_commit_ledger_changes", other_writer_then_commit)
+    out = resolver._resolve_due_predictions(subnets=[])
+
+    assert [r.get("id") for r in out["resolved_now"]] == [], f"conflicted row reported resolved: {out['resolved_now']}"
+
+
 def test_impact_env_override_still_stamps_the_row_before_save(monkeypatch):
     """With IMPACT_STRENGTH set, the saved row must still carry impact_strength_after."""
     monkeypatch.setenv("IMPACT_STRENGTH", "1.5")

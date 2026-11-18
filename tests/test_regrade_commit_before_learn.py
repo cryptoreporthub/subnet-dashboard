@@ -125,3 +125,26 @@ def test_successful_regrade_runs_each_sink_once(regrade_setup, sinks):
 
     counts = {name: sinks.count(name) for name in SINKS}
     assert counts == {name: 1 for name in SINKS}, counts
+
+
+
+def test_conflicted_regrade_row_is_not_reported_as_regraded(regrade_setup, sinks, monkeypatch):
+    """When one regrade conflicts and another commits, only the committed row counts as regraded."""
+    disk = json.loads(regrade_setup.read_text())
+    second = dict(disk["resolved"][0], id="regrade-2")
+    disk["resolved"].append(second)
+    regrade_setup.write_text(json.dumps(disk))
+    real_commit = resolver._commit_ledger_changes
+
+    def other_writer_then_commit(before, after, **kwargs):
+        cur = json.loads(regrade_setup.read_text())
+        for row in cur["resolved"]:
+            if row.get("id") == "regrade-1":
+                row["note"] = "other writer"
+        regrade_setup.write_text(json.dumps(cur))
+        return real_commit(before, after, **kwargs)
+
+    monkeypatch.setattr(resolver, "_commit_ledger_changes", other_writer_then_commit)
+    out = resolver.regrade_expired_predictions(live_prices={})
+
+    assert out["regraded"] == 1, f"conflicted regrade counted as regraded: {out}"

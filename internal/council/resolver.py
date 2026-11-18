@@ -560,6 +560,16 @@ def _commit_ledger_changes(before, after, *, path, caller, trigger):
     return result
 
 
+def _committed_only(rows: List[Dict[str, Any]], commit_result: Any) -> List[Dict[str, Any]]:
+    """Keep only rows whose ledger write committed. A conflicted row stays pending on disk."""
+    if not getattr(commit_result, "conflicts", None):
+        return rows
+    from internal.learning.predictions_store import _row_key
+
+    committed = set(commit_result.committed_keys)
+    return [row for row in rows if _row_key(row) in committed]
+
+
 def _save_json(
     path: str,
     data: Any,
@@ -1993,6 +2003,11 @@ def _resolve_due_predictions_body(
     )
     # Learning runs only now. A refused save raised above, so none of it ran.
     _flush_deferred_learning(_learning_deferral.get(), commit_result)
+    if commit_result.conflicts:
+        # Conflicted rows were not written, so they are not resolved or expired now.
+        resolved_now = _committed_only(resolved_now, commit_result)
+        expired_now = _committed_only(expired_now, commit_result)
+        data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
 
     # Cold-cache spike alert — log at WARNING level so operators see it without
     # log diving.  Emitted once per resolver run when the ratio exceeds threshold.
@@ -2166,6 +2181,9 @@ def _regrade_expired_predictions_body(
         )
         # Learning for these rows runs only now. A refused save raised above, so none ran.
         _flush_deferred_learning(_learning_deferral.get(), commit_result)
+        regraded = _committed_only(regraded, commit_result)
+        if commit_result.conflicts:
+            data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
 
     return {
         "attempted": attempted,
