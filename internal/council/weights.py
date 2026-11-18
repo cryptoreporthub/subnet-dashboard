@@ -706,7 +706,15 @@ def _save_weights_outcome(
         root_norm = (
             normalize_council_weights(root) if isinstance(root, dict) else {}
         )
-        if current == canonical and root_norm == canonical:
+        # A legacy key in the two slots this write normalizes must be removed, even when the
+        # normalized maps match. The soul_map_state slot is not rewritten here, as at base.
+        def _has_contrarian(slot: Any) -> bool:
+            return isinstance(slot, dict) and any(str(k).lower().strip() == "contrarian" for k in slot)
+
+        stale_slot = _has_contrarian(
+            (data.get("adversarial_state") or {}).get("council_weights")
+        ) or _has_contrarian(data.get("expert_weights"))
+        if current == canonical and root_norm == canonical and not stale_slot:
             return
         adv = data.setdefault("adversarial_state", {})
         if not isinstance(adv, dict):
