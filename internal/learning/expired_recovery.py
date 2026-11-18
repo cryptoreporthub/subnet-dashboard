@@ -20,7 +20,6 @@ import logging
 import os
 import threading
 import time
-import uuid
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone

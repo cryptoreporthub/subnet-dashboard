@@ -689,3 +689,25 @@ def test_daily_tick_does_not_hold_when_reconcile_raises_non_timeout(monkeypatch)
     assert result["ok"] is True
     assert result.get("reconcile_ok") is False
     assert not result.get("scheduler_hold")
+
+
+def test_portfolio_lock_timeout_still_fails_the_reconcile(tmp_path, monkeypatch):
+    """A held portfolio store must fail reconciliation, not look like a successful zero."""
+    from datetime import datetime as _dt, timezone as _tz
+
+    from internal.judges import portfolios
+    from internal.learning import prediction_loop
+
+    now = _dt.now(_tz.utc).isoformat().replace("+00:00", "Z")
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({"predictions": [{
+        "id": "pick-9", "pick_source": "council", "status": "pending", "created_at": now,
+        "judge_scores_at_creation": {"oracle": {}},
+    }], "resolved": [], "stats": {}}))
+
+    def locked(row, scores):
+        raise portfolios.PortfolioLockTimeout("portfolio store busy")
+
+    monkeypatch.setattr(portfolios, "open_positions_for_prediction", locked)
+    with pytest.raises(portfolios.PortfolioLockTimeout):
+        prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
