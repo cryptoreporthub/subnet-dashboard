@@ -113,6 +113,10 @@ def read_blob_checked(path: str) -> BlobRead:
     except Exception as exc:
         return BlobRead("transient", None, error=str(exc))
 
+    if raw == "":
+        # A zero-byte file holds no data: treat it as missing so writers are not wedged.
+        # Whitespace-only content is still unreadable (pinned by earlier #1578 tests).
+        return BlobRead("missing", {})
     if not raw.strip():
         return BlobRead("unreadable", None, error="empty")
     try:
