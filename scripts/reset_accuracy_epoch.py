@@ -43,7 +43,14 @@ def main() -> int:
     os.makedirs("data", exist_ok=True)
     pending = "data/.pending_reset_id"
     with open(f"{pending}.lock", "a+", encoding="utf-8") as lock:
-        _acquire_exclusive(lock)
+        try:
+            _acquire_exclusive(lock)
+        except TimeoutError as exc:
+            print(
+                json.dumps({"ok": False, "reason": "lock_timeout", "detail": str(exc)}),
+                file=sys.stderr,
+            )
+            return 1
         if args.request_id:
             try:
                 request_id = str(uuid.UUID(args.request_id))

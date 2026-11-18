@@ -229,10 +229,9 @@ def test_reset_script_rejects_invalid_request_id_without_persisting(tmp_path, mo
     assert uuid.UUID(seen[0])
 
 
-def test_reset_script_times_out_instead_of_blocking_on_held_lock(tmp_path, monkeypatch):
+def test_reset_script_times_out_instead_of_blocking_on_held_lock(tmp_path, monkeypatch, capsys):
     import fcntl
     import sys
-    import pytest
     from scripts import reset_accuracy_epoch
 
     monkeypatch.chdir(tmp_path)
@@ -243,8 +242,10 @@ def test_reset_script_times_out_instead_of_blocking_on_held_lock(tmp_path, monke
     monkeypatch.setattr(sys, "argv", ["reset_accuracy_epoch.py", "--no-heal"])
     with open("data/.pending_reset_id.lock", "a+", encoding="utf-8") as holder:
         fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
-        with pytest.raises(TimeoutError):
-            reset_accuracy_epoch.main()
+        assert reset_accuracy_epoch.main() == 1
+    outcome = json.loads(capsys.readouterr().err)
+    assert outcome["ok"] is False
+    assert outcome["reason"] == "lock_timeout"
     assert seen == []
     assert not (tmp_path / "data" / ".pending_reset_id").exists()
 
