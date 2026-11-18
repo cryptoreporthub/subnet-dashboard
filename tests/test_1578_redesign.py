@@ -330,12 +330,9 @@ def test_missing_or_corrupt_portfolio_is_not_all_closed(tmp_path, monkeypatch):
     result = expired_recovery.recover_expired_predictions()
     # A missing book is close-complete: recovery may grade the row and stamp finalize.
     disk = json.loads(pred_path.read_text())["resolved"][0]
-    if result.get("ok") is True:
-        assert disk.get("outcome") in {"hit", "miss"}
-        assert not port_path.exists()
-    else:
-        # Still must not look like a quiet success that skipped the grade.
-        assert result.get("ok") is not True
+    assert result.get("ok") is True
+    assert disk.get("outcome") in {"hit", "miss"}
+    assert not port_path.exists()
 
     port_path.write_bytes(b"{not json")
     pred_path.write_text(json.dumps({"predictions": [], "resolved": [_expired("corr-1")], "stats": {}}))
@@ -1357,8 +1354,7 @@ def test_receipt_write_timeout_after_pump_marks_indeterminate_and_retry_does_not
     assert third.get("ok") is True
     assert counts["pump"] == before_two["pump"]
     assert counts["finalize"] == before_two["finalize"]
-    assert ledger_writes["n"] <= 1
-    # unused but documents that run 2 did work on the ledger
+    assert ledger_writes["n"] == 0
     assert writes_after_two == 1
 
 
