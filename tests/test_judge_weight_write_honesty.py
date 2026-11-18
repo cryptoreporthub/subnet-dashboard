@@ -30,32 +30,27 @@ def test_nudge_judge_refused_write_returns_none(tmp_path, monkeypatch):
 def test_concurrent_nudges_preserve_both_judges(tmp_path, monkeypatch):
     path = tmp_path / "soul_map.json"
     path.write_text(json.dumps({"judge_weights": {"oracle": 0.35, "echo": 0.30, "pulse": 0.35}}))
-    original = judge_weights.load_judge_weights
+    # Both nudges start together, so a weight read taken before the soul-map lock overlaps.
     barrier = threading.Barrier(2)
+    reached: list[str] = []
     errors = []
-
-    def synchronized_read(*args, **kwargs):
-        result = original(*args, **kwargs)
-        try:
-            barrier.wait(timeout=1)
-        except threading.BrokenBarrierError:
-            pass
-        return result
 
     def nudge(name):
         try:
+            barrier.wait(timeout=5)
+            reached.append(name)
             judge_weights.nudge_judge(name, True, path=str(path))
         except Exception as exc:
             errors.append(exc)
 
-    monkeypatch.setattr(judge_weights, "load_judge_weights", synchronized_read)
     monkeypatch.setattr("internal.learning.trail_bus.emit_weight_change", lambda *_a, **_kw: None)
     threads = [threading.Thread(target=nudge, args=(name,)) for name in ("oracle", "echo")]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join(5)
-    assert errors == []
+    assert errors == [], errors
+    assert sorted(reached) == ["echo", "oracle"], "a nudge never reached nudge_judge"
     final = json.loads(path.read_text())["judge_weights"]
     assert final["oracle"] == 0.37
     assert final["echo"] == 0.32

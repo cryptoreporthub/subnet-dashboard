@@ -100,31 +100,27 @@ def test_parallel_portfolio_updates_do_not_lose_a_judge(tmp_path, monkeypatch):
     port_path = tmp_path / "judge_portfolios.json"
     port_path.write_text("{}")
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    # Both writers must start their open_position call together. A read taken before the
+    # portfolios lock then overlaps the other writer's read, which is the lost-update window.
     barrier = threading.Barrier(2)
-    real_load = portfolios._load
+    reached: list[str] = []
     errors = []
-
-    def synchronized_load():
-        data = real_load()
-        try:
-            barrier.wait(timeout=1)
-        except threading.BrokenBarrierError:
-            pass
-        return data
 
     def open_for(name):
         try:
+            barrier.wait(timeout=5)
+            reached.append(name)
             portfolios.open_position(name, {"id": "pick-1", "netuid": 7})
         except Exception as exc:
             errors.append(exc)
 
-    monkeypatch.setattr(portfolios, "_load", synchronized_load)
     threads = [threading.Thread(target=open_for, args=(name,)) for name in ("oracle", "echo")]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join(5)
-    assert not errors
+    assert not errors, errors
+    assert sorted(reached) == ["echo", "oracle"], "a writer never reached open_position"
     data = json.loads(port_path.read_text())
     assert len(data["oracle"]["open_positions"]) == 1
     assert len(data["echo"]["open_positions"]) == 1
