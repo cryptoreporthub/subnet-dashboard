@@ -146,3 +146,11 @@ def test_conflicted_row_runs_no_learning(ledger, sinks, monkeypatch):
     disk = json.loads(ledger.read_text())
     assert [r.get("status") for r in disk["predictions"] if r.get("id") == "r1"] == ["pending"]
     assert _sink_calls(sinks) == [], f"learning ran for a conflicted row: {sinks}"
+
+
+def test_impact_env_override_still_stamps_the_row_before_save(monkeypatch):
+    """With IMPACT_STRENGTH set, the saved row must still carry impact_strength_after."""
+    monkeypatch.setenv("IMPACT_STRENGTH", "1.5")
+    row = _due_row()
+    resolver._stage_impact_strength(row, True, resolver._LearningDeferral())
+    assert row["impact_strength_after"] == 1.5

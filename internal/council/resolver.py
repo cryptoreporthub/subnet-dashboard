@@ -277,6 +277,8 @@ def _stage_impact_strength(prediction: Dict[str, Any], correct: bool, deferral: 
     )
 
     if os.environ.get("IMPACT_STRENGTH", "").strip() != "":
+        # The override pins the value, so the nudge changes nothing. Stamp what it will report.
+        prediction["impact_strength_after"] = float(load_impact_strength())
         return
     tier_l = str(_impact_tier(prediction) or "").lower()
     if tier_l == "large":
