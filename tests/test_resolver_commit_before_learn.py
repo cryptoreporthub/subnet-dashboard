@@ -191,3 +191,80 @@ def test_late_grade_that_raises_queues_no_learning(ledger, sinks, monkeypatch):
     rows = json.loads(ledger.read_text())
     assert [r["status"] for r in rows["resolved"] if r.get("id") == "r1"] == ["expired"]
     assert _sink_calls(sinks) == [], f"learning ran for an expired row: {sinks}"
+
+
+def test_skipped_first_same_tier_row_logs_staged_vs_applied_impact(tmp_path, monkeypatch, caplog):
+    """Row 2 stages from row 1's delta. If row 1 is skipped, the saved copy drifts from
+    what the soul map applied. That drift must be logged, and the trail must carry the
+    applied value, which matches the soul map.
+    """
+    import logging
+
+    from internal.council import pick_history, prediction_trace, resolver, scenario_memory, weights
+    from internal.learning import trail_events
+
+    now = datetime.now(timezone.utc)
+    stamp = (now - timedelta(seconds=60)).isoformat().replace("+00:00", "Z")
+    pred_stamp = (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+
+    def due_small(row_id, pct):
+        row = _due_row(row_id)
+        # Distinct predicted_pct: the resolver dedupes same-netuid, same-pct rows in one window.
+        row["predicted_pct"] = pct
+        row["market_impact"] = {"tier": "small"}
+        row["resolve_at"] = stamp
+        row["predicted_at"] = pred_stamp
+        row["reference_price"] = 10.0
+        return row
+
+    path = tmp_path / "predictions.json"
+    path.write_text(json.dumps({"predictions": [due_small("r1", 5.0), due_small("r2", 6.0)], "resolved": [], "stats": {}}))
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(resolver, "fetch_prices", lambda _subnets=None: {})
+    monkeypatch.setattr(resolver, "hydrate_candles_for_netuid", lambda *_a, **_kw: False)
+    monkeypatch.setattr(
+        resolver, "lookup_horizon_price",
+        lambda *_a, **_kw: ("ok", 12.0, {"price_source": "test", "price_lag_seconds": 0}),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda _p: False)
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: False)
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
+    monkeypatch.delenv("IMPACT_STRENGTH", raising=False)
+    # Silence every effect except the impact write, which is the one under test.
+    for target, name in (
+        (weights, "nudge_expert"), (resolver, "nudge_signal_weight"),
+        (resolver, "on_prediction_resolved"), (prediction_trace, "record_prediction_resolved"),
+        (pick_history, "finalize_from_prediction"), (scenario_memory, "record_outcome"),
+    ):
+        monkeypatch.setattr(target, name, lambda *_a, **_kw: None)
+    trail_seen = {}
+
+    def record_trail(prediction, *_a, **_kw):
+        trail_seen[prediction.get("id")] = prediction.get("impact_strength_after")
+
+    monkeypatch.setattr(trail_events, "emit_prediction_resolved", record_trail)
+
+    real_commit = resolver._commit_ledger_changes
+
+    def other_writer_then_commit(before, after, **kwargs):
+        disk = json.loads(path.read_text())
+        for row in disk["predictions"]:
+            if row.get("id") == "r1":
+                row["note"] = "other writer"
+        path.write_text(json.dumps(disk))
+        return real_commit(before, after, **kwargs)
+
+    monkeypatch.setattr(resolver, "_commit_ledger_changes", other_writer_then_commit)
+    with caplog.at_level(logging.WARNING):
+        resolver._resolve_due_predictions(subnets=[])
+
+    applied = weights.load_impact_strength()
+    staged_r2 = trail_seen.get("r2")
+    assert any(
+        "r2" in rec.getMessage() and rec.levelno == logging.WARNING
+        for rec in caplog.records
+    ), "no warning names row 2 for the staged/applied mismatch"
+    assert trail_seen.get("r2") is not None
+    assert abs(trail_seen["r2"] - applied) < 1e-4, (
+        f"trail carries {trail_seen['r2']}, soul map applied {applied}"
+    )

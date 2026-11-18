@@ -265,7 +265,8 @@ def _impact_tier(prediction: Dict[str, Any]) -> Optional[str]:
 def _stage_impact_strength(prediction: Dict[str, Any], correct: bool, deferral: _LearningDeferral) -> None:
     """Stamp the impact value the nudge will produce, before the save.
 
-    The row carries impact_strength_after into the saved ledger, so it is set now.
+    The row carries impact_strength_after into the saved ledger, so it is set now. The
+    field means the value expected at save time. The trail carries the applied value.
     The weight write waits for the save. Rows in one cycle chain through
     deferral.impact_value, so a second row on the same tier sees the first row's delta.
     """
@@ -293,12 +294,26 @@ def _stage_impact_strength(prediction: Dict[str, Any], correct: bool, deferral: 
     deferral.impact_value = after
 
 
-def _apply_impact_guarded(prediction: Dict[str, Any], correct: bool) -> None:
+def _apply_impact_guarded(
+    prediction: Dict[str, Any], correct: bool, staged: Optional[float] = None
+) -> None:
     # The check and the write sit under the release guard, as before, so an abandon waits for both.
     with _cycle_persist_guard_safe():
         if _cycle_writes_revoked_safe():
             return
         _nudge_impact_strength(prediction, correct)
+    # Deferred rows only: the saved copy is the staged value. Log when the applied
+    # value differs, which happens when an earlier same-tier row was skipped or a
+    # concurrent writer moved the soul map. The trail carries the applied value.
+    if staged is not None:
+        applied = prediction.get("impact_strength_after")
+        if applied is not None and abs(float(applied) - float(staged)) > 1e-4:
+            logger.warning(
+                "impact staged value differs from applied row=%s staged=%s applied=%s",
+                prediction.get("id"),
+                staged,
+                applied,
+            )
 
 
 def _stage_or_run_impact(prediction: Dict[str, Any], correct: bool) -> None:
@@ -314,7 +329,10 @@ def _stage_or_run_impact(prediction: Dict[str, Any], correct: bool) -> None:
         # The old nudge swallowed errors. Skip this row's impact rather than abort the cycle.
         logger.exception("impact staging failed, row impact not learned id=%s", prediction.get("id"))
         return
-    _queue_effect(prediction, deferral, lambda: _apply_impact_guarded(prediction, correct))
+    staged = prediction["impact_strength_after"]
+    _queue_effect(
+        prediction, deferral, lambda: _apply_impact_guarded(prediction, correct, staged)
+    )
 
 
 def _queue_mark() -> Optional[Tuple[int, Optional[float]]]:
