@@ -113,10 +113,6 @@ def read_blob_checked(path: str) -> BlobRead:
     except Exception as exc:
         return BlobRead("transient", None, error=str(exc))
 
-    if raw == "":
-        # A zero-byte file holds no data: treat it as missing so writers are not wedged.
-        # Whitespace-only content is still unreadable (pinned by earlier #1578 tests).
-        return BlobRead("missing", {})
     if not raw.strip():
         return BlobRead("unreadable", None, error="empty")
     try:
@@ -307,6 +303,22 @@ def read_soul_map(path: Optional[str] = None, *, copy_blob: bool = True) -> Dict
         return {}
 
 
+def _read_for_write(path: str) -> BlobRead:
+    """Classify the file for a write. A zero-byte soul map holds no data, so it counts as
+    missing and the write may proceed. Every other classification is unchanged, and the
+    shared classifier still refuses zero-byte ledgers."""
+    checked = read_blob_checked(path)
+    if checked.kind == "unreadable" and checked.error == "empty":
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return checked
+        if size == 0:
+            logger.warning("soul map is zero bytes; treating as missing for this write: %s", path)
+            return BlobRead("missing", {})
+    return checked
+
+
 def write_soul_map(
     mutator: Callable[[Dict[str, Any]], None],
     path: Optional[str] = None,
@@ -319,7 +331,7 @@ def write_soul_map(
     deadline = time.monotonic() + _SOUL_MAP_LOCK_DEADLINE_SECONDS
     try:
         with _acquire_write_locks(resolved, deadline):
-            checked = read_blob_checked(resolved)
+            checked = _read_for_write(resolved)
             if checked.kind == "transient":
                 return WriteResult(
                     WriteOutcome.READ_FAILED,
