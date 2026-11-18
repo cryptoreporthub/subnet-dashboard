@@ -1798,12 +1798,8 @@ def _resolve_due_predictions_body(
     resolved.extend(duplicate_rows)
 
     prices = fetch_prices(subnets)
-    # Regrade keeps its immediate learning: its rows are outside this queue.
-    _immediate_token = _learning_deferral.set(None)
-    try:
-        regraded_expired = regrade_expired_predictions(live_prices=prices)
-    finally:
-        _learning_deferral.reset(_immediate_token)
+    # Regrade owns its own learning queue and flushes it after its save.
+    regraded_expired = regrade_expired_predictions(live_prices=prices)
     # Re-sync the in-memory resolved list whenever regrade_expired_predictions wrote
     # anything to disk — not only on successful regrades.  Without this, stamp-only
     # mutations (historical_hydration_attempted, horizon_too_old_for_history) are
@@ -1991,7 +1987,24 @@ def regrade_expired_predictions(
     live_prices: Optional[Dict[Any, float]] = None,
     limit: int = 50,
 ) -> Dict[str, Any]:
-    """Retry grading expired rows when price cache now has horizon candles (RF-3)."""
+    """Retry grading expired rows when price cache now has horizon candles (RF-3).
+
+    Learning for each regraded row runs only after the regrade save succeeds.
+    """
+    token = _learning_deferral.set(_LearningDeferral())
+    try:
+        return _regrade_expired_predictions_body(live_prices=live_prices, limit=limit)
+    finally:
+        # Anything still queued belongs to a save that never ran, so it is dropped, not run.
+        _learning_deferral.reset(token)
+
+
+def _regrade_expired_predictions_body(
+    *,
+    live_prices: Optional[Dict[Any, float]] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Body of regrade_expired_predictions. Runs inside its own learning deferral."""
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {}},
@@ -2094,9 +2107,11 @@ def regrade_expired_predictions(
     if needs_save:
         data["resolved"] = resolved
         data["stats"] = _compute_stats(data)
-        _commit_ledger_changes(
+        commit_result = _commit_ledger_changes(
             before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="regrade"
         )
+        # Learning for these rows runs only now. A refused save raised above, so none ran.
+        _flush_deferred_learning(_learning_deferral.get(), commit_result)
 
     return {
         "attempted": attempted,
