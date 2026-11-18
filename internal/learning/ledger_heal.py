@@ -326,7 +326,10 @@ def archive_predictions_epoch(
         persisted = predictions_store.mutate_predictions(
             clear_epoch, path=src, caller="archive_predictions_epoch", trigger="archive"
         )
-    except (OSError, ValueError) as exc:
+    except (
+        OSError, ValueError,
+        predictions_store.FileLockTimeout, predictions_store.PredictionsLedgerUnreadable,
+    ) as exc:
         return {"ok": False, "reason": str(exc), "heal": {"skipped": True}}
     if persisted.outcome is not predictions_store.PersistOutcome.APPLIED:
         reason = "ledger_unreadable" if persisted.reason in (

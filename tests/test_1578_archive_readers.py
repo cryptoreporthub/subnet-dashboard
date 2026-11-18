@@ -89,3 +89,22 @@ def test_one_bad_epoch_receipt_does_not_block_later_epochs(tmp_path):
     assert (dest / "pre-epoch-new.json").read_bytes() == newer, "newer epoch was not published"
     assert result["ok"] is False
     assert [f["reset_request_id"] for f in result["failures"]] == ["r1"]
+
+
+def test_archive_lock_timeout_returns_not_ok_instead_of_raising(tmp_path, monkeypatch):
+    """A lost lock race during archive must come back as ok: False, not escape as an exception."""
+    from internal.learning import ledger_heal, predictions_store
+
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}))
+
+    def lock_lost(*_a, **_kw):
+        raise predictions_store.FileLockTimeout("predictions lock timed out")
+
+    monkeypatch.setattr(predictions_store, "mutate_predictions", lock_lost)
+    result = ledger_heal.archive_predictions_epoch(
+        reset_request_id="6f1c2a4e-9b7d-4e8a-8c31-2d5f7a9b0c11",
+        predictions_path=str(ledger),
+        archive_dir=str(tmp_path / "archives"),
+    )
+    assert result["ok"] is False
