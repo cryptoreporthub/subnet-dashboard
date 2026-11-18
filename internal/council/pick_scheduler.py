@@ -260,10 +260,10 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
                 written = pick_history.record_hour_pick(
                     pick, subnet_row, prediction_id=pred_id
                 )
+                if written is None or not pick_history.has_prediction(pred_id):
+                    return "indeterminate"
             except Exception as exc:
                 logger.warning("pick_history record failed: %s", exc)
-                return "indeterminate"
-            if written is None:
                 return "indeterminate"
         if stored_kind == "indeterminate":
             logger.warning("hour pick record indeterminate: %s", stored.reason)

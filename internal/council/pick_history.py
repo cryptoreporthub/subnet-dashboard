@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
-from internal.file_utils import safe_write_json
+from internal.file_utils import file_lock, safe_write_json
 
 logger = logging.getLogger(__name__)
 
 PICK_HISTORY_PATH = os.environ.get("PICK_HISTORY_PATH", os.path.join("data", "pick_history.json"))
+
+
+def _serialized_writer(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Hold the pick-history file lock across a whole read-modify-write.
+
+    Without it, the resolver thread and the scheduler thread each load the file,
+    change it, and save it, so one save silently overwrites the other.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        with file_lock(PICK_HISTORY_PATH):
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 class PickHistoryUnreadable(Exception):
@@ -78,6 +94,7 @@ def _retire_active(store: Dict[str, Any], *, reason: str) -> None:
     store["active"] = None
 
 
+@_serialized_writer
 def record_hour_pick(
     pick: Dict[str, Any],
     subnet: Dict[str, Any],
@@ -125,6 +142,7 @@ def record_hour_pick(
     return row
 
 
+@_serialized_writer
 def finalize_from_prediction(prediction: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Move active hour pick to history when its prediction resolves."""
     if not isinstance(prediction, dict):
