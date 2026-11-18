@@ -268,3 +268,41 @@ def test_skipped_first_same_tier_row_logs_staged_vs_applied_impact(tmp_path, mon
     assert abs(trail_seen["r2"] - applied) < 1e-4, (
         f"trail carries {trail_seen['r2']}, soul map applied {applied}"
     )
+
+
+def test_revoked_before_commit_refuses_save_and_runs_no_learning(ledger, sinks, monkeypatch):
+    """A cycle revoked before its commit must refuse the save and run no learning."""
+    before = ledger.read_bytes()
+    state = {"rev": False}
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: state["rev"])
+
+    def revoke_then_continue(*_a, **_kw):
+        state["rev"] = True
+        return None
+
+    monkeypatch.setattr(resolver, "check_resolver_watchdog", revoke_then_continue)
+    with pytest.raises(resolver.LedgerPersistSkipped):
+        resolver._resolve_due_predictions(subnets=[])
+
+    assert _sink_calls(sinks) == []
+    assert ledger.read_bytes() == before
+
+
+def test_revoked_between_save_and_flush_stops_remaining_learning(ledger, sinks, monkeypatch):
+    """A revocation that lands after the save stops the learning that has not run yet.
+
+    The save already happened, so the row stays resolved. Only the first effect runs.
+    """
+    state = {"rev": False}
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: state["rev"])
+
+    def expert_then_revoke(*_a, **_kw):
+        sinks.append("expert_nudge")
+        state["rev"] = True
+
+    monkeypatch.setattr(weights, "nudge_expert", expert_then_revoke)
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert sinks == ["expert_nudge"], f"learning ran after revocation: {sinks}"
+    rows = json.loads(ledger.read_text())
+    assert [r["status"] for r in rows["resolved"] if r.get("id") == "r1"] == ["resolved"]
