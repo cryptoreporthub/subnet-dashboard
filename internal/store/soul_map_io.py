@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from internal.file_utils import _fsync_dir
 import enum
 import fcntl
 import hashlib
@@ -366,10 +367,15 @@ def write_soul_map(
                 )
                 with os.fdopen(fd, "w") as f:
                     json.dump(blob, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
                 if pre_replace is not None:
                     pre_replace()
                 os.replace(temp_path, resolved)
                 temp_path = ""
+                # Best effort: the data is already committed by the rename, so a directory
+                # fsync failure is logged inside _fsync_dir and does not fail the write.
+                _fsync_dir(os.path.dirname(resolved) or ".")
                 try:
                     _cache_put(resolved, blob, time.monotonic())
                 except Exception as exc:
