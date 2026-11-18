@@ -11,6 +11,14 @@ from unittest.mock import patch
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _isolate_postmortem_dir(tmp_path, monkeypatch):
+    """Keep judge postmortem writes out of the repo's data/ directory."""
+    from internal.judges import postmortems
+
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(tmp_path / "postmortems"))
+
 from internal.judges import portfolios
 from internal.learning import prediction_loop
 
