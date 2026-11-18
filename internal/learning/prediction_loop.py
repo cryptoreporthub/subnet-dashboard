@@ -483,15 +483,20 @@ def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
             continue
         if created < cutoff:
             continue
-        scores = row.get("judge_scores_at_creation")
-        if not isinstance(scores, dict):
-            from internal.judges.tracker import evaluate_prediction
+        try:
+            scores = row.get("judge_scores_at_creation")
+            if not isinstance(scores, dict):
+                from internal.judges.tracker import evaluate_prediction
 
-            scores = evaluate_prediction(
-                row, signal_impact=row.get("signal_impact"),
-                subnet=row.get("subnet_snapshot"), expert_weights=row.get("weights_at_creation"),
-            )
-        open_positions_for_prediction(row, scores)
+                scores = evaluate_prediction(
+                    row, signal_impact=row.get("signal_impact"),
+                    subnet=row.get("subnet_snapshot"), expert_weights=row.get("weights_at_creation"),
+                )
+            open_positions_for_prediction(row, scores)
+        except Exception:
+            # One bad pick must not stop the sweep; it is retried on the next pass.
+            logger.exception("Reconcile skipped pick id=%s", row.get("id"))
+            continue
         reconciled += 1
 
     from internal.judges.portfolios import observe_portfolios

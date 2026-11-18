@@ -92,3 +92,37 @@ def test_persist_lifecycle_non_storage_exception_is_persist_error(
     assert result.outcome is WriteOutcome.PERSIST_ERROR
     assert result.outcome is not WriteOutcome.REPLACE_FAILED
     assert "TypeError" in result.detail
+
+
+def test_one_bad_pick_does_not_stop_reconciling_the_rest(tmp_path, monkeypatch):
+    """A row whose position open raises must not abort the reconcile sweep for later picks."""
+    import json as _json
+    from datetime import datetime as _dt, timezone as _tz
+
+    from internal.judges import portfolios
+    from internal.learning import prediction_loop
+
+    now = _dt.now(_tz.utc).isoformat().replace("+00:00", "Z")
+    ledger = tmp_path / "predictions.json"
+    base = {"pick_source": "council", "status": "pending", "created_at": now,
+            "judge_scores_at_creation": {"oracle": {}}}
+    ledger.write_text(_json.dumps({
+        "predictions": [dict(base, id="bad-1"), dict(base, id="good-2")],
+        "resolved": [], "stats": {},
+    }))
+    port = tmp_path / "judge_portfolios.json"
+    port.write_text("{}")
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port))
+
+    opened = []
+
+    def open_positions(row, scores):
+        if row["id"] == "bad-1":
+            raise RuntimeError("corrupt pick")
+        opened.append(row["id"])
+
+    monkeypatch.setattr(portfolios, "open_positions_for_prediction", open_positions)
+    count = prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+
+    assert opened == ["good-2"], f"later pick was never reconciled: {opened}"
+    assert count == 1
