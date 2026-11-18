@@ -283,13 +283,13 @@ def test_execute_lock_wait_timeout_exits_6_without_restore(tmp_path, monkeypatch
     from internal.store import soul_map_io as smio
 
     def _lock_timeout(*_a, **_k):
-        return smio.WriteResult(smio.WriteOutcome.LOCK_WAIT_FAILED, None, detail="test")
+        raise smio.SoulMapLockWaitTimeout("test lock held")
 
     monkeypatch.setattr(smio, "write_soul_map", _lock_timeout)
     rc = compact.execute(str(path), str(bak))
     out = capsys.readouterr().out
     assert rc == 6
-    assert "COMPACTION_FAILED" in out
+    assert "lock_timeout" in out
     assert "COMPACTION_FAILED_RESTORED" not in out
     assert path.read_bytes() == before_bytes
 
