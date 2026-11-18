@@ -302,7 +302,7 @@ def test_recovery_refused_persist_does_not_nudge_and_applied_keeps_stamps(tmp_pa
     assert counts["impact"] == 1
     disk = json.loads(pred_path.read_text())["resolved"][0]
     assert disk.get("expert")
-    assert disk.get("expert_attribution_source") or disk.get("expert")
+    assert disk.get("expert_attribution_source") == "replay"
     assert isinstance(disk.get("subnet_snapshot"), dict)
 
 
@@ -621,7 +621,8 @@ def test_post_commit_learning_retries_and_idless_receipts(tmp_path, monkeypatch)
     assert expert_calls["n"] == 2
     third = expired_recovery.recover_expired_predictions()
     assert expert_calls["n"] == 2
-    assert "impact" in done or "impact" in ((json.loads(pred_path.read_text())["resolved"][0].get("learning_effects") or {}).get("done") or [])
+    final_done = ((json.loads(pred_path.read_text())["resolved"][0].get("learning_effects") or {}).get("done") or [])
+    assert "impact" in final_done
 
 
 def test_idless_legacy_rows_have_distinct_effect_receipts(tmp_path, monkeypatch):
