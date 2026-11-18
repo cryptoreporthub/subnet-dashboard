@@ -20,6 +20,23 @@ def _isolate_learning_effect_receipts(tmp_path, monkeypatch):
     receipts = tmp_path / "learning_effect_receipts.json"
     monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", str(receipts), raising=False)
     monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", str(receipts))
+    # These tests run real learning effects. Several default paths are repo-relative data/ files
+    # bound as function defaults at import, so patching the constants alone does not reach them.
+    # Changing into tmp_path redirects every relative default.
+    monkeypatch.chdir(tmp_path)
+    from internal.council import scenario_memory, weights
+    from internal.store import db
+    from internal.trace import store as trace_store
+
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
+    monkeypatch.setattr(trace_store, "TRACE_STORE_PATH", str(tmp_path / "decision_trace.json"))
+    monkeypatch.setattr(db, "STORE_DB_PATH", str(tmp_path / "store.db"))
+    monkeypatch.setattr(scenario_memory, "SCENARIO_MEMORY_PATH", str(tmp_path / "scenario_memory.json"))
+    from internal.analytics import scenario_state
+    from internal.judges import weights as judge_weights
+
+    monkeypatch.setattr(judge_weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"), raising=False)
+    monkeypatch.setattr(scenario_state, "SCENARIO_MEMORY_PATH", str(tmp_path / "scenario_memory.json"), raising=False)
 
 
 def _gradeable(pred_id, *, outcome="miss", actual_pct=-3.0, correct=None):
@@ -257,11 +274,15 @@ def test_recovery_refused_persist_does_not_nudge_and_applied_keeps_stamps(tmp_pa
     monkeypatch.setattr(resolver, "_record_scenario_outcome", count_scenario)
     monkeypatch.setattr(resolver, "_nudge_signal_weights", count_signal)
 
-    monkeypatch.setattr(
-        predictions_store,
-        "merge_ledger_changes",
-        lambda *args, **kwargs: PersistResult(PersistOutcome.REFUSED, PersistReason.CONFLICT_ONLY),
-    )
+    refuse = {"on": True}
+    real_merge = predictions_store.merge_ledger_changes
+
+    def merge_refusing_while_on(*args, **kwargs):
+        if refuse["on"]:
+            return PersistResult(PersistOutcome.REFUSED, PersistReason.CONFLICT_ONLY)
+        return real_merge(*args, **kwargs)
+
+    monkeypatch.setattr(predictions_store, "merge_ledger_changes", merge_refusing_while_on)
     result = expired_recovery.recover_expired_predictions()
     assert result["ok"] is False
     assert result.get("recovered") == 0
@@ -270,28 +291,7 @@ def test_recovery_refused_persist_does_not_nudge_and_applied_keeps_stamps(tmp_pa
     assert disk["outcome"] == "expired"
     assert disk["status"] == "expired"
 
-    monkeypatch.setattr(predictions_store, "merge_ledger_changes", predictions_store.merge_ledger_changes)
-    # Re-import bound original: just delete the patch by setting the real function.
-    from internal.learning import predictions_store as ps
-
-    monkeypatch.undo()
-    # Re-apply path and price stubs plus counters after undo.
-    # undo() also drops the autouse receipts isolation; restore it.
-    monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", str(tmp_path / "learning_effect_receipts.json"), raising=False)
-    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", str(tmp_path / "learning_effect_receipts.json"))
-    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(pred_path))
-    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(pred_path))
-    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
-    monkeypatch.setattr(
-        price_reference,
-        "price_at_resolve_at",
-        lambda *args, **kwargs: ("ok", 110.0, {"price_source": "hourly"}),
-    )
-    monkeypatch.setattr(resolver, "_skip_council_learning", lambda *args, **kwargs: False)
-    monkeypatch.setattr(resolver, "_nudge_weights", count_weights)
-    monkeypatch.setattr(resolver, "_nudge_impact_strength", count_impact)
-    monkeypatch.setattr(resolver, "_record_scenario_outcome", count_scenario)
-    monkeypatch.setattr(resolver, "_nudge_signal_weights", count_signal)
+    refuse["on"] = False
     counts.update({k: 0 for k in counts})
 
     result = expired_recovery.recover_expired_predictions()
