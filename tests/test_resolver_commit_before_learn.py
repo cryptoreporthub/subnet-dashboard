@@ -288,11 +288,14 @@ def test_revoked_before_commit_refuses_save_and_runs_no_learning(ledger, sinks, 
     assert ledger.read_bytes() == before
 
 
-def test_revoked_between_save_and_flush_stops_remaining_learning(ledger, sinks, monkeypatch):
+def test_revoked_between_save_and_flush_stops_remaining_learning(ledger, sinks, monkeypatch, caplog):
     """A revocation that lands after the save stops the learning that has not run yet.
 
-    The save already happened, so the row stays resolved. Only the first effect runs.
+    The save already happened, so the row stays resolved. Only the first effect runs,
+    and the dropped learning is logged, so the loss is visible.
     """
+    import logging
+
     state = {"rev": False}
     monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: state["rev"])
 
@@ -306,3 +309,58 @@ def test_revoked_between_save_and_flush_stops_remaining_learning(ledger, sinks, 
     assert sinks == ["expert_nudge"], f"learning ran after revocation: {sinks}"
     rows = json.loads(ledger.read_text())
     assert [r["status"] for r in rows["resolved"] if r.get("id") == "r1"] == ["resolved"]
+    dropped = [rec.getMessage() for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert any("dropped" in m and "r1" in m for m in dropped), f"no warning for dropped learning: {dropped}"
+
+
+def test_scenario_record_keeps_rsi_and_volume_features(ledger, sinks, monkeypatch):
+    """The deferred scenario write must still carry the rsi and volume signals.
+
+    The signals are set on the row for grading and removed right after it. The
+    scenario write runs later from the queue, so it has to receive them explicitly.
+    """
+    captured = {}
+
+    def capture(**kwargs):
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(scenario_memory, "record_outcome", capture)
+    resolver._resolve_due_predictions(subnets=[{"netuid": 7, "volume": 2_000_000, "price": 12.0}])
+
+    features = captured.get("features") or {}
+    assert "volume" in features and "rsi" in features, f"scenario features lost signals: {features}"
+
+
+def test_impact_nudge_failure_is_logged_not_silent(ledger, sinks, monkeypatch, caplog):
+    """If the impact nudge raises, the staged value is not applied, and that must be logged."""
+    import logging
+
+    def boom(*_a, **_kw):
+        raise RuntimeError("soul map write failed")
+
+    monkeypatch.setattr(resolver, "nudge_impact_strength", boom)
+    with caplog.at_level(logging.WARNING):
+        resolver._resolve_due_predictions(subnets=[])
+
+    messages = [rec.getMessage() for rec in caplog.records if rec.levelno == logging.WARNING]
+    assert any("staged impact not applied" in m and "r1" in m for m in messages), messages
+
+
+def test_keyless_row_learns_nothing_when_save_reports_unidentified(ledger, sinks, monkeypatch):
+    """A keyed row and a keyless row in one save: only the keyed row may learn.
+
+    The save reports the keyless row as unidentified and does not apply it, so its
+    learning must not run. The expert nudge is the sink, so count it per row.
+    """
+    keyed = _due_row("r1")
+    keyless = _due_row(None)
+    keyless["predicted_pct"] = 6.0
+    ledger.write_text(json.dumps({"predictions": [keyed, keyless], "resolved": [], "stats": {}}))
+
+    try:
+        resolver._resolve_due_predictions(subnets=[])
+    except Exception:
+        pass
+
+    assert sinks.count("expert_nudge") == 1, f"keyless row learned: {sinks}"

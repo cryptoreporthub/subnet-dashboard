@@ -17,13 +17,12 @@ import pytest
 import internal.council.resolver as resolver
 import internal.council.resolver_scheduler as resolver_scheduler
 import internal.council.weights as weights
-from internal.learning.predictions_store import PersistReason
 
 
 NETUID = 7
 
 
-def _resolve_cycle(*, revoked: bool) -> None:
+def _resolve_cycle() -> None:
     """Run one resolver pass.
 
     Learning now runs after the ledger save. An abandon that lands during learning
@@ -112,7 +111,7 @@ def _run_cycle(
 
     monkeypatch.setattr(resolver, "nudge_impact_strength", spy_nudge)
     try:
-        _resolve_cycle(revoked=abandon_on_first_nudge)
+        _resolve_cycle()
     finally:
         resolver_scheduler._cycle_timing.reset(token)
 
@@ -165,9 +164,9 @@ def test_revoked_cycle_applies_no_later_learning_write(harness, monkeypatch, rev
     monkeypatch.setattr(resolver, "nudge_impact_strength", recorder("impact"))
     monkeypatch.setattr(resolver, "_record_scenario_outcome", recorder("scenario"))
     monkeypatch.setattr(resolver, "_nudge_signal_weights", recorder("signal"))
-    monkeypatch.setattr(resolver, "_finalize_effects", recorder("finalize"))
+    monkeypatch.setattr(resolver, "_finalize_effects", lambda *_a, **_k: (recorder("finalize")(), [])[1])
     try:
-        _resolve_cycle(revoked=True)
+        _resolve_cycle()
     finally:
         resolver_scheduler._cycle_timing.reset(token)
 
@@ -201,7 +200,7 @@ def test_abandon_cannot_revoke_between_impact_check_and_write(harness, monkeypat
 
     monkeypatch.setattr(resolver, "nudge_impact_strength", impact_while_abandon_races)
     try:
-        _resolve_cycle(revoked=True)
+        _resolve_cycle()
     finally:
         resolver_scheduler._cycle_timing.reset(token)
     abandon_thread.join(5)

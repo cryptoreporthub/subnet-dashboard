@@ -297,6 +297,10 @@ def _stage_impact_strength(prediction: Dict[str, Any], correct: bool, deferral: 
 def _apply_impact_guarded(
     prediction: Dict[str, Any], correct: bool, staged: Optional[float] = None
 ) -> None:
+    if staged is not None:
+        # Clear the staged value. The nudge stamps the applied value only when it applies,
+        # so a field still None afterwards means nothing was applied.
+        prediction["impact_strength_after"] = None
     # The check and the write sit under the release guard, as before, so an abandon waits for both.
     with _cycle_persist_guard_safe():
         if _cycle_writes_revoked_safe():
@@ -307,7 +311,13 @@ def _apply_impact_guarded(
     # concurrent writer moved the soul map. The trail carries the applied value.
     if staged is not None:
         applied = prediction.get("impact_strength_after")
-        if applied is not None and abs(float(applied) - float(staged)) > 1e-4:
+        if applied is None:
+            logger.warning(
+                "staged impact not applied row=%s staged=%s",
+                prediction.get("id"),
+                staged,
+            )
+        elif abs(float(applied) - float(staged)) > 1e-4:
             logger.warning(
                 "impact staged value differs from applied row=%s staged=%s applied=%s",
                 prediction.get("id"),
@@ -385,11 +395,19 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
     # A row with no key cannot be matched to a conflict, so an unidentified conflict
     # means any keyless row may be one the save did not apply. Skip those rows too.
     unidentified = any(isinstance(k, tuple) and k and k[0] == "unidentified" for k in conflicted)
-    for key, effect in deferral.items:
+    for index, (key, effect) in enumerate(deferral.items):
         if (key is not None and key in conflicted) or (key is None and unidentified):
             logger.warning("learning skipped for ledger row the save did not apply key=%s", key)
             continue
         if _cycle_writes_revoked_safe():
+            # The save already happened, so these rows stay resolved and will not be regraded.
+            # Say what was dropped, so the loss is visible.
+            dropped = [k for k, _ in deferral.items[index:]]
+            logger.warning(
+                "learning dropped after revoke: %d effect(s) for rows %s",
+                len(dropped),
+                dropped,
+            )
             return
         try:
             effect()
@@ -1071,7 +1089,16 @@ def _record_scenario_outcome(
     outcome: str,
     correct: bool,
     expert: Optional[str],
+    *,
+    rsi_signal: Any = None,
+    volume_signal: Any = None,
 ) -> None:
+    # The grade-time signals are removed from the row right after grading, so a deferred
+    # caller passes them in. Callers that pass nothing read them from the row, as before.
+    if rsi_signal is None:
+        rsi_signal = prediction.get("_rsi_signal")
+    if volume_signal is None:
+        volume_signal = prediction.get("_volume_signal")
     if prediction.get("outcome") in {"duplicate", "expired", "ungradeable"}:
         return
     try:
@@ -1086,8 +1113,6 @@ def _record_scenario_outcome(
             "impact_strength_at_creation": prediction.get("impact_strength_at_creation"),
             "impact_strength_after": prediction.get("impact_strength_after"),
         }
-        rsi_signal = prediction.get("_rsi_signal")
-        volume_signal = prediction.get("_volume_signal")
         if rsi_signal:
             features["rsi"] = rsi_signal
         if volume_signal:
@@ -1514,9 +1539,20 @@ def resolve_prediction_at_horizon(
         lambda: _finalize_effects_deferred(prediction, apply_judge_nudge=apply_judge_nudge),
     )
     if not _skip_council_learning(prediction):
+        # Read the grade-time signals now: the caller removes them from the row after grading.
+        rsi_at_grade = prediction.get("_rsi_signal")
+        volume_at_grade = prediction.get("_volume_signal")
         _run_or_defer(
             prediction,
-            lambda: _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert),
+            lambda: _record_scenario_outcome(
+                prediction,
+                actual_pct,
+                outcome,
+                bool(correct),
+                expert,
+                rsi_signal=rsi_at_grade,
+                volume_signal=volume_at_grade,
+            ),
         )
         _run_or_defer(
             prediction,
