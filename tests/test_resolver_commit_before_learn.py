@@ -169,3 +169,25 @@ def test_impact_staging_error_skips_only_that_row(monkeypatch):
     finally:
         resolver._learning_deferral.reset(token)
     assert deferral.items == []
+
+
+def test_late_grade_that_raises_queues_no_learning(ledger, sinks, monkeypatch):
+    """A row past grace whose late grade raises is expired. Its queued learning is dropped."""
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(days=60)
+    disk = json.loads(ledger.read_text())
+    disk["predictions"][0]["resolve_at"] = old.isoformat().replace("+00:00", "Z")
+    disk["predictions"][0]["predicted_at"] = (old - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    disk["predictions"][0]["resolve_attempts"] = 99
+    disk["predictions"][0]["horizon_hours"] = 1
+    ledger.write_text(json.dumps(disk))
+
+    def raise_in_late_grade(*_a, **_kw):
+        raise RuntimeError("snapshot failed during late grade")
+
+    monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", raise_in_late_grade)
+    resolver._resolve_due_predictions(subnets=[])
+
+    rows = json.loads(ledger.read_text())
+    assert [r["status"] for r in rows["resolved"] if r.get("id") == "r1"] == ["expired"]
+    assert _sink_calls(sinks) == [], f"learning ran for an expired row: {sinks}"
