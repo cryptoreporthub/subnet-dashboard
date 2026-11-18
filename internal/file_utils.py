@@ -39,7 +39,9 @@ def file_lock(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
             try:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except OSError:
+            except BlockingIOError:
+                # Only a busy lock is worth waiting for. Any other OSError is permanent
+                # (bad fd, read-only volume, permission) and must surface at once.
                 if time.monotonic() >= deadline:
                     raise TimeoutError(
                         f"Timed out after {timeout_seconds}s waiting for {lock_path}"
