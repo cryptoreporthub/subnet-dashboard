@@ -47,3 +47,37 @@ def test_persistent_pick_lock_timeout_is_logged_with_prediction_id(monkeypatch, 
 
     assert "pick_history_finalize" in warnings
     assert any("p9" in rec.getMessage() for rec in caplog.records if rec.levelno >= logging.ERROR)
+
+
+def test_non_hour_row_does_not_wait_for_pick_history_lock(tmp_path, monkeypatch):
+    """A row that is not an hour pick has no pick to finalize, so it must not wait on the lock."""
+    import threading
+    import time
+
+    from internal.file_utils import file_lock
+
+    path = tmp_path / "pick_history.json"
+    path.write_text('{"active": null, "history": []}')
+    monkeypatch.setattr(pick_history, "PICK_HISTORY_PATH", str(path))
+
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold_lock():
+        with file_lock(str(path), timeout_seconds=30):
+            held.set()
+            release.wait(timeout=30)
+
+    holder = threading.Thread(target=hold_lock)
+    holder.start()
+    try:
+        assert held.wait(timeout=5)
+        started = time.monotonic()
+        result = pick_history.finalize_from_prediction({"id": "d1", "horizon_type": "day"})
+        elapsed = time.monotonic() - started
+    finally:
+        release.set()
+        holder.join(timeout=30)
+
+    assert result is None
+    assert elapsed < 1.0, f"non-hour row waited {elapsed:.1f}s on the pick-history lock"

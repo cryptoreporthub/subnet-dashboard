@@ -142,14 +142,19 @@ def record_hour_pick(
     return row
 
 
-@_serialized_writer
 def finalize_from_prediction(prediction: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Move active hour pick to history when its prediction resolves."""
+    # Rows that are not hour picks have nothing to finalize, so they never take the lock.
     if not isinstance(prediction, dict):
         return None
     if str(prediction.get("horizon_type") or "") != "hour":
         return None
+    return _finalize_hour_pick_locked(prediction)
 
+
+@_serialized_writer
+def _finalize_hour_pick_locked(prediction: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Read-modify-write for finalize. Callers hold the lock through the decorator."""
     store = _load_for_write()
     active = store.get("active")
     if not isinstance(active, dict) or active.get("finalized"):
