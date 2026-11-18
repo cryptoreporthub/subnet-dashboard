@@ -726,6 +726,7 @@ def test_unreadable_portfolio_book_fails_the_reconcile(tmp_path, monkeypatch):
         "id": "pick-10", "pick_source": "council", "status": "pending", "created_at": now,
         "judge_scores_at_creation": {"oracle": {}},
     }], "resolved": [], "stats": {}}))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(tmp_path / "judge_portfolios.json"))
     monkeypatch.setattr(portfolios, "observe_portfolios", lambda: {"kind": "unreadable", "error": "bad json"})
     with pytest.raises(portfolios.PortfolioUnreadable):
         prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
