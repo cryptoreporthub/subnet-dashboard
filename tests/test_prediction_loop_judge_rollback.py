@@ -711,3 +711,21 @@ def test_portfolio_lock_timeout_still_fails_the_reconcile(tmp_path, monkeypatch)
     monkeypatch.setattr(portfolios, "open_positions_for_prediction", locked)
     with pytest.raises(portfolios.PortfolioLockTimeout):
         prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+
+
+def test_unreadable_portfolio_book_fails_the_reconcile(tmp_path, monkeypatch):
+    """A corrupt portfolio book must fail reconciliation, not return a quiet zero."""
+    from datetime import datetime as _dt, timezone as _tz
+
+    from internal.judges import portfolios
+    from internal.learning import prediction_loop
+
+    now = _dt.now(_tz.utc).isoformat().replace("+00:00", "Z")
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({"predictions": [{
+        "id": "pick-10", "pick_source": "council", "status": "pending", "created_at": now,
+        "judge_scores_at_creation": {"oracle": {}},
+    }], "resolved": [], "stats": {}}))
+    monkeypatch.setattr(portfolios, "observe_portfolios", lambda: {"kind": "unreadable", "error": "bad json"})
+    with pytest.raises(portfolios.PortfolioUnreadable):
+        prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))

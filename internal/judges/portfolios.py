@@ -37,8 +37,11 @@ class PortfolioLockTimeout(TimeoutError):
     """Raised when the portfolios mutex or flock is not acquired before the deadline."""
 
 
-class PortfolioUnreadable(Exception):
-    """Raised when the portfolios book exists but cannot be read."""
+class PortfolioUnreadable(ValueError):
+    """Raised when the portfolios book exists but cannot be read.
+
+    A ValueError, so existing handlers that catch ValueError keep working.
+    """
 
 
 @contextmanager
@@ -96,7 +99,7 @@ def _load_checked() -> Dict[str, Any]:
     if obs["kind"] == "missing":
         return {}
     if obs["kind"] != "readable":
-        raise ValueError(obs.get("error") or "unreadable portfolios")
+        raise PortfolioUnreadable(obs.get("error") or "unreadable portfolios")
     return obs["data"]
 
 
@@ -544,7 +547,7 @@ def backfill_closed_position(
     """Rebuild-only: record a closed position without going through live open."""
     obs = observe_portfolios()
     if obs["kind"] == "unreadable":
-        raise ValueError(obs.get("error") or "unreadable portfolios")
+        raise PortfolioUnreadable(obs.get("error") or "unreadable portfolios")
     data = obs["data"] if obs["kind"] == "readable" else {}
     name = judge_name.lower()
     judge = _get_judge(data, name)
