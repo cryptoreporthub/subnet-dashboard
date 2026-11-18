@@ -517,8 +517,11 @@ def recover_overdue_pump_leads(
         data["stats"] = _compute_stats(data)
     except Exception:
         pass
+    from internal.council.resolver import _compute_stats
+
     persisted = merge_ledger_changes(
-        before, data, path=resolved_path, caller="pump_lead_recover", trigger="recover"
+        before, data, path=resolved_path, caller="pump_lead_recover", trigger="recover",
+        stats_fn=_compute_stats,
     )
     if persisted.outcome is not PersistOutcome.APPLIED:
         return {"ok": False, "reason": "persist_refused", "persist_outcome": persisted.outcome.value}

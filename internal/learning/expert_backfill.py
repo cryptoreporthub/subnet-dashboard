@@ -43,8 +43,10 @@ def backfill_expert_attribution(*, dry_run: bool = True) -> Dict[str, Any]:
             updated += 1
 
     if not dry_run and updated > 0:
+        # Only expert labels change here, so keep the stored stats block as it was.
         result = merge_ledger_changes(
-            before, data, caller="expert_backfill", trigger="expert_backfill"
+            before, data, caller="expert_backfill", trigger="expert_backfill",
+            stats_fn=lambda fresh: fresh.get("stats") or {},
         )
         if result.outcome is not PersistOutcome.APPLIED:
             reason = result.reason.value if result.reason is not None else "persist_refused"
