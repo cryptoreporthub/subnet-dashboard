@@ -26,6 +26,7 @@ on:
       - "tests/test_soul_map_write_honesty.py"
       - "tests/test_judge_weight_write_honesty.py"
       - "tests/test_prediction_loop_judge_rollback.py"
+      - "tests/test_pick_effects_survive_position_failure.py"
       - "tests/test_mindmap_pending_declined.py"
       - "tests/test_resolver_predictions_unreadable.py"
       - "tests/test_resolver_persist_honesty_outcomes.py"
@@ -110,6 +111,7 @@ jobs:
             tests/test_soul_map_write_honesty.py \
             tests/test_judge_weight_write_honesty.py \
             tests/test_prediction_loop_judge_rollback.py \
+            tests/test_pick_effects_survive_position_failure.py \
             tests/test_mindmap_pending_declined.py \
             tests/test_resolver_predictions_unreadable.py \
             tests/test_resolver_persist_honesty_outcomes.py \
