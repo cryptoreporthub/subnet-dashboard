@@ -1142,6 +1142,12 @@ class PredictionResolverScheduler:
         if kind != "loaded" or not isinstance(checked.blob, dict):
             return
         data = checked.blob
+        if "prediction_resolver_scheduler" not in data:
+            # No scheduler state yet, so there is nothing to seed. Latch it, as base did,
+            # so the soul map is not re-read every cycle. A present but malformed value
+            # still retries (pinned by test_1578_plan_v31_weights_ledger).
+            self._cycle_generation_seeded = True
+            return
         sched = data.get("prediction_resolver_scheduler")
         if not isinstance(sched, dict):
             return
