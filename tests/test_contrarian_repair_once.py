@@ -37,3 +37,11 @@ def test_legacy_contrarian_is_cleared_and_later_loads_do_not_rewrite(tmp_path, m
     for _ in range(3):
         weights.load_weights(str(soul))
     assert soul.read_bytes() == before, "later loads rewrote a repaired soul map"
+
+
+def test_non_dict_adversarial_state_does_not_crash_the_weight_write(tmp_path):
+    """A malformed adversarial_state on disk must not crash a weight save."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(json.dumps({"adversarial_state": ["not", "a", "dict"]}))
+    weights.save_weights(dict(CANON), str(soul))
+    assert json.loads(soul.read_text())["adversarial_state"]["council_weights"]

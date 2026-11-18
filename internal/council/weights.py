@@ -711,9 +711,9 @@ def _save_weights_outcome(
         def _has_contrarian(slot: Any) -> bool:
             return isinstance(slot, dict) and any(str(k).lower().strip() == "contrarian" for k in slot)
 
-        stale_slot = _has_contrarian(
-            (data.get("adversarial_state") or {}).get("council_weights")
-        ) or _has_contrarian(data.get("expert_weights"))
+        adv_state = data.get("adversarial_state")
+        council_slot = adv_state.get("council_weights") if isinstance(adv_state, dict) else None
+        stale_slot = _has_contrarian(council_slot) or _has_contrarian(data.get("expert_weights"))
         if current == canonical and root_norm == canonical and not stale_slot:
             return
         adv = data.setdefault("adversarial_state", {})
