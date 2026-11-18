@@ -730,3 +730,27 @@ def test_unreadable_portfolio_book_fails_the_reconcile(tmp_path, monkeypatch):
     monkeypatch.setattr(portfolios, "observe_portfolios", lambda: {"kind": "unreadable", "error": "bad json"})
     with pytest.raises(portfolios.PortfolioUnreadable):
         prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
+
+
+def test_disk_error_on_portfolio_save_fails_the_reconcile(tmp_path, monkeypatch):
+    """A failing disk on the portfolio save is systemic and must fail the sweep, not look like a zero."""
+    import errno
+    from datetime import datetime as _dt, timezone as _tz
+
+    from internal.judges import portfolios
+    from internal.learning import prediction_loop
+
+    now = _dt.now(_tz.utc).isoformat().replace("+00:00", "Z")
+    ledger = tmp_path / "predictions.json"
+    base = {"pick_source": "council", "status": "pending", "created_at": now,
+            "judge_scores_at_creation": {"oracle": {}}}
+    ledger.write_text(json.dumps({"predictions": [dict(base, id=f"p-{i}") for i in range(3)],
+                                  "resolved": [], "stats": {}}))
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(tmp_path / "judge_portfolios.json"))
+
+    def disk_full(*_a, **_kw):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(portfolios, "_save", disk_full)
+    with pytest.raises(OSError):
+        prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))

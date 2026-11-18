@@ -462,7 +462,6 @@ def _is_wrong_pick(row: Dict[str, Any]) -> bool:
 
 def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
     from internal.judges.portfolios import (
-        PortfolioLockTimeout,
         PortfolioUnreadable,
         get_portfolio,
         open_positions_for_prediction,
@@ -498,8 +497,9 @@ def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
                     subnet=row.get("subnet_snapshot"), expert_weights=row.get("weights_at_creation"),
                 )
             open_positions_for_prediction(row, scores)
-        except (PortfolioLockTimeout, PortfolioUnreadable):
-            # A held or unreadable portfolio store is not a bad pick; it must fail the sweep.
+        except (OSError, PortfolioUnreadable):
+            # A systemic store failure (disk error, held lock, unreadable book) is not a bad
+            # pick; it must fail the sweep. PortfolioLockTimeout is a TimeoutError, an OSError.
             raise
         except Exception:
             # One bad pick must not stop the sweep; it is retried on the next pass.
