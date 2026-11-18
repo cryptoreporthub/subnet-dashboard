@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from internal.file_utils import _fsync_dir
+
 logger = logging.getLogger(__name__)
 
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
@@ -448,8 +450,13 @@ def _write_predictions_unlocked(
             writer_function=writer_function,
             trigger=trigger,
         )
+        # The caller holds the ledger lock, so the fixed .tmp name cannot collide.
+        # Sync the temp file before the rename and the directory after it, the same
+        # durability safe_write_json gives, so a power cut cannot leave an empty ledger.
         with open(tmp, "w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
         log_mutation(
             operation="rename",
             path=ledger_path,
@@ -457,6 +464,7 @@ def _write_predictions_unlocked(
             trigger=trigger,
         )
         os.replace(tmp, ledger_path)
+        _fsync_dir(os.path.dirname(ledger_path) or ".")
         if on_replaced is not None:
             on_replaced()
         log_mutation(
