@@ -307,6 +307,7 @@ def test_resolve_due_predictions_expires_when_no_price(nudge_spy):
     _write_predictions({
         "predictions": [
             {
+                "id": "scheduler-expire-1",
                 "netuid": 999,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,
