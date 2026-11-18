@@ -19,6 +19,7 @@ exec python -m pytest -q \
   tests/test_1578_commit_then_learn.py \
   tests/test_1578_archive_readers.py \
   tests/test_1578_redesign.py \
+  tests/test_soul_map_fsync.py \
   tests/test_1578_review_fixes.py \
   tests/test_background_boot.py \
   tests/test_cold_cache_alert.py \
