@@ -245,12 +245,7 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
                 logger.warning("pick_history unreadable: %s", exc)
                 return "indeterminate"
             return stored_kind
-        ledger_committed = stored_kind == "committed" or (
-            stored_kind == "indeterminate"
-            and stored.reason == "positions_incomplete"
-            and stored.prediction is not None
-        )
-        if ledger_committed:
+        if stored.ledger_committed:
             pred_id = stored.prediction.get("id") if stored.prediction else None
             if pred_id is None:
                 if stored_kind == "indeterminate":

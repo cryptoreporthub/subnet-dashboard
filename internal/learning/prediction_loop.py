@@ -31,6 +31,23 @@ class PickRecord:
     prediction: Optional[Dict[str, Any]] = None
     reason: Optional[str] = None
 
+    @property
+    def ledger_committed(self) -> bool:
+        """True when this record's prediction row is in the ledger.
+
+        Committed rows qualify. An indeterminate row qualifies only for
+        positions_incomplete, because the row was written before the judge
+        positions failed. ledger_indeterminate means the append outcome is
+        unknown, so the row may not be there.
+        """
+        if self.kind is PickRecordKind.COMMITTED:
+            return True
+        return (
+            self.kind is PickRecordKind.INDETERMINATE
+            and self.reason == "positions_incomplete"
+            and self.prediction is not None
+        )
+
 
 from internal.council.expert_display import (
     canonical_expert_contributions,

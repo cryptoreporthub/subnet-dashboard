@@ -441,3 +441,79 @@ def test_pump_lead_locked_duplicate_returns_none_and_writes_nothing(predictions_
     assert result is None
     stored = json.loads(Path(predictions_file).read_text(encoding="utf-8"))
     assert [row["id"] for row in stored["predictions"]] == ["competing-row"]
+
+
+# U6 (I8): both hour-pick sites decide "is this row committed" the same way. A pick
+# reaches pick history only when its ledger row was committed. Each case below is
+# driven through the public site function, and the assertion is whether the
+# prediction id lands in pick history.
+_PICK_SITE_PICK = {"action": "long", "subnet": {"netuid": 7, "price": 12}}
+_PICK_SITE_SUBNETS = [{"netuid": 7, "price": 12, "name": "SN7"}]
+_PICK_SITE_CASES = [
+    pytest.param(
+        PickRecordKind.COMMITTED, {"id": "p-committed"}, None, True, id="committed"
+    ),
+    pytest.param(
+        PickRecordKind.INDETERMINATE,
+        {"id": "p-incomplete"},
+        "positions_incomplete",
+        True,
+        id="committed-positions-incomplete",
+    ),
+    pytest.param(
+        PickRecordKind.INDETERMINATE,
+        {"id": "p-filed"},
+        "ledger_indeterminate",
+        False,
+        id="filed-but-never-written",
+    ),
+    pytest.param(PickRecordKind.SKIPPED, None, "duplicate", False, id="duplicate"),
+]
+
+
+@pytest.fixture
+def pick_site_history(tmp_path, monkeypatch):
+    from internal.council import pick_history
+
+    path = tmp_path / "pick_history.json"
+    path.write_text(json.dumps({"active": None, "history": []}), encoding="utf-8")
+    monkeypatch.setattr(pick_history, "PICK_HISTORY_PATH", str(path))
+    monkeypatch.setattr(predictions_store, "pending_hour_prediction", lambda netuid: None)
+    return pick_history
+
+
+@pytest.mark.parametrize("kind, prediction, reason, expected_recorded", _PICK_SITE_CASES)
+def test_scheduler_site_records_pick_history_only_for_committed_rows(
+    pick_site_history, monkeypatch, kind, prediction, reason, expected_recorded
+):
+    import internal.council.pick_scheduler as pick_scheduler
+    from internal.learning import prediction_loop
+
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: _PICK_SITE_SUBNETS)
+    monkeypatch.setattr(
+        prediction_loop,
+        "record_pick",
+        lambda *a, **k: prediction_loop.PickRecord(kind, prediction, reason),
+    )
+    pick_scheduler._record_hour_pick(_PICK_SITE_PICK, _PICK_SITE_SUBNETS, {})
+    recorded = expected_recorded and prediction is not None
+    assert pick_site_history.has_prediction(prediction["id"] if prediction else "") is recorded
+
+
+@pytest.mark.parametrize("kind, prediction, reason, expected_recorded", _PICK_SITE_CASES)
+def test_server_site_records_pick_history_only_for_committed_rows(
+    pick_site_history, monkeypatch, kind, prediction, reason, expected_recorded
+):
+    import server
+    from internal.learning import prediction_loop
+
+    monkeypatch.setattr(
+        prediction_loop,
+        "record_pick",
+        lambda *a, **k: prediction_loop.PickRecord(kind, prediction, reason),
+    )
+    server._record_pick_in_learning_loop(
+        _PICK_SITE_PICK, _PICK_SITE_SUBNETS, {}, "hour"
+    )
+    recorded = expected_recorded and prediction is not None
+    assert pick_site_history.has_prediction(prediction["id"] if prediction else "") is recorded
