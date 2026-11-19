@@ -63,10 +63,17 @@ def main() -> int:
                     request_id = str(uuid.UUID(handle.read().strip()))
             except ValueError:
                 print(
-                    json.dumps({"warning": "invalid_pending_reset_id_ignored", "pending": pending}),
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "reason": "invalid_pending_reset_id",
+                            "pending": pending,
+                            "hint": "rerun with --request-id <uuid> to resume, or --new to start a new reset",
+                        }
+                    ),
                     file=sys.stderr,
                 )
-                request_id = str(uuid.uuid4())
+                return 1
         else:
             request_id = str(uuid.uuid4())
         temporary = f"{pending}.{uuid.uuid4().hex}.tmp"
