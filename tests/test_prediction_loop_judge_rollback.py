@@ -6,10 +6,11 @@ import json
 import time
 import threading
 from datetime import datetime, timezone
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+
+from internal.learning.prediction_loop import PickRecord, PickRecordKind
 
 
 @pytest.fixture(autouse=True)
@@ -235,8 +236,8 @@ def test_heal_does_not_claim_indeterminate_pick_was_healed(tmp_path, monkeypatch
     })
     monkeypatch.setattr(ledger_heal, "_subnet_row_for_heal", lambda *_a: {"netuid": 7, "price": 12})
     if hasattr(prediction_loop, "record_pick"):
-        monkeypatch.setattr(prediction_loop, "record_pick", lambda *_a, **_kw: SimpleNamespace(
-            kind="indeterminate", prediction=None, reason="post_replace_error",
+        monkeypatch.setattr(prediction_loop, "record_pick", lambda *_a, **_kw: PickRecord(
+            kind=PickRecordKind.INDETERMINATE, prediction=None, reason="post_replace_error",
         ))
     else:
         monkeypatch.setattr(prediction_loop, "record_pick_prediction", lambda *_a, **_kw: {
@@ -320,8 +321,8 @@ def test_hour_tick_indeterminate_pick_does_not_record_history(monkeypatch):
     history = []
     monkeypatch.setattr(pick_history, "record_hour_pick", lambda *_a, **_kw: history.append(True))
     if hasattr(prediction_loop, "record_pick"):
-        monkeypatch.setattr(prediction_loop, "record_pick", lambda *_a, **_kw: SimpleNamespace(
-            kind="indeterminate", prediction=None, reason="post_replace_error",
+        monkeypatch.setattr(prediction_loop, "record_pick", lambda *_a, **_kw: PickRecord(
+            kind=PickRecordKind.INDETERMINATE, prediction=None, reason="post_replace_error",
         ))
     else:
         monkeypatch.setattr(prediction_loop, "record_pick_prediction", lambda *_a, **_kw: {
