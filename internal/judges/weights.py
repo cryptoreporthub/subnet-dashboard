@@ -5,8 +5,11 @@ Closes the judges learning loop: each judge's selective endorsement grade
 consensus blend in subnet_judges.py.
 """
 
+import logging
 import os
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 SOUL_MAP_PATH = os.path.join("data", "soul_map.json")
 
@@ -113,7 +116,7 @@ def nudge_judge(
                 },
             )
         except Exception:
-            pass
+            logger.exception("nudge_judge: emit_weight_change failed")
     return after
 
 

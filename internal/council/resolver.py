@@ -786,7 +786,7 @@ def _nudge_weights(
             extra=extra or None,
         )
     except Exception:
-        pass
+        logger.exception("_nudge_weights: emit_weight_change failed")
 
 
 # Metabolism map only — not UI nesting. Leading auditor at pick-time soft-nudges
@@ -862,7 +862,7 @@ def _nudge_weights_from_judge_audit(prediction: Dict[str, Any], correct: bool) -
                 extra={"leading_judge": leading},
             )
         except Exception:
-            pass
+            logger.exception("_nudge_weights_from_judge_audit: emit_weight_change failed")
 
 
 def _parse_resolve_at(prediction: Dict[str, Any]) -> Optional[datetime]:

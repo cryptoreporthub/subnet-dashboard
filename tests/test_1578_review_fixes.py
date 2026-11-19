@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,9 @@ import internal.council.resolver_scheduler as resolver_scheduler
 from internal.learning import predictions_store
 from internal.learning.prediction_loop import PickRecordKind, record_pick
 from internal.store.soul_map_io import WriteOutcome
+from internal.council import resolver
+from internal.council.weights import load_weights, save_weights
+from internal.judges.weights import load_judge_weights, nudge_judge, save_judge_weights
 
 
 @pytest.fixture
@@ -126,3 +130,58 @@ def test_one_bad_pick_does_not_stop_reconciling_the_rest(tmp_path, monkeypatch):
 
     assert opened == ["good-2"], f"later pick was never reconciled: {opened}"
     assert count == 1
+
+
+@pytest.fixture
+def soul(tmp_path, monkeypatch):
+    path = str(tmp_path / "soul_map.json")
+    save_weights({"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, path)
+    save_judge_weights({"oracle": 1.0, "echo": 1.0, "pulse": 1.0}, path)
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", path)
+    monkeypatch.setattr("internal.judges.weights.SOUL_MAP_PATH", path)
+    return path
+
+
+@pytest.fixture
+def trail_down(monkeypatch):
+    def _raise(*_a, **_k):
+        raise RuntimeError("trail unavailable")
+
+    monkeypatch.setattr("internal.learning.trail_bus.emit_weight_change", _raise)
+
+
+def _error_records(caplog, marker: str):
+    return [
+        r
+        for r in caplog.records
+        if r.levelno >= logging.ERROR and marker in r.getMessage()
+    ]
+
+
+def test_expert_nudge_keeps_write_and_logs_failed_emit(soul, trail_down, caplog):
+    """A failed weight-change trail emit keeps the expert write and logs an ERROR."""
+    with caplog.at_level(logging.ERROR):
+        resolver._nudge_weights(True, "quant")
+
+    assert load_weights(soul)["quant"] > 1.0
+    assert _error_records(caplog, "emit_weight_change"), "emit failure was swallowed silently"
+
+
+def test_judge_nudge_keeps_write_and_logs_failed_emit(soul, trail_down, caplog):
+    """A failed trail emit keeps the judge write and logs an ERROR."""
+    with caplog.at_level(logging.ERROR):
+        after = nudge_judge("oracle", True, soul)
+
+    assert after is not None and after > 1.0
+    assert load_judge_weights(soul)["oracle"] == pytest.approx(after, abs=1e-4)
+    assert _error_records(caplog, "emit_weight_change"), "emit failure was swallowed silently"
+
+
+def test_judge_audit_nudge_keeps_write_and_logs_failed_emit(soul, trail_down, caplog):
+    """A failed trail emit keeps the audit-driven expert writes and logs an ERROR."""
+    prediction = {"judge_scores_at_creation": {"oracle": 0.9, "echo": 0.1, "pulse": 0.1}}
+    with caplog.at_level(logging.ERROR):
+        resolver._nudge_weights_from_judge_audit(prediction, True)
+
+    assert any(v != 1.0 for v in load_weights(soul).values()), "audit nudge was not persisted"
+    assert _error_records(caplog, "emit_weight_change"), "emit failure was swallowed silently"
