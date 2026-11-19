@@ -11,6 +11,7 @@ import pytest
 import internal.council.resolver_scheduler as resolver_scheduler
 from internal.learning import predictions_store
 from internal.learning.prediction_loop import PickRecordKind, record_pick
+from internal.learning.pump_lead_ledger import record_pump_lead_at_phase_entry
 from internal.store.soul_map_io import WriteOutcome
 from internal.council import resolver
 from internal.council.weights import load_weights, save_weights
@@ -185,3 +186,25 @@ def test_judge_audit_nudge_keeps_write_and_logs_failed_emit(soul, trail_down, ca
 
     assert any(v != 1.0 for v in load_weights(soul).values()), "audit nudge was not persisted"
     assert _error_records(caplog, "emit_weight_change"), "emit failure was swallowed silently"
+
+
+def test_refused_pump_lead_append_returns_none_and_logs_warning(predictions_file, monkeypatch, caplog):
+    """I1: a refused ledger append is reported as a warning, not dropped at debug level."""
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", predictions_file)
+    Path(predictions_file).write_text("{not json", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING):
+        row = record_pump_lead_at_phase_entry(
+            netuid=28,
+            name="LOL",
+            phase="ACCUMULATING",
+            composite_score=0.62,
+            reference_price=0.05,
+            signal_snapshot={"buy_ratio": 0.7, "volume_intensity": 0.4, "price": 0.05},
+        )
+
+    assert row is None
+    assert Path(predictions_file).read_text(encoding="utf-8") == "{not json"
+    assert any(
+        r.levelno == logging.WARNING and "pump_lead" in r.getMessage() for r in caplog.records
+    ), "refused pump lead row was dropped without a warning"

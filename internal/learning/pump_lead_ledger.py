@@ -11,7 +11,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from internal.learning.predictions_store import append_prediction, load_predictions
+from internal.learning.predictions_store import (
+    PersistOutcome,
+    append_prediction_result,
+    load_predictions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +195,14 @@ def record_pump_lead_at_phase_entry(
         )
     except Exception as exc:
         logger.debug("pump_lead feature freeze skipped SN%s: %s", nu, exc)
-    if not append_prediction(prediction):
+    persisted = append_prediction_result(prediction)
+    if persisted.outcome is not PersistOutcome.APPLIED:
+        logger.warning(
+            "pump_lead ledger refused SN%s %s (%s): %s",
+            nu, badge, persisted.outcome.value, persisted.reason,
+        )
+        return None
+    if not persisted.committed_keys:
         return None
     logger.info("pump_lead ledger: SN%s %s @ %.6f", nu, badge, ref)
     try:
