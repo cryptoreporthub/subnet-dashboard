@@ -208,3 +208,93 @@ def test_refused_pump_lead_append_returns_none_and_logs_warning(predictions_file
     assert any(
         r.levelno == logging.WARNING and "pump_lead" in r.getMessage() for r in caplog.records
     ), "refused pump lead row was dropped without a warning"
+
+
+def test_calibration_state_save_keeps_concurrent_signal_weights_write(tmp_path, monkeypatch):
+    from internal.calibration import pipeline as calibration_pipeline
+    from internal.store import soul_map_io
+
+    soul = str(tmp_path / "soul_map.json")
+    real_write = soul_map_io.write_soul_map
+    real_write(lambda blob: blob.update({"seed": 1}), soul)
+
+    concurrent_writes = []
+
+    def interleaving_write(mutator, path=None, **kwargs):
+        # A second writer lands between the calibration save's read and its write.
+        if not concurrent_writes:
+            concurrent_writes.append("signal_weights")
+            real_write(lambda blob: blob.update({"signal_weights": {"hour": 1.5}}), path)
+        return real_write(mutator, path, **kwargs)
+
+    monkeypatch.setattr(soul_map_io, "write_soul_map", interleaving_write)
+    persisted = calibration_pipeline._save_calibration_state(
+        {"last_retrain_at": "2026-11-19T00:00:00Z"},
+        soul_map_path=soul,
+    )
+
+    assert concurrent_writes == ["signal_weights"], "interleaving never happened"
+    assert persisted is True
+    blob = json.loads(Path(soul).read_text(encoding="utf-8"))
+    assert blob["signal_weights"] == {"hour": 1.5}
+    assert blob["adversarial_state"]["calibration"]["last_retrain_at"] == "2026-11-19T00:00:00Z"
+
+
+@pytest.mark.parametrize(
+    ("force", "expected_status"),
+    [(False, "cert_failed"), (True, "fired")],
+)
+def test_refused_calibration_state_write_is_reported_not_raised(
+    tmp_path, monkeypatch, caplog, force, expected_status
+):
+    from internal.calibration import pipeline as calibration_pipeline
+    from internal.store import soul_map_io
+
+    soul = str(tmp_path / "soul_map.json")
+    predictions = str(tmp_path / "predictions.json")
+
+    def refusing_write(mutator, path=None, **kwargs):
+        return soul_map_io.WriteResult(WriteOutcome.REPLACE_FAILED, None, detail="injected")
+
+    monkeypatch.setattr(soul_map_io, "write_soul_map", refusing_write)
+    monkeypatch.setattr(
+        calibration_pipeline,
+        "fire_weights",
+        lambda proposed, **kwargs: dict(proposed),
+    )
+    with caplog.at_level(logging.WARNING):
+        result = calibration_pipeline.run_calibration_pipeline(
+            force=force,
+            soul_map_path=soul,
+            predictions_path=predictions,
+        )
+
+    assert result["status"] == expected_status
+    assert result["state_persisted"] is False
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("calibration state" in msg and "refused" in msg for msg in warnings), warnings
+
+
+def test_fire_error_with_refused_state_write_returns_fire_failed(tmp_path, monkeypatch):
+    from internal.calibration import pipeline as calibration_pipeline
+    from internal.store import soul_map_io
+
+    soul = str(tmp_path / "soul_map.json")
+    predictions = str(tmp_path / "predictions.json")
+
+    def refusing_write(mutator, path=None, **kwargs):
+        return soul_map_io.WriteResult(WriteOutcome.REPLACE_FAILED, None, detail="injected")
+
+    def failing_fire(proposed, **kwargs):
+        raise calibration_pipeline.FireError("injected fire failure")
+
+    monkeypatch.setattr(soul_map_io, "write_soul_map", refusing_write)
+    monkeypatch.setattr(calibration_pipeline, "fire_weights", failing_fire)
+    result = calibration_pipeline.run_calibration_pipeline(
+        force=True,
+        soul_map_path=soul,
+        predictions_path=predictions,
+    )
+
+    assert result["status"] == "fire_failed"
+    assert result["state_persisted"] is False
