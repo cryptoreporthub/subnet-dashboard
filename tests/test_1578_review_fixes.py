@@ -298,3 +298,146 @@ def test_fire_error_with_refused_state_write_returns_fire_failed(tmp_path, monke
 
     assert result["status"] == "fire_failed"
     assert result["state_persisted"] is False
+
+
+def test_refused_combined_exp_append_returns_no_id_and_logs_warning(
+    predictions_file, tmp_path, monkeypatch, caplog
+):
+    """Combined-exp I1 sibling: a refused ledger append is a logged warning, not a debug line."""
+    from internal.pump import combined_ledger
+
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", predictions_file)
+    monkeypatch.setattr(combined_ledger, "LEDGER_PATH", str(tmp_path / "combined_calls.json"))
+    Path(predictions_file).write_text("{not json", encoding="utf-8")
+    angles = {
+        "focus_netuid": 23,
+        "weights": {"timing": 0.7, "peer": 0.3},
+        "combined": {
+            "netuid": 11,
+            "name": "Sub11",
+            "timing_pts": 80,
+            "peer_pts": 40,
+            "combined_pts": 68,
+            "price": 1.2,
+            "phase": "ACCUMULATING",
+            "score": 0.6,
+        },
+        "tracked": [{"netuid": 11, "combined_pts": 68}],
+    }
+
+    with caplog.at_level(logging.WARNING):
+        call = combined_ledger.maybe_record_combined_call(angles)
+
+    assert call is not None
+    assert call["prediction_id"] is None
+    assert Path(predictions_file).read_text(encoding="utf-8") == "{not json"
+    assert any(
+        r.levelno == logging.WARNING and "combined" in r.getMessage() for r in caplog.records
+    ), "refused combined-exp row was dropped without a warning"
+
+
+def test_combined_exp_locked_duplicate_returns_no_id_and_writes_nothing(
+    predictions_file, tmp_path, monkeypatch
+):
+    """A pending combined-exp row that lands after the pre-check, inside the locked append,
+    must not yield a prediction_id for a row that was never written."""
+    from internal.pump import combined_ledger
+
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", predictions_file)
+    monkeypatch.setattr(combined_ledger, "LEDGER_PATH", str(tmp_path / "combined_calls.json"))
+    real_append = predictions_store.append_prediction_result
+    landed = []
+
+    def competing_then_append(prediction, **kwargs):
+        if not landed:
+            landed.append("competing")
+            real_append(
+                {
+                    "id": "competing-row",
+                    "netuid": 11,
+                    "name": "Sub11",
+                    "direction": "up",
+                    "predicted_pct": 2.0,
+                    "horizon_hours": 1,
+                    "horizon_type": "pump_combined_exp",
+                    "reference_price": 1.2,
+                    "created_at": "2026-11-19T00:00:00Z",
+                    "resolve_at": "2026-11-19T01:00:00Z",
+                    "status": "pending",
+                    "shadow": False,
+                    "pick_source": "pump_combined_exp",
+                }
+            )
+        return real_append(prediction, **kwargs)
+
+    monkeypatch.setattr(predictions_store, "append_prediction_result", competing_then_append)
+    angles = {
+        "focus_netuid": 23,
+        "weights": {"timing": 0.7, "peer": 0.3},
+        "combined": {
+            "netuid": 11,
+            "name": "Sub11",
+            "timing_pts": 80,
+            "peer_pts": 40,
+            "combined_pts": 68,
+            "price": 1.2,
+            "phase": "ACCUMULATING",
+            "score": 0.6,
+        },
+        "tracked": [{"netuid": 11, "combined_pts": 68}],
+    }
+
+    call = combined_ledger.maybe_record_combined_call(angles)
+
+    assert landed == ["competing"], "the competing row never landed inside the locked append"
+    assert call is not None
+    assert call["prediction_id"] is None
+    stored = json.loads(Path(predictions_file).read_text(encoding="utf-8"))
+    assert [row["id"] for row in stored["predictions"]] == ["competing-row"]
+
+
+def test_pump_lead_locked_duplicate_returns_none_and_writes_nothing(predictions_file, monkeypatch):
+    """A pending pump_lead row that lands after the pre-check must not yield a returned lead."""
+    from internal.learning import pump_lead_ledger
+
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", predictions_file)
+    real_append = predictions_store.append_prediction_result
+    landed = []
+
+    def competing_then_append(prediction, **kwargs):
+        if not landed:
+            landed.append("competing")
+            real_append(
+                {
+                    "id": "competing-row",
+                    "netuid": 11,
+                    "name": "Sub11",
+                    "direction": "up",
+                    "predicted_pct": 2.0,
+                    "horizon_hours": 1,
+                    "horizon_type": "pump_lead",
+                    "reference_price": 1.2,
+                    "created_at": "2026-11-19T00:00:00Z",
+                    "resolve_at": "2026-11-19T01:00:00Z",
+                    "status": "pending",
+                    "shadow": False,
+                    "pick_source": "pump_lead",
+                }
+            )
+        return real_append(prediction, **kwargs)
+
+    monkeypatch.setattr(pump_lead_ledger, "append_prediction_result", competing_then_append)
+
+    result = pump_lead_ledger.record_pump_lead_at_phase_entry(
+        netuid=11,
+        name="Sub11",
+        phase="ACCUMULATING",
+        composite_score=0.6,
+        reference_price=1.2,
+        signal_snapshot={"buy_ratio": 0.8, "volume_intensity": 2.0},
+    )
+
+    assert landed == ["competing"], "the competing row never landed inside the locked append"
+    assert result is None
+    stored = json.loads(Path(predictions_file).read_text(encoding="utf-8"))
+    assert [row["id"] for row in stored["predictions"]] == ["competing-row"]
