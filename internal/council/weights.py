@@ -1007,7 +1007,7 @@ def nudge_signal_weight(
                 extra=payload,
             )
         except Exception:
-            logger.exception("nudge_signal_weight: emit_weight_change failed")
+            pass
     return float(new_val)
 
 

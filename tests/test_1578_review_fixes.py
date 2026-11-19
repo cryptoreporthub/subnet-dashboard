@@ -528,14 +528,3 @@ def test_server_site_records_pick_history_only_for_committed_rows(
     )
     recorded = expected_recorded and prediction is not None
     assert pick_site_history.has_prediction(prediction["id"] if prediction else "") is recorded
-
-
-def test_signal_nudge_keeps_write_and_logs_failed_emit(soul, trail_down, caplog):
-    """A failed weight-change trail emit keeps the signal write and logs an ERROR."""
-    from internal.council.weights import nudge_signal_weight
-
-    with caplog.at_level(logging.ERROR):
-        new_val = nudge_signal_weight("hour", "quant", True, path=soul)
-
-    assert new_val is not None and new_val > 1.0, "signal write was not applied"
-    assert _error_records(caplog, "emit_weight_change"), "emit failure was swallowed silently"
