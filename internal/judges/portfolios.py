@@ -46,11 +46,13 @@ class PortfolioUnreadable(ValueError):
 
 @contextmanager
 def portfolios_operation_deadline(seconds: Optional[float] = None) -> Iterator[None]:
-    """Set a shared absolute deadline for nested portfolio lock acquisitions.
+    """Give the portfolio operations inside this scope one shared deadline.
 
+    The lock is not re-entrant, so no operation may run inside another one. Inside
+    a scope, operations in the same thread share its deadline. A new scope (for
+    example, one per judge in tracker.py) gets a new deadline.
     If a parent deadline is already set, inherit it (do not reset).
-    ContextVar does not propagate into new threads; share a deadline only
-    in the same thread (the 3-judge close loop is sequential in-thread).
+    ContextVar does not propagate into new threads, so each thread needs its own scope.
     """
     if _operation_deadline.get() is not None:
         yield
@@ -272,7 +274,10 @@ def _closed_row_from_prediction(
 def _portfolios_lock(*, deadline: Optional[float] = None) -> Iterator[None]:
     """Acquire the in-process mutex and the on-disk flock, or time out.
 
-    Mutex serializes threads, flock serializes processes; nesting is unsupported.
+    Mutex serializes threads, flock serializes processes. The lock is not
+    re-entrant: taking it again in a thread that already holds it waits on the
+    flock and raises PortfolioLockTimeout at the deadline. Operations inside one
+    portfolios_operation_deadline scope share its deadline.
     The timeout constant is read inside this function so tests can patch it.
     """
     if deadline is None:
