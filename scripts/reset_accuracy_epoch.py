@@ -58,8 +58,15 @@ def main() -> int:
                 print(json.dumps({"ok": False, "reason": "invalid_reset_request_id"}), file=sys.stderr)
                 return 1
         elif os.path.exists(pending) and not args.new:
-            with open(pending, encoding="utf-8") as handle:
-                request_id = handle.read().strip()
+            try:
+                with open(pending, encoding="utf-8") as handle:
+                    request_id = str(uuid.UUID(handle.read().strip()))
+            except ValueError:
+                print(
+                    json.dumps({"warning": "invalid_pending_reset_id_ignored", "pending": pending}),
+                    file=sys.stderr,
+                )
+                request_id = str(uuid.uuid4())
         else:
             request_id = str(uuid.uuid4())
         temporary = f"{pending}.{uuid.uuid4().hex}.tmp"
