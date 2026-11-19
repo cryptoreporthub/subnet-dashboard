@@ -234,10 +234,21 @@ def test_calibration_state_save_keeps_concurrent_signal_weights_write(tmp_path, 
     )
 
     assert concurrent_writes == ["signal_weights"], "interleaving never happened"
-    assert persisted is True
     blob = json.loads(Path(soul).read_text(encoding="utf-8"))
     assert blob["signal_weights"] == {"hour": 1.5}
     assert blob["adversarial_state"]["calibration"]["last_retrain_at"] == "2026-11-19T00:00:00Z"
+
+
+def test_calibration_state_save_reports_persisted_when_write_applies(tmp_path):
+    from internal.calibration import pipeline as calibration_pipeline
+
+    soul = str(tmp_path / "soul_map.json")
+    persisted = calibration_pipeline._save_calibration_state(
+        {"last_retrain_at": "2026-11-19T00:00:00Z"},
+        soul_map_path=soul,
+    )
+
+    assert persisted is True
 
 
 @pytest.mark.parametrize(
@@ -517,3 +528,14 @@ def test_server_site_records_pick_history_only_for_committed_rows(
     )
     recorded = expected_recorded and prediction is not None
     assert pick_site_history.has_prediction(prediction["id"] if prediction else "") is recorded
+
+
+def test_signal_nudge_keeps_write_and_logs_failed_emit(soul, trail_down, caplog):
+    """A failed weight-change trail emit keeps the signal write and logs an ERROR."""
+    from internal.council.weights import nudge_signal_weight
+
+    with caplog.at_level(logging.ERROR):
+        new_val = nudge_signal_weight("hour", "quant", True, path=soul)
+
+    assert new_val is not None and new_val > 1.0, "signal write was not applied"
+    assert _error_records(caplog, "emit_weight_change"), "emit failure was swallowed silently"
