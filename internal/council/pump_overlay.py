@@ -31,7 +31,7 @@ def _readonly_ladder() -> Dict[str, Any]:
     path = _resolve_path(None)
     try:
         st = os.stat(path)
-        key = (path, st.st_mtime_ns, st.st_size)
+        key = (path, st.st_mtime_ns, st.st_size, load_state)
     except OSError:
         key = None
     with _ladder_memo_lock:
