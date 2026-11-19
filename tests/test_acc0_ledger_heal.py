@@ -236,23 +236,27 @@ def test_reset_script_rejects_invalid_request_id_without_persisting(tmp_path, mo
     [b"not-a-uuid", b"", b"\xff\xfe\x00"],
     ids=["non-uuid", "empty", "invalid-utf8"],
 )
-def test_reset_script_does_not_wedge_on_invalid_stored_pending_id(tmp_path, monkeypatch, capsys, stored):
+def test_reset_script_fails_closed_on_invalid_stored_pending_id(tmp_path, monkeypatch, capsys, stored):
     import sys
-    from internal.learning import ledger_heal, predictions_store
     from scripts import reset_accuracy_epoch
 
     monkeypatch.chdir(tmp_path)
-    preds = tmp_path / "data" / "predictions.json"
-    _write_json(preds, {"predictions": [], "resolved": [], "stats": {}})
-    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(preds))
-    monkeypatch.setattr(ledger_heal, "ARCHIVE_DIR", str(tmp_path / "archive"))
+    os.makedirs("data")
     pending = tmp_path / "data" / ".pending_reset_id"
     pending.write_bytes(stored)
+    seen = []
+    monkeypatch.setattr(
+        reset_accuracy_epoch, "archive_predictions_epoch",
+        lambda **kwargs: seen.append(kwargs) or {"ok": True},
+    )
     monkeypatch.setattr(sys, "argv", ["reset_accuracy_epoch.py", "--no-heal"])
 
-    assert reset_accuracy_epoch.main() == 0
-    assert not pending.exists()
-    assert "invalid_pending_reset_id_ignored" in capsys.readouterr().err
+    assert reset_accuracy_epoch.main() == 1
+    outcome = json.loads(capsys.readouterr().err)
+    assert outcome["reason"] == "invalid_pending_reset_id"
+    assert outcome["pending"] == "data/.pending_reset_id"
+    assert pending.read_bytes() == stored
+    assert seen == []
 
 
 def test_reset_script_times_out_instead_of_blocking_on_held_lock(tmp_path, monkeypatch, capsys):
