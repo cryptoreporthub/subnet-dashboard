@@ -10,15 +10,15 @@ import server
 def test_cold_homepage_keeps_no_store(monkeypatch):
     # TTL 0 makes any in-process shell a miss, including one a boot thread just filled.
     monkeypatch.setattr(server, "HOMEPAGE_SHELL_CACHE_SECONDS", 0)
+    monkeypatch.setattr(server, "_HOMEPAGE_HTML_CACHE", {"at": 0.0, "html": None})
     with TestClient(server.app) as client:
-        server._HOMEPAGE_HTML_CACHE["html"] = None
-        server._HOMEPAGE_HTML_CACHE["at"] = 0.0
         response = client.get("/")
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store, max-age=0"
 
 
-def test_warm_homepage_gets_public_ttl():
+def test_warm_homepage_gets_public_ttl(monkeypatch):
+    monkeypatch.setattr(server, "_HOMEPAGE_HTML_CACHE", {"at": 0.0, "html": None})
     with TestClient(server.app) as client:
         server._HOMEPAGE_HTML_CACHE["html"] = "<html>warm</html>"
         server._HOMEPAGE_HTML_CACHE["at"] = time.time()
