@@ -27,7 +27,7 @@ class Judge:
     ) -> Dict[str, float]:
         raise NotImplementedError
 
-    def open_position(self, prediction: Dict[str, Any], size: Optional[float] = None) -> Dict[str, Any]:
+    def open_position(self, prediction: Dict[str, Any], size: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """Open a paper position sized by confidence (or explicit size)."""
         if size is None:
             size = self._position_size(prediction)
@@ -41,6 +41,10 @@ class Judge:
     ) -> Optional[Dict[str, Any]]:
         """Close the matching paper position."""
         return portfolios.close_position(self.name, prediction, actual_pct=actual_pct, outcome=outcome)
+
+    def discard_open_position(self, prediction_id: Any) -> bool:
+        """Drop an open position when a ledger append did not land."""
+        return portfolios.discard_open_position(self.name, prediction_id)
 
     def record_postmortem(
         self,
