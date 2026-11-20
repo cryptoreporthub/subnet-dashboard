@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -260,7 +261,7 @@ def _git_show_entrypoint(rev: str) -> str:
 def _sleep_standin_regex(sleep_id: str) -> str:
     # Anchored to the exact argv of a stand-in ("sleep <id>"). An unanchored
     # match would also hit any wrapper whose command line merely contains <id>.
-    return f"^sleep {sleep_id}$"
+    return f"^sleep {re.escape(sleep_id)}$"
 
 
 def _kill_sleep_standins(sleep_id: str) -> None:
@@ -384,7 +385,7 @@ def _run_supervisor_stale_heartbeat_harness(
             time.sleep(0.25)
         time.sleep(1)
         listed = subprocess.run(
-            ["pgrep", "-af", parent_sleep_id],
+            ["pgrep", "-af", _sleep_standin_regex(parent_sleep_id)],
             capture_output=True,
             text=True,
             check=False,
