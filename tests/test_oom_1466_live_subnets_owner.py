@@ -285,10 +285,9 @@ def _stub_ps_absent(tmp_path: Path) -> str:
 
 
 def _patch_entrypoint_for_harness(entrypoint_src: str, web_sleep_id: str) -> str:
-    return entrypoint_src.replace(
-        "exec python scripts/run_web_with_guard.py",
-        f"exec sleep {web_sleep_id}\n",
-    )
+    launch = "python scripts/run_web_with_guard.py"
+    assert entrypoint_src.count(launch) == 1, "web launch line moved; update the harness"
+    return entrypoint_src.replace(launch, f"sleep {web_sleep_id}")
 
 
 def _run_supervisor_stale_heartbeat_harness(
@@ -398,12 +397,13 @@ def _run_supervisor_stale_heartbeat_harness(
         assert "heartbeat stale" in between or "heartbeat stale" in out[:idx_second]
     finally:
         log_handle.close()
-        if proc.poll() is None:
-            try:
-                os.killpg(os.getpgid(proc.pid), 9)
-            except ProcessLookupError:
-                proc.kill()
-            proc.wait(timeout=5)
+        # Kill the group even if the main process already exited: the supervisor
+        # subshell is a background child in this group and respawns workers forever.
+        try:
+            os.killpg(proc.pid, 9)
+        except ProcessLookupError:
+            pass
+        proc.wait(timeout=5)
         for pattern in (parent_sleep_id, child_sleep_id, web_sleep_id):
             subprocess.run(["pkill", "-9", "-f", pattern], check=False)
 
@@ -471,6 +471,12 @@ def test_proc_pgid_scan_mawk_churn_false_dead_without_cat_snapshot():
     assert false_dead >= 1, (
         "pre-cat awk-on-glob scan should false-negative under /proc churn"
     )
+
+
+def test_harness_patch_swaps_real_web_app_for_sleep_stand_in():
+    patched = _patch_entrypoint_for_harness(_repo_entrypoint_text(), "61999001249")
+    assert patched.rstrip().endswith("sleep 61999001249")
+    assert "run_web_with_guard" not in patched
 
 
 def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
