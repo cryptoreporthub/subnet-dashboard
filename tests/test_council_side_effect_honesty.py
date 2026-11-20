@@ -67,7 +67,7 @@ def test_rebalance_trail_emitted_false_on_emit_failure(tmp_path, monkeypatch):
     assert result["saved"] is True
     # emit may no-op if no weight deltas; force via patching the loop by changing before
     # If no deltas, trail_emitted stays True (emit never called). Re-run with mocked before/after.
-    with patch("internal.council.weights.save_weights"):
+    with patch("internal.council.weights.save_weights", return_value=(True, True)):
         with patch("internal.council.weights.load_weights", return_value={"quant": 2.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}):
             with patch(
                 "internal.council.weights.soft_blend_weights",

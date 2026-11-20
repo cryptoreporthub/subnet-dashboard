@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -257,9 +258,22 @@ def _git_show_entrypoint(rev: str) -> str:
     return proc.stdout
 
 
-def _pids_matching(pattern: str) -> set[str]:
+def _sleep_standin_regex(sleep_id: str) -> str:
+    # Anchored to the exact argv of a stand-in ("sleep <id>"). An unanchored
+    # match would also hit any wrapper whose command line merely contains <id>.
+    return f"^sleep {re.escape(sleep_id)}$"
+
+
+def _kill_sleep_standins(sleep_id: str) -> None:
+    subprocess.run(
+        ["pkill", "-9", "-f", _sleep_standin_regex(sleep_id)],
+        check=False,
+    )
+
+
+def _pids_matching(sleep_id: str) -> set[str]:
     out = subprocess.run(
-        ["pgrep", "-f", pattern],
+        ["pgrep", "-f", _sleep_standin_regex(sleep_id)],
         capture_output=True,
         text=True,
         check=False,
@@ -285,10 +299,9 @@ def _stub_ps_absent(tmp_path: Path) -> str:
 
 
 def _patch_entrypoint_for_harness(entrypoint_src: str, web_sleep_id: str) -> str:
-    return entrypoint_src.replace(
-        "exec python scripts/run_web_with_guard.py",
-        f"exec sleep {web_sleep_id}\n",
-    )
+    launch = "python scripts/run_web_with_guard.py"
+    assert entrypoint_src.count(launch) == 1, "web launch line moved; update the harness"
+    return entrypoint_src.replace(launch, f"sleep {web_sleep_id}")
 
 
 def _run_supervisor_stale_heartbeat_harness(
@@ -326,8 +339,8 @@ def _run_supervisor_stale_heartbeat_harness(
     )
     log_path = tmp_path / "entrypoint_supervisor.log"
     log_handle = log_path.open("w", encoding="utf-8")
-    for pattern in (parent_sleep_id, child_sleep_id):
-        subprocess.run(["pkill", "-9", "-f", pattern], check=False)
+    for sleep_id in (parent_sleep_id, child_sleep_id):
+        _kill_sleep_standins(sleep_id)
     proc = subprocess.Popen(
         ["dash", "-c", src],
         env=env,
@@ -372,7 +385,7 @@ def _run_supervisor_stale_heartbeat_harness(
             time.sleep(0.25)
         time.sleep(1)
         listed = subprocess.run(
-            ["pgrep", "-af", parent_sleep_id],
+            ["pgrep", "-af", _sleep_standin_regex(parent_sleep_id)],
             capture_output=True,
             text=True,
             check=False,
@@ -398,14 +411,15 @@ def _run_supervisor_stale_heartbeat_harness(
         assert "heartbeat stale" in between or "heartbeat stale" in out[:idx_second]
     finally:
         log_handle.close()
-        if proc.poll() is None:
-            try:
-                os.killpg(os.getpgid(proc.pid), 9)
-            except ProcessLookupError:
-                proc.kill()
-            proc.wait(timeout=5)
-        for pattern in (parent_sleep_id, child_sleep_id, web_sleep_id):
-            subprocess.run(["pkill", "-9", "-f", pattern], check=False)
+        # Kill the group even if the main process already exited: the supervisor
+        # subshell is a background child in this group and respawns workers forever.
+        try:
+            os.killpg(proc.pid, 9)
+        except ProcessLookupError:
+            pass
+        proc.wait(timeout=5)
+        for sleep_id in (parent_sleep_id, child_sleep_id, web_sleep_id):
+            _kill_sleep_standins(sleep_id)
 
 
 def _run_churn_group_live_checks(
@@ -445,7 +459,7 @@ def _run_churn_group_live_checks(
                 except ProcessLookupError:
                     proc.kill()
                 proc.wait(timeout=5)
-        subprocess.run(["pkill", "-9", "-f", target], check=False)
+        _kill_sleep_standins(target)
     return false_dead
 
 
@@ -471,6 +485,12 @@ def test_proc_pgid_scan_mawk_churn_false_dead_without_cat_snapshot():
     assert false_dead >= 1, (
         "pre-cat awk-on-glob scan should false-negative under /proc churn"
     )
+
+
+def test_harness_patch_swaps_real_web_app_for_sleep_stand_in():
+    patched = _patch_entrypoint_for_harness(_repo_entrypoint_text(), "61999001249")
+    assert patched.rstrip().endswith("sleep 61999001249")
+    assert "run_web_with_guard" not in patched
 
 
 def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):

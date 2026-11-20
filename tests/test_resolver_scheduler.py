@@ -1714,7 +1714,7 @@ def test_commit_writer_wins_then_revoke(tmp_path, monkeypatch):
         def _m(blob: Dict[str, Any]) -> None:
             blob["revoke_marker"] = True
 
-        soul_map_io.write_soul_map(_m, str(soul_path), with_status=True)
+        soul_map_io.write_soul_map(_m, str(soul_path), raise_on_lock_timeout=False)
         done_second.set()
 
     def _writer() -> None:
@@ -1984,15 +1984,21 @@ def test_gate_deadline_returns_pending(monkeypatch, tmp_path):
     seed = b'{"seed": true}'
     soul_path.write_bytes(seed)
 
-    def _instant_timeout(*_a, **_k):
-        raise TimeoutError("fast")
+    from internal.store.soul_map_io import SoulMapLockWaitTimeout
 
-    monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", _instant_timeout)
-    blob, committed = soul_map_io.write_soul_map(
-        lambda b: b.update({"x": 1}), path=str(soul_path), with_status=True
+    def _instant_timeout(*_a, **_k):
+        raise SoulMapLockWaitTimeout("Timed out waiting for flock test")
+
+    monkeypatch.setattr(soul_map_io, "_acquire_write_locks", _instant_timeout)
+    result = soul_map_io.write_soul_map(
+        lambda b: b.update({"x": 1}),
+        path=str(soul_path),
+        raise_on_lock_timeout=False,
     )
-    assert committed is False
-    assert isinstance(blob, dict)
+    from internal.store.soul_map_io import WriteOutcome
+
+    assert result.outcome is WriteOutcome.LOCK_WAIT_FAILED
+    assert result.blob is None
     assert soul_path.read_bytes() == seed
 
 
