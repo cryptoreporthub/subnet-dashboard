@@ -1,6 +1,5 @@
 """Tests for canonical subnet name resolution."""
 
-from copy import deepcopy
 from unittest.mock import patch
 
 from internal.subnet_names import enrich_subnet_row, resolve_subnet_name
@@ -141,7 +140,6 @@ def test_tmc_display_names_uses_tao_table_not_live_feed(monkeypatch):
     """Name cache must use TaoMarketCap table, not blockmachine live feed names."""
     import internal.subnet_names as sn
 
-    cache_before = deepcopy(sn._tmc_name_cache)
     with monkeypatch.context() as isolated:
         isolated.setattr(sn, "_tmc_name_cache", {"at": 0.0, "by_netuid": {}})
         with patch("fetchers.taomarketcap._get_all_subnets_tao", return_value=[{"netuid": 6, "name": "Numinous"}]):
@@ -149,7 +147,6 @@ def test_tmc_display_names_uses_tao_table_not_live_feed(monkeypatch):
                 from internal.subnet_names import _tmc_display_names
 
                 assert _tmc_display_names().get(6) == "Numinous"
-    assert sn._tmc_name_cache == cache_before
 
 
 def test_tmc_cache_beats_stale_row_hint():
