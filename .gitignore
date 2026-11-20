@@ -77,7 +77,7 @@ config/watchlist.json
 data/learning_effect_receipts.json
 data/learning_effect_receipts.json.apply
 data/learning_effect_receipts.json.apply.lock
-data/learning_effect_receipts.json.tmp*
+data/*.tmp
 data/*.lock
 data/pick_score_cache.json
 data/pick_score_latency.jsonl
