@@ -257,9 +257,22 @@ def _git_show_entrypoint(rev: str) -> str:
     return proc.stdout
 
 
-def _pids_matching(pattern: str) -> set[str]:
+def _sleep_standin_regex(sleep_id: str) -> str:
+    # Anchored to the exact argv of a stand-in ("sleep <id>"). An unanchored
+    # match would also hit any wrapper whose command line merely contains <id>.
+    return f"^sleep {sleep_id}$"
+
+
+def _kill_sleep_standins(sleep_id: str) -> None:
+    subprocess.run(
+        ["pkill", "-9", "-f", _sleep_standin_regex(sleep_id)],
+        check=False,
+    )
+
+
+def _pids_matching(sleep_id: str) -> set[str]:
     out = subprocess.run(
-        ["pgrep", "-f", pattern],
+        ["pgrep", "-f", _sleep_standin_regex(sleep_id)],
         capture_output=True,
         text=True,
         check=False,
@@ -325,8 +338,8 @@ def _run_supervisor_stale_heartbeat_harness(
     )
     log_path = tmp_path / "entrypoint_supervisor.log"
     log_handle = log_path.open("w", encoding="utf-8")
-    for pattern in (parent_sleep_id, child_sleep_id):
-        subprocess.run(["pkill", "-9", "-f", pattern], check=False)
+    for sleep_id in (parent_sleep_id, child_sleep_id):
+        _kill_sleep_standins(sleep_id)
     proc = subprocess.Popen(
         ["dash", "-c", src],
         env=env,
@@ -404,8 +417,8 @@ def _run_supervisor_stale_heartbeat_harness(
         except ProcessLookupError:
             pass
         proc.wait(timeout=5)
-        for pattern in (parent_sleep_id, child_sleep_id, web_sleep_id):
-            subprocess.run(["pkill", "-9", "-f", pattern], check=False)
+        for sleep_id in (parent_sleep_id, child_sleep_id, web_sleep_id):
+            _kill_sleep_standins(sleep_id)
 
 
 def _run_churn_group_live_checks(
@@ -445,7 +458,7 @@ def _run_churn_group_live_checks(
                 except ProcessLookupError:
                     proc.kill()
                 proc.wait(timeout=5)
-        subprocess.run(["pkill", "-9", "-f", target], check=False)
+        _kill_sleep_standins(target)
     return false_dead
 
 
