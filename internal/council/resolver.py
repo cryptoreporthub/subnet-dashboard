@@ -7,10 +7,12 @@ weights, atomic ledger resolution, and dedupe before resolve.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import math
 import os
+from copy import deepcopy
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -222,6 +224,197 @@ def _in_replay_mode() -> bool:
     return _replay_mode.get()
 
 
+class _LearningDeferral:
+    """Learning effects queued behind one ledger save.
+
+    Only _resolve_due_predictions sets one. Every other caller keeps the immediate
+    behavior, so nothing changes for them.
+    """
+
+    def __init__(self) -> None:
+        self.items: List[Tuple[Any, Any]] = []
+        self.impact_value: Optional[float] = None
+
+
+_learning_deferral: ContextVar[Optional[_LearningDeferral]] = ContextVar(
+    "resolver_learning_deferral", default=None
+)
+
+
+def _queue_effect(prediction: Dict[str, Any], deferral: _LearningDeferral, effect: Any) -> None:
+    from internal.learning.predictions_store import _row_key
+
+    deferral.items.append((_row_key(prediction), effect))
+
+
+def _run_or_defer(prediction: Dict[str, Any], effect: Any) -> None:
+    """Run a learning effect now, or queue it behind the save that owns this row."""
+    deferral = _learning_deferral.get()
+    if deferral is None:
+        effect()
+        return
+    _queue_effect(prediction, deferral, effect)
+
+
+def _impact_tier(prediction: Dict[str, Any]) -> Optional[str]:
+    impact = prediction.get("market_impact") or prediction.get("impact") or {}
+    tier = impact.get("tier") if isinstance(impact, dict) else None
+    return tier or prediction.get("impact_tier")
+
+
+def _stage_impact_strength(prediction: Dict[str, Any], correct: bool, deferral: _LearningDeferral) -> None:
+    """Stamp the impact value the nudge will produce, before the save.
+
+    The row carries impact_strength_after into the saved ledger, so it is set now. The
+    field means the value expected at save time. The trail carries the applied value.
+    The weight write waits for the save. Rows in one cycle chain through
+    deferral.impact_value, so a second row on the same tier sees the first row's delta.
+    """
+    from internal.council.weights import (
+        _IMPACT_STRENGTH_DELTA,
+        _IMPACT_STRENGTH_MAX,
+        _IMPACT_STRENGTH_MIN,
+        load_impact_strength,
+    )
+
+    if os.environ.get("IMPACT_STRENGTH", "").strip() != "":
+        # The override pins the value, so the nudge changes nothing. Stamp what it will report.
+        prediction["impact_strength_after"] = float(load_impact_strength())
+        return
+    tier_l = str(_impact_tier(prediction) or "").lower()
+    if tier_l == "large":
+        delta = -_IMPACT_STRENGTH_DELTA if correct else _IMPACT_STRENGTH_DELTA
+    else:
+        delta = _IMPACT_STRENGTH_DELTA if correct else -_IMPACT_STRENGTH_DELTA
+    base = deferral.impact_value
+    if base is None:
+        base = float(load_impact_strength())
+    after = max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, base + delta))
+    prediction["impact_strength_after"] = after
+    deferral.impact_value = after
+
+
+def _apply_impact_guarded(
+    prediction: Dict[str, Any], correct: bool, staged: Optional[float] = None
+) -> None:
+    if staged is not None:
+        # Clear the staged value. The nudge stamps the applied value only when it applies,
+        # so a field still None afterwards means nothing was applied.
+        prediction["impact_strength_after"] = None
+    # The check and the write sit under the release guard, as before, so an abandon waits for both.
+    with _cycle_persist_guard_safe():
+        if _cycle_writes_revoked_safe():
+            return
+        _nudge_impact_strength(prediction, correct)
+    # Deferred rows only: the saved copy is the staged value. Log when the applied
+    # value differs, which happens when an earlier same-tier row was skipped or a
+    # concurrent writer moved the soul map. The trail carries the applied value.
+    if staged is not None:
+        applied = prediction.get("impact_strength_after")
+        if applied is None:
+            logger.warning(
+                "staged impact not applied row=%s staged=%s",
+                prediction.get("id"),
+                staged,
+            )
+        elif abs(float(applied) - float(staged)) > 1e-4:
+            logger.warning(
+                "impact staged value differs from applied row=%s staged=%s applied=%s",
+                prediction.get("id"),
+                staged,
+                applied,
+            )
+
+
+def _stage_or_run_impact(prediction: Dict[str, Any], correct: bool) -> None:
+    if _in_replay_mode():
+        return
+    deferral = _learning_deferral.get()
+    if deferral is None:
+        _apply_impact_guarded(prediction, correct)
+        return
+    try:
+        _stage_impact_strength(prediction, correct, deferral)
+    except Exception:
+        # The old nudge swallowed errors. Skip this row's impact rather than abort the cycle.
+        logger.exception("impact staging failed, row impact not learned id=%s", prediction.get("id"))
+        return
+    staged = prediction["impact_strength_after"]
+    _queue_effect(
+        prediction, deferral, lambda: _apply_impact_guarded(prediction, correct, staged)
+    )
+
+
+def _queue_mark() -> Optional[Tuple[int, Optional[float]]]:
+    deferral = _learning_deferral.get()
+    return None if deferral is None else (len(deferral.items), deferral.impact_value)
+
+
+def _drop_queued_after(mark: Optional[Tuple[int, Optional[float]]]) -> None:
+    """Discard effects queued since ``mark``, so a row that failed to grade queues nothing."""
+    deferral = _learning_deferral.get()
+    if mark is None or deferral is None:
+        return
+    del deferral.items[mark[0]:]
+    deferral.impact_value = mark[1]
+
+
+def _finalize_effects_deferred(prediction: Dict[str, Any], *, apply_judge_nudge: bool) -> None:
+    warnings = _finalize_effects(prediction, apply_judge_nudge=apply_judge_nudge)
+    if not warnings:
+        return
+    if _learning_deferral.get() is None:
+        # Immediate caller (replay, regrade): the row is not saved yet, so stamp it as before.
+        prediction["side_effect_warnings"] = warnings
+    else:
+        # Deferred: the row was saved before these ran, so log them with the id instead.
+        logger.warning(
+            "resolver side effects reported after save id=%s warnings=%s",
+            prediction.get("id"),
+            warnings,
+        )
+
+
+def _adapt_pump_calibration(prediction: Dict[str, Any]) -> None:
+    # ponytail: calibration I/O under guard delays abandon (same trade-off as _save_json).
+    with _cycle_persist_guard_safe():
+        if not _cycle_writes_revoked_safe():
+            try:
+                from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                maybe_adapt_after_resolve(prediction=prediction)
+            except Exception:
+                pass
+
+
+def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_result: Any) -> None:
+    """Run queued learning after the ledger save. Skip rows the save did not apply."""
+    if deferral is None:
+        return
+    conflicted = set(getattr(commit_result, "conflicts", None) or ())
+    # A row with no key cannot be matched to a conflict, so an unidentified conflict
+    # means any keyless row may be one the save did not apply. Skip those rows too.
+    unidentified = any(isinstance(k, tuple) and k and k[0] == "unidentified" for k in conflicted)
+    for index, (key, effect) in enumerate(deferral.items):
+        if (key is not None and key in conflicted) or (key is None and unidentified):
+            logger.warning("learning skipped for ledger row the save did not apply key=%s", key)
+            continue
+        if _cycle_writes_revoked_safe():
+            # The save already happened, so these rows stay resolved and will not be regraded.
+            # Say what was dropped, so the loss is visible.
+            dropped = [k for k, _ in deferral.items[index:]]
+            logger.warning(
+                "learning dropped after revoke: %d effect(s) for rows %s",
+                len(dropped),
+                dropped,
+            )
+            return
+        try:
+            effect()
+        except Exception:
+            logger.exception("deferred resolver learning effect failed")
+
+
 def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
     """Pump desk + HOLD counterfactual shadows must not nudge council weights."""
     if is_pump_desk_claim(prediction):
@@ -244,7 +437,24 @@ def _is_shadow(prediction: Dict[str, Any]) -> bool:
     return bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
 
-def _load_json(path: str, default: Any) -> Any:
+def _load_json(path: str, default: Any, *, fail_closed: bool = False) -> Any:
+    from internal.store.soul_map_io import StateUnreadable, read_blob_checked
+
+    checked = read_blob_checked(path)
+    if checked.kind in ("unreadable", "transient"):
+        ledger = os.path.normpath(path) == os.path.normpath(PREDICTIONS_PATH)
+        if ledger and fail_closed:
+            raise StateUnreadable(checked.kind, path, error=checked.error)
+        if ledger:
+            logger.warning(
+                "predictions ledger read-only degraded kind=%s path=%s error=%s",
+                checked.kind,
+                path,
+                checked.error or "",
+            )
+            return copy.deepcopy(default) if isinstance(default, dict) else default
+        return default
+
     now = datetime.now(timezone.utc)
     file_bytes = 0
     mtime_iso: Optional[str] = None
@@ -259,8 +469,10 @@ def _load_json(path: str, default: Any) -> Any:
         )
         mtime_age_seconds = max(0.0, now.timestamp() - stat.st_mtime)
         file_bytes = stat.st_size
-        with open(path, "r", encoding="utf-8") as f:
-            result = json.load(f)
+        if checked.kind == "missing":
+            result = default
+        else:
+            result = checked.blob if checked.blob is not None else default
         partial_parse = False
         if isinstance(result, dict):
             parse_scope = path + ":" + "|".join(sorted(str(k) for k in result.keys()))
@@ -309,6 +521,53 @@ def _cycle_persist_guard_safe():
         return cycle_persist_guard()
     except Exception:
         return nullcontext()
+
+
+def _commit_predictions_mutation(fn, *, path, caller, trigger):
+    from internal.learning.predictions_store import (
+        PersistOutcome, PersistReason, PersistResult, mutate_predictions,
+    )
+
+    with _cycle_persist_guard_safe():
+        if _cycle_writes_revoked_safe():
+            return PersistResult(PersistOutcome.SKIPPED_ABANDONED, PersistReason.REVOKED)
+        return mutate_predictions(fn, path=path, caller=caller, trigger=trigger)
+
+
+class LedgerPersistFailure(Exception):
+    def __init__(self, result):
+        self.result = result
+        super().__init__(f"ledger_persist_{result.outcome.value}:{result.reason}")
+
+
+class LedgerPersistSkipped(LedgerPersistFailure):
+    pass
+
+
+def _commit_ledger_changes(before, after, *, path, caller, trigger):
+    from internal.learning.predictions_store import PersistOutcome, merge_ledger_changes
+
+    result = merge_ledger_changes(
+        before, after, path=path, caller=caller, trigger=trigger,
+        commit=_commit_predictions_mutation, stats_fn=_compute_stats,
+    )
+    if result.conflicts:
+        logger.warning("ledger commit conflicts trigger=%s keys=%s", trigger, result.conflicts)
+    if result.outcome is PersistOutcome.SKIPPED_ABANDONED:
+        raise LedgerPersistSkipped(result)
+    if result.outcome is not PersistOutcome.APPLIED:
+        raise LedgerPersistFailure(result)
+    return result
+
+
+def _committed_only(rows: List[Dict[str, Any]], commit_result: Any) -> List[Dict[str, Any]]:
+    """Keep only rows whose ledger write committed. A conflicted row stays pending on disk."""
+    if not getattr(commit_result, "conflicts", None):
+        return rows
+    from internal.learning.predictions_store import _row_key
+
+    committed = set(commit_result.committed_keys)
+    return [row for row in rows if _row_key(row) in committed]
 
 
 def _save_json(
@@ -429,18 +688,10 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     return normalize_expert(prediction)
 
 
-def _stamp_and_nudge_expert(
-    prediction: Dict[str, Any],
-    *,
-    correct: bool,
-    capture: Optional[CaptureResult] = None,
-) -> Tuple[Optional[str], Optional[str]]:
-    """Stamp rich attribution on the row; nudge the SAME attributed expert so
-    attribution stamping and weight nudging stay in agreement (fixes quant
-    sink / dark_horse starvation where legacy string normalization diverged)."""
+def _stamp_expert_attribution(prediction: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """Write persistable expert/evidence fields on the row. Does not nudge weights."""
     from internal.council.expert_attribution import resolve_expert_attribution
-    from internal.council.signal_expert import expert_for_replay_row
-    from internal.learning.evidence import evidence_population, stamp_evidence
+    from internal.learning.evidence import stamp_evidence
 
     stamped_expert, expert_source = resolve_expert_attribution(prediction)
     stamp_evidence(prediction)
@@ -448,8 +699,22 @@ def _stamp_and_nudge_expert(
         prediction["expert"] = stamped_expert
         if expert_source != "existing":
             prediction["expert_attribution_source"] = expert_source
-    # Outcome weights require both a published council row and attributable
-    # signal evidence. A bare legacy expert label is diagnostic only.
+    return stamped_expert, expert_source
+
+
+def _nudge_attributed_expert(
+    prediction: Dict[str, Any],
+    *,
+    correct: bool,
+    capture: Optional[CaptureResult] = None,
+    stamped_expert: Optional[str] = None,
+) -> Optional[str]:
+    """Nudge the same expert that was stamped. Call only after a successful persist."""
+    from internal.council.signal_expert import expert_for_replay_row
+    from internal.learning.evidence import evidence_population
+
+    if stamped_expert is None:
+        stamped_expert = prediction.get("expert")
     replay_expert = expert_for_replay_row(prediction)
     nudge_expert = (
         stamped_expert
@@ -461,6 +726,22 @@ def _stamp_and_nudge_expert(
         with _cycle_persist_guard_safe():
             if not _cycle_writes_revoked_safe():
                 _nudge_weights(bool(correct), nudge_expert, capture=capture)
+    return nudge_expert
+
+
+def _stamp_and_nudge_expert(
+    prediction: Dict[str, Any],
+    *,
+    correct: bool,
+    capture: Optional[CaptureResult] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Stamp rich attribution on the row; nudge the SAME attributed expert so
+    attribution stamping and weight nudging stay in agreement (fixes quant
+    sink / dark_horse starvation where legacy string normalization diverged)."""
+    stamped_expert, _expert_source = _stamp_expert_attribution(prediction)
+    nudge_expert = _nudge_attributed_expert(
+        prediction, correct=bool(correct), capture=capture, stamped_expert=stamped_expert
+    )
     return stamped_expert, nudge_expert
 
 
@@ -505,7 +786,7 @@ def _nudge_weights(
             extra=extra or None,
         )
     except Exception:
-        pass
+        logger.exception("_nudge_weights: emit_weight_change failed")
 
 
 # Metabolism map only — not UI nesting. Leading auditor at pick-time soft-nudges
@@ -581,7 +862,7 @@ def _nudge_weights_from_judge_audit(prediction: Dict[str, Any], correct: bool) -
                 extra={"leading_judge": leading},
             )
         except Exception:
-            pass
+            logger.exception("_nudge_weights_from_judge_audit: emit_weight_change failed")
 
 
 def _parse_resolve_at(prediction: Dict[str, Any]) -> Optional[datetime]:
@@ -818,7 +1099,16 @@ def _record_scenario_outcome(
     outcome: str,
     correct: bool,
     expert: Optional[str],
+    *,
+    rsi_signal: Any = None,
+    volume_signal: Any = None,
 ) -> None:
+    # The grade-time signals are removed from the row right after grading, so a deferred
+    # caller passes them in. Callers that pass nothing read them from the row, as before.
+    if rsi_signal is None:
+        rsi_signal = prediction.get("_rsi_signal")
+    if volume_signal is None:
+        volume_signal = prediction.get("_volume_signal")
     if prediction.get("outcome") in {"duplicate", "expired", "ungradeable"}:
         return
     try:
@@ -833,8 +1123,6 @@ def _record_scenario_outcome(
             "impact_strength_at_creation": prediction.get("impact_strength_at_creation"),
             "impact_strength_after": prediction.get("impact_strength_after"),
         }
-        rsi_signal = prediction.get("_rsi_signal")
-        volume_signal = prediction.get("_volume_signal")
         if rsi_signal:
             features["rsi"] = rsi_signal
         if volume_signal:
@@ -950,6 +1238,32 @@ def atomic_finalize_resolution(
     apply_judge_nudge: bool = True,
 ) -> Dict[str, Any]:
     """J3: one event updates prediction, judges, and trace."""
+    _finalize_row_fields(
+        prediction,
+        actual_pct=actual_pct,
+        outcome=outcome,
+        correct=correct,
+        resolved_price=resolved_price,
+        resolved_at=resolved_at,
+        price_meta=price_meta,
+    )
+    warnings = _finalize_effects(prediction, apply_judge_nudge=apply_judge_nudge)
+    if warnings:
+        prediction["side_effect_warnings"] = warnings
+    return prediction
+
+
+def _finalize_row_fields(
+    prediction: Dict[str, Any],
+    *,
+    actual_pct: float,
+    outcome: str,
+    correct: Optional[bool],
+    resolved_price: float,
+    resolved_at: str,
+    price_meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Set the graded fields. They are part of the ledger row, so they run before the save."""
     prediction["actual_pct"] = actual_pct
     prediction["outcome"] = outcome
     prediction["correct"] = correct
@@ -963,24 +1277,53 @@ def atomic_finalize_resolution(
         prediction["price_source"] = price_meta.get("price_source")
         prediction["price_lag_seconds"] = price_meta.get("price_lag_seconds")
 
+
+def _finalize_pick_with_retry(prediction: Dict[str, Any], attempts: int = 3) -> None:
+    """Finalize the hour pick, retrying a briefly busy pick-history lock."""
+    from internal.council import pick_history
+
+    for attempt in range(1, attempts + 1):
+        try:
+            pick_history.finalize_from_prediction(prediction)
+            return
+        except TimeoutError:
+            if attempt == attempts:
+                raise
+            logger.warning(
+                "pick_history lock busy, retrying finalize id=%s attempt=%s",
+                prediction.get("id"),
+                attempt,
+            )
+
+
+def _finalize_effects(prediction: Dict[str, Any], *, apply_judge_nudge: bool) -> List[str]:
+    """Judge, trace, trail and pick-history effects of a resolved row. Returns warnings."""
     warnings: List[str] = []
 
     # Revocation is sticky for a cycle, so one revoked check ends the whole finalize.
     try:
         with _cycle_persist_guard_safe():
             if _cycle_writes_revoked_safe():
-                return prediction
-            on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
-    except Exception:
-        logger.exception("atomic_finalize: on_prediction_resolved failed")
-        warnings.append("on_prediction_resolved")
+                return warnings
+            summary = on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
+            if isinstance(summary, dict) and summary.get("portfolios_unobservable"):
+                warnings.append("portfolios_unobservable")
+    except Exception as exc:
+        from internal.judges.portfolios import PortfolioUnreadable
+
+        if isinstance(exc, PortfolioUnreadable):
+            logger.exception("atomic_finalize: portfolios unreadable")
+            warnings.append("portfolios_unobservable")
+        else:
+            logger.exception("atomic_finalize: on_prediction_resolved failed")
+            warnings.append("on_prediction_resolved")
 
     try:
         from internal.council.prediction_trace import record_prediction_resolved
 
         with _cycle_persist_guard_safe():
             if _cycle_writes_revoked_safe():
-                return prediction
+                return warnings
             record_prediction_resolved(prediction)
     except Exception:
         logger.exception("atomic_finalize: record_prediction_resolved failed")
@@ -991,7 +1334,7 @@ def atomic_finalize_resolution(
 
         with _cycle_persist_guard_safe():
             if _cycle_writes_revoked_safe():
-                return prediction
+                return warnings
             emit_prediction_resolved(prediction, prediction.get("expert"))
     except Exception:
         logger.exception("atomic_finalize: emit_prediction_resolved failed")
@@ -1002,15 +1345,17 @@ def atomic_finalize_resolution(
 
         with _cycle_persist_guard_safe():
             if _cycle_writes_revoked_safe():
-                return prediction
-            pick_history.finalize_from_prediction(prediction)
+                return warnings
+            _finalize_pick_with_retry(prediction)
     except Exception:
-        logger.exception("atomic_finalize: pick_history.finalize_from_prediction failed")
+        # After the save, a lost outcome is the at-most-once trade-off. Log the id so it is findable.
+        logger.exception(
+            "atomic_finalize: pick_history.finalize_from_prediction failed id=%s",
+            prediction.get("id"),
+        )
         warnings.append("pick_history_finalize")
 
-    if warnings:
-        prediction["side_effect_warnings"] = warnings
-    return prediction
+    return warnings
 
 
 def resolve_prediction(
@@ -1173,23 +1518,24 @@ def resolve_prediction_at_horizon(
     # Revocation can land after the entry check, so every learning write re-checks.
     if _cycle_writes_revoked_safe():
         return prediction
-    expert, _nudge_expert = _stamp_and_nudge_expert(
-        prediction, correct=bool(correct), capture=capture
+    # Stamp now (the stamp is part of the row). The weight nudge queues behind the save.
+    stamped_expert, _expert_source = _stamp_expert_attribution(prediction)
+    expert = stamped_expert
+    _run_or_defer(
+        prediction,
+        lambda: _nudge_attributed_expert(
+            prediction, correct=bool(correct), capture=capture, stamped_expert=stamped_expert
+        ),
     )
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
     if _cycle_writes_revoked_safe():
         return prediction
-    # Impact dial before finalize so prediction_resolved trail includes after value.
+    # Impact is staged before the save and written after it, so the row carries the
+    # value and the trail still sees it. Effects below queue in the original order.
     if not _skip_council_learning(prediction):
-        # Check and write under the release guard so an abandon cannot land between them.
-        with _cycle_persist_guard_safe():
-            if _cycle_writes_revoked_safe():
-                return prediction
-            _nudge_impact_strength(prediction, bool(correct))
-        if _cycle_writes_revoked_safe():
-            return prediction
-    atomic_finalize_resolution(
+        _stage_or_run_impact(prediction, bool(correct))
+    _finalize_row_fields(
         prediction,
         actual_pct=actual_pct,
         outcome=outcome,
@@ -1197,27 +1543,33 @@ def resolve_prediction_at_horizon(
         resolved_price=price,
         resolved_at=resolved_at,
         price_meta=meta,
-        apply_judge_nudge=apply_judge_nudge,
+    )
+    _run_or_defer(
+        prediction,
+        lambda: _finalize_effects_deferred(prediction, apply_judge_nudge=apply_judge_nudge),
     )
     if not _skip_council_learning(prediction):
-        if _cycle_writes_revoked_safe():
-            return prediction
-        _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
-        if _cycle_writes_revoked_safe():
-            return prediction
-        _nudge_signal_weights(prediction, bool(correct), capture=capture)
+        # Read the grade-time signals now: the caller removes them from the row after grading.
+        rsi_at_grade = prediction.get("_rsi_signal")
+        volume_at_grade = prediction.get("_volume_signal")
+        _run_or_defer(
+            prediction,
+            lambda: _record_scenario_outcome(
+                prediction,
+                actual_pct,
+                outcome,
+                bool(correct),
+                expert,
+                rsi_signal=rsi_at_grade,
+                volume_signal=volume_at_grade,
+            ),
+        )
+        _run_or_defer(
+            prediction,
+            lambda: _nudge_signal_weights(prediction, bool(correct), capture=capture),
+        )
     else:
-        # ponytail: calibration I/O under guard delays abandon (same trade-off as _save_json).
-        with _cycle_persist_guard_safe():
-            if not _cycle_writes_revoked_safe():
-                try:
-                    from internal.learning.pump_calibration import (
-                        maybe_adapt_after_resolve,
-                    )
-
-                    maybe_adapt_after_resolve(prediction=prediction)
-                except Exception:
-                    pass
+        _run_or_defer(prediction, lambda: _adapt_pump_calibration(prediction))
     return prediction
 
 
@@ -1394,7 +1746,9 @@ def expire_stale_predictions(
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
+        fail_closed=True,
     )
+    before = copy.deepcopy(data)
     predictions: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     now = datetime.now(timezone.utc)
@@ -1417,7 +1771,9 @@ def expire_stale_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
-    _save_json(PREDICTIONS_PATH, data, caller="resolver")
+    _commit_ledger_changes(
+        before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="expire"
+    )
 
     return {
         "expired_now": expired_now,
@@ -1430,7 +1786,7 @@ def expire_stale_predictions(
 
 def _merge_regraded_resolved(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Re-sync rows regrade_expired_predictions updated on disk (RF-3 follow-up)."""
-    fresh = _load_json(PREDICTIONS_PATH, {}).get("resolved") or []
+    fresh = _load_json(PREDICTIONS_PATH, {}, fail_closed=True).get("resolved") or []
     by_id = {
         str(row.get("id")): row
         for row in fresh
@@ -1467,23 +1823,46 @@ def _resolve_due_predictions(
     horizon_hours: float = 24.0,
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
+    """Resolve due predictions. Learning for each row runs only after its save succeeds."""
+    token = _learning_deferral.set(_LearningDeferral())
+    try:
+        return _resolve_due_predictions_body(
+            subnets, horizon_hours=horizon_hours, tolerance=tolerance
+        )
+    finally:
+        # Reset even when the cycle raises, so a later caller never inherits a queue.
+        _learning_deferral.reset(token)
+
+
+def _resolve_due_predictions_body(
+    subnets: Optional[List[Dict[str, Any]]] = None,
+    *,
+    horizon_hours: float = 24.0,
+    tolerance: float = 0.5,
+) -> Dict[str, Any]:
     """Resolve predictions whose horizon has elapsed and persist the result."""
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
+        fail_closed=True,
     )
+    before = copy.deepcopy(data)
     now = datetime.now(timezone.utc)
     restored_now = _restore_recently_expired_predictions(data, now=now)
     if restored_now:
         # ``regrade_expired_predictions`` reads the ledger independently, so
         # make the repair visible to that pass before it runs.
-        _save_json(PREDICTIONS_PATH, data, caller="resolver")
+        _commit_ledger_changes(
+            before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="restore"
+        )
+        before = copy.deepcopy(data)
     raw_pending: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     pending, duplicate_rows = dedupe_predictions(raw_pending)
     resolved.extend(duplicate_rows)
 
     prices = fetch_prices(subnets)
+    # Regrade owns its own learning queue and flushes it after its save.
     regraded_expired = regrade_expired_predictions(live_prices=prices)
     # Re-sync the in-memory resolved list whenever regrade_expired_predictions wrote
     # anything to disk — not only on successful regrades.  Without this, stamp-only
@@ -1553,6 +1932,7 @@ def _resolve_due_predictions(
                 # Reload only after a dispatched fetch. A rate-limit or a zero
                 # hydration budget writes nothing, and parsing the whole cache
                 # again keeps the previous copy resident.
+                _late_mark = _queue_mark()
                 try:
                     if hydrate_candles_for_netuid(uid):
                         cache = _load_json(PRICE_CACHE_PATH, {})
@@ -1578,7 +1958,8 @@ def _resolve_due_predictions(
                     # not genuine expiry, before the existing expiry handling.
                     pred["price_data_unavailable"] = True
                 except Exception:
-                    pass
+                    # The row is expired below, so no learning from this grade may run.
+                    _drop_queued_after(_late_mark)
             _expire_prediction(pred, now)
             resolved.append(pred)
             expired_now.append(pred)
@@ -1617,7 +1998,16 @@ def _resolve_due_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
-    _save_json(PREDICTIONS_PATH, data, caller="resolver")
+    commit_result = _commit_ledger_changes(
+        before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="resolve"
+    )
+    # Learning runs only now. A refused save raised above, so none of it ran.
+    _flush_deferred_learning(_learning_deferral.get(), commit_result)
+    if commit_result.conflicts:
+        # Conflicted rows were not written, so they are not resolved or expired now.
+        resolved_now = _committed_only(resolved_now, commit_result)
+        expired_now = _committed_only(expired_now, commit_result)
+        data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
 
     # Cold-cache spike alert — log at WARNING level so operators see it without
     # log diving.  Emitted once per resolver run when the ratio exceeds threshold.
@@ -1666,11 +2056,30 @@ def regrade_expired_predictions(
     live_prices: Optional[Dict[Any, float]] = None,
     limit: int = 50,
 ) -> Dict[str, Any]:
-    """Retry grading expired rows when price cache now has horizon candles (RF-3)."""
+    """Retry grading expired rows when price cache now has horizon candles (RF-3).
+
+    Learning for each regraded row runs only after the regrade save succeeds.
+    """
+    token = _learning_deferral.set(_LearningDeferral())
+    try:
+        return _regrade_expired_predictions_body(live_prices=live_prices, limit=limit)
+    finally:
+        # Anything still queued belongs to a save that never ran, so it is dropped, not run.
+        _learning_deferral.reset(token)
+
+
+def _regrade_expired_predictions_body(
+    *,
+    live_prices: Optional[Dict[Any, float]] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Body of regrade_expired_predictions. Runs inside its own learning deferral."""
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {}},
+        fail_closed=True,
     )
+    before = deepcopy(data)
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     regraded: List[Dict[str, Any]] = []
     attempted = 0
@@ -1767,7 +2176,14 @@ def regrade_expired_predictions(
     if needs_save:
         data["resolved"] = resolved
         data["stats"] = _compute_stats(data)
-        _save_json(PREDICTIONS_PATH, data, caller="resolver")
+        commit_result = _commit_ledger_changes(
+            before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="regrade"
+        )
+        # Learning for these rows runs only now. A refused save raised above, so none ran.
+        _flush_deferred_learning(_learning_deferral.get(), commit_result)
+        regraded = _committed_only(regraded, commit_result)
+        if commit_result.conflicts:
+            data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
 
     return {
         "attempted": attempted,

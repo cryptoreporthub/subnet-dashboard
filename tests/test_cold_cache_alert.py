@@ -171,6 +171,9 @@ class TestWarningEmission:
             "predictions": [], "resolved": [], "stats": {},
         })
         monkeypatch.setattr(resolver_mod, "_save_json", lambda *a, **kw: None)
+        # The ledger commit re-reads PREDICTIONS_PATH. Point it at a tmp file so the
+        # real data/predictions.json cannot conflict with the faked "before" snapshot.
+        monkeypatch.setattr(resolver_mod, "PREDICTIONS_PATH", str(tmp_path / "predictions.json"))
         monkeypatch.setattr(resolver_mod, "check_resolver_watchdog", lambda *a, **kw: {})
         monkeypatch.setattr(resolver_mod, "dedupe_predictions", lambda p, **kw: (p, []))
         monkeypatch.setattr(resolver_mod, "_restore_recently_expired_predictions", lambda *a, **kw: [])
@@ -192,7 +195,7 @@ class TestWarningEmission:
             f"Expected 'Cold-cache alert' in WARNING logs; got: {warning_msgs}"
         )
 
-    def test_no_warning_when_alert_not_fired(self, resolver_mod, monkeypatch, caplog):
+    def test_no_warning_when_alert_not_fired(self, resolver_mod, monkeypatch, caplog, tmp_path):
         """No cold-cache WARNING when the ratio is below threshold."""
         monkeypatch.setattr(resolver_mod, "COLD_CACHE_ALERT_RATIO", 0.05)
 
@@ -210,6 +213,9 @@ class TestWarningEmission:
             "predictions": [], "resolved": [], "stats": {},
         })
         monkeypatch.setattr(resolver_mod, "_save_json", lambda *a, **kw: None)
+        # The ledger commit re-reads PREDICTIONS_PATH. Point it at a tmp file so the
+        # real data/predictions.json cannot conflict with the faked "before" snapshot.
+        monkeypatch.setattr(resolver_mod, "PREDICTIONS_PATH", str(tmp_path / "predictions.json"))
         monkeypatch.setattr(resolver_mod, "check_resolver_watchdog", lambda *a, **kw: {})
         monkeypatch.setattr(resolver_mod, "dedupe_predictions", lambda p, **kw: (p, []))
         monkeypatch.setattr(resolver_mod, "_restore_recently_expired_predictions", lambda *a, **kw: [])

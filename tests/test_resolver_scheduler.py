@@ -235,8 +235,9 @@ def test_resolve_due_restores_recently_expired_malformed_timestamp():
     assert all(row.get("outcome") != "expired" for row in result["pending"])
 
 
-def test_expire_skips_non_dict_records():
-    """A corrupt non-dict entry must not crash the loop."""
+def test_expire_refuses_non_dict_records():
+    """Malformed ledger rows are refused without overwriting the ledger."""
+    from internal.learning.predictions_store import PredictionsLedgerUnreadable
     now = datetime.now(timezone.utc)
     _write_predictions({
         "predictions": [
@@ -253,9 +254,10 @@ def test_expire_skips_non_dict_records():
         "resolved": [],
     })
 
-    result = resolver.expire_stale_predictions()
-    assert len(result["expired_now"]) == 1
-    assert result["stats"]["pending"] == 0
+    before = Path(resolver.PREDICTIONS_PATH).read_bytes()
+    with pytest.raises(PredictionsLedgerUnreadable):
+        resolver.expire_stale_predictions()
+    assert Path(resolver.PREDICTIONS_PATH).read_bytes() == before
 
 
 def test_expire_does_not_nudge_weights(nudge_spy):
@@ -305,6 +307,7 @@ def test_resolve_due_predictions_expires_when_no_price(nudge_spy):
     _write_predictions({
         "predictions": [
             {
+                "id": "scheduler-expire-1",
                 "netuid": 999,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,
@@ -400,6 +403,9 @@ def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler,
                 # council_published population + attributable signal evidence
                 # (the rogue guard rejects bare expert stamps), so the weight
                 # nudge fires for the stamped expert.
+                # Keyed row: a real ledger row always has an id. Without one the save
+                # reports it as unidentified and skips its learning, as it should.
+                "id": "scheduler-quant-1",
                 "pick_source": "council",
                 "signal_source": "emission_momentum",
                 "netuid": 1,
@@ -455,6 +461,7 @@ def test_scheduler_run_once_expires_stale_predictions(fresh_scheduler):
     _write_predictions({
         "predictions": [
             {
+                "id": "expired-scheduler-row",
                 "netuid": 999,
                 "horizon_hours": horizon,
                 "expert": "quant",
@@ -578,6 +585,7 @@ def test_scheduler_persists_cycle_summary(fresh_scheduler):
     _write_predictions({
         "predictions": [
             {
+                "id": "summary-scheduler-row",
                 "netuid": 1,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,
@@ -1207,33 +1215,8 @@ def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler,
 
 
 @pytest.fixture(autouse=True)
-def isolate_liveness_persistence(tmp_path, monkeypatch):
-    """Point internal.liveness soul-map IO at a per-test JSON file."""
-    from internal import liveness as _liv_mod
-
-    sm_path = tmp_path / "liveness_soul_map.json"
-
-    def _read():
-        try:
-            return json.loads(sm_path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-
-    def _write(mutator):
-        blob = _read() or {}
-        mutator(blob)
-        sm_path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=str(sm_path.parent), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(blob, f)
-            os.replace(tmp, sm_path)
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-
-    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
-    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+def isolate_liveness_persistence(liveness_real_soul_map):
+    return liveness_real_soul_map
 
 
 # ---------------------------------------------------------------------------

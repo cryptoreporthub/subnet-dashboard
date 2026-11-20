@@ -461,3 +461,36 @@ def test_ops_readiness_worker_mode_field():
     assert resp.status_code == 200
     body = resp.json()
     assert body.get("worker_mode") in ("web", "worker", "combined", "split", "split_v2")
+
+
+def test_boot_heal_runs_when_epoch_archive_reconcile_raises(monkeypatch):
+    import internal.background_boot as background_boot
+    import internal.learning.ledger_heal as ledger_heal
+
+    class _InlineThread:
+        def __init__(self, target=None, **_kwargs):
+            self._target = target
+
+        def start(self):
+            self._target()
+
+    heal = MagicMock(return_value={"ok": True})
+
+    def _reconcile_fails():
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(background_boot.threading, "Thread", _InlineThread)
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.start_prediction_resolver_scheduler",
+        MagicMock(return_value={}),
+    )
+    monkeypatch.setattr(ledger_heal, "reconcile_epoch_archives", _reconcile_fails)
+    monkeypatch.setattr(ledger_heal, "heal_daily_pick_ledger", heal)
+    monkeypatch.setattr(
+        "internal.learning.pump_lead_recover.recover_overdue_pump_leads",
+        MagicMock(return_value={"ok": False}),
+    )
+
+    background_boot._start_resolver()
+
+    heal.assert_called_once_with(dry_run=False)
