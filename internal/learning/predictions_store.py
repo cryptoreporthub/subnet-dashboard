@@ -417,6 +417,19 @@ def save_predictions(
         lambda _fresh, _raw: (data, ["replacement"], []),
         path=path, caller="save_predictions", trigger=trigger,
     )
+    if result.outcome is not PersistOutcome.APPLIED:
+        from internal.ops.mutation_log import log_mutation
+
+        log_mutation(
+            operation="failed",
+            path=_resolved_predictions_path(path),
+            writer_function="save_predictions",
+            trigger=trigger,
+        )
+        logger.error(
+            "Failed to persist predictions.json (%s): %s",
+            result.outcome.value, result.reason,
+        )
     if result.reason is PersistReason.LOCK_TIMEOUT:
         raise FileLockTimeout("Timed out waiting for predictions ledger")
     if result.outcome is not PersistOutcome.APPLIED:
