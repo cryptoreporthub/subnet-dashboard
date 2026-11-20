@@ -70,7 +70,7 @@ def test_trigger_and_horizon():
 def test_track_record_honest_empty(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {"predictions": [], "resolved": []},
+        lambda *_a, **_k: {"predictions": [], "resolved": []},
     )
     assert "No graded call" in subnet_graded_snippet(42)
 
@@ -78,7 +78,7 @@ def test_track_record_honest_empty(monkeypatch):
 def test_track_record_hit_with_n(monkeypatch):
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {
+        lambda *_a, **_k: {
             "predictions": [],
             "resolved": [
                 {
