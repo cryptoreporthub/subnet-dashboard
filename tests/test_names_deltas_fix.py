@@ -11,7 +11,7 @@ def test_story_strip_refreshes_name_from_netuid(monkeypatch):
     )
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {
+        lambda *_a, **_k: {
             "resolved": [
                 {
                     "netuid": 28,
