@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 export DISABLE_BACKGROUND_SCANS=1
+python scripts/check_score_snapshot_seed.py
 exec python -m pytest -q \
   tests/test_soul_map_io.py \
   tests/test_soul_map_io_failure.py \
