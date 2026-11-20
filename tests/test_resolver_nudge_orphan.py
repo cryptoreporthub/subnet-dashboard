@@ -22,6 +22,17 @@ import internal.council.weights as weights
 NETUID = 7
 
 
+def _resolve_cycle() -> None:
+    """Run one resolver pass.
+
+    Learning now runs after the ledger save. An abandon that lands during learning
+    therefore cannot refuse a save that already happened. It stops the learning
+    that has not run yet, and the pass returns normally.
+    """
+    subnets = [{"netuid": NETUID, "price": 110.0}]
+    resolver._resolve_due_predictions(subnets=subnets)
+
+
 @pytest.fixture
 def harness(tmp_path, monkeypatch):
     predictions_path = tmp_path / "predictions.json"
@@ -100,7 +111,7 @@ def _run_cycle(
 
     monkeypatch.setattr(resolver, "nudge_impact_strength", spy_nudge)
     try:
-        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+        _resolve_cycle()
     finally:
         resolver_scheduler._cycle_timing.reset(token)
 
@@ -153,9 +164,9 @@ def test_revoked_cycle_applies_no_later_learning_write(harness, monkeypatch, rev
     monkeypatch.setattr(resolver, "nudge_impact_strength", recorder("impact"))
     monkeypatch.setattr(resolver, "_record_scenario_outcome", recorder("scenario"))
     monkeypatch.setattr(resolver, "_nudge_signal_weights", recorder("signal"))
-    monkeypatch.setattr(resolver, "atomic_finalize_resolution", recorder("finalize"))
+    monkeypatch.setattr(resolver, "_finalize_effects", lambda *_a, **_k: (recorder("finalize")(), [])[1])
     try:
-        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+        _resolve_cycle()
     finally:
         resolver_scheduler._cycle_timing.reset(token)
 
@@ -189,7 +200,7 @@ def test_abandon_cannot_revoke_between_impact_check_and_write(harness, monkeypat
 
     monkeypatch.setattr(resolver, "nudge_impact_strength", impact_while_abandon_races)
     try:
-        resolver._resolve_due_predictions(subnets=[{"netuid": NETUID, "price": 110.0}])
+        _resolve_cycle()
     finally:
         resolver_scheduler._cycle_timing.reset(token)
     abandon_thread.join(5)
@@ -219,8 +230,8 @@ def test_revoked_cycle_skips_pump_calibration_write(harness, monkeypatch, tmp_pa
     monkeypatch.setattr(resolver, "_skip_council_learning", lambda *_a, **_k: True)
     monkeypatch.setattr(
         resolver,
-        "atomic_finalize_resolution",
-        lambda prediction, **_kwargs: prediction,
+        "_finalize_effects",
+        lambda prediction, **_kwargs: [],
     )
 
     pred = json.loads(harness.read_text(encoding="utf-8"))["predictions"][0]

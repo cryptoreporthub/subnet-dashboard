@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -25,7 +27,7 @@ def emit_trail_event(
     judge: Optional[str] = None,
     extra: Optional[Dict[str, Any]] = None,
     resolved_prediction_id: Any = None,
-) -> None:
+) -> Any:
     """Append a learning-trail row via MindmapBridge (merged soul_map save)."""
     entry: Dict[str, Any] = {
         "time": _now_z(),
@@ -40,15 +42,19 @@ def emit_trail_event(
     }
     if extra:
         entry.update(extra)
+    entry.setdefault("event_id", uuid.uuid4().hex)
     try:
         from internal.council.mindmap_bridge import MindmapBridge
         from internal.council.weights import SOUL_MAP_PATH
 
-        MindmapBridge(persistence_path=SOUL_MAP_PATH).append_learning_trail(
+        return MindmapBridge(persistence_path=SOUL_MAP_PATH).append_learning_trail(
             entry, resolved_prediction_id=resolved_prediction_id
         )
     except Exception as exc:
         logger.warning("Trail event %s failed: %s", event_type, exc)
+        from internal.council.mindmap_bridge import TrailAppend, TrailKind
+
+        return TrailAppend(TrailKind.FAILED, str(entry["event_id"]))
 
 
 def _prediction_resolved_recorded(prediction_id: Any) -> bool:
@@ -78,7 +84,7 @@ def _prediction_resolved_recorded(prediction_id: Any) -> bool:
     return False
 
 
-def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) -> None:
+def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) -> Any:
     """Trail event when a prediction resolves and nudges expert weights."""
     prediction_id = prediction.get("id")
     if prediction_id is not None and _prediction_resolved_recorded(prediction_id):
@@ -87,7 +93,12 @@ def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) 
     correct = prediction.get("correct")
     outcome = prediction.get("outcome")
     impact = prediction.get("market_impact") if isinstance(prediction.get("market_impact"), dict) else {}
-    emit_trail_event(
+    learning = prediction.get("learning")
+    event_extra = None
+    if isinstance(learning, dict) and learning.get("key"):
+        material = f"{learning['key']}|prediction_resolved|0"
+        event_extra = {"event_id": hashlib.sha256(material.encode()).hexdigest()[:16]}
+    return emit_trail_event(
         "prediction_resolved",
         subnet=prediction.get("name"),
         netuid=prediction.get("netuid"),
@@ -107,6 +118,7 @@ def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) 
         decision="weight_nudge_up" if correct else "weight_nudge_down",
         prediction=prediction.get("statement"),
         judge=expert,
+        extra=event_extra,
         resolved_prediction_id=prediction_id,
     )
 
