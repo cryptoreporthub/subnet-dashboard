@@ -638,3 +638,120 @@ def test_heal_append_unreadable(tmp_path, monkeypatch):
     assert summary["ok"] is False
     assert summary["reason"] == "ledger_unreadable"
     assert preds.read_bytes() == before
+
+
+def test_heal_skipped_record_reports_record_failed(tmp_path, monkeypatch):
+    from internal.learning.prediction_loop import PickRecord, PickRecordKind
+
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    _write_json(
+        daily,
+        [
+            {
+                "date": _today(),
+                "action": "long",
+                "pick": _sample_pick(),
+                "market_context": {},
+            }
+        ],
+    )
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.record_pick",
+        lambda *args, **kwargs: PickRecord(PickRecordKind.SKIPPED, None, "duplicate"),
+    )
+
+    summary = heal_daily_pick_ledger(
+        dry_run=False, daily_picks_path=str(daily), predictions_path=str(preds)
+    )
+    assert summary["ok"] is False
+    assert summary["healed"] is False
+    assert summary["reason"] == "record_failed"
+
+
+def test_positions_incomplete_counts_as_healed(tmp_path, monkeypatch):
+    from internal.learning.prediction_loop import PickRecord, PickRecordKind
+
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    archive = tmp_path / "archive"
+    _write_json(
+        daily,
+        [{"date": _today(), "action": "long", "pick": _sample_pick(), "market_context": {}}],
+    )
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+    row = {"id": "x", "netuid": 15, "horizon_type": "day", "status": "pending"}
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.record_pick",
+        lambda *args, **kwargs: PickRecord(
+            PickRecordKind.INDETERMINATE, row, "positions_incomplete"
+        ),
+    )
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
+    monkeypatch.setattr("internal.learning.ledger_heal.ARCHIVE_DIR", str(archive))
+
+    summary = heal_daily_pick_ledger(
+        dry_run=False, daily_picks_path=str(daily), predictions_path=str(preds)
+    )
+    assert summary["ok"] is True
+    assert summary["healed"] is True
+    assert summary["positions_pending"] is True
+
+    epoch = archive_predictions_epoch(
+        predictions_path=str(preds),
+        archive_dir=str(archive),
+        re_heal_daily=True,
+        reset_request_id="11111111-1111-4111-8111-111111111111",
+    )
+    assert "downgraded_daily_pick" not in epoch["heal"]
+
+
+def _epoch_reset_paths(tmp_path, monkeypatch):
+    default = tmp_path / "default" / "predictions.json"
+    default.parent.mkdir()
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(default))
+    return default
+
+
+def test_epoch_reset_custom_path_leaves_default_ledger_alone(tmp_path, monkeypatch):
+    default = _epoch_reset_paths(tmp_path, monkeypatch)
+    default_payload = {
+        "predictions": [],
+        "resolved": [{"id": "keep", "netuid": 1, "status": "correct", "horizon_type": "hour",
+                      "created_at": "2026-01-01T00:00:00Z"}],
+        "stats": {},
+    }
+    default.write_text(json.dumps(default_payload), encoding="utf-8")
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps({"predictions": [], "resolved": [{"id": "old", "netuid": 2, "status": "correct",
+                      "horizon_type": "hour", "created_at": "2026-01-01T00:00:00Z"}], "stats": {}}), encoding="utf-8")
+
+    archive_predictions_epoch(
+        predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=False,
+        reset_request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert json.loads(default.read_text(encoding="utf-8")) == default_payload
+    custom_data = json.loads(custom.read_text(encoding="utf-8"))
+    assert custom_data["resolved"] == [] and custom_data["predictions"] == []
+
+
+def test_epoch_reset_custom_path_keeps_its_own_pending_rows(tmp_path, monkeypatch):
+    default = _epoch_reset_paths(tmp_path, monkeypatch)
+
+    def pending(pid):
+        return {"id": pid, "netuid": 1, "status": "pending", "horizon_type": "hour",
+                "created_at": "2026-01-01T00:00:00Z"}
+
+    default.write_text(json.dumps({"predictions": [pending("dflt")], "resolved": [], "stats": {}}), encoding="utf-8")
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps({"predictions": [pending("mine")], "resolved": [], "stats": {}}), encoding="utf-8")
+
+    archive_predictions_epoch(
+        predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=False,
+        reset_request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert [p["id"] for p in json.loads(custom.read_text(encoding="utf-8"))["predictions"]] == ["mine"]

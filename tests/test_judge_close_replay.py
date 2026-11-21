@@ -98,3 +98,28 @@ def test_replayed_wrong_pick_records_one_postmortem_per_judge(portfolio_path, mo
     for judge in tracker.all_judges():
         entries = postmortems.list_for_judge(judge.name)
         assert len(entries) == 1, judge.name
+
+
+def test_regrading_same_prediction_id_keeps_latest_actual(tmp_path, monkeypatch):
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(tmp_path / "postmortems"))
+    prediction = {"id": "pred-regrade-1", "netuid": 7, "name": "SN7", "direction": "up", "predicted_pct": 3.0}
+
+    first = postmortems.record("oracle", prediction, actual_pct=-2.0)
+    postmortems.record("oracle", prediction, actual_pct=-5.0)
+
+    entries = [e for e in postmortems.list_for_judge("oracle") if e["prediction_id"] == "pred-regrade-1"]
+    assert len(entries) == 1
+    assert entries[0]["actual_pct"] == -5.0
+    assert entries[0]["created_at"] == first["created_at"]
+
+
+def test_recording_same_grade_again_leaves_file_unchanged(tmp_path, monkeypatch):
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(tmp_path / "postmortems"))
+    prediction = {"id": "pred-regrade-2", "netuid": 7, "name": "SN7", "direction": "up", "predicted_pct": 3.0}
+    postmortems.record("oracle", prediction, actual_pct=-5.0)
+
+    path = postmortems._path("oracle")
+    before = open(path, "rb").read()
+    postmortems.record("oracle", prediction, actual_pct=-5.0)
+
+    assert open(path, "rb").read() == before

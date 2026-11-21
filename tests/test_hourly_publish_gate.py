@@ -97,13 +97,13 @@ def test_hold_does_not_call_record_pick_prediction(monkeypatch):
 
     def boom_pick(*_a, **_k):
         recorded["pick"] = True
-        raise AssertionError("record_pick_prediction must not run on HOLD")
+        raise AssertionError("record_pick must not run on HOLD")
 
     def ok_hold(**kwargs):
         recorded["hold"] = True
 
     monkeypatch.setattr(
-        "internal.learning.prediction_loop.record_pick_prediction", boom_pick
+        "internal.learning.prediction_loop.record_pick", boom_pick
     )
     monkeypatch.setattr(
         "internal.learning.prediction_loop.record_hold_decision", ok_hold
