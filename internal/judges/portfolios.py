@@ -109,9 +109,13 @@ def _shape_error(data: Any) -> Optional[str]:
     if not isinstance(data, dict):
         return "portfolios root must be an object"
     for judge in data.values():
-        if not isinstance(judge, dict) or any(
-            not isinstance(judge.get(key, []), list) for key in ("open_positions", "closed_positions")
-        ) or not isinstance(judge.get("closed_prediction_ids", {}), dict):
+        if not isinstance(judge, dict):
+            return "invalid judge portfolio"
+        for key in ("open_positions", "closed_positions"):
+            rows = judge.get(key, [])
+            if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                return f"invalid {key}"
+        if not isinstance(judge.get("closed_prediction_ids", {}), dict):
             return "invalid judge portfolio"
     return None
 
