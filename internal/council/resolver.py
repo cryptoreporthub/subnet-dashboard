@@ -1784,9 +1784,10 @@ def expire_stale_predictions(
     }
 
 
-def _merge_regraded_resolved(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _merge_regraded_resolved(
+    resolved: List[Dict[str, Any]], fresh: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     """Re-sync rows regrade_expired_predictions updated on disk (RF-3 follow-up)."""
-    fresh = _load_json(PREDICTIONS_PATH, {}, fail_closed=True).get("resolved") or []
     by_id = {
         str(row.get("id")): row
         for row in fresh
@@ -1869,7 +1870,9 @@ def _resolve_due_predictions_body(
     # mutations (historical_hydration_attempted, horizon_too_old_for_history) are
     # silently overwritten when resolve_due_predictions saves its stale in-memory list.
     if regraded_expired.get("ledger_mutated") or int(regraded_expired.get("regraded") or 0) > 0:
-        resolved = _merge_regraded_resolved(resolved)
+        fresh = _load_json(PREDICTIONS_PATH, {}, fail_closed=True).get("resolved") or []
+        resolved = _merge_regraded_resolved(resolved, fresh)
+        before["resolved"] = _merge_regraded_resolved(before["resolved"], fresh)
     cache = _load_json(PRICE_CACHE_PATH, {})
     subnet_by_uid: Dict[Any, Dict[str, Any]] = {}
     if subnets:

@@ -769,3 +769,35 @@ def test_regrade_stamp_present_when_historical_hydration_succeeds_but_graded(mon
     assert graded.get("historical_hydration_attempted") is True, (
         f"Graded row must carry historical_hydration_attempted=True, got {graded.get('historical_hydration_attempted')!r}"
     )
+
+
+def test_regrade_only_cycle_is_not_a_commit_conflict(monkeypatch):
+    """A cycle whose only write is regrade's stamp must commit cleanly, not as a conflict."""
+    from internal.council.watchdog import check_resolver_watchdog
+
+    row = {
+        "id": "a",
+        "netuid": 5,
+        "status": "expired",
+        "outcome": "expired",
+        "created_at": "2026-01-01T00:00:00Z",
+        "horizon_type": "24h",
+    }
+    _write_predictions({
+        "predictions": [],
+        "resolved": [row],
+        "stats": {},
+        "watchdog": check_resolver_watchdog([]),
+    })
+
+    def fake_regrade(**_kwargs):
+        with open(resolver.PREDICTIONS_PATH) as f:
+            on_disk = json.load(f)
+        on_disk["resolved"][0]["historical_hydration_attempted"] = True
+        _write_predictions(on_disk)
+        return {"ledger_mutated": True, "regraded": 0}
+
+    monkeypatch.setattr(resolver, "regrade_expired_predictions", fake_regrade)
+    monkeypatch.setattr(resolver, "fetch_prices", lambda *_a, **_k: {})
+
+    assert resolver._resolve_due_predictions_body(subnets=[]) is not None
