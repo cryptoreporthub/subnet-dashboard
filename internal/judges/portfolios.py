@@ -466,23 +466,6 @@ def _open_position_locked(
     return position
 
 @_portfolio_transaction
-def discard_open_position(judge_name: str, prediction_id: Any) -> bool:
-    """Remove an open paper position without closing it to the ledger."""
-    if prediction_id is None:
-        return False
-    data = _load_checked()
-    judge = _get_judge(data, judge_name)
-    open_positions = judge.get("open_positions", [])
-    remaining = [pos for pos in open_positions if pos.get("id") != prediction_id]
-    if len(remaining) == len(open_positions):
-        return False
-    judge["open_positions"] = remaining
-    _recompute_summary(judge)
-    _save(data)
-    return True
-
-
-@_portfolio_transaction
 def close_position(
     judge_name: str,
     prediction: Dict[str, Any],
