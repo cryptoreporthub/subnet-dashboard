@@ -8,7 +8,6 @@ from typing import Any, Dict
 from internal.council.expert_attribution import CANONICAL_EXPERTS, resolve_expert_attribution
 from internal.learning.predictions_store import (
     PersistOutcome,
-    PredictionsLedgerUnreadable,
     load_predictions,
     merge_ledger_changes,
 )
@@ -50,7 +49,8 @@ def backfill_expert_attribution(*, dry_run: bool = True) -> Dict[str, Any]:
             stats_fn=lambda fresh: fresh.get("stats") or {},
         )
         if result.outcome is not PersistOutcome.APPLIED:
-            raise PredictionsLedgerUnreadable("persist_refused", error=str(result.reason))
+            reason = result.reason.value if result.reason is not None else "persist_refused"
+            return {"ok": False, "reason": reason, "updated": 0}
         updated = len(result.committed_keys)
 
     return {
