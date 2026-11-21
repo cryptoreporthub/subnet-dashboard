@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import threading
@@ -207,3 +208,10 @@ def test_worker_replaced_while_effect_runs_cannot_mark_new_owner_applied(tmp_pat
     assert row["learning"]["state"] == "claimed"
     assert row["learning"]["owner"]["boot_id"] == "replacement-boot"
     assert result["learning_failed"] == 1
+
+
+def test_pump_learning_leaves_no_per_key_lock_sidecars(tmp_path, monkeypatch):
+    path = _pump_ledger(tmp_path, monkeypatch)
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", lambda **_kw: None)
+    pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
+    assert glob.glob(f"{path}.learning-*") == []
