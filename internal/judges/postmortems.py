@@ -180,9 +180,15 @@ def _record_locked(
         try:
             entries = _load(judge_name)
             pred_id = prediction.get("id")
+            actual = round(float(actual_pct or 0), 4)
             if pred_id is not None:
                 for existing in entries:
                     if existing.get("prediction_id") == pred_id:
+                        if existing.get("actual_pct") == actual:
+                            return existing
+                        existing["actual_pct"] = actual
+                        existing["questions"] = _diagnosis(prediction, actual_pct)
+                        _save(judge_name, entries)
                         return existing
             diagnosis = _diagnosis(prediction, actual_pct)
             entry = {
@@ -192,7 +198,7 @@ def _record_locked(
                 "name": prediction.get("name"),
                 "direction": prediction.get("direction"),
                 "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
-                "actual_pct": round(float(actual_pct or 0), 4),
+                "actual_pct": actual,
                 "signal_source": prediction.get("signal_source") or prediction.get("expert"),
                 "questions": diagnosis,
                 "created_at": _utcnow(),

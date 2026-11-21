@@ -36,6 +36,8 @@ def _parse_utc_iso(ts: str) -> Optional[datetime]:
 def _load_json(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as handle:
         data = json.load(handle)
+    if isinstance(data, list):
+        return {"predictions": data, "resolved": []}
     if not isinstance(data, dict):
         raise ValueError("archive root must be an object")
     return data
