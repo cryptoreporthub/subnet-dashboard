@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Unit 1 soul-map write-honesty — PR gate (expand when touching predictions ledger).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+export DISABLE_BACKGROUND_SCANS=1
+python scripts/check_score_snapshot_seed.py
+exec python -m pytest -q \
+  tests/test_soul_map_io.py \
+  tests/test_soul_map_io_failure.py \
+  tests/test_endpoint_contract.py \
+  tests/test_soul_map_write_honesty.py \
+  tests/test_judge_weight_write_honesty.py \
+  tests/test_prediction_loop_judge_rollback.py \
+  tests/test_pick_effects_survive_position_failure.py \
+  tests/test_mindmap_pending_declined.py \
+  tests/test_1578_plan_v31_weights_ledger.py \
+  tests/test_1578_ci_lists_in_sync.py \
+  tests/test_1578_ledger_single_writer.py \
+  tests/test_1578_single_ledger_writer_boundary.py \
+  tests/test_1578_commit_then_learn.py \
+  tests/test_1578_archive_readers.py \
+  tests/test_1578_redesign.py \
+  tests/test_soul_map_fsync.py \
+  tests/test_1578_review_fixes.py \
+  tests/test_background_boot.py \
+  tests/test_cold_cache_alert.py \
+  tests/test_contrarian_repair_once.py \
+  tests/test_daily_pick_stall_report.py \
+  tests/test_dev_radar_github_sync.py \
+  tests/test_expert_attribution.py \
+  tests/test_expired_recovery.py \
+  tests/test_fq4_combined_angles.py \
+  tests/test_judge_feedback_confidence.py \
+  tests/test_judge_weights.py \
+  tests/test_ledger_stats_preserved.py \
+  tests/test_names_deltas_fix.py \
+  tests/test_outcome_snapshot.py \
+  tests/test_pick_history_concurrent_writers.py \
+  tests/test_pick_scheduler_commit_truth.py \
+  tests/test_prediction_signal_impact_persist.py \
+  tests/test_predictions_ledger_fsync.py \
+  tests/test_proof_scout.py \
+  tests/test_pump_recover_stats.py \
+  tests/test_regrade_commit_before_learn.py \
+  tests/test_resolver_commit_before_learn.py \
+  tests/test_resolver_finalize_replay.py \
+  tests/test_resolver_lock_order_tripwire.py \
+  tests/test_resolver_nudge_orphan.py \
+  tests/test_resolver_seed_once.py \
+  tests/test_resolver_stop_repeat.py \
+  tests/test_server_pick_positions_incomplete.py \
+  tests/test_soul_map_empty_file.py \
+  tests/test_trust_stats.py \
+  tests/test_weighing_room.py \
+  tests/test_resolver_scheduler.py \
+  tests/test_resolver_soul_map_read_wedge.py \
+  tests/test_resolver_predictions_unreadable.py \
+  tests/test_resolver_persist_honesty_outcomes.py \
+  tests/test_compact_soul_map.py \
+  tests/test_resolver_corrupt_ledger_tick.py \
+  tests/test_phase3_mid_guards_orphan_revive.py::test_phase3_dark_region_telemetry_t1_5_and_persist_subtimers \
+  tests/test_prediction_loop_closure.py \
+  tests/test_predictions_store_contract.py \
+  tests/test_expiry_ledger.py \
+  tests/test_acc0_ledger_heal.py \
+  tests/test_predictions_write_race.py \
+  tests/test_tribunal_hero_live.py \
+  tests/test_predictions_store_patch_contract.py \
+  tests/test_dev_radar.py \
+  tests/test_graded_chat.py \
+  "$@"
