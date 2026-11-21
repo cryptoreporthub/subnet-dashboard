@@ -387,7 +387,7 @@ def recover_expired_predictions(
         if indeterminate and outcome not in _RETIRED:
             retryable_indeterminate.append(row)
 
-    if not dry_run and observation.get("kind") == "unreadable" and not retryable_pending:
+    if not dry_run and observation.get("kind") == "unreadable":
         return _fail(
             "portfolio_unobservable",
             error=str(observation.get("error") or observation.get("kind") or "unobservable"),
