@@ -1,0 +1,230 @@
+[
+  {
+    "rule": "read-as-empty",
+    "file": "internal/cockpit/picks_snapshot.py",
+    "function": "_registry_subnets_for_hour",
+    "key": "read-as-empty|internal/cockpit/picks_snapshot.py|_registry_subnets_for_hour|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/council/emission_monitor.py",
+    "function": "_load_soul",
+    "key": "read-as-empty|internal/council/emission_monitor.py|_load_soul|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/council/pick_selection_audit.py",
+    "function": "load_daily_picks",
+    "key": "read-as-empty|internal/council/pick_selection_audit.py|load_daily_picks|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/council/price_reference.py",
+    "function": "_load_cache",
+    "key": "read-as-empty|internal/council/price_reference.py|_load_cache|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/council/state_vector.py",
+    "function": "_load_registry",
+    "key": "read-as-empty|internal/council/state_vector.py|_load_registry|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/data_volume.py",
+    "function": "_read_mountinfo",
+    "key": "read-as-empty|internal/data_volume.py|_read_mountinfo|OSError|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/dev_radar/github_sync.py",
+    "function": "load_dev_radar_cache",
+    "key": "read-as-empty|internal/dev_radar/github_sync.py|load_dev_radar_cache|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/indicators/indicator_engine.py",
+    "function": "_load_json",
+    "key": "read-as-empty|internal/indicators/indicator_engine.py|_load_json|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/indicators/indicator_scheduler.py",
+    "function": "_load_json",
+    "key": "read-as-empty|internal/indicators/indicator_scheduler.py|_load_json|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/indicators/price_fetcher.py",
+    "function": "_load_json",
+    "key": "read-as-empty|internal/indicators/price_fetcher.py|_load_json|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/judges/portfolios.py",
+    "function": "_load",
+    "key": "read-as-empty|internal/judges/portfolios.py|_load|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/judges/postmortems.py",
+    "function": "_load",
+    "key": "read-as-empty|internal/judges/postmortems.py|_load|FileNotFoundError,JSONDecodeError,OSError|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/learning/dpick_spotlight.py",
+    "function": "_registry_subnets_for_spotlight",
+    "key": "read-as-empty|internal/learning/dpick_spotlight.py|_registry_subnets_for_spotlight|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/letter/generator.py",
+    "function": "_alerts_on_date",
+    "key": "read-as-empty|internal/letter/generator.py|_alerts_on_date|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/letter/generator.py",
+    "function": "_load_daily_picks",
+    "key": "read-as-empty|internal/letter/generator.py|_load_daily_picks|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/live_subnets_fetch_child.py",
+    "function": "_registry_netuids",
+    "key": "read-as-empty|internal/live_subnets_fetch_child.py|_registry_netuids|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/message_intel/engine.py",
+    "function": "_registry_subnet_names",
+    "key": "read-as-empty|internal/message_intel/engine.py|_registry_subnet_names|JSONDecodeError,OSError,TypeError|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/message_intel/gainers_alert.py",
+    "function": "_read_state",
+    "key": "read-as-empty|internal/message_intel/gainers_alert.py|_read_state|FileNotFoundError,JSONDecodeError,OSError|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/message_intel/stake_alert.py",
+    "function": "_read_state",
+    "key": "read-as-empty|internal/message_intel/stake_alert.py|_read_state|FileNotFoundError,JSONDecodeError,OSError|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/message_intel/trend_alert.py",
+    "function": "_read_state",
+    "key": "read-as-empty|internal/message_intel/trend_alert.py|_read_state|FileNotFoundError,JSONDecodeError,OSError|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/signal_hub/tracker.py",
+    "function": "_load_price_cache",
+    "key": "read-as-empty|internal/signal_hub/tracker.py|_load_price_cache|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/simivision/caution_cells.py",
+    "function": "_load_seen",
+    "key": "read-as-empty|internal/simivision/caution_cells.py|_load_seen|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/simivision/engine.py",
+    "function": "_load_json",
+    "key": "read-as-empty|internal/simivision/engine.py|_load_json|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/subnet_names.py",
+    "function": "_load_local_registry",
+    "key": "read-as-empty|internal/subnet_names.py|_load_local_registry|Exception|#1"
+  },
+  {
+    "rule": "read-as-empty",
+    "file": "internal/watchlist/store.py",
+    "function": "_read_document",
+    "key": "read-as-empty|internal/watchlist/store.py|_read_document|FileNotFoundError,JSONDecodeError,OSError|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/analytics/report.py",
+    "function": "build_subnet_report",
+    "key": "swallow-to-empty|internal/analytics/report.py|build_subnet_report|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/council/score_snapshots.py",
+    "function": "_complete_write_future",
+    "key": "swallow-to-empty|internal/council/score_snapshots.py|_complete_write_future|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/council/score_snapshots.py",
+    "function": "write_full_universe_snapshot",
+    "key": "swallow-to-empty|internal/council/score_snapshots.py|write_full_universe_snapshot|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/council/state_vector.py",
+    "function": "_compute_signal_impact",
+    "key": "swallow-to-empty|internal/council/state_vector.py|_compute_signal_impact|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/judges/subnet_judges.py",
+    "function": "score_all_subnets",
+    "key": "swallow-to-empty|internal/judges/subnet_judges.py|score_all_subnets|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/learning/dpick_shortlist.py",
+    "function": "build_deliberation_shortlist",
+    "key": "swallow-to-empty|internal/learning/dpick_shortlist.py|build_deliberation_shortlist|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/learning/prediction_loop.py",
+    "function": "retry_pending_postmortems",
+    "key": "swallow-to-empty|internal/learning/prediction_loop.py|retry_pending_postmortems|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/message_intel/summary_bot.py",
+    "function": "_format_gainers_reply",
+    "key": "swallow-to-empty|internal/message_intel/summary_bot.py|_format_gainers_reply|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/mindmap/graph.py",
+    "function": "get_mindmap_graph",
+    "key": "swallow-to-empty|internal/mindmap/graph.py|get_mindmap_graph|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/mindmap/graph.py",
+    "function": "get_mindmap_graph",
+    "key": "swallow-to-empty|internal/mindmap/graph.py|get_mindmap_graph|Exception|#2"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/scheduler.py",
+    "function": "_persist_cycle_summary",
+    "key": "swallow-to-empty|internal/scheduler.py|_persist_cycle_summary|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/share_pages/routes.py",
+    "function": "_listener_page_context_body",
+    "key": "swallow-to-empty|internal/share_pages/routes.py|_listener_page_context_body|Exception|#1"
+  },
+  {
+    "rule": "swallow-to-empty",
+    "file": "internal/share_pages/routes.py",
+    "function": "_listener_page_context_body",
+    "key": "swallow-to-empty|internal/share_pages/routes.py|_listener_page_context_body|Exception|#2"
+  }
+]
