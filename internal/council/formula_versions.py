@@ -213,5 +213,7 @@ def record_calibration_version(
     council["history"] = history[-20:]
     versions["council_weights"] = council
     adv["formula_versions"] = versions
-    _save_raw(data, soul_map_path)
+    if not _save_raw(data, soul_map_path):
+        entry = dict(entry)
+        entry["persisted"] = False
     return entry
