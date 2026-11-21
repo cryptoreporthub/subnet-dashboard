@@ -61,7 +61,7 @@ def load_archive(path: str) -> Dict[str, Any]:
     merged: Dict[str, Any] = {"predictions": [], "resolved": [], "archive_errors": []}
     names = []
     for entry in sorted(os.listdir(path)):
-        if not entry.startswith("pre-epoch-") or not os.path.isfile(os.path.join(path, entry)):
+        if not entry.startswith("pre-epoch-") or entry.endswith(".partial") or not os.path.isfile(os.path.join(path, entry)):
             continue
         if ARCHIVE_NAME.fullmatch(entry):
             names.append(entry)
