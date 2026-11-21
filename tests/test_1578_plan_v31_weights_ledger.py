@@ -397,7 +397,10 @@ def test_heal_record_failed_not_fooled_by_global_decoy(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "internal.learning.prediction_loop.record_pick",
         lambda *a, **k: SimpleNamespace(
-            kind="skipped", reason="duplicate", prediction=None
+            kind="skipped",
+            reason="duplicate",
+            prediction=None,
+            ledger_committed=False,
         ),
     )
 
