@@ -638,3 +638,33 @@ def test_heal_append_unreadable(tmp_path, monkeypatch):
     assert summary["ok"] is False
     assert summary["reason"] == "ledger_unreadable"
     assert preds.read_bytes() == before
+
+
+def test_heal_skipped_record_reports_record_failed(tmp_path, monkeypatch):
+    from internal.learning.prediction_loop import PickRecord, PickRecordKind
+
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    _write_json(
+        daily,
+        [
+            {
+                "date": _today(),
+                "action": "long",
+                "pick": _sample_pick(),
+                "market_context": {},
+            }
+        ],
+    )
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.record_pick",
+        lambda *args, **kwargs: PickRecord(PickRecordKind.SKIPPED, None, "duplicate"),
+    )
+
+    summary = heal_daily_pick_ledger(
+        dry_run=False, daily_picks_path=str(daily), predictions_path=str(preds)
+    )
+    assert summary["ok"] is False
+    assert summary["healed"] is False
+    assert summary["reason"] == "record_failed"
