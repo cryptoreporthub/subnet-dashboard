@@ -51,7 +51,7 @@ def rebuild_judge_portfolios_from_stream(
 ) -> Dict[str, Any]:
     """Rebuild open/closed judge positions from a unified prediction stream."""
     from internal.judges import portfolios as jp
-    from internal.judges.tracker import on_prediction_created, on_prediction_resolved
+    from internal.judges.tracker import on_prediction_created
 
     old_path = jp.PORTFOLIOS_PATH
     jp.PORTFOLIOS_PATH = portfolios_path
