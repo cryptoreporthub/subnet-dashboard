@@ -356,7 +356,11 @@ def write_soul_map(
             prior = copy.deepcopy(blob)
             mutator(blob)
 
-            if _canonical_blob_json(blob) == _canonical_blob_json(prior):
+            try:
+                unchanged = _canonical_blob_json(blob) == _canonical_blob_json(prior)
+            except (TypeError, ValueError):
+                unchanged = False
+            if unchanged:
                 return WriteResult(WriteOutcome.DECLINED, prior)
 
             temp_path = ""
