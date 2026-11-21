@@ -59,12 +59,15 @@ def load_archive(path: str) -> Dict[str, Any]:
         raise FileNotFoundError(path)
 
     merged: Dict[str, Any] = {"predictions": [], "resolved": [], "archive_errors": []}
-    names = sorted(
-        entry
-        for entry in os.listdir(path)
-        if ARCHIVE_NAME.fullmatch(entry) and os.path.isfile(os.path.join(path, entry))
-    )
-    if not names:
+    names = []
+    for entry in sorted(os.listdir(path)):
+        if not entry.startswith("pre-epoch-") or not os.path.isfile(os.path.join(path, entry)):
+            continue
+        if ARCHIVE_NAME.fullmatch(entry):
+            names.append(entry)
+        else:
+            merged["archive_errors"].append({"file": entry, "error": "unrecognized archive name"})
+    if not names and not merged["archive_errors"]:
         raise FileNotFoundError(f"no pre-epoch-* files in {path}")
 
     for name in names:
