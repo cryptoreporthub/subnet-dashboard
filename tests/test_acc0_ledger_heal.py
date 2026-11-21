@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+
 from internal.learning.ledger_heal import (
     archive_predictions_epoch,
     heal_daily_pick_ledger,
@@ -156,6 +157,7 @@ def test_epoch_reset_reheals_or_downgrades(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr("internal.learning.ledger_heal.PREDICTIONS_PATH", str(preds))
     monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
     monkeypatch.setattr("internal.learning.ledger_heal.ARCHIVE_DIR", str(archive))
     monkeypatch.setattr(
@@ -178,3 +180,32 @@ def test_epoch_reset_reheals_or_downgrades(tmp_path, monkeypatch):
         soul_path=str(tmp_path / "missing_soul.json"),
     )
     assert report["ledger"]["gap"] is False
+
+
+def _epoch_reset_paths(tmp_path, monkeypatch):
+    default = tmp_path / "default" / "predictions.json"
+    default.parent.mkdir()
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(default))
+    return default
+
+
+def test_epoch_reset_custom_path_leaves_default_ledger_alone(tmp_path, monkeypatch):
+    default = _epoch_reset_paths(tmp_path, monkeypatch)
+    default_payload = {
+        "predictions": [],
+        "resolved": [{"id": "keep", "netuid": 1, "status": "correct", "horizon_type": "hour",
+                      "created_at": "2026-01-01T00:00:00Z"}],
+        "stats": {},
+    }
+    default.write_text(json.dumps(default_payload), encoding="utf-8")
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps({"predictions": [], "resolved": [{"id": "old", "netuid": 2, "status": "correct",
+                      "horizon_type": "hour", "created_at": "2026-01-01T00:00:00Z"}], "stats": {}}), encoding="utf-8")
+
+    archive_predictions_epoch(
+        predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=False,
+    )
+
+    assert json.loads(default.read_text(encoding="utf-8")) == default_payload
+    custom_data = json.loads(custom.read_text(encoding="utf-8"))
+    assert custom_data["resolved"] == [] and custom_data["predictions"] == []
