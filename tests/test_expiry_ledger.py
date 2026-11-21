@@ -17,8 +17,8 @@ def test_trust_banner_expired_rate_uses_resolved_flow() -> None:
     banner = build_trust_banner(
         {"correct": 0, "wrong": 0, "expired": 11, "duplicate": 2, "pending": 3, "total": 16}
     )
-    assert banner["expired_rate"] == pytest.approx(11 / 13)  # graded+expired+duplicate
-    assert banner["expired_total_rate"] == pytest.approx(11 / 16)
+    assert banner["expired_rate"] == 0.846  # round(expired/resolved_total, 3)
+    assert banner["expired_total_rate"] == 0.688
     assert banner["graded"] == 0
 
 
@@ -48,22 +48,25 @@ def test_epoch_archive_preserves_pending(monkeypatch, tmp_path) -> None:
     import internal.learning.ledger_heal as lh
     from internal.learning import predictions_store as ps
 
-    captured: dict = {}
-    monkeypatch.setattr(ps, "load_predictions", lambda: {
+    preds = tmp_path / "predictions.json"
+    payload = {
         "predictions": [
             {"id": "p1", "status": "pending", "netuid": 1, "resolve_at": "2099-01-01T00:00:00Z"},
         ],
         "resolved": [{"id": "r1", "status": "resolved", "correct": True}],
         "stats": {"correct": 1, "wrong": 0, "pending": 1, "total": 2, "accuracy": 1.0},
-    })
-    monkeypatch.setattr(ps, "save_predictions", lambda d: captured.update(data=d))
+    }
+    preds.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(preds))
 
     res = lh.archive_predictions_epoch(
-        predictions_path="unused.json",
+        reset_request_id="11111111-1111-4111-8111-111111111111",
+        predictions_path=str(preds),
         archive_dir=str(tmp_path / "arc"),
         re_heal_daily=False,
     )
     assert res["ok"] is True
-    assert captured["data"]["predictions"]  # in-flight row preserved
-    assert captured["data"]["resolved"] == []
-    assert captured["data"]["stats"]["pending"] == 1
+    saved = json.loads(preds.read_text(encoding="utf-8"))
+    assert saved["predictions"]  # in-flight row preserved
+    assert saved["resolved"] == []
+    assert saved["stats"]["pending"] == 1
