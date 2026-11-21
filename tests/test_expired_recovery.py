@@ -352,4 +352,3 @@ def test_stale_close_warning_does_not_fail_recovery_when_positions_closed(tmp_pa
     data = json.loads(port_path.read_text())
     assert all(len(data[name]["open_positions"]) == 0 for name in ("oracle", "echo", "pulse"))
     assert result.get("reason") != "judge_close_incomplete"
-    assert result.get("ok") is not False or result.get("reason") != "judge_close_incomplete"
