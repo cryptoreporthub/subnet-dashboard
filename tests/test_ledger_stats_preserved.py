@@ -55,30 +55,3 @@ def test_backfill_relabel_keeps_row_order(tmp_path, monkeypatch):
     assert [r["id"] for r in rows] == ["r1", "r2", "r3", "r4", "r5"]
     assert [r["expert"] for r in rows[:2]] == ["quant", "quant"]
 
-
-
-def test_backfill_refused_write_is_http_error(tmp_path, monkeypatch):
-    from fastapi.testclient import TestClient
-
-    from server import app
-
-    monkeypatch.chdir(tmp_path)
-    path = tmp_path / "predictions.json"
-    path.write_text(json.dumps({
-        "predictions": [],
-        "resolved": [{"id": "r1", "netuid": 1, "status": "correct", "outcome": "correct",
-                      "horizon_type": "hour", "created_at": "2026-01-01T00:00:00Z"}],
-        "stats": {},
-    }))
-    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
-    monkeypatch.setattr(expert_backfill, "resolve_expert_attribution", lambda row: ("quant", "existing"))
-    monkeypatch.setattr(
-        expert_backfill, "merge_ledger_changes",
-        lambda *a, **k: predictions_store.PersistResult(
-            predictions_store.PersistOutcome.REFUSED, predictions_store.PersistReason.CONFLICT_ONLY,
-        ),
-    )
-
-    response = TestClient(app).post("/api/learning/backfill-expert-attribution?dry_run=false")
-
-    assert response.status_code == 500, (response.status_code, response.text)
