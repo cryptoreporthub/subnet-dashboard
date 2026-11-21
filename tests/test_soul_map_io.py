@@ -482,3 +482,41 @@ def test_write_soul_map_non_serializable_value_is_replace_failed(tmp_path):
     result = write_soul_map(lambda b: b.__setitem__("y", {1, 2}), path)
 
     assert result.outcome is WriteOutcome.REPLACE_FAILED
+
+
+class _CountingCopy:
+    def __init__(self, real):
+        self._real = real
+        self.calls = 0
+
+    def deepcopy(self, obj, *args, **kwargs):
+        self.calls += 1
+        return self._real.deepcopy(obj, *args, **kwargs)
+
+
+def test_write_soul_map_copies_blob_twice_not_three_times(tmp_path, monkeypatch):
+    soul_path = str(tmp_path / "soul_map.json")
+    write_soul_map(lambda blob: blob.__setitem__("seed", 1), soul_path)
+    soul_map_io._cache.clear()
+    counting = _CountingCopy(soul_map_io.copy)
+    monkeypatch.setattr(soul_map_io, "copy", counting)
+
+    result = write_soul_map(lambda blob: blob.__setitem__("k", 2), soul_path)
+
+    assert result.outcome is WriteOutcome.APPLIED
+    # One copy for the prior-state comparison, one for the cache entry.
+    assert counting.calls == 2
+
+
+def test_hold_path_flock_reports_hard_errors_not_lock_timeout(tmp_path, monkeypatch):
+    def broken_flock(fd, op):
+        raise OSError(errno.EBADF, "bad file descriptor")
+
+    monkeypatch.setattr(soul_map_io.fcntl, "flock", broken_flock)
+
+    with pytest.raises(OSError) as excinfo:
+        with _hold_path_flock(str(tmp_path / "soul_map.json"), timeout_seconds=0.2):
+            pass
+
+    assert not isinstance(excinfo.value, TimeoutError)
+    assert excinfo.value.errno == errno.EBADF
