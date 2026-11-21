@@ -88,3 +88,18 @@ def test_panel_summaries_live_council():
     out = summarize_council()
     assert out.get("text")
     assert len(out.get("sentences") or []) >= 2
+
+
+def test_trail_append_self_heals_null_learning_trail(tmp_path):
+    from internal.council.mindmap_bridge import MindmapBridge, TrailKind
+
+    path = tmp_path / "soul_map.json"
+    path.write_text(json.dumps({"soul_map_state": {"learning_trail": None}}), encoding="utf-8")
+
+    result = MindmapBridge(persistence_path=str(path)).append_learning_trail(
+        {"event_type": "x", "time": "t"}
+    )
+
+    assert result.kind is TrailKind.COMMITTED
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert stored["soul_map_state"]["learning_trail"][0]["event_type"] == "x"
