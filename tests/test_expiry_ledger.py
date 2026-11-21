@@ -46,24 +46,24 @@ def test_scenario_add_dedupes_pending_same_name_regime(monkeypatch) -> None:
 
 def test_epoch_archive_preserves_pending(monkeypatch, tmp_path) -> None:
     import internal.learning.ledger_heal as lh
-    from internal.learning import predictions_store as ps
 
-    captured: dict = {}
-    monkeypatch.setattr(ps, "load_predictions", lambda: {
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({
         "predictions": [
             {"id": "p1", "status": "pending", "netuid": 1, "resolve_at": "2099-01-01T00:00:00Z"},
         ],
         "resolved": [{"id": "r1", "status": "resolved", "correct": True}],
         "stats": {"correct": 1, "wrong": 0, "pending": 1, "total": 2, "accuracy": 1.0},
-    })
-    monkeypatch.setattr(ps, "save_predictions", lambda d: captured.update(data=d))
+    }))
 
     res = lh.archive_predictions_epoch(
-        predictions_path="unused.json",
+        reset_request_id="7f1c2d3e-4b5a-4c6d-8e9f-0a1b2c3d4e5f",
+        predictions_path=str(ledger),
         archive_dir=str(tmp_path / "arc"),
         re_heal_daily=False,
     )
     assert res["ok"] is True
-    assert captured["data"]["predictions"]  # in-flight row preserved
-    assert captured["data"]["resolved"] == []
-    assert captured["data"]["stats"]["pending"] == 1
+    after = json.loads(ledger.read_text())
+    assert [row["id"] for row in after["predictions"]] == ["p1"]  # in-flight row preserved
+    assert after["resolved"] == []
+    assert after["stats"]["pending"] == 1
