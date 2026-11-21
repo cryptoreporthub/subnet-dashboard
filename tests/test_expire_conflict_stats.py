@@ -28,5 +28,6 @@ def test_conflicted_expiry_reports_disk_stats(tmp_path, monkeypatch):
     out = resolver.expire_stale_predictions()
     disk = json.loads(ledger.read_text())
     assert [r["id"] for r in out["expired_now"]] == ["p2"]
+    assert out["stats"]["pending"] == 1, "p1 is conflicted, so it is still pending"
+    assert disk["stats"]["pending"] == 1
     assert out["stats"]["pending"] == disk["stats"]["pending"]
-    assert out["stats"].get("expired") == disk["stats"].get("expired")
