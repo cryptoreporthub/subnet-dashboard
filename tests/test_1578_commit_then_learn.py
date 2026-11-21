@@ -185,6 +185,7 @@ def test_stale_learning_owner_cannot_finish_replacement_claim(tmp_path):
 
 def test_worker_replaced_while_effect_runs_cannot_mark_new_owner_applied(tmp_path, monkeypatch):
     path = _pump_ledger(tmp_path, monkeypatch)
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", lambda **_kw: None)
     original_change = learning_effects._change_learning
     calls = 0
 
