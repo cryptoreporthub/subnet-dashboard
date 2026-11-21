@@ -280,6 +280,25 @@ def test_failed_append_keeps_trail_row_and_ledger_in_bridge_memory(tmp_path, mon
     assert "p-failed" in bridge.soul_map_state["resolved_prediction_ids"]
 
 
+def test_trail_write_exception_is_logged_and_row_stays_buffered(tmp_path, monkeypatch, caplog):
+    import internal.council.mindmap_bridge as mindmap_bridge
+    from internal.council.mindmap_bridge import MindmapBridge, TrailKind
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
+    bridge = MindmapBridge(persistence_path=str(soul_path))
+
+    def _boom(*_args, **_kwargs):
+        raise PermissionError("lock file unwritable")
+
+    monkeypatch.setattr(mindmap_bridge, "write_soul_map", _boom)
+    with caplog.at_level("WARNING", logger=mindmap_bridge.logger.name):
+        result = bridge.append_learning_trail({"event_type": "prediction_resolved", "evidence": {"seq": 1}})
+
+    assert result.kind is TrailKind.BUFFERED
+    assert any("learning trail write failed" in r.getMessage() and "PermissionError" in r.getMessage() for r in caplog.records)
+
+
 def test_successful_append_shows_other_bridges_rows_in_bridge_memory(tmp_path, monkeypatch):
     """A successful append must leave the bridge holding every row now on disk, not just its own.
 
@@ -402,19 +421,19 @@ def test_row_committed_by_another_bridge_during_save_is_written_once(tmp_path, m
     soul_path.write_text(json.dumps({"soul_map_state": {}}), encoding="utf-8")
     first = MindmapBridge(persistence_path=str(soul_path))
     second = MindmapBridge(persistence_path=str(soul_path))
-    real_write = mindmap_bridge.write_soul_map_committed
+    real_write = mindmap_bridge.write_soul_map
     interleaved = []
 
-    def _write_after_second_commits(mutator, path):
+    def _write_after_second_commits(mutator, path, **kwargs):
         if not interleaved:
             interleaved.append(True)
             second.append_learning_trail(
                 {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-second"}},
                 resolved_prediction_id="p-second",
             )
-        return real_write(mutator, path)
+        return real_write(mutator, path, **kwargs)
 
-    monkeypatch.setattr(mindmap_bridge, "write_soul_map_committed", _write_after_second_commits)
+    monkeypatch.setattr(mindmap_bridge, "write_soul_map", _write_after_second_commits)
     first.append_learning_trail(
         {"event_type": "prediction_resolved", "evidence": {"prediction_id": "p-first"}},
         resolved_prediction_id="p-first",
@@ -451,19 +470,22 @@ def test_row_already_committed_is_not_replayed_twice_by_a_later_write(tmp_path, 
     _fail_first_replace(monkeypatch)
     bridge.append_learning_trail(_timed_row("p-x"), resolved_prediction_id="p-x")
 
-    real_write = mindmap_bridge.write_soul_map_committed
+    # append_learning_trail writes through write_soul_map; the later append runs right after that
+    # call returns, which is the window the test is about.
+    real_write = mindmap_bridge.write_soul_map
     injected = []
 
-    def _write_then_later_appends(mutator, path):
-        result = real_write(mutator, path)
+    def _write_then_later_appends(mutator, path, **kwargs):
+        result = real_write(mutator, path, **kwargs)
         if not injected:
             injected.append(True)
             later.append_learning_trail(_timed_row("p-y"), resolved_prediction_id="p-y")
         return result
 
-    monkeypatch.setattr(mindmap_bridge, "write_soul_map_committed", _write_then_later_appends)
+    monkeypatch.setattr(mindmap_bridge, "write_soul_map", _write_then_later_appends)
     bridge.append_learning_trail(_timed_row("p-z"), resolved_prediction_id="p-z")
 
+    assert injected, "the later append never ran, so the window was not exercised"
     on_disk = json.loads(soul_path.read_text(encoding="utf-8"))["soul_map_state"]
     assert sorted(_prediction_ids(on_disk["learning_trail"])) == ["p-x", "p-y", "p-z"]
     assert sorted(on_disk["resolved_prediction_ids"]) == ["p-x", "p-y", "p-z"]

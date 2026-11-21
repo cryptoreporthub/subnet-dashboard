@@ -34,7 +34,7 @@ from typing import Any, Callable, ContextManager, Dict, Iterator, Optional, Tupl
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
 from internal.liveness import LivenessTracker
 from internal.process_memory import log_heavy_job_rss, process_uptime_seconds
@@ -1032,11 +1032,12 @@ class PredictionResolverScheduler:
             block.update(state)
 
         try:
-            _blob, committed = write_soul_map(  # type: ignore[misc]
+            wr = write_soul_map(  # type: ignore[misc]
                 _mutator,
                 self.soul_map_path,
-                with_status=True,
+                raise_on_lock_timeout=False,
             )
+            committed = wr.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
             return PersistResult(committed=bool(committed))
         except Exception:
             return PersistResult(committed=False)
@@ -1752,23 +1753,24 @@ class PredictionResolverScheduler:
         try:
             if owned_cycle:
 
-                def _write_owned() -> Tuple[Any, bool]:
+                def _write_owned() -> Any:
                     return write_soul_map(  # type: ignore[misc]
                         _mutator,
                         self.soul_map_path,
-                        with_status=True,
+                        raise_on_lock_timeout=False,
                         pre_replace=pre,
                     )
 
                 with self._release_guard:
-                    _blob, committed = _write_owned()
+                    wr = _write_owned()
             else:
-                _blob, committed = write_soul_map(  # type: ignore[misc]
+                wr = write_soul_map(  # type: ignore[misc]
                     _mutator,
                     self.soul_map_path,
-                    with_status=True,
+                    raise_on_lock_timeout=False,
                     pre_replace=pre,
                 )
+            committed = wr.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
             if timing is not None:
                 timing.record_persist_subtimer(
                     "summary_rmw", (time.perf_counter() - t_rmw) * 1000

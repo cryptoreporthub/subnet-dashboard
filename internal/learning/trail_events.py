@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -25,7 +26,7 @@ def emit_trail_event(
     judge: Optional[str] = None,
     extra: Optional[Dict[str, Any]] = None,
     resolved_prediction_id: Any = None,
-) -> None:
+) -> Any:
     """Append a learning-trail row via MindmapBridge (merged soul_map save)."""
     entry: Dict[str, Any] = {
         "time": _now_z(),
@@ -40,15 +41,17 @@ def emit_trail_event(
     }
     if extra:
         entry.update(extra)
+    entry.setdefault("event_id", uuid.uuid4().hex)
     try:
         from internal.council.mindmap_bridge import MindmapBridge
         from internal.council.weights import SOUL_MAP_PATH
 
-        MindmapBridge(persistence_path=SOUL_MAP_PATH).append_learning_trail(
+        return MindmapBridge(persistence_path=SOUL_MAP_PATH).append_learning_trail(
             entry, resolved_prediction_id=resolved_prediction_id
         )
     except Exception as exc:
         logger.warning("Trail event %s failed: %s", event_type, exc)
+        return None
 
 
 def _prediction_resolved_recorded(prediction_id: Any) -> bool:
