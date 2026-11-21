@@ -520,3 +520,16 @@ def test_hold_path_flock_reports_hard_errors_not_lock_timeout(tmp_path, monkeypa
 
     assert not isinstance(excinfo.value, TimeoutError)
     assert excinfo.value.errno == errno.EBADF
+
+
+def test_write_result_mutation_does_not_leak_into_cache_or_disk(tmp_path):
+    """A caller that mutates the blob returned by a write must not change what later reads see."""
+    soul_path = str(tmp_path / "soul_map.json")
+    result = write_soul_map(lambda blob: blob.__setitem__("subnet", {"score": 1}), soul_path)
+    returned = _applied_blob(result)
+    returned["subnet"]["score"] = 999
+    returned["leaked"] = [1, 2, 3]
+
+    assert read_soul_map(soul_path) == {"subnet": {"score": 1}}
+    assert read_soul_map(soul_path, copy_blob=False) == {"subnet": {"score": 1}}
+    assert json.loads(Path(soul_path).read_text()) == {"subnet": {"score": 1}}
