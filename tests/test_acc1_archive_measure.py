@@ -74,3 +74,16 @@ def test_load_archive_directory_accepts_list_root_member(tmp_path):
 
     assert blob["predictions"] == rows
     assert not blob["archive_errors"]
+
+
+def test_load_archive_directory_reports_unmatched_pre_epoch_name(tmp_path):
+    from internal.accuracy_lift.measure import load_archive as load_from_module
+
+    rows = [{"id": "a"}]
+    (tmp_path / "pre-epoch-2026-01-01T000000Z").write_text(json.dumps(rows), encoding="utf-8")
+    (tmp_path / "pre-epoch-2026-01-01T000000Z.json").write_text(json.dumps(rows), encoding="utf-8")
+
+    blob = load_from_module(str(tmp_path))
+
+    assert blob["predictions"] == rows
+    assert [e["file"] for e in blob["archive_errors"]] == ["pre-epoch-2026-01-01T000000Z.json"]
