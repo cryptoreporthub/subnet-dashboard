@@ -464,3 +464,21 @@ def test_a_hard_flock_error_is_not_reported_as_a_lock_timeout(monkeypatch, tmp_p
     )
     assert result.outcome is WriteOutcome.APPLIED
     assert read_soul_map(str(soul_path))["v"] == 3
+
+
+def test_write_soul_map_mixed_key_types_do_not_raise(tmp_path):
+    path = str(tmp_path / "soul_map.json")
+    Path(path).write_text(json.dumps({"x": {"a": 1}}), encoding="utf-8")
+
+    result = write_soul_map(lambda b: b["x"].__setitem__(5, "v"), path)
+
+    assert result.outcome is WriteOutcome.APPLIED
+
+
+def test_write_soul_map_non_serializable_value_is_replace_failed(tmp_path):
+    path = str(tmp_path / "soul_map.json")
+    Path(path).write_text(json.dumps({"x": 1}), encoding="utf-8")
+
+    result = write_soul_map(lambda b: b.__setitem__("y", {1, 2}), path)
+
+    assert result.outcome is WriteOutcome.REPLACE_FAILED
