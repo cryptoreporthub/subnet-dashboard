@@ -67,12 +67,6 @@
   },
   {
     "rule": "read-as-empty",
-    "file": "internal/judges/postmortems.py",
-    "function": "_load",
-    "key": "read-as-empty|internal/judges/postmortems.py|_load|FileNotFoundError,JSONDecodeError,OSError|#1"
-  },
-  {
-    "rule": "read-as-empty",
     "file": "internal/learning/dpick_spotlight.py",
     "function": "_registry_subnets_for_spotlight",
     "key": "read-as-empty|internal/learning/dpick_spotlight.py|_registry_subnets_for_spotlight|Exception|#1"
