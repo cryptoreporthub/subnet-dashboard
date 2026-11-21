@@ -247,7 +247,12 @@ class MindmapBridge:
             through, rows, resolved = _snapshot_pending(key)
             flushed["through"] = through
             target_key = _trail_key(entry)
-            present = {_trail_key(row) for row in state.get("learning_trail", []) if isinstance(row, dict)}
+            existing = state.get("learning_trail")
+            present = {
+                _trail_key(row)
+                for row in (existing if isinstance(existing, list) else [])
+                if isinstance(row, dict)
+            }
             for row, _rid in rows:
                 if row.get("event_id") == event_id:
                     flushed["target"] = True
