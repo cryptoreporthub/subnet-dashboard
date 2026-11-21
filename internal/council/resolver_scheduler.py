@@ -307,12 +307,6 @@ def _load_json(path: str) -> Dict[str, Any]:
     return {}
 
 
-def _soul_map_read_kind(path: str) -> str:
-    from internal.store.soul_map_io import read_blob_checked
-
-    return read_blob_checked(path).kind
-
-
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     try:
         from internal.file_utils import ensure_data_dir

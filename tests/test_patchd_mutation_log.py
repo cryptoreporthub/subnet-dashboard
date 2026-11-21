@@ -239,3 +239,34 @@ def test_bind_inside_executor_survives_parent_gen_bump(tmp_path, caplog):
         assert payload["cycle_generation"] == submitted_gen
         assert payload["resolver_cycle_id"] == cycle_id
         assert payload["thread_id"] == worker_ident
+
+
+def test_save_predictions_lock_timeout_logs_failed(tmp_path, monkeypatch, caplog):
+    import fcntl
+
+    from internal.learning import predictions_store
+
+    path = tmp_path / "predictions.json"
+    lock = tmp_path / "predictions.json.lock"
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_LOCK_PATH", str(lock))
+    real_lock = predictions_store.locked_predictions_file
+
+    def short_wait(timeout_seconds=5.0, *, path=None):
+        return real_lock(timeout_seconds=0.2, path=path)
+
+    monkeypatch.setattr(predictions_store, "locked_predictions_file", short_wait)
+    caplog.set_level(logging.INFO, logger="internal.ops.mutation_log")
+
+    holder = open(predictions_store._predictions_lock_path(str(path)), "a+", encoding="utf-8")
+    try:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        with pytest.raises(predictions_store.FileLockTimeout):
+            predictions_store.save_predictions(predictions_store._default_data())
+    finally:
+        holder.close()
+
+    failed = [p for p in _payloads(caplog) if p["operation"] == "failed"]
+    assert failed
+    assert failed[0]["writer_function"] == "save_predictions"
+    assert not path.exists()

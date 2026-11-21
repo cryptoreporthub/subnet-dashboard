@@ -1458,8 +1458,9 @@ def test_postmortem_record_times_out_when_lock_is_held(tmp_path, monkeypatch):
     monkeypatch.setattr(postmortems, "POSTMORTEM_LOCK_TIMEOUT_SECONDS", 0.3)
     path = Path(postmortems._path("oracle"))
     lock_path = str(path) + ".lock"
-    ready = multiprocessing.Event()
-    release = multiprocessing.Event()
+    ctx = multiprocessing.get_context("fork")
+    ready = ctx.Event()
+    release = ctx.Event()
 
     def hold():
         with open(lock_path, "a+", encoding="utf-8") as fh:
@@ -1467,7 +1468,7 @@ def test_postmortem_record_times_out_when_lock_is_held(tmp_path, monkeypatch):
             ready.set()
             release.wait(timeout=15)
 
-    child = multiprocessing.Process(target=hold)
+    child = ctx.Process(target=hold)
     child.start()
     try:
         assert ready.wait(timeout=5)
@@ -1605,8 +1606,9 @@ def test_m2_apply_lock_timeout_does_not_apply(tmp_path, monkeypatch):
     monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 0.3)
     lock_path = expired_recovery._apply_lock_path()
     Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
-    ready = multiprocessing.Event()
-    release = multiprocessing.Event()
+    ctx = multiprocessing.get_context("fork")
+    ready = ctx.Event()
+    release = ctx.Event()
 
     def hold():
         with open(lock_path, "a+", encoding="utf-8") as fh:
@@ -1614,7 +1616,7 @@ def test_m2_apply_lock_timeout_does_not_apply(tmp_path, monkeypatch):
             ready.set()
             release.wait(timeout=15)
 
-    child = multiprocessing.Process(target=hold)
+    child = ctx.Process(target=hold)
     child.start()
     try:
         assert ready.wait(timeout=5)
@@ -1758,8 +1760,9 @@ def test_v12_m2_apply_lock_timeout_aborts_remaining_effects(tmp_path, monkeypatc
     monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 0.25)
     lock_path = expired_recovery._apply_lock_path()
     Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
-    ready = multiprocessing.Event()
-    release = multiprocessing.Event()
+    ctx = multiprocessing.get_context("fork")
+    ready = ctx.Event()
+    release = ctx.Event()
 
     def hold():
         with open(lock_path, "a+", encoding="utf-8") as fh:
@@ -1767,7 +1770,7 @@ def test_v12_m2_apply_lock_timeout_aborts_remaining_effects(tmp_path, monkeypatc
             ready.set()
             release.wait(timeout=15)
 
-    child = multiprocessing.Process(target=hold)
+    child = ctx.Process(target=hold)
     child.start()
     try:
         assert ready.wait(timeout=5)
@@ -1800,8 +1803,9 @@ def test_v12_m2_receipts_lock_timeout_aborts_remaining_effects(tmp_path, monkeyp
     monkeypatch.setattr(expired_recovery, "RECEIPTS_LOCK_TIMEOUT_SECONDS", 0.25)
     lock_path = expired_recovery._receipts_path() + ".lock"
     Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
-    ready = multiprocessing.Event()
-    release = multiprocessing.Event()
+    ctx = multiprocessing.get_context("fork")
+    ready = ctx.Event()
+    release = ctx.Event()
 
     def hold():
         with open(lock_path, "a+", encoding="utf-8") as fh:
@@ -1809,7 +1813,7 @@ def test_v12_m2_receipts_lock_timeout_aborts_remaining_effects(tmp_path, monkeyp
             ready.set()
             release.wait(timeout=15)
 
-    child = multiprocessing.Process(target=hold)
+    child = ctx.Process(target=hold)
     child.start()
     try:
         assert ready.wait(timeout=5)

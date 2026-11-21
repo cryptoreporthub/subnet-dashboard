@@ -74,7 +74,7 @@ def reconcile_pump_learning(path, *, cycle_run_id, recovered=True):
         if learning.get("state") not in ("pending", "claimed"):
             continue
         key = learning["key"]
-        lock_path = f"{path}.learning-{key}.lock"
+        lock_path = f"{path}.learning.lock"
         os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
         with open(lock_path, "a+", encoding="utf-8") as lock:
             try:

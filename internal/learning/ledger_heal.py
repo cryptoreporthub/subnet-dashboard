@@ -164,13 +164,14 @@ def heal_daily_pick_ledger(
             "reason": "ledger_unreadable",
             "error": str(exc),
         }
-    if stored.kind == "committed":
+    if stored.ledger_committed:
         logger.info("ledger heal: backfilled day row for SN%s", netuid)
         return {
             "ok": True,
             "healed": True,
             "netuid": netuid,
             "prediction_id": stored.prediction.get("id"),
+            "positions_pending": stored.kind != "committed",
         }
 
     if stored.kind == "indeterminate":
