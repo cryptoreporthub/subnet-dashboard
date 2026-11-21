@@ -346,7 +346,8 @@ def write_soul_map(
             if checked.kind == "missing":
                 blob: Dict[str, Any] = {}
             elif checked.kind == "loaded" and checked.blob is not None:
-                blob = copy.deepcopy(checked.blob)
+                # checked is a fresh parse owned by this call; nothing else aliases it.
+                blob = checked.blob
             else:
                 return WriteResult(
                     WriteOutcome.READ_FAILED,
