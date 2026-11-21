@@ -39,7 +39,7 @@ def _hold_path_flock(path: str, timeout_seconds: float = 5.0):
                 )
                 acquired = True
                 break
-            except (BlockingIOError, OSError):
+            except BlockingIOError:
                 time.sleep(0.01)
         if not acquired:
             raise TimeoutError(
