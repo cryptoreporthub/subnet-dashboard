@@ -27,7 +27,7 @@ class Judge:
     ) -> Dict[str, float]:
         raise NotImplementedError
 
-    def open_position(self, prediction: Dict[str, Any], size: Optional[float] = None) -> Dict[str, Any]:
+    def open_position(self, prediction: Dict[str, Any], size: Optional[float] = None) -> Optional[Dict[str, Any]]:
         """Open a paper position sized by confidence (or explicit size)."""
         if size is None:
             size = self._position_size(prediction)
