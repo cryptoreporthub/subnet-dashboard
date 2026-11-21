@@ -33,3 +33,25 @@ def test_backfill_keeps_stored_stats(tmp_path, monkeypatch):
 
     assert out.get("ok") is not False, out
     assert json.loads(path.read_text())["stats"] == stored_stats
+
+
+def test_backfill_relabel_keeps_row_order(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    resolved = [
+        {"id": f"r{i}", "netuid": i, "status": "correct", "outcome": "correct",
+         "horizon_type": "hour", "created_at": "2026-01-01T00:00:00Z",
+         "expert": "" if i <= 2 else "quant"}
+        for i in range(1, 6)
+    ]
+    path = tmp_path / "predictions.json"
+    path.write_text(json.dumps({"predictions": [], "resolved": resolved, "stats": {}}))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(expert_backfill, "resolve_expert_attribution", lambda row: ("quant", "existing"))
+
+    out = expert_backfill.backfill_expert_attribution(dry_run=False)
+
+    assert out["updated"] == 2, out
+    rows = json.loads(path.read_text())["resolved"]
+    assert [r["id"] for r in rows] == ["r1", "r2", "r3", "r4", "r5"]
+    assert [r["expert"] for r in rows[:2]] == ["quant", "quant"]
+

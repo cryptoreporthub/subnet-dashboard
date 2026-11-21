@@ -366,7 +366,7 @@ def merge_ledger_changes(
             new_unkeyed = [row for row in after.get(bucket, []) if _row_key(row) is None]
             if old_unkeyed != new_unkeyed:
                 conflicts.append(("unidentified", bucket))
-        for key in original.keys() | desired.keys():
+        for key in dict.fromkeys([*original, *desired]):
             old, new, live = original.get(key, []), desired.get(key, []), current.get(key, [])
             if old == new:
                 continue
@@ -379,10 +379,14 @@ def merge_ledger_changes(
             if not old and live:
                 conflicts.append(key)
                 continue
-            if live:
-                fresh[live[0][0]].remove(live[0][1])
-            if new:
-                fresh[new[0][0]].append(new[0][1])
+            if live and new and live[0][0] == new[0][0]:
+                rows = fresh[live[0][0]]
+                rows[rows.index(live[0][1])] = new[0][1]
+            else:
+                if live:
+                    fresh[live[0][0]].remove(live[0][1])
+                if new:
+                    fresh[new[0][0]].append(new[0][1])
             keys.append(key)
         for field in after.keys() - {"predictions", "resolved", "stats"}:
             if before.get(field) == after[field]:
