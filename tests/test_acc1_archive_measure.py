@@ -49,3 +49,41 @@ def test_render_markdown_answers_key_questions():
     assert "Expert breakdown" in md
     assert "Magnitude noise" in md
     assert "quant" in md.lower()
+
+
+def test_load_archive_accepts_list_root_file(tmp_path):
+    from internal.accuracy_lift.measure import load_archive as load_from_module
+
+    rows = [{"id": "a", "horizon": "24h"}, {"id": "b", "horizon": "4h"}]
+    archive = tmp_path / "pre-epoch-2026-01-01T000000Z.json"
+    archive.write_text(json.dumps(rows), encoding="utf-8")
+
+    blob = load_from_module(str(archive))
+
+    assert blob["predictions"] == rows
+    assert not blob.get("archive_errors")
+
+
+def test_load_archive_directory_accepts_list_root_member(tmp_path):
+    from internal.accuracy_lift.measure import load_archive as load_from_module
+
+    rows = [{"id": "a"}, {"id": "b"}]
+    (tmp_path / "pre-epoch-2026-01-01T000000Z").write_text(json.dumps(rows), encoding="utf-8")
+
+    blob = load_from_module(str(tmp_path))
+
+    assert blob["predictions"] == rows
+    assert not blob["archive_errors"]
+
+
+def test_load_archive_directory_reports_unmatched_pre_epoch_name(tmp_path):
+    from internal.accuracy_lift.measure import load_archive as load_from_module
+
+    rows = [{"id": "a"}]
+    (tmp_path / "pre-epoch-2026-01-01T000000Z").write_text(json.dumps(rows), encoding="utf-8")
+    (tmp_path / "pre-epoch-2026-01-01T000000Z.json").write_text(json.dumps(rows), encoding="utf-8")
+
+    blob = load_from_module(str(tmp_path))
+
+    assert blob["predictions"] == rows
+    assert [e["file"] for e in blob["archive_errors"]] == ["pre-epoch-2026-01-01T000000Z.json"]

@@ -98,7 +98,7 @@ def test_expert_samples_reject_bare_legacy_quant_and_pump_rows(monkeypatch):
 
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: {
+        lambda *_a, **_k: {
             "resolved": [
                 {"expert": "quant", "correct": True},
                 {"signal_source": "emission_momentum", "correct": True},
