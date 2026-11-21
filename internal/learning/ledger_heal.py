@@ -186,7 +186,7 @@ def archive_predictions_epoch(
     preserve_pending = os.environ.get("PREDICTIONS_ARCHIVE_PRESERVE_PENDING", "1") != "0"
     pending_kept: List[Dict[str, Any]] = []
     try:
-        old = load_predictions()
+        old = load_predictions(path=src)
         pending_kept = [
             p for p in (old.get("predictions") or [])
             if isinstance(p, dict) and p.get("status", "pending") in (None, "pending")

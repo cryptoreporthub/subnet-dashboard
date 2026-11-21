@@ -48,7 +48,7 @@ def test_epoch_archive_preserves_pending(monkeypatch, tmp_path) -> None:
     import internal.learning.ledger_heal as lh
 
     captured: dict = {}
-    monkeypatch.setattr(lh, "load_predictions", lambda: {
+    monkeypatch.setattr(lh, "load_predictions", lambda **_kw: {
         "predictions": [
             {"id": "p1", "status": "pending", "netuid": 1, "resolve_at": "2099-01-01T00:00:00Z"},
         ],

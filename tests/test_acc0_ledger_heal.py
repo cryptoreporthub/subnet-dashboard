@@ -209,3 +209,21 @@ def test_epoch_reset_custom_path_leaves_default_ledger_alone(tmp_path, monkeypat
     assert json.loads(default.read_text(encoding="utf-8")) == default_payload
     custom_data = json.loads(custom.read_text(encoding="utf-8"))
     assert custom_data["resolved"] == [] and custom_data["predictions"] == []
+
+
+def test_epoch_reset_custom_path_keeps_its_own_pending_rows(tmp_path, monkeypatch):
+    default = _epoch_reset_paths(tmp_path, monkeypatch)
+
+    def pending(pid):
+        return {"id": pid, "netuid": 1, "status": "pending", "horizon_type": "hour",
+                "created_at": "2026-01-01T00:00:00Z"}
+
+    default.write_text(json.dumps({"predictions": [pending("dflt")], "resolved": [], "stats": {}}), encoding="utf-8")
+    custom = tmp_path / "custom.json"
+    custom.write_text(json.dumps({"predictions": [pending("mine")], "resolved": [], "stats": {}}), encoding="utf-8")
+
+    archive_predictions_epoch(
+        predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=False,
+    )
+
+    assert [p["id"] for p in json.loads(custom.read_text(encoding="utf-8"))["predictions"]] == ["mine"]
