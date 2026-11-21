@@ -1777,6 +1777,7 @@ def expire_stale_predictions(
     if commit_result.conflicts:
         # Conflicted rows were not written, so they did not expire now.
         expired_now = _committed_only(expired_now, commit_result)
+        data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
 
     return {
         "expired_now": expired_now,
