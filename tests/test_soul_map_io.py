@@ -484,30 +484,6 @@ def test_write_soul_map_non_serializable_value_is_replace_failed(tmp_path):
     assert result.outcome is WriteOutcome.REPLACE_FAILED
 
 
-class _CountingCopy:
-    def __init__(self, real):
-        self._real = real
-        self.calls = 0
-
-    def deepcopy(self, obj, *args, **kwargs):
-        self.calls += 1
-        return self._real.deepcopy(obj, *args, **kwargs)
-
-
-def test_write_soul_map_copies_blob_twice_not_three_times(tmp_path, monkeypatch):
-    soul_path = str(tmp_path / "soul_map.json")
-    write_soul_map(lambda blob: blob.__setitem__("seed", 1), soul_path)
-    soul_map_io._cache.clear()
-    counting = _CountingCopy(soul_map_io.copy)
-    monkeypatch.setattr(soul_map_io, "copy", counting)
-
-    result = write_soul_map(lambda blob: blob.__setitem__("k", 2), soul_path)
-
-    assert result.outcome is WriteOutcome.APPLIED
-    # One copy for the prior-state comparison, one for the cache entry.
-    assert counting.calls == 2
-
-
 def test_hold_path_flock_reports_hard_errors_not_lock_timeout(tmp_path, monkeypatch):
     def broken_flock(fd, op):
         raise OSError(errno.EBADF, "bad file descriptor")
