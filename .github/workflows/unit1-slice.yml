@@ -13,6 +13,7 @@ on:
       - "internal/accuracy_lift/**"
       - "internal/background_boot.py"
       - "scripts/compact_soul_map.py"
+      - "scripts/gated_unit1_pytest.sh"
       - "scripts/reset_accuracy_epoch.py"
       - "scripts/measure_accuracy_archive.py"
       - "tests/test_predictions_store_patch_contract.py"

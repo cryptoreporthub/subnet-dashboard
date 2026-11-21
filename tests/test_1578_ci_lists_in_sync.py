@@ -52,6 +52,7 @@ def test_required_source_paths_trigger_unit1():
         "internal/background_boot.py",
         "scripts/reset_accuracy_epoch.py",
         "scripts/measure_accuracy_archive.py",
+        "scripts/gated_unit1_pytest.sh",
     ):
         assert f'"{path}"' in triggers
 
