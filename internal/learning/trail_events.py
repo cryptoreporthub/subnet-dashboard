@@ -51,9 +51,7 @@ def emit_trail_event(
         )
     except Exception as exc:
         logger.warning("Trail event %s failed: %s", event_type, exc)
-        from internal.council.mindmap_bridge import TrailAppend, TrailKind
-
-        return TrailAppend(TrailKind.FAILED, str(entry["event_id"]))
+        return None
 
 
 def _prediction_resolved_recorded(prediction_id: Any) -> bool:
