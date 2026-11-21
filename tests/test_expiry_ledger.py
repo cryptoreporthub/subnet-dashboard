@@ -46,16 +46,17 @@ def test_scenario_add_dedupes_pending_same_name_regime(monkeypatch) -> None:
 
 def test_epoch_archive_preserves_pending(monkeypatch, tmp_path) -> None:
     import internal.learning.ledger_heal as lh
+    from internal.learning import predictions_store as ps
 
     captured: dict = {}
-    monkeypatch.setattr(lh, "load_predictions", lambda **_kw: {
+    monkeypatch.setattr(ps, "load_predictions", lambda: {
         "predictions": [
             {"id": "p1", "status": "pending", "netuid": 1, "resolve_at": "2099-01-01T00:00:00Z"},
         ],
         "resolved": [{"id": "r1", "status": "resolved", "correct": True}],
         "stats": {"correct": 1, "wrong": 0, "pending": 1, "total": 2, "accuracy": 1.0},
     })
-    monkeypatch.setattr(lh, "save_predictions", lambda d, **_kw: captured.update(data=d))
+    monkeypatch.setattr(ps, "save_predictions", lambda d: captured.update(data=d))
 
     res = lh.archive_predictions_epoch(
         predictions_path="unused.json",

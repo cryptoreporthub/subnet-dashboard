@@ -142,7 +142,7 @@ def test_daily_pick_lite_enrich_attaches_matching_day_judge_scores(monkeypatch):
     today = datetime.now(timezone.utc).date().isoformat()
     scores = {"oracle": {"confidence": 0.8}, "echo": {"confidence": 0.7}, "pulse": {"confidence": 0.6}}
 
-    def _fake_load():
+    def _fake_load(**_kwargs):
         return {
             "predictions": [
                 {
