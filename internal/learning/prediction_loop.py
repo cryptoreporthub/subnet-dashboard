@@ -531,6 +531,8 @@ def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
     from internal.judges.portfolios import observe_portfolios
 
     observation = observe_portfolios()
+    if observation.get("kind") == "unreadable":
+        raise PortfolioUnreadable(observation.get("error") or "unreadable portfolios")
     open_ids = set()
     if observation.get("kind") == "readable":
         for name in ("oracle", "echo", "pulse"):
