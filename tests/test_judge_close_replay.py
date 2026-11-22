@@ -123,3 +123,16 @@ def test_recording_same_grade_again_leaves_file_unchanged(tmp_path, monkeypatch)
     postmortems.record("oracle", prediction, actual_pct=-5.0)
 
     assert open(path, "rb").read() == before
+
+
+def test_portfolio_non_dict_position_row_is_unreadable(tmp_path, monkeypatch):
+    path = tmp_path / "judge_portfolios.json"
+    path.write_text(
+        json.dumps({"oracle": {"open_positions": ["x"], "closed_positions": []}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(path))
+
+    assert portfolios.observe_portfolios()["kind"] == "unreadable"
+    with pytest.raises(portfolios.PortfolioUnreadable):
+        portfolios.holds_open("oracle", 1)
