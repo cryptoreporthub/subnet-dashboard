@@ -396,6 +396,7 @@ def recover_expired_predictions(
     before = deepcopy(data)
     resolved = data.get("resolved", []) or []
     recovered_rows: List[Dict[str, Any]] = []
+    applied_rows: List[Dict[str, Any]] = []
 
     for row in resolved:
         if recovered >= max_rows:
@@ -771,9 +772,11 @@ def recover_expired_predictions(
         except Exception as exc:
             return _fail("ledger_unreadable", error=str(exc), recovered=recovered)
         from internal.council.capture import capture_from_row
+        # Rows recovered above already had their effects tried in this sweep.
+        tried_this_sweep = {_row_key(item["row"]) for item in applied_rows}
         pending_items = []
         for row in fresh.get("resolved") or []:
-            if not isinstance(row, dict):
+            if not isinstance(row, dict) or _row_key(row) in tried_this_sweep:
                 continue
             effects = row.get("learning_effects") if isinstance(row.get("learning_effects"), dict) else {}
             pending = effects.get("pending") or []
