@@ -232,7 +232,7 @@ class _LearningDeferral:
     """
 
     def __init__(self) -> None:
-        self.items: List[Tuple[Any, Any]] = []
+        self.items: List[Tuple[Any, str, Any, Dict[str, Any]]] = []
         self.impact_value: Optional[float] = None
 
 
@@ -241,19 +241,42 @@ _learning_deferral: ContextVar[Optional[_LearningDeferral]] = ContextVar(
 )
 
 
-def _queue_effect(prediction: Dict[str, Any], deferral: _LearningDeferral, effect: Any) -> None:
+def _queue_effect(
+    prediction: Dict[str, Any], deferral: _LearningDeferral, effect: Any, name: str
+) -> None:
     from internal.learning.predictions_store import _row_key
 
-    deferral.items.append((_row_key(prediction), effect))
+    deferral.items.append((_row_key(prediction), name, effect, prediction))
 
 
-def _run_or_defer(prediction: Dict[str, Any], effect: Any) -> None:
+def _run_or_defer(prediction: Dict[str, Any], effect: Any, name: str) -> None:
     """Run a learning effect now, or queue it behind the save that owns this row."""
     deferral = _learning_deferral.get()
     if deferral is None:
         effect()
         return
-    _queue_effect(prediction, deferral, effect)
+    _queue_effect(prediction, deferral, effect, name)
+
+
+def _stamp_deferred_learning_pending(deferral: Optional[_LearningDeferral], rows: List[Dict[str, Any]]) -> None:
+    """Mark each row with the effects queued for it, so the save carries the marker.
+
+    A crash between the save and the flush leaves the queue lost. The marker survives it,
+    and the expired-recovery sweep re-runs exactly these effects.
+    """
+    if deferral is None or not deferral.items:
+        return
+    from internal.learning.expired_recovery import stamp_learning_effects_pending
+    from internal.learning.predictions_store import _row_key
+
+    queued: Dict[Any, List[str]] = {}
+    for key, name, _effect, _prediction in deferral.items:
+        if key is not None and name not in queued.setdefault(key, []):
+            queued[key].append(name)
+    for row in rows:
+        names = queued.get(_row_key(row)) if isinstance(row, dict) else None
+        if names:
+            stamp_learning_effects_pending(row, names)
 
 
 def _impact_tier(prediction: Dict[str, Any]) -> Optional[str]:
@@ -341,7 +364,7 @@ def _stage_or_run_impact(prediction: Dict[str, Any], correct: bool) -> None:
         return
     staged = prediction["impact_strength_after"]
     _queue_effect(
-        prediction, deferral, lambda: _apply_impact_guarded(prediction, correct, staged)
+        prediction, deferral, lambda: _apply_impact_guarded(prediction, correct, staged), "impact"
     )
 
 
@@ -387,32 +410,76 @@ def _adapt_pump_calibration(prediction: Dict[str, Any]) -> None:
                 pass
 
 
+def _receipt_applied_effect(key: Any, name: str, prediction: Dict[str, Any]) -> bool:
+    """Record that an effect ran. False when the marker must stay for the sweep to settle."""
+    if key is None:
+        return False
+    from internal.learning import expired_recovery
+
+    try:
+        expired_recovery.write_effect_receipt(key, name)
+        return True
+    except Exception:
+        logger.exception("learning effect ran but its receipt was not written key=%s effect=%s", key, name)
+    try:
+        # Marked indeterminate, the sweep settles it without running the effect again.
+        expired_recovery._mark_effect_indeterminate(prediction, name)
+    except Exception:
+        logger.exception("learning effect left pending after a failed receipt key=%s effect=%s", key, name)
+    return False
+
+
 def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_result: Any) -> None:
-    """Run queued learning after the ledger save. Skip rows the save did not apply."""
+    """Run queued learning after the ledger save. Skip rows the save did not apply.
+
+    Each effect writes its receipt right after it runs, and the markers of the effects
+    that ran are cleared in one ledger write at the end. An effect that raises keeps its
+    marker, so the expired-recovery sweep retries it. A crash between an effect and its
+    receipt can replay that one effect, the residual the sweep already accepts.
+    """
     if deferral is None:
         return
     conflicted = set(getattr(commit_result, "conflicts", None) or ())
     # A row with no key cannot be matched to a conflict, so an unidentified conflict
     # means any keyless row may be one the save did not apply. Skip those rows too.
     unidentified = any(isinstance(k, tuple) and k and k[0] == "unidentified" for k in conflicted)
-    for index, (key, effect) in enumerate(deferral.items):
-        if (key is not None and key in conflicted) or (key is None and unidentified):
-            logger.warning("learning skipped for ledger row the save did not apply key=%s", key)
-            continue
-        if _cycle_writes_revoked_safe():
-            # The save already happened, so these rows stay resolved and will not be regraded.
-            # Say what was dropped, so the loss is visible.
-            dropped = [k for k, _ in deferral.items[index:]]
-            logger.warning(
-                "learning dropped after revoke: %d effect(s) for rows %s",
-                len(dropped),
-                dropped,
-            )
-            return
-        try:
-            effect()
-        except Exception:
-            logger.exception("deferred resolver learning effect failed")
+    receipted: List[Tuple[Any, str]] = []
+    try:
+        for index, (key, name, effect, prediction) in enumerate(deferral.items):
+            if (key is not None and key in conflicted) or (key is None and unidentified):
+                logger.warning("learning skipped for ledger row the save did not apply key=%s", key)
+                continue
+            if _cycle_writes_revoked_safe():
+                # The save already happened, so these rows stay resolved and will not be regraded.
+                # Their markers stay pending, so the expired-recovery sweep runs what was dropped.
+                dropped = [k for k, _n, _e, _p in deferral.items[index:]]
+                logger.warning(
+                    "learning dropped after revoke, left pending for the recovery sweep: %d effect(s) for rows %s",
+                    len(dropped),
+                    dropped,
+                )
+                return
+            try:
+                effect()
+            except Exception:
+                logger.exception("deferred resolver learning effect failed")
+                continue
+            if _receipt_applied_effect(key, name, prediction):
+                receipted.append((key, name))
+    finally:
+        _clear_receipted_markers(receipted)
+
+
+def _clear_receipted_markers(receipted: List[Tuple[Any, str]]) -> None:
+    if not receipted:
+        return
+    from internal.learning import expired_recovery
+
+    try:
+        expired_recovery.move_effects_on_ledger(receipted)
+    except Exception:
+        # Receipts exist, so the sweep moves these markers without running the effects.
+        logger.exception("learning markers not cleared after flush, the sweep will clear them")
 
 
 def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
@@ -1526,6 +1593,7 @@ def resolve_prediction_at_horizon(
         lambda: _nudge_attributed_expert(
             prediction, correct=bool(correct), capture=capture, stamped_expert=stamped_expert
         ),
+        "expert",
     )
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
@@ -1547,6 +1615,7 @@ def resolve_prediction_at_horizon(
     _run_or_defer(
         prediction,
         lambda: _finalize_effects_deferred(prediction, apply_judge_nudge=apply_judge_nudge),
+        "finalize",
     )
     if not _skip_council_learning(prediction):
         # Read the grade-time signals now: the caller removes them from the row after grading.
@@ -1563,13 +1632,15 @@ def resolve_prediction_at_horizon(
                 rsi_signal=rsi_at_grade,
                 volume_signal=volume_at_grade,
             ),
+            "scenario",
         )
         _run_or_defer(
             prediction,
             lambda: _nudge_signal_weights(prediction, bool(correct), capture=capture),
+            "signal",
         )
     else:
-        _run_or_defer(prediction, lambda: _adapt_pump_calibration(prediction))
+        _run_or_defer(prediction, lambda: _adapt_pump_calibration(prediction), "pump")
     return prediction
 
 
@@ -2004,6 +2075,7 @@ def _resolve_due_predictions_body(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
+    _stamp_deferred_learning_pending(_learning_deferral.get(), resolved)
     commit_result = _commit_ledger_changes(
         before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="resolve"
     )
@@ -2182,6 +2254,7 @@ def _regrade_expired_predictions_body(
     if needs_save:
         data["resolved"] = resolved
         data["stats"] = _compute_stats(data)
+        _stamp_deferred_learning_pending(_learning_deferral.get(), resolved)
         commit_result = _commit_ledger_changes(
             before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="regrade"
         )
