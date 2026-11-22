@@ -4,24 +4,17 @@ from internal.learning import prediction_loop
 
 
 def test_record_hold_decision_writes_soul_map(monkeypatch, tmp_path):
-    saved = {}
+    import json
 
-    def _load():
-        return {"soul_map_state": {}}
-
-    def _save(data):
-        import copy
-
-        saved.clear()
-        saved.update(copy.deepcopy(data))
+    soul_map = tmp_path / "soul_map.json"
+    soul_map.write_text(json.dumps({"soul_map_state": {}}))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul_map))
 
     events = []
 
     def _emit(event_type, **kwargs):
         events.append({"event_type": event_type, **kwargs})
 
-    monkeypatch.setattr("internal.council.weights._load_raw", _load)
-    monkeypatch.setattr("internal.council.weights._save_raw", _save)
     monkeypatch.setattr(
         "internal.learning.trail_events.emit_trail_event", _emit
     )
@@ -38,6 +31,7 @@ def test_record_hold_decision_writes_soul_map(monkeypatch, tmp_path):
     assert events
     assert events[0]["event_type"] == "conviction_update"
     assert events[0]["decision"] == "HOLD"
+    saved = json.loads(soul_map.read_text())
     assert saved["soul_map_state"]["last_day_pick"]["action"] == "HOLD"
     assert saved["soul_map_state"]["last_day_hold"]["action"] == "HOLD"
     assert saved["soul_map_state"]["last_day_pick"]["pick"] is None
