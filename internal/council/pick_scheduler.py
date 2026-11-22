@@ -231,7 +231,18 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
             try:
                 if pred_id and not pick_history.has_prediction(pred_id):
                     try:
-                        written = pick_history.record_hour_pick(pick, subnet_row, prediction_id=pred_id)
+                        stored_pick = {
+                            "netuid": prediction.get("netuid"),
+                            "name": prediction.get("name"),
+                            "direction": prediction.get("direction"),
+                            "confidence": prediction.get("pick_confidence"),
+                        }
+                        stored_subnet = {
+                            "netuid": prediction.get("netuid"),
+                            "name": prediction.get("name"),
+                            "price": prediction.get("reference_price"),
+                        }
+                        written = pick_history.record_hour_pick(stored_pick, stored_subnet, prediction_id=pred_id)
                     except Exception as exc:
                         logger.warning("pick_history repair failed: %s", exc)
                         return "indeterminate"
