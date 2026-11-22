@@ -62,14 +62,21 @@ def _change_learning(path, key, expected, change):
 
 
 def reconcile_pump_learning(path, *, cycle_run_id, recovered=True):
-    counts = {"applied": 0, "recovered": 0, "indeterminate": 0, "failed": 0, "busy": 0}
+    counts = {
+        "applied": 0,
+        "recovered": 0,
+        "indeterminate": 0,
+        "indeterminate_historic": 0,
+        "failed": 0,
+        "busy": 0,
+    }
     data = load_predictions(path=path, fail_closed=True)
     for row in data["resolved"]:
         learning = row.get("learning")
         if not isinstance(learning, dict) or learning.get("kind") != "pump":
             continue
         if learning.get("state") == "indeterminate":
-            counts["indeterminate"] += 1
+            counts["indeterminate_historic"] += 1
             continue
         if learning.get("state") not in ("pending", "claimed"):
             continue

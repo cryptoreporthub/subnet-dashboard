@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from internal.council.dark_horse_crash import FORMULA_VERSION as DARK_HORSE_FORMULA_VERSION
 from internal.council.human_narrative import calibration_version_story
-from internal.council.weights import _load_raw, _save_raw
+from internal.council.weights import _load_raw, _mutate_raw
 
 _DEFAULT_COUNCIL_VERSION = "1.0"
 # ponytail: ~2 council minor bumps/month max — 14d cooldown, 2pp gain, 40+ holdout picks
@@ -124,7 +124,10 @@ def version_bump_policy() -> Dict[str, Any]:
 
 
 def load_formula_versions(path: str = "data/soul_map.json") -> Dict[str, Any]:
-    data = _load_raw(path)
+    return _versions_from_blob(_load_raw(path))
+
+
+def _versions_from_blob(data: Dict[str, Any]) -> Dict[str, Any]:
     adv = data.get("adversarial_state") if isinstance(data.get("adversarial_state"), dict) else {}
     versions = adv.get("formula_versions")
     if not isinstance(versions, dict):
@@ -145,22 +148,21 @@ def load_formula_versions(path: str = "data/soul_map.json") -> Dict[str, Any]:
     return versions
 
 
-def record_calibration_version(
+def _apply_calibration_version(
+    data: Dict[str, Any],
     *,
     cert: Dict[str, Any],
     weights_before: Dict[str, float],
     weights_after: Dict[str, float],
-    soul_map_path: str = "data/soul_map.json",
-    forced: bool = False,
+    forced: bool,
 ) -> Dict[str, Any]:
-    """Bump council weights version when calibration fires; record holdout beat."""
-    data = _load_raw(soul_map_path)
+    """Compute the calibration entry against ``data`` and write it into ``data`` in place."""
     adv = data.setdefault("adversarial_state", {})
     if not isinstance(adv, dict):
         adv = {}
         data["adversarial_state"] = adv
 
-    versions = load_formula_versions(soul_map_path)
+    versions = _versions_from_blob(data)
     council = versions.setdefault("council_weights", {"current": _DEFAULT_COUNCIL_VERSION, "history": []})
     prev_version = str(council.get("current") or _DEFAULT_COUNCIL_VERSION)
     proposed_acc = cert.get("proposed_accuracy")
@@ -213,7 +215,37 @@ def record_calibration_version(
     council["history"] = history[-20:]
     versions["council_weights"] = council
     adv["formula_versions"] = versions
-    if not _save_raw(data, soul_map_path):
-        entry = dict(entry)
-        entry["persisted"] = False
     return entry
+
+
+def record_calibration_version(
+    *,
+    cert: Dict[str, Any],
+    weights_before: Dict[str, float],
+    weights_after: Dict[str, float],
+    soul_map_path: str = "data/soul_map.json",
+    forced: bool = False,
+) -> Dict[str, Any]:
+    """Bump council weights version when calibration fires; record holdout beat."""
+    box: Dict[str, Any] = {}
+
+    def _apply(data: Dict[str, Any]) -> None:
+        box["entry"] = _apply_calibration_version(
+            data,
+            cert=cert,
+            weights_before=weights_before,
+            weights_after=weights_after,
+            forced=forced,
+        )
+
+    if _mutate_raw(_apply, soul_map_path):
+        return box["entry"]
+    # Not written: report the entry computed from a copy, marked unpersisted.
+    entry = _apply_calibration_version(
+        _load_raw(soul_map_path),
+        cert=cert,
+        weights_before=weights_before,
+        weights_after=weights_after,
+        forced=forced,
+    )
+    return {**entry, "persisted": False}
