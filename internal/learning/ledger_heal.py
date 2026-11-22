@@ -225,14 +225,14 @@ def archive_predictions_epoch(
 
 
 def heal_succeeded(summary: Dict[str, Any]) -> bool:
-    """True when today's pick has a gradeable row, or no LONG needed one.
+    """True when today's LONG has a gradeable day row already, or was just written.
 
-    Shared with scripts/heal_daily_pick_ledger.py so both callers agree.
+    Only the epoch-reset downgrade asks this. A LONG with no usable pick
+    reports no_published_long and must still downgrade, so it is not here.
     """
     return bool(summary.get("healed")) or summary.get("reason") in (
         "ledger_present",
         "duplicate_skipped",
-        "no_published_long",
     )
 
 
