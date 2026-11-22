@@ -67,9 +67,17 @@ def rebuild_judge_portfolios_from_stream(
             status = str(pred.get("status", "pending"))
             if status in {"duplicate", "expired"} and pred.get("outcome") == "duplicate":
                 continue
-            on_prediction_created(pred)
             if status in {"resolved", "expired", "ungradeable"}:
-                on_prediction_resolved(pred)
+                # Ledger-terminal rows never open live, so open-then-close would drop them.
+                for name in ("oracle", "echo", "pulse"):
+                    jp.backfill_closed_position(
+                        name,
+                        pred,
+                        actual_pct=pred.get("actual_pct"),
+                        outcome=pred.get("outcome"),
+                    )
+                continue
+            on_prediction_created(pred)
         return jp.all_portfolios()
     finally:
         jp.PORTFOLIOS_PATH = old_path
