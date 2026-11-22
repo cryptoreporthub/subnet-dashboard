@@ -439,13 +439,19 @@ def _run_keyed_effect_once(key: Any, name: str, effect: Any, prediction: Dict[st
 
     The sweep can pick up a freshly committed row before this flush reaches it, so the
     receipt is rechecked under the same lock the sweep holds while it applies an effect.
+    An unreadable journal does not stop the effect. The sweep applies nothing while the
+    journal is unreadable, so running it now cannot double-apply, and the failed receipt
+    write marks it indeterminate.
     """
     from internal.learning import expired_recovery
 
     try:
         with expired_recovery._apply_lock():
-            if expired_recovery.has_effect_receipt(key, name):
-                return True
+            try:
+                if expired_recovery.has_effect_receipt(key, name):
+                    return True
+            except expired_recovery.LearningEffectReceiptsUnreadable:
+                logger.warning("receipts unreadable, running learning effect live key=%s effect=%s", key, name)
             try:
                 effect()
             except Exception:
@@ -455,7 +461,6 @@ def _run_keyed_effect_once(key: Any, name: str, effect: Any, prediction: Dict[st
     except (
         expired_recovery.LearningEffectApplyLockTimeout,
         expired_recovery.LearningEffectReceiptsLockTimeout,
-        expired_recovery.LearningEffectReceiptsUnreadable,
     ) as exc:
         raise _FlushStopped(str(exc))
 
@@ -466,8 +471,8 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
     Each keyed effect runs under the sweep's apply lock and writes its receipt before the
     lock is released. The markers of the effects that ran are cleared in one ledger write
     at the end. An effect that raises keeps its marker, so the expired-recovery sweep
-    retries it. The first lock timeout or unreadable receipts file stops the flush, and
-    the remaining effects stay pending for the sweep. A crash between an effect and its
+    retries it. The first lock timeout stops the flush, and the remaining effects stay
+    pending for the sweep. A crash between an effect and its
     receipt can replay that one effect, the residual the sweep already accepts.
     """
     if deferral is None:

@@ -391,3 +391,58 @@ def test_a_held_receipts_lock_does_not_stall_the_cycle_and_loses_no_learning(
 
     expired_recovery.recover_expired_predictions()
     assert _counts(sinks) == _once(rows=2), _counts(sinks)
+
+
+def test_an_unreadable_receipts_file_does_not_stop_live_learning(ledger, sinks, tmp_path):
+    (tmp_path / "learning_effect_receipts.json").write_text("not json {")
+
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert _counts(sinks) == _once(), "learning must still run when the journal is unreadable"
+    marker = _markers(ledger)["r1"]
+    assert marker["pending"] == [], marker
+    assert sorted(marker["indeterminate"]) == ["expert", "finalize", "impact", "scenario", "signal"], marker
+
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), "the sweep must not run effects while the journal is unreadable"
+
+
+def test_a_sweep_that_finishes_before_the_flush_starts_is_not_repeated(ledger, sinks, monkeypatch):
+    """The recheck under the lock is what stops the flush from repeating work the sweep did."""
+    in_flush = threading.Event()
+    release = threading.Event()
+    real_flush = resolver._flush_deferred_learning
+
+    def flush_after_the_sweep(deferral, commit_result):
+        in_flush.set()
+        release.wait(timeout=20)
+        real_flush(deferral, commit_result)
+
+    monkeypatch.setattr(resolver, "_flush_deferred_learning", flush_after_the_sweep)
+    cycle = threading.Thread(target=lambda: resolver._resolve_due_predictions(subnets=[]))
+    cycle.start()
+    try:
+        assert in_flush.wait(timeout=20), "the cycle never reached its flush"
+        expired_recovery.recover_expired_predictions()
+        assert _counts(sinks) == _once(), "the sweep should have run every effect"
+    finally:
+        release.set()
+        cycle.join(timeout=30)
+    assert not cycle.is_alive()
+
+    assert _counts(sinks) == _once(), _counts(sinks)
+
+
+def test_a_queued_effect_with_no_row_key_still_runs_once(monkeypatch):
+    """No committed row has an empty key, so this pins the flush's own behavior directly."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: False)
+    ran: list[str] = []
+    deferral = resolver._LearningDeferral()
+    deferral.items.append((None, "expert", lambda: ran.append("expert"), {}))
+
+    resolver._flush_deferred_learning(deferral, SimpleNamespace(conflicts=()))
+
+    assert ran == ["expert"]
