@@ -291,6 +291,12 @@ def move_effects_on_ledger(
     if result.outcome is not PersistOutcome.APPLIED:
         reason = result.reason.value if result.reason is not None else str(result.outcome)
         raise RuntimeError(f"learning effect ledger stamp not applied: {reason}")
+    # A write that touches several rows is APPLIED when any of them commits. A row that
+    # conflicted was not written, so raise and let the caller's retry reread the ledger.
+    conflicted = {tuple(k) if isinstance(k, list) else k for k in (result.conflicts or ())}
+    touched = set(wanted) | set(warnings or {})
+    if conflicted & touched:
+        raise RuntimeError(f"learning effect ledger stamp conflicted for {sorted(map(str, conflicted & touched))}")
 
 
 def _move_effect_on_ledger(
@@ -714,6 +720,9 @@ def recover_expired_predictions(
                             warnings_after = list(row.get("side_effect_warnings") or [])
                             # A replay under a revoke ran no finalize sink, so it has no evidence to
                             # replace the stamp with. Leave what an earlier run recorded.
+                            # A revoke skips the finalize sinks that come after it, and it is one-way, so
+                            # one seen after the replay may have cut it short. Silence is then not
+                            # evidence, and the earlier stamp stays.
                             replay_warnings = None if resolver._cycle_writes_revoked_safe() else warnings_after
                             fresh_close_warning = any(
                                 name in warnings_after
