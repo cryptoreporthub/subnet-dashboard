@@ -410,31 +410,64 @@ def _adapt_pump_calibration(prediction: Dict[str, Any]) -> None:
                 pass
 
 
-def _receipt_applied_effect(key: Any, name: str, prediction: Dict[str, Any]) -> bool:
+class _FlushStopped(Exception):
+    """The receipts journal or the apply lock cannot be used, so the flush stops here."""
+
+
+def _write_receipt_for_applied_effect(key: Any, name: str, prediction: Dict[str, Any]) -> bool:
     """Record that an effect ran. False when the marker must stay for the sweep to settle."""
-    if key is None:
-        return False
     from internal.learning import expired_recovery
 
     try:
         expired_recovery.write_effect_receipt(key, name)
         return True
-    except Exception:
+    except Exception as exc:
         logger.exception("learning effect ran but its receipt was not written key=%s effect=%s", key, name)
+        failure = exc
     try:
         # Marked indeterminate, the sweep settles it without running the effect again.
         expired_recovery._mark_effect_indeterminate(prediction, name)
     except Exception:
         logger.exception("learning effect left pending after a failed receipt key=%s effect=%s", key, name)
+    if isinstance(failure, expired_recovery.LearningEffectReceiptsLockTimeout):
+        raise _FlushStopped(str(failure))
     return False
+
+
+def _run_keyed_effect_once(key: Any, name: str, effect: Any, prediction: Dict[str, Any]) -> bool:
+    """Run one queued effect under the sweep's apply lock. True when it is receipted.
+
+    The sweep can pick up a freshly committed row before this flush reaches it, so the
+    receipt is rechecked under the same lock the sweep holds while it applies an effect.
+    """
+    from internal.learning import expired_recovery
+
+    try:
+        with expired_recovery._apply_lock():
+            if expired_recovery.has_effect_receipt(key, name):
+                return True
+            try:
+                effect()
+            except Exception:
+                logger.exception("deferred resolver learning effect failed")
+                return False
+            return _write_receipt_for_applied_effect(key, name, prediction)
+    except (
+        expired_recovery.LearningEffectApplyLockTimeout,
+        expired_recovery.LearningEffectReceiptsLockTimeout,
+        expired_recovery.LearningEffectReceiptsUnreadable,
+    ) as exc:
+        raise _FlushStopped(str(exc))
 
 
 def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_result: Any) -> None:
     """Run queued learning after the ledger save. Skip rows the save did not apply.
 
-    Each effect writes its receipt right after it runs, and the markers of the effects
-    that ran are cleared in one ledger write at the end. An effect that raises keeps its
-    marker, so the expired-recovery sweep retries it. A crash between an effect and its
+    Each keyed effect runs under the sweep's apply lock and writes its receipt before the
+    lock is released. The markers of the effects that ran are cleared in one ledger write
+    at the end. An effect that raises keeps its marker, so the expired-recovery sweep
+    retries it. The first lock timeout or unreadable receipts file stops the flush, and
+    the remaining effects stay pending for the sweep. A crash between an effect and its
     receipt can replay that one effect, the residual the sweep already accepts.
     """
     if deferral is None:
@@ -459,13 +492,24 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
                     dropped,
                 )
                 return
-            try:
-                effect()
-            except Exception:
-                logger.exception("deferred resolver learning effect failed")
+            if key is None:
+                # No key means no receipt and no marker, so there is nothing to recover from.
+                try:
+                    effect()
+                except Exception:
+                    logger.exception("deferred resolver learning effect failed")
                 continue
-            if _receipt_applied_effect(key, name, prediction):
-                receipted.append((key, name))
+            try:
+                if _run_keyed_effect_once(key, name, effect, prediction):
+                    receipted.append((key, name))
+            except _FlushStopped as exc:
+                remaining = len(deferral.items) - index
+                logger.warning(
+                    "learning flush stopped, %d effect(s) left pending for the recovery sweep: %s",
+                    remaining,
+                    exc,
+                )
+                return
     finally:
         _clear_receipted_markers(receipted)
 
