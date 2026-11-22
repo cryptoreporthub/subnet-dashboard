@@ -1771,9 +1771,12 @@ def expire_stale_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
-    _commit_ledger_changes(
+    commit_result = _commit_ledger_changes(
         before, data, path=PREDICTIONS_PATH, caller="resolver", trigger="expire"
     )
+    if commit_result.conflicts:
+        # Conflicted rows were not written, so they did not expire now.
+        expired_now = _committed_only(expired_now, commit_result)
 
     return {
         "expired_now": expired_now,
