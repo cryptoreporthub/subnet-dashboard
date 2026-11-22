@@ -477,8 +477,8 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
     Each keyed effect runs under the sweep's apply lock and writes its receipt before the
     lock is released. The markers of the effects that ran are cleared in one ledger write
     at the end. An effect that raises keeps its marker, so the expired-recovery sweep
-    retries it. The first lock timeout stops the flush, and the remaining effects stay
-    pending for the sweep. A crash between an effect and its
+    retries it. The first lock timeout, or any other error from the lock or the journal,
+    stops the flush, and the remaining effects stay pending for the sweep. A crash between an effect and its
     receipt can replay that one effect, the residual the sweep already accepts.
     """
     if deferral is None:
