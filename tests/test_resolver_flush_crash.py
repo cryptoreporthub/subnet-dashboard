@@ -223,3 +223,60 @@ def test_learning_dropped_by_a_revoke_is_recovered_by_the_sweep(ledger, sinks, m
     assert counts["expert_nudge"] == 1, counts
     assert counts["signal_nudge"] == 1, counts
     assert counts["scenario_outcome"] == 1, counts
+
+
+NETUID = 7
+
+
+@pytest.fixture
+def regrade_ledger(tmp_path, monkeypatch, ledger):
+    """An expired row that now has a candle, so regrade_expired_predictions grades it."""
+    resolve_at = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+    expired = {
+        "id": "regrade-1",
+        "netuid": NETUID,
+        "name": "Regrade Test",
+        "direction": "up",
+        "predicted_pct": 2.0,
+        "reference_price": 100.0,
+        "resolve_at": resolve_at,
+        "created_at": resolve_at,
+        "status": "expired",
+        "outcome": "expired",
+        "horizon_type": "hour",
+        "expert": "oracle",
+        "signal_contributions": {"momentum": {"score": 0.9}},
+        "active_signals": ["momentum"],
+    }
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [expired], "stats": {}}))
+    cache = tmp_path / "price_cache.json"
+    cache.write_text(json.dumps({
+        str(NETUID): {
+            "source": "test",
+            "candles": [{
+                "timestamp": resolve_at, "open": 102.0, "high": 103.0,
+                "low": 101.0, "close": 103.0, "volume": 500.0,
+            }],
+        }
+    }))
+    monkeypatch.setattr(resolver, "PRICE_CACHE_PATH", str(cache))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
+    return ledger
+
+
+def test_regraded_row_learning_survives_a_crash_between_commit_and_flush(regrade_ledger, sinks, monkeypatch):
+    _crash_at_flush(monkeypatch)
+    with pytest.raises(ProcessDied):
+        resolver.regrade_expired_predictions(live_prices={})
+
+    disk = json.loads(regrade_ledger.read_text())
+    assert disk["resolved"][0]["outcome"] != "expired", "the regrade commit must have landed"
+    assert _counts(sinks) == {name: 0 for name in SINKS}, "no learning ran before the crash"
+
+    expired_recovery.recover_expired_predictions()
+    once = _counts(sinks)
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == once, "a second sweep must not apply the effects again"
+    for name in ("expert_nudge", "signal_nudge", "scenario_outcome", "impact_write"):
+        assert once[name] == 1, once
