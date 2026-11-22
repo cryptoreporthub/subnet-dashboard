@@ -171,20 +171,20 @@ def test_concurrent_open_and_close_preserve_both_changes(tmp_path, monkeypatch):
     assert [row["id"] for row in data["echo"]["closed_positions"]] == ["old"]
 
 
-def test_evaluation_failure_does_not_commit_pick(tmp_path, monkeypatch):
+def test_evaluation_failure_still_commits_pick(tmp_path, monkeypatch):
     from internal.judges import echo_judge
 
     ledger = tmp_path / "predictions.json"
     ledger.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}))
-    before = ledger.read_bytes()
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(tmp_path / "portfolios.json"))
     monkeypatch.setattr(prediction_loop, "_link_scenario_memory", lambda *_a, **_kw: None)
     monkeypatch.setattr(echo_judge, "evaluate", lambda *_a, **_kw: (_ for _ in ()).throw(ValueError("evaluate failed")))
     pick = {"subnet": {"netuid": 7}, "confidence": 0.7, "action": "long"}
     subnet = {"netuid": 7, "name": "Seven", "price": 12.0}
     stored = prediction_loop.record_pick_prediction(pick, subnet, predictions_path=str(ledger))
-    assert stored is None
-    assert ledger.read_bytes() == before
+    saved = json.loads(ledger.read_text())["predictions"]
+    assert stored is not None, "a judge failure must not drop a pick the ledger has saved"
+    assert [p["id"] for p in saved] == [stored["id"]]
 
 
 def test_indeterminate_append_does_not_open_positions(tmp_path, monkeypatch):
@@ -284,7 +284,7 @@ def test_reconcile_evaluates_legacy_pick_without_saved_scores(tmp_path, monkeypa
     assert all(len(data[name]["open_positions"]) == 1 for name in ("oracle", "echo", "pulse"))
 
 
-def test_portfolio_save_failure_is_not_reported_as_success(tmp_path, monkeypatch):
+def test_portfolio_save_failure_keeps_saved_pick_and_reconciles_positions(tmp_path, monkeypatch):
     from internal.council import prediction_trace
 
     ledger, port_path = tmp_path / "predictions.json", tmp_path / "portfolios.json"
@@ -301,7 +301,9 @@ def test_portfolio_save_failure_is_not_reported_as_success(tmp_path, monkeypatch
     result = prediction_loop.record_pick_prediction(
         pick, {"netuid": 7, "name": "Seven", "price": 12.0}, predictions_path=str(ledger)
     )
-    assert result is None
+    saved = json.loads(ledger.read_text())["predictions"]
+    assert result is not None, "the ledger row is saved, so the pick stays committed"
+    assert [p["id"] for p in saved] == [result["id"]]
     assert json.loads(port_path.read_text()) == {}
     monkeypatch.setattr(portfolios, "_save", real_save)
     prediction_loop.reconcile_judge_positions(predictions_path=str(ledger))
