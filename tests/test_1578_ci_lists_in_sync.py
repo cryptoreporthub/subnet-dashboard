@@ -62,3 +62,17 @@ def test_sync_test_is_selected_by_both_gates():
     assert TEST_FILE in paths
     assert TEST_FILE in workflow
     assert TEST_FILE in gated
+
+
+JUDGE_FAILURE_MODULES = (
+    "tests/test_judge_failure_keeps_pick.py",
+    "tests/test_judge_failure_reconciles_later.py",
+)
+
+
+def test_judge_failure_modules_are_selected_by_every_gate():
+    _, paths, workflow, gated = _selections()
+    for module in JUDGE_FAILURE_MODULES:
+        assert module in paths, module
+        assert module in workflow, module
+        assert module in gated, module
