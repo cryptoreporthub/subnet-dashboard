@@ -13,7 +13,6 @@ from __future__ import annotations
 import fcntl
 import json
 import threading
-import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -608,6 +607,55 @@ def test_an_unexpected_error_from_the_journal_does_not_abort_the_cycle(ledger, s
 
     monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", good)
     monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", good, raising=False)
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), _counts(sinks)
+
+
+def _lock_failing_on_entry(monkeypatch, entry, error):
+    real_lock = expired_recovery._apply_lock
+    state = {"n": 0}
+
+    @contextmanager
+    def failing(*args, **kwargs):
+        state["n"] += 1
+        if state["n"] == entry:
+            raise error
+        with real_lock(*args, **kwargs) as value:
+            yield value
+
+    monkeypatch.setattr(expired_recovery, "_apply_lock", failing)
+    return real_lock
+
+
+def test_an_unexpected_error_stops_the_flush_and_keeps_what_already_ran(ledger, sinks, monkeypatch):
+    real_lock = _lock_failing_on_entry(monkeypatch, 2, OSError(28, "No space left on device"))
+
+    resolver._resolve_due_predictions(subnets=[])
+
+    marker = _markers(ledger)["r1"]
+    assert marker["done"] == ["expert"], marker
+    assert sorted(marker["pending"]) == ["finalize", "impact", "scenario", "signal"], marker
+    counts = _counts(sinks)
+    assert counts["expert_nudge"] == 1 and counts["signal_nudge"] == 0, counts
+    assert counts["judge_resolved"] == 0, counts
+
+    monkeypatch.setattr(expired_recovery, "_apply_lock", real_lock)
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), _counts(sinks)
+
+
+def test_an_error_that_is_not_an_oserror_does_not_abort_the_cycle_either(ledger, sinks, monkeypatch):
+    real_lock = _lock_failing_on_entry(monkeypatch, 1, RuntimeError("lock backend failed"))
+
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert [r["id"] for r in json.loads(ledger.read_text())["resolved"]] == ["r1"]
+    assert len(_markers(ledger)["r1"]["pending"]) == 5
+    assert _counts(sinks) == {name: 0 for name in SINKS}
+
+    monkeypatch.setattr(expired_recovery, "_apply_lock", real_lock)
     expired_recovery.recover_expired_predictions()
 
     assert _counts(sinks) == _once(), _counts(sinks)
