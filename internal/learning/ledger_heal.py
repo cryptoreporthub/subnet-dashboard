@@ -208,7 +208,7 @@ def archive_predictions_epoch(
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:
-        heal_summary = heal_daily_pick_ledger(dry_run=False)
+        heal_summary = heal_daily_pick_ledger(dry_run=False, predictions_path=src)
 
     if re_heal_daily and not heal_summary.get("healed"):
         # ponytail: never leave LONG without ledger — downgrade to honest HOLD.
