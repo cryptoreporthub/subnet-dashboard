@@ -426,6 +426,8 @@ def _write_receipt_for_applied_effect(key: Any, name: str, prediction: Dict[str,
         failure = exc
     try:
         # Marked indeterminate, the sweep settles it without running the effect again.
+        # If this mark fails too and the journal is then repaired to an empty file, the
+        # sweep runs the effect a second time. That is the receipt-gap residual again.
         expired_recovery._mark_effect_indeterminate(prediction, name)
     except Exception:
         logger.exception("learning effect left pending after a failed receipt key=%s effect=%s", key, name)
@@ -457,6 +459,10 @@ def _run_keyed_effect_once(key: Any, name: str, effect: Any, prediction: Dict[st
             except Exception:
                 logger.exception("deferred resolver learning effect failed")
                 return False
+            # A normal return counts as applied. An effect that swallows its own error, or
+            # that skips itself because a revoke landed after the flush's own check, also
+            # returns normally, so it is receipted as done and never retried. Fixing that
+            # needs every effect to report applied or skipped.
             return _write_receipt_for_applied_effect(key, name, prediction)
     except (
         expired_recovery.LearningEffectApplyLockTimeout,
@@ -513,6 +519,14 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
                     "learning flush stopped, %d effect(s) left pending for the recovery sweep: %s",
                     remaining,
                     exc,
+                )
+                return
+            except Exception:
+                # Lock-file or journal I/O failed. The row is already committed, so the cycle
+                # must not abort. The remaining effects keep their markers for the sweep.
+                logger.exception(
+                    "learning flush aborted on an unexpected error, %d effect(s) left pending",
+                    len(deferral.items) - index,
                 )
                 return
     finally:

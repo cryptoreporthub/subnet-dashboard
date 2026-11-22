@@ -13,6 +13,7 @@ from __future__ import annotations
 import fcntl
 import json
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -446,3 +447,167 @@ def test_a_queued_effect_with_no_row_key_still_runs_once(monkeypatch):
     resolver._flush_deferred_learning(deferral, SimpleNamespace(conflicts=()))
 
     assert ran == ["expert"]
+
+
+def _two_rows(ledger_path):
+    ledger_path.write_text(
+        json.dumps({"predictions": [_due_row(), _second_due_row()], "resolved": [], "stats": {}})
+    )
+
+
+def _count_calls(monkeypatch, name):
+    real = getattr(expired_recovery, name)
+    calls = {"n": 0}
+
+    @contextmanager
+    def counted(*args, **kwargs):
+        calls["n"] += 1
+        with real(*args, **kwargs) as value:
+            yield value
+
+    monkeypatch.setattr(expired_recovery, name, counted)
+    return calls
+
+
+def test_a_held_apply_lock_stops_the_flush_at_the_first_timeout(ledger, sinks, monkeypatch, tmp_path):
+    _two_rows(ledger)
+    monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 0.2)
+    attempts = _count_calls(monkeypatch, "_apply_lock")
+    apply_path = str(tmp_path / "learning_effect_receipts.json") + ".apply"
+    with open(apply_path, "a+") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX)
+        try:
+            resolver._resolve_due_predictions(subnets=[])
+        finally:
+            fcntl.flock(held.fileno(), fcntl.LOCK_UN)
+
+    assert attempts["n"] == 1, f"the flush kept waiting on the apply lock {attempts['n']} times"
+    expired_recovery.recover_expired_predictions()
+    assert _counts(sinks) == _once(rows=2), _counts(sinks)
+
+
+def test_effects_with_no_row_key_each_run_and_share_no_receipt(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: False)
+    ran: list[str] = []
+    for _cycle in range(2):
+        deferral = resolver._LearningDeferral()
+        deferral.items.append((None, "expert", lambda: ran.append("expert"), {}))
+        resolver._flush_deferred_learning(deferral, SimpleNamespace(conflicts=()))
+
+    assert ran == ["expert", "expert"]
+
+
+def test_the_receipt_is_written_before_the_sweep_can_take_the_apply_lock(ledger, sinks, monkeypatch):
+    monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 0.3)
+    real_write = expired_recovery.write_effect_receipt
+    at_receipt = threading.Event()
+    release = threading.Event()
+    state = {"first": True}
+
+    def slow_first_receipt(key, effect):
+        if state["first"]:
+            state["first"] = False
+            at_receipt.set()
+            release.wait(timeout=20)
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", slow_first_receipt)
+    cycle = threading.Thread(target=lambda: resolver._resolve_due_predictions(subnets=[]))
+    cycle.start()
+    try:
+        assert at_receipt.wait(timeout=20)
+        expired_recovery.recover_expired_predictions()
+    finally:
+        release.set()
+        cycle.join(timeout=30)
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), _counts(sinks)
+
+
+def test_a_receipt_write_timeout_after_an_effect_stops_the_flush(ledger, sinks, monkeypatch, tmp_path):
+    """A shared lock lets the receipt recheck pass, so the write is what times out."""
+    monkeypatch.setattr(expired_recovery, "RECEIPTS_LOCK_TIMEOUT_SECONDS", 0.2)
+    lock_path = str(tmp_path / "learning_effect_receipts.json") + ".lock"
+    with open(lock_path, "a+") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_SH)
+        try:
+            resolver._resolve_due_predictions(subnets=[])
+        finally:
+            fcntl.flock(held.fileno(), fcntl.LOCK_UN)
+
+    marker = _markers(ledger)["r1"]
+    assert marker["indeterminate"] == ["expert"], marker
+    assert sorted(marker["pending"]) == ["finalize", "impact", "scenario", "signal"], marker
+
+
+def test_markers_of_effects_receipted_before_a_stop_are_cleared(ledger, sinks, monkeypatch):
+    real_has = expired_recovery.has_effect_receipt
+    calls = {"n": 0}
+
+    def second_recheck_times_out(key, effect):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise expired_recovery.LearningEffectReceiptsLockTimeout("held")
+        return real_has(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "has_effect_receipt", second_recheck_times_out)
+    resolver._resolve_due_predictions(subnets=[])
+
+    marker = _markers(ledger)["r1"]
+    assert marker["done"] == ["expert"], marker
+    assert "expert" not in marker["pending"], marker
+
+
+def test_the_flush_rechecks_the_receipt_after_it_takes_the_apply_lock(ledger, sinks, monkeypatch):
+    monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 5.0)
+    real_lock = expired_recovery._apply_lock
+    at_lock = threading.Event()
+    release = threading.Event()
+    state = {"first": True}
+
+    @contextmanager
+    def pause_flush_once(*args, **kwargs):
+        if threading.current_thread().name == "flush" and state["first"]:
+            state["first"] = False
+            at_lock.set()
+            release.wait(timeout=20)
+        with real_lock(*args, **kwargs) as value:
+            yield value
+
+    monkeypatch.setattr(expired_recovery, "_apply_lock", pause_flush_once)
+    cycle = threading.Thread(
+        target=lambda: resolver._resolve_due_predictions(subnets=[]), name="flush"
+    )
+    cycle.start()
+    try:
+        assert at_lock.wait(timeout=20)
+        expired_recovery.recover_expired_predictions()
+    finally:
+        release.set()
+        cycle.join(timeout=30)
+
+    assert _counts(sinks) == _once(), _counts(sinks)
+
+
+def test_an_unexpected_error_from_the_journal_does_not_abort_the_cycle(ledger, sinks, monkeypatch, tmp_path):
+    """A path under a regular file makes the real lock-file open raise NotADirectoryError."""
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a regular file")
+    good = str(tmp_path / "learning_effect_receipts.json")
+    bad = str(blocker / "receipts.json")
+    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", bad)
+    monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", bad, raising=False)
+
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert [r["id"] for r in json.loads(ledger.read_text())["resolved"]] == ["r1"], "the commit must stay"
+    assert _markers(ledger)["r1"]["pending"], "the effects must stay pending"
+
+    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", good)
+    monkeypatch.setattr(expired_recovery, "LEARNING_EFFECT_RECEIPTS_PATH", good, raising=False)
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), _counts(sinks)
