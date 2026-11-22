@@ -22,6 +22,9 @@ GATED_ONLY = {
 
 
 TEST_PATH = r"tests/test_[\w]+\.py"
+COMMAND = re.compile(r"^\s*(exec )?python -m pytest -q \\$")
+ARGUMENT = re.compile(rf"^\s*({TEST_PATH})(::\w+)?( \\)?$")
+FORWARD_ARGS = '"$@"'
 
 
 def _filter_paths(triggers):
@@ -30,28 +33,52 @@ def _filter_paths(triggers):
     return set(items)
 
 
-def _pytest_arguments(text):
-    """Test paths in the backslash-continued pytest command, as the shell will run it.
+def _command_block(text):
+    """The backslash-continued pytest command, exactly as the shell reads it.
 
-    A comment anywhere in that command is rejected. In bash a comment on a continuation
-    line ends the command there, so a commented last argument is silently not run, and
-    a commented middle argument turns the next line into its own command.
+    The first line must be exactly 'python -m pytest -q \\' (the script may prefix
+    'exec'), and every line after it must be one bare test path, until the first line
+    that does not end in a backslash. Anything else is rejected: a comment, a flag such
+    as --co or -k, a node id, a quoted path, or a wrapper. In bash a comment on a
+    continuation line ends the command there, so a commented last argument is silently
+    not run, and flags change which tests run without changing which paths are listed.
     """
     lines = text.splitlines()
-    start = next(i for i, line in enumerate(lines) if "python -m pytest -q" in line)
-    block = [lines[start].split("python -m pytest -q", 1)[1]]
-    index = start
-    while lines[index].rstrip().endswith("\\") and index + 1 < len(lines):
+    starts = [i for i, line in enumerate(lines) if COMMAND.match(line)]
+    assert starts, "no 'python -m pytest -q \\' command line found"
+    assert len(starts) == 1, "more than one 'python -m pytest -q \\' command line"
+    index = starts[0]
+    block = [lines[index]]
+    while block[-1].endswith("\\") and index + 1 < len(lines):
         index += 1
-        block.append(lines[index])
-    for line in block:
+        line = lines[index]
         assert "#" not in line, f"comment inside the pytest argument list: {line.strip()!r}"
-    return set(re.findall(TEST_PATH, "\n".join(block)))
+        assert ARGUMENT.match(line) or line.strip() == FORWARD_ARGS, (
+            f"unexpected content in the pytest argument list: {line.strip()!r}"
+        )
+        block.append(line)
+    return block
+
+
+def _pytest_arguments(text):
+    paths = []
+    for line in _command_block(text)[1:]:
+        match = ARGUMENT.match(line)
+        if match is None:
+            continue
+        path, node_id = match.group(1), match.group(2)
+        assert node_id is None or path in GATED_ONLY, (
+            f"a node id narrows a test path that is not allowed one: {line.strip()!r}"
+        )
+        paths.append(path)
+    assert len(paths) == len(set(paths)), "a test path is listed twice"
+    return set(paths)
 
 
 def _split_workflow(workflow):
-    triggers, job = workflow.split("jobs:", 1)
-    return triggers, job
+    parts = re.split(r"^jobs:\s*$", workflow, maxsplit=1, flags=re.MULTILINE)
+    assert len(parts) == 2, "no top-level jobs: key found"
+    return parts[0], parts[1]
 
 
 def _selections():
@@ -111,59 +138,164 @@ def test_judge_failure_modules_are_selected_by_every_gate():
         assert module in gated, module
 
 
-def _with_line_changed(text, needle, replacement):
+def _argument_lines(text):
+    return [i for i, line in enumerate(text.split("\n")) if ARGUMENT.match(line)]
+
+
+def _ordinary_lines(text):
+    """Argument lines for tests the real files run whole, not only a node id."""
+    return [
+        i
+        for i, line in enumerate(text.split("\n"))
+        if ARGUMENT.match(line)
+        and ARGUMENT.match(line).group(1) not in GATED_ONLY
+    ]
+
+
+def _edited(text, which, change, lines_of=None):
+    """Copy of text with change(line) applied to the n-th test-path line of the command."""
     lines = text.split("\n")
-    index = next(i for i, line in enumerate(lines) if needle in line)
-    lines[index] = replacement(lines[index])
+    index = (lines_of or _argument_lines)(text)[which]
+    lines[index] = change(lines[index])
     return "\n".join(lines)
 
 
-def _last_argument_line(text):
-    lines = text.split("\n")
-    return next(
-        lines[i].strip()
-        for i in range(len(lines) - 1, -1, -1)
-        if re.fullmatch(rf"\s*{TEST_PATH}\s*\\?", lines[i])
-    )
+def _gated():
+    return GATED.read_text(encoding="utf-8")
 
 
-def test_a_commented_out_last_workflow_argument_fails_the_guard():
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    _, job = _split_workflow(workflow)
-    last = _last_argument_line(job)
-    broken = _with_line_changed(job, last, lambda line: line.replace(last, "# " + last))
+def _job():
+    return _split_workflow(WORKFLOW.read_text(encoding="utf-8"))[1]
+
+
+@pytest.mark.parametrize("text", [_gated, _job], ids=["gated", "workflow"])
+@pytest.mark.parametrize("which", [0, 5, -1], ids=["first", "middle", "last"])
+def test_a_commented_out_argument_fails_the_guard(text, which):
+    broken = _edited(text(), which, lambda line: line.replace(line.strip(), "# " + line.strip()))
     with pytest.raises(AssertionError, match="comment inside the pytest argument list"):
         _pytest_arguments(broken)
 
 
-def test_a_commented_out_middle_gated_argument_fails_the_guard():
-    gated = GATED.read_text(encoding="utf-8")
-    broken = _with_line_changed(
-        gated, "tests/test_soul_map_io_failure.py", lambda line: "  # " + line.strip()
-    )
+@pytest.mark.parametrize("text", [_gated, _job], ids=["gated", "workflow"])
+def test_an_inline_comment_after_an_argument_fails_the_guard(text):
+    broken = _edited(text(), 5, lambda line: line + "  # flaky", _ordinary_lines)
     with pytest.raises(AssertionError, match="comment inside the pytest argument list"):
         _pytest_arguments(broken)
 
 
-def test_an_inline_comment_after_a_gated_argument_fails_the_guard():
-    gated = GATED.read_text(encoding="utf-8")
-    broken = _with_line_changed(
-        gated, "tests/test_soul_map_io_failure.py", lambda line: line + "  # flaky"
-    )
-    with pytest.raises(AssertionError, match="comment inside the pytest argument list"):
+@pytest.mark.parametrize("text", [_gated, _job], ids=["gated", "workflow"])
+def test_a_comment_on_the_pytest_line_itself_fails_the_guard(text):
+    broken = text().replace("python -m pytest -q \\", "python -m pytest -q  # slice \\", 1)
+    assert broken != text()
+    with pytest.raises(AssertionError, match="no 'python -m pytest -q"):
+        _pytest_arguments(broken)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda t: t.replace("python -m pytest -q \\", "python -m pytest -q --co \\", 1),
+        lambda t: t.replace("python -m pytest -q \\", "python -m pytest -q -k nothing \\", 1),
+        lambda t: t.replace("python -m pytest -q \\", "true || python -m pytest -q \\", 1),
+        lambda t: t.replace("python -m pytest -q \\", "echo python -m pytest -q \\", 1),
+        lambda t: t.replace("python -m pytest -q \\", "python -m pytest -q ; true \\", 1),
+    ],
+    ids=["--co", "-k", "true-or", "echo", "semicolon"],
+)
+@pytest.mark.parametrize("text", [_gated, _job], ids=["gated", "workflow"])
+def test_a_flag_or_wrapper_on_the_pytest_line_fails_the_guard(text, mutate):
+    broken = mutate(text())
+    assert broken != text()
+    with pytest.raises(AssertionError):
+        _pytest_arguments(broken)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda line: line.replace(".py", ".py::test_one"),
+        lambda line: f'"{line.strip()}"' if not line.rstrip().endswith("\\") else line.replace(line.strip().split()[0], f'"{line.strip().split()[0]}"'),
+        lambda line: line.replace("tests/", "--deselect tests/"),
+        lambda line: line.replace("tests/", "--ignore=tests/"),
+        lambda line: line + " || true",
+    ],
+    ids=["node-id", "quoted", "--deselect", "--ignore", "or-true"],
+)
+@pytest.mark.parametrize("text", [_gated, _job], ids=["gated", "workflow"])
+def test_an_argument_that_is_not_a_bare_test_path_fails_the_guard(text, change):
+    broken = _edited(text(), 5, change, _ordinary_lines)
+    assert broken != text()
+    with pytest.raises(
+        AssertionError, match="unexpected content|narrows a test path"
+    ):
+        _pytest_arguments(broken)
+
+
+@pytest.mark.parametrize("text", [_gated, _job], ids=["gated", "workflow"])
+def test_a_duplicated_path_fails_the_guard(text):
+    lines = text().split("\n")
+    ordinary = _ordinary_lines(text())
+    lines[ordinary[1]] = lines[ordinary[0]]
+    with pytest.raises(AssertionError, match="listed twice"):
+        _pytest_arguments("\n".join(lines))
+
+
+@pytest.mark.parametrize("text", [_gated, _job], ids=["gated", "workflow"])
+def test_a_space_after_a_backslash_fails_the_guard(text):
+    """Bash does not continue the line, so the rest of the list would not run."""
+    broken = _edited(text(), 5, lambda line: line + " ", _ordinary_lines)
+    with pytest.raises(AssertionError, match="unexpected content in the pytest argument list"):
         _pytest_arguments(broken)
 
 
 def test_a_commented_out_path_filter_entry_is_not_counted():
     triggers, _ = _split_workflow(WORKFLOW.read_text(encoding="utf-8"))
-    target = "tests/test_hold_learning_trail.py"
-    assert target in _filter_paths(triggers)
+    target = sorted(_filter_paths(triggers))[3]
     commented = triggers.replace(f'- "{target}"', f'# - "{target}"')
     assert commented != triggers
-    assert target not in _filter_paths(commented)
+    assert _filter_paths(commented) == _filter_paths(triggers) - {target}
 
 
-def test_the_real_files_have_no_comment_inside_their_pytest_commands():
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    _pytest_arguments(_split_workflow(workflow)[1])
-    _pytest_arguments(GATED.read_text(encoding="utf-8"))
+def test_a_jobs_word_in_a_comment_does_not_confuse_the_split():
+    workflow = "# jobs: are defined below\n" + WORKFLOW.read_text(encoding="utf-8")
+    triggers, job = _split_workflow(workflow)
+    assert "pull_request:" in triggers, "the trigger section must still be the part before jobs:"
+    assert "python -m pytest -q" in job and "python -m pytest -q" not in triggers
+
+
+def test_a_second_pytest_command_line_fails_the_guard():
+    job = _job()
+    with pytest.raises(AssertionError, match="more than one"):
+        _pytest_arguments(job + "\n          python -m pytest -q \\\n            tests/test_x.py\n")
+
+
+def _missing_files(paths):
+    return sorted(p for p in paths if not (ROOT / p).is_file())
+
+
+def test_every_listed_test_file_exists():
+    _, filters, workflow, gated = _selections()
+    assert _missing_files(filters | workflow | gated) == []
+
+
+def test_a_listed_test_file_that_does_not_exist_is_reported():
+    assert _missing_files({"tests/test_does_not_exist_zzz.py"}) == ["tests/test_does_not_exist_zzz.py"]
+
+
+def test_the_push_trigger_reuses_the_pull_request_path_filter():
+    triggers, _ = _split_workflow(WORKFLOW.read_text(encoding="utf-8"))
+    assert triggers.count("&unit1_slice_paths") == 1
+    assert triggers.count("*unit1_slice_paths") == 1
+
+
+def test_the_real_files_pass_the_strict_command_shape():
+    _pytest_arguments(_job())
+    _pytest_arguments(_gated())
+
+
+def test_a_node_id_is_allowed_only_on_the_paths_the_script_narrows_on_purpose():
+    gated = _gated()
+    narrowed = [
+        line for line in gated.split("\n") if ARGUMENT.match(line) and ARGUMENT.match(line).group(2)
+    ]
+    assert all(ARGUMENT.match(line).group(1) in GATED_ONLY for line in narrowed)
