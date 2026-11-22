@@ -5,11 +5,14 @@ Ensures data directory exists before file writes to prevent
 "No such file or directory" errors on Fly.io and similar platforms.
 """
 
+import fcntl
 import json
 import logging
 import os
 import tempfile
-from typing import Any, Dict, Optional, Tuple
+import time
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, Optional, Tuple
 
 
 DATA_DIR = os.environ.get("DATA_DIR", "data")
@@ -17,6 +20,37 @@ DATA_DIR = os.environ.get("DATA_DIR", "data")
 _logger = logging.getLogger(__name__)
 _data_dir_created_logged = False
 _fsync_dir_warned = False
+
+
+@contextmanager
+def file_lock(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
+    """Cross-process, cross-thread lock for a read-modify-write of ``path``.
+
+    flock is per open file description, so two threads that each open the
+    sidecar ``<path>.lock`` contend exactly as two processes do. Raises
+    TimeoutError rather than proceeding unlocked, so a caller can report
+    "not written" instead of a silent overwrite.
+    """
+    lock_path = path + ".lock"
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                # Only a busy lock is worth waiting for. Any other OSError is permanent
+                # (bad fd, read-only volume, permission) and must surface at once.
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Timed out after {timeout_seconds}s waiting for {lock_path}"
+                    )
+                time.sleep(0.01)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def ensure_data_dir() -> str:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from internal.council.resolver import atomic_finalize_resolution
@@ -67,7 +68,7 @@ def test_rebalance_trail_emitted_false_on_emit_failure(tmp_path, monkeypatch):
     assert result["saved"] is True
     # emit may no-op if no weight deltas; force via patching the loop by changing before
     # If no deltas, trail_emitted stays True (emit never called). Re-run with mocked before/after.
-    with patch("internal.council.weights.save_weights"):
+    with patch("internal.council.weights.save_weights", return_value=(True, True)):
         with patch("internal.council.weights.load_weights", return_value={"quant": 2.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}):
             with patch(
                 "internal.council.weights.soft_blend_weights",
@@ -83,3 +84,30 @@ def test_rebalance_trail_emitted_false_on_emit_failure(tmp_path, monkeypatch):
                             )
     assert result2["trail_emitted"] is False
     assert "emit_weight_change" in result2.get("warnings", [])
+
+
+def test_rebalance_reports_trail_committed_after_successful_save(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    soul.write_text(
+        '{"adversarial_state":{"council_weights":{"quant":1,"hype":1,"dark_horse":1,"technical":1}}}',
+        encoding="utf-8",
+    )
+    preds.write_text('{"resolved":[],"active":[]}', encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    blended = {"quant": 1.5, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
+    monkeypatch.setattr(
+        "internal.council.weights.soft_blend_weights", lambda *_a, **_k: dict(blended)
+    )
+
+    result = rebalance_council_weights(
+        predictions_path=str(preds),
+        soul_map_path=str(soul),
+        save=True,
+    )
+
+    assert result["trail_emit_planned"] > 0
+    assert result["ok"] is True
+    assert result["trail_emitted"] is True
+    trail = json.loads(soul.read_text(encoding="utf-8"))["soul_map_state"]["learning_trail"]
+    assert any(row.get("event_type") == "weight_change" for row in trail)
