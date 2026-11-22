@@ -210,7 +210,7 @@ def archive_predictions_epoch(
     if re_heal_daily:
         heal_summary = heal_daily_pick_ledger(dry_run=False, predictions_path=src)
 
-    if re_heal_daily and not heal_summary.get("healed"):
+    if re_heal_daily and not heal_succeeded(heal_summary):
         # ponytail: never leave LONG without ledger — downgrade to honest HOLD.
         downgraded = _downgrade_today_to_hold(
             reason="Epoch reset — ledger backfill failed; no gradeable row",
@@ -222,6 +222,17 @@ def archive_predictions_epoch(
         "archive_path": archive_path,
         "heal": heal_summary,
     }
+
+
+def heal_succeeded(summary: Dict[str, Any]) -> bool:
+    """True when today's pick has a gradeable row, or no LONG needed one.
+
+    Shared with scripts/heal_daily_pick_ledger.py so both callers agree.
+    """
+    return bool(summary.get("healed")) or summary.get("reason") in (
+        "ledger_present",
+        "no_published_long",
+    )
 
 
 def _downgrade_today_to_hold(*, reason: str, daily_picks_path: Optional[str] = None) -> bool:

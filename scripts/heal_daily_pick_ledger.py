@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 
-from internal.learning.ledger_heal import heal_daily_pick_ledger
+from internal.learning.ledger_heal import heal_daily_pick_ledger, heal_succeeded
 
 
 def main() -> int:
@@ -22,7 +22,7 @@ def main() -> int:
     print(json.dumps(summary, indent=2))
     if not summary.get("ok"):
         return 1
-    if summary.get("healed") or summary.get("reason") in ("ledger_present", "no_published_long"):
+    if heal_succeeded(summary):
         return 0
     if summary.get("dry_run"):
         return 0
