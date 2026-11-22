@@ -664,11 +664,13 @@ def test_an_error_that_is_not_an_oserror_does_not_abort_the_cycle_either(ledger,
 
 
 @pytest.fixture
-def judges(ledger, sinks, monkeypatch):
+def judges(ledger, sinks, monkeypatch, tmp_path):
     """Real judge close and nudge: positions open for r1 and regrade-1, nudge_judge is spied."""
+    import internal.judges.postmortems as postmortems
     import internal.judges.weights as judge_weights
     from internal.judges import tracker
 
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(tmp_path / "postmortems"))
     monkeypatch.setattr(resolver, "on_prediction_resolved", tracker.on_prediction_resolved)
     nudges: list[str] = []
     monkeypatch.setattr(judge_weights, "nudge_judge", lambda name, *_a, **_k: nudges.append(name))
