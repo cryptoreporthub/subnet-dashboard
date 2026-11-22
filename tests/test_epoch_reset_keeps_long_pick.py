@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from internal.learning import ledger_heal
 from internal.learning.ledger_heal import archive_predictions_epoch
 
+RESET_ID = "11111111-1111-4111-8111-111111111111"
+
 
 def _today() -> str:
     return datetime.now(timezone.utc).date().isoformat()
@@ -49,6 +51,7 @@ def test_row_already_present_keeps_the_long_pick(tmp_path, monkeypatch):
     custom, daily = _setup(tmp_path, monkeypatch, with_day_row=True)
 
     summary = archive_predictions_epoch(
+        reset_request_id=RESET_ID,
         predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=True,
     )
 
@@ -64,6 +67,7 @@ def test_failed_heal_still_downgrades_to_hold(tmp_path, monkeypatch):
     )
 
     archive_predictions_epoch(
+        reset_request_id=RESET_ID,
         predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=True,
     )
 
@@ -75,16 +79,19 @@ def test_row_written_by_another_writer_keeps_the_long_pick(tmp_path, monkeypatch
     from internal.learning import prediction_loop
 
     custom, daily = _setup(tmp_path, monkeypatch, with_day_row=False)
-    monkeypatch.setattr(prediction_loop, "record_pick_prediction", lambda *_a, **_kw: None)
+    skipped = prediction_loop.PickRecord(prediction_loop.PickRecordKind.SKIPPED, reason="duplicate")
+    monkeypatch.setattr(prediction_loop, "record_pick_prediction", lambda *_a, **_kw: None, raising=False)
+    monkeypatch.setattr(prediction_loop, "record_pick", lambda *_a, **_kw: skipped, raising=False)
     checks = []
 
-    def _present(_netuid, *_args):
+    def _present(_netuid, *_args, **_kwargs):
         checks.append(1)
         return len(checks) > 1  # absent on the pre-check, present after the failed write
 
     monkeypatch.setattr(ledger_heal, "_day_ledger_present", _present)
 
     summary = archive_predictions_epoch(
+        reset_request_id=RESET_ID,
         predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=True,
     )
 
@@ -101,6 +108,7 @@ def test_long_without_a_pick_payload_downgrades_to_hold(tmp_path, monkeypatch):
     daily.write_text(json.dumps(rows))
 
     summary = archive_predictions_epoch(
+        reset_request_id=RESET_ID,
         predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=True,
     )
 
