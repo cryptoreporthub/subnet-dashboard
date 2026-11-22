@@ -233,13 +233,50 @@ def _pending_list(row: Dict[str, Any]) -> List[str]:
     return list(_NORMAL_EFFECTS)
 
 
-def _stamp_learning_effects_pending(row: Dict[str, Any]) -> None:
+def _stamp_learning_effects_pending(row: Dict[str, Any], names: Optional[List[str]] = None) -> None:
     existing = row.get("learning_effects")
     if isinstance(existing, dict) and existing.get("pending"):
         return
     done = list((existing or {}).get("done") or []) if isinstance(existing, dict) else []
     # New grade cycle: do not carry a prior outcome's indeterminate list.
-    row["learning_effects"] = {"pending": _pending_list(row), "done": done, "indeterminate": []}
+    pending = list(names) if names is not None else _pending_list(row)
+    row["learning_effects"] = {"pending": pending, "done": done, "indeterminate": []}
+
+
+stamp_learning_effects_pending = _stamp_learning_effects_pending
+
+
+def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
+    """Mark (row_key, effect) pairs done in one ledger write. Their receipts already exist."""
+    from internal.learning.predictions_store import (
+        PersistOutcome,
+        _row_key,
+        load_predictions,
+        merge_ledger_changes,
+    )
+
+    if not pairs:
+        return
+    wanted: Dict[Tuple[Any, ...], List[str]] = {}
+    for key, effect in pairs:
+        wanted.setdefault(key, []).append(effect)
+    before = load_predictions(fail_closed=True)
+    after = deepcopy(before)
+    for candidate in after.get("resolved") or []:
+        if not isinstance(candidate, dict):
+            continue
+        effects = candidate.get("learning_effects")
+        names = wanted.get(_row_key(candidate))
+        if not names or not isinstance(effects, dict):
+            continue
+        effects["pending"] = [n for n in (effects.get("pending") or []) if n not in names]
+        effects["indeterminate"] = [n for n in (effects.get("indeterminate") or []) if n not in names]
+        done = list(effects.get("done") or [])
+        effects["done"] = done + [n for n in names if n not in done]
+    result = merge_ledger_changes(before, after, caller="resolver", trigger="learning_effect_receipt")
+    if result.outcome is not PersistOutcome.APPLIED:
+        reason = result.reason.value if result.reason is not None else str(result.outcome)
+        raise RuntimeError(f"learning effect ledger stamp not applied: {reason}")
 
 
 def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
