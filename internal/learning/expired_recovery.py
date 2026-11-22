@@ -250,8 +250,15 @@ def _stamp_learning_effects_pending(
 stamp_learning_effects_pending = _stamp_learning_effects_pending
 
 
-def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
-    """Mark (row_key, effect) pairs done in one ledger write. Their receipts already exist."""
+def move_effects_on_ledger(
+    pairs: List[Tuple[Tuple[Any, ...], str]],
+    warnings: Optional[Dict[Tuple[Any, ...], List[str]]] = None,
+) -> None:
+    """Mark (row_key, effect) pairs done in one ledger write. Their receipts already exist.
+
+    ``warnings`` are side-effect warnings a row's finalize reported after the save. They are
+    stamped on the row in the same write, as the immediate path always stamped them.
+    """
     from internal.learning.predictions_store import (
         PersistOutcome,
         _row_key,
@@ -259,7 +266,7 @@ def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
         merge_ledger_changes,
     )
 
-    if not pairs:
+    if not pairs and not warnings:
         return
     wanted: Dict[Tuple[Any, ...], List[str]] = {}
     for key, effect in pairs:
@@ -269,8 +276,11 @@ def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
     for candidate in after.get("resolved") or []:
         if not isinstance(candidate, dict):
             continue
+        key = _row_key(candidate)
+        if warnings and warnings.get(key):
+            candidate["side_effect_warnings"] = list(warnings[key])
         effects = candidate.get("learning_effects")
-        names = wanted.get(_row_key(candidate))
+        names = wanted.get(key)
         if not names or not isinstance(effects, dict):
             continue
         effects["pending"] = [n for n in (effects.get("pending") or []) if n not in names]

@@ -979,3 +979,73 @@ def test_a_row_recovered_from_expired_closes_judge_positions_without_a_nudge(jud
 
     assert result.get("recovered") == 1, result
     assert judges == [], "a recovered expired row has always replayed without the judge nudge"
+
+
+def _row_on_disk(ledger_path, row_id):
+    return next(r for r in json.loads(ledger_path.read_text())["resolved"] if r["id"] == row_id)
+
+
+def test_a_trace_write_failure_is_stamped_on_the_saved_row_as_before(ledger, sinks, monkeypatch):
+    """The row used to carry side_effect_warnings, and an audit script reads that field."""
+    from internal.council import prediction_trace
+
+    def trace_fails(*_a, **_kw):
+        raise RuntimeError("trace disk unavailable")
+
+    monkeypatch.setattr(prediction_trace, "record_prediction_resolved", trace_fails)
+    resolver._resolve_due_predictions(subnets=[])
+
+    row = _row_on_disk(ledger, "r1")
+    assert row.get("side_effect_warnings") == ["record_prediction_resolved"], row.get("side_effect_warnings")
+    assert _markers(ledger)["r1"]["pending"] == []
+
+
+def test_a_clean_cycle_leaves_no_side_effect_warnings_on_the_row(ledger, sinks):
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert "side_effect_warnings" not in _row_on_disk(ledger, "r1")
+
+
+def test_a_regrade_trace_failure_is_stamped_on_the_saved_row_too(regrade_ledger, sinks, monkeypatch):
+    from internal.council import prediction_trace
+
+    monkeypatch.setattr(
+        prediction_trace, "record_prediction_resolved", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("trace"))
+    )
+    resolver.regrade_expired_predictions(live_prices={})
+
+    row = _row_on_disk(regrade_ledger, "regrade-1")
+    assert row.get("side_effect_warnings") == ["record_prediction_resolved"], row.get("side_effect_warnings")
+
+
+def test_a_trace_failure_is_stamped_even_when_no_receipt_could_be_written(ledger, sinks, monkeypatch):
+    from internal.council import prediction_trace
+
+    def receipts_unwritable(key, effect):
+        raise OSError(errno.EIO, "input/output error")
+
+    monkeypatch.setattr(
+        prediction_trace, "record_prediction_resolved", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("trace"))
+    )
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", receipts_unwritable)
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
+
+
+def test_warnings_are_stamped_only_on_the_row_that_reported_them(ledger, sinks, monkeypatch):
+    from internal.council import prediction_trace
+
+    real = prediction_trace.record_prediction_resolved
+
+    def trace_fails_for_r1(prediction, *a, **k):
+        if prediction.get("id") == "r1":
+            raise RuntimeError("trace")
+        return real(prediction, *a, **k)
+
+    monkeypatch.setattr(prediction_trace, "record_prediction_resolved", trace_fails_for_r1)
+    _two_rows(ledger)
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
+    assert "side_effect_warnings" not in _row_on_disk(ledger, "r2")
