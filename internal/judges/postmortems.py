@@ -27,6 +27,14 @@ POSTMORTEM_LOCK_TIMEOUT_SECONDS = 5.0
 class PostmortemLockTimeout(Exception):
     """Raised only when the postmortem lock deadline passes."""
 
+
+class PostmortemFileCorrupt(Exception):
+    """The judge's postmortem file exists but cannot be parsed.
+
+    Writers must not overwrite it, so this is raised instead of returning [].
+    """
+
+
 def _path(judge_name: str) -> str:
     """Resolve the on-disk path for a judge's postmortem file (registry + containment)."""
     name = judge_name.lower()
@@ -45,16 +53,20 @@ def _path(judge_name: str) -> str:
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-def _load(judge_name: str) -> List[Dict[str, Any]]:
+def _load(judge_name: str) -> List[Any]:
+    """Missing file is an empty history. A file that exists but will not parse raises,
+    so the writer in _record_locked never replaces it with a fresh list."""
     path = _path(judge_name)
     try:
         with open(path, "r") as f:
             data = json.load(f)
-        if not isinstance(data, list):
-            return []
-        return [entry for entry in data if isinstance(entry, dict)]
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except FileNotFoundError:
         return []
+    except (json.JSONDecodeError, OSError) as exc:
+        raise PostmortemFileCorrupt(f"{path} is unreadable: {exc}") from exc
+    if not isinstance(data, list):
+        raise PostmortemFileCorrupt(f"{path} root is not a list")
+    return data
 
 def _write_tmp_json(tmp: str, entries: List[Dict[str, Any]]) -> None:
     """Write JSON to a fresh tmp file; refuse pre-existing symlinks (TOCTOU hardening)."""
@@ -183,7 +195,7 @@ def _record_locked(
             actual = round(float(actual_pct or 0), 4)
             if pred_id is not None:
                 for existing in entries:
-                    if existing.get("prediction_id") == pred_id:
+                    if isinstance(existing, dict) and existing.get("prediction_id") == pred_id:
                         if existing.get("actual_pct") == actual:
                             return existing
                         existing["actual_pct"] = actual
@@ -210,8 +222,8 @@ def _record_locked(
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
-    """Return all postmortems for a judge, newest first."""
-    return list(reversed(_load(judge_name)))
+    """Return all postmortems for a judge, newest first. Rows that are not objects are skipped here; the writer keeps them."""
+    return [row for row in reversed(_load(judge_name)) if isinstance(row, dict)]
 
 
 def _list_for_judge_fail_empty(judge_name: str) -> List[Dict[str, Any]]:

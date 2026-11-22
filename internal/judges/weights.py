@@ -58,7 +58,9 @@ def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) ->
     def _mutate(blob: Dict[str, Any]) -> None:
         blob["judge_weights"] = rounded
 
-    result = write_soul_map(_mutate, path=path or SOUL_MAP_PATH)
+    result = write_soul_map(
+        _mutate, path=path or SOUL_MAP_PATH, raise_on_lock_timeout=False
+    )
     return result.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
 
 
@@ -95,7 +97,7 @@ def nudge_judge(
         blob["judge_weights"] = weights
         updated.update(before=before, after=after)
 
-    result = write_soul_map(_mutate, path=resolved_path)
+    result = write_soul_map(_mutate, path=resolved_path, raise_on_lock_timeout=False)
     if result.outcome is not WriteOutcome.APPLIED:
         return None
     before, after = updated["before"], updated["after"]
