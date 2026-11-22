@@ -250,8 +250,15 @@ def _stamp_learning_effects_pending(
 stamp_learning_effects_pending = _stamp_learning_effects_pending
 
 
-def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
-    """Mark (row_key, effect) pairs done in one ledger write. Their receipts already exist."""
+def move_effects_on_ledger(
+    pairs: List[Tuple[Tuple[Any, ...], str]],
+    warnings: Optional[Dict[Tuple[Any, ...], List[str]]] = None,
+) -> None:
+    """Mark (row_key, effect) pairs done in one ledger write. Their receipts already exist.
+
+    ``warnings`` are side-effect warnings a row's finalize reported after the save. They are
+    stamped on the row in the same write, as the immediate path always stamped them.
+    """
     from internal.learning.predictions_store import (
         PersistOutcome,
         _row_key,
@@ -259,7 +266,7 @@ def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
         merge_ledger_changes,
     )
 
-    if not pairs:
+    if not pairs and not warnings:
         return
     wanted: Dict[Tuple[Any, ...], List[str]] = {}
     for key, effect in pairs:
@@ -269,8 +276,11 @@ def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
     for candidate in after.get("resolved") or []:
         if not isinstance(candidate, dict):
             continue
+        key = _row_key(candidate)
+        if warnings and warnings.get(key):
+            candidate["side_effect_warnings"] = list(warnings[key])
         effects = candidate.get("learning_effects")
-        names = wanted.get(_row_key(candidate))
+        names = wanted.get(key)
         if not names or not isinstance(effects, dict):
             continue
         effects["pending"] = [n for n in (effects.get("pending") or []) if n not in names]
@@ -283,7 +293,9 @@ def move_effects_on_ledger(pairs: List[Tuple[Tuple[Any, ...], str]]) -> None:
         raise RuntimeError(f"learning effect ledger stamp not applied: {reason}")
 
 
-def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
+def _move_effect_on_ledger(
+    row: Dict[str, Any], effect: str, warnings: Optional[List[str]] = None
+) -> None:
     from internal.learning.predictions_store import load_predictions, merge_ledger_changes, _row_key
 
     key = _row_key(row)
@@ -301,6 +313,12 @@ def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
             break
     if target is None:
         return
+    if warnings is not None:
+        # A replayed finalize reports its own warnings. Replace what an earlier run stamped.
+        if warnings:
+            target["side_effect_warnings"] = list(warnings)
+        else:
+            target.pop("side_effect_warnings", None)
     effects = target.setdefault("learning_effects", {"pending": [], "done": [], "indeterminate": []})
     pending = [name for name in (effects.get("pending") or []) if name != effect]
     done = list(effects.get("done") or [])
@@ -568,6 +586,7 @@ def recover_expired_predictions(
             work = pending + [name for name in indeterminate if name not in pending]
             indeterminate_set = set(indeterminate)
             for effect in list(work):
+                replay_warnings = None
                 # Fail-closed: a None key collides in has_effect_receipt and
                 # _ledger_effect_state, so do not consult either.
                 if key is None:
@@ -679,7 +698,9 @@ def recover_expired_predictions(
                                 resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
                             else:
                                 resolved_at = str(resolve_at or row.get("resolved_at") or _utcnow_iso())
-                            warnings_before = list(row.get("side_effect_warnings") or [])
+                            # The flush may have stamped warnings from its own run. Judge this replay
+                            # only by what it reports, then record exactly that on the row.
+                            row.pop("side_effect_warnings", None)
                             resolver.atomic_finalize_resolution(
                                 row,
                                 actual_pct=float(item.get("actual_pct") if item.get("actual_pct") is not None else row.get("actual_pct") or 0),
@@ -691,8 +712,11 @@ def recover_expired_predictions(
                                 apply_judge_nudge=replay_judge_nudge,
                             )
                             warnings_after = list(row.get("side_effect_warnings") or [])
+                            # A replay under a revoke ran no finalize sink, so it has no evidence to
+                            # replace the stamp with. Leave what an earlier run recorded.
+                            replay_warnings = None if resolver._cycle_writes_revoked_safe() else warnings_after
                             fresh_close_warning = any(
-                                name in warnings_after and name not in warnings_before
+                                name in warnings_after
                                 for name in ("on_prediction_resolved", "portfolios_unobservable")
                             )
                             obs = observe_portfolios()
@@ -757,7 +781,7 @@ def recover_expired_predictions(
                                 incomplete.append(row.get("id"))
                                 receipts_write_failed.append(row.get("id"))
                             continue
-                        _move_effect_on_ledger(row, effect)
+                        _move_effect_on_ledger(row, effect, warnings=replay_warnings)
                 except LearningEffectApplyLockTimeout:
                     logger.exception("expired recovery apply lock timeout")
                     _note_lock_timeout(row, apply_timeout=True)

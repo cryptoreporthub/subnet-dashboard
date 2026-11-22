@@ -235,6 +235,8 @@ class _LearningDeferral:
         self.items: List[Tuple[Any, str, Any, Dict[str, Any]]] = []
         # The apply_judge_nudge each row's finalize effect was queued with, by row key.
         self.judge_nudge: Dict[Any, bool] = {}
+        # Side-effect warnings the finalize effect reported after the save, by row key.
+        self.warnings: Dict[Any, List[str]] = {}
         self.impact_value: Optional[float] = None
 
 
@@ -405,7 +407,14 @@ def _finalize_effects_deferred(prediction: Dict[str, Any], *, apply_judge_nudge:
         # Immediate caller (replay, regrade): the row is not saved yet, so stamp it as before.
         prediction["side_effect_warnings"] = warnings
     else:
-        # Deferred: the row was saved before these ran, so log them with the id instead.
+        # Deferred: the row was saved before these ran. Log them, and hand them to the
+        # flush, which stamps them on the saved row in its final ledger write.
+        deferral = _learning_deferral.get()
+        from internal.learning.predictions_store import _row_key
+
+        key = _row_key(prediction)
+        if key is not None:
+            deferral.warnings[key] = list(warnings)
         logger.warning(
             "resolver side effects reported after save id=%s warnings=%s",
             prediction.get("id"),
@@ -549,19 +558,26 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
                 )
                 return
     finally:
-        _clear_receipted_markers(receipted)
+        _clear_receipted_markers(receipted, deferral.warnings)
 
 
-def _clear_receipted_markers(receipted: List[Tuple[Any, str]]) -> None:
-    if not receipted:
+def _clear_receipted_markers(
+    receipted: List[Tuple[Any, str]], warnings: Optional[Dict[Any, List[str]]] = None
+) -> None:
+    if not receipted and not warnings:
         return
     from internal.learning import expired_recovery
 
-    try:
-        expired_recovery.move_effects_on_ledger(receipted)
-    except Exception:
-        # Receipts exist, so the sweep moves these markers without running the effects.
-        logger.exception("learning markers not cleared after flush, the sweep will clear them")
+    for attempt in (1, 2):
+        try:
+            expired_recovery.move_effects_on_ledger(receipted, warnings=warnings)
+            return
+        except Exception:
+            # One retry: a conflict with a concurrent writer is gone on a fresh read.
+            if attempt == 2:
+                # Receipts exist, so the sweep moves these markers without running the
+                # effects. Warnings that were not stamped remain only in the log.
+                logger.exception("learning markers not cleared after flush, the sweep will clear them")
 
 
 def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
