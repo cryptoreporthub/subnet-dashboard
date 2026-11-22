@@ -494,9 +494,10 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
     at the end. An effect that raises keeps its marker, so the expired-recovery sweep
     retries it. The first lock timeout, or any other error from the apply lock or the
     receipt recheck, stops the flush, and the remaining effects stay pending for the
-    sweep. A failed receipt write is different: the effect already ran, so it is marked
-    indeterminate and the flush goes on. Stopping there would send the remaining effects
-    through the sweep's replay, which is a weaker copy of the live effect. A crash between an effect and its
+    sweep. A failed receipt write is different, unless it is a lock timeout: the effect
+    already ran, so it is marked indeterminate and the flush goes on. Stopping there
+    would send the remaining effects through the sweep's replay, a weaker copy of the
+    live effect. A crash between an effect and its
     receipt can replay that one effect, the residual the sweep already accepts.
     """
     if deferral is None:
