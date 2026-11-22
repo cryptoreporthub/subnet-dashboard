@@ -216,3 +216,22 @@ def test_pump_learning_leaves_no_per_key_lock_sidecars(tmp_path, monkeypatch):
     monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", lambda **_kw: None)
     pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
     assert glob.glob(f"{path}.learning-*") == []
+
+
+def test_historic_indeterminate_does_not_lock_recovery_forever(tmp_path, monkeypatch):
+    path = _pump_ledger(tmp_path, monkeypatch)
+    calls = []
+
+    def crash(**_kw):
+        calls.append(1)
+        raise SystemExit("crash during calibration")
+
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", crash)
+    with pytest.raises(SystemExit):
+        pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
+    monkeypatch.setattr(pump_calibration, "maybe_adapt_after_resolve", lambda **_kw: calls.append(1))
+    pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
+    later = pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
+    assert calls == [1]
+    assert later["ok"] is True
+    assert later["learning_indeterminate_historic"] == 1
