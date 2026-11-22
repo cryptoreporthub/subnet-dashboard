@@ -10,8 +10,10 @@ effects. These tests crash the flush, run the sweep, and count the real write si
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import json
+import logging
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -659,3 +661,179 @@ def test_an_error_that_is_not_an_oserror_does_not_abort_the_cycle_either(ledger,
     expired_recovery.recover_expired_predictions()
 
     assert _counts(sinks) == _once(), _counts(sinks)
+
+
+@pytest.fixture
+def judges(ledger, sinks, monkeypatch):
+    """Real judge close and nudge: positions open for r1 and regrade-1, nudge_judge is spied."""
+    import internal.judges.weights as judge_weights
+    from internal.judges import tracker
+
+    monkeypatch.setattr(resolver, "on_prediction_resolved", tracker.on_prediction_resolved)
+    nudges: list[str] = []
+    monkeypatch.setattr(judge_weights, "nudge_judge", lambda name, *_a, **_k: nudges.append(name))
+    for row in (_due_row(), _due_row("regrade-1")):
+        for judge in tracker.all_judges():
+            judge.open_position(row, size=1.0)
+    return nudges
+
+
+def _judge_count():
+    from internal.judges import tracker
+
+    return len(tracker.all_judges())
+
+
+def test_a_crash_before_the_flush_still_nudges_each_judge_once(judges, monkeypatch):
+    _crash_at_flush(monkeypatch)
+    with pytest.raises(ProcessDied):
+        resolver._resolve_due_predictions(subnets=[])
+    assert judges == []
+
+    expired_recovery.recover_expired_predictions()
+
+    assert len(judges) == _judge_count(), judges
+
+
+def test_a_clean_cycle_nudges_each_judge_once_and_the_sweep_adds_none(judges):
+    resolver._resolve_due_predictions(subnets=[])
+    assert len(judges) == _judge_count(), judges
+
+    expired_recovery.recover_expired_predictions()
+
+    assert len(judges) == _judge_count(), "the sweep must not nudge a judge again"
+
+
+def test_a_regrade_crash_replays_without_a_judge_nudge(regrade_ledger, judges, monkeypatch):
+    _crash_at_flush(monkeypatch)
+    with pytest.raises(ProcessDied):
+        resolver.regrade_expired_predictions(live_prices={})
+
+    expired_recovery.recover_expired_predictions()
+
+    assert judges == [], "regrade grades with apply_judge_nudge False, so replay must too"
+
+
+def test_a_lock_timeout_stop_before_finalize_still_nudges_each_judge_once(judges, monkeypatch):
+    real_has = expired_recovery.has_effect_receipt
+
+    def finalize_times_out(key, effect):
+        if effect == "finalize":
+            raise expired_recovery.LearningEffectReceiptsLockTimeout("held")
+        return real_has(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "has_effect_receipt", finalize_times_out)
+    resolver._resolve_due_predictions(subnets=[])
+    assert judges == []
+    monkeypatch.setattr(expired_recovery, "has_effect_receipt", real_has)
+
+    expired_recovery.recover_expired_predictions()
+
+    assert len(judges) == _judge_count(), judges
+
+
+def test_a_failed_receipt_write_marks_that_effect_indeterminate_and_the_flush_goes_on(
+    ledger, sinks, monkeypatch
+):
+    real_write = expired_recovery.write_effect_receipt
+    state = {"first": True}
+
+    def first_write_fails(key, effect):
+        if state["first"]:
+            state["first"] = False
+            raise OSError(errno.EIO, "input/output error")
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", first_write_fails)
+    resolver._resolve_due_predictions(subnets=[])
+
+    marker = _markers(ledger)["r1"]
+    assert marker["indeterminate"] == ["expert"], marker
+    assert sorted(marker["done"]) == ["finalize", "impact", "scenario", "signal"], marker
+    assert _counts(sinks) == _once(), "later effects must still run live"
+
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), "the sweep must settle the indeterminate effect without running it"
+    assert _markers(ledger)["r1"]["indeterminate"] == []
+
+
+def test_a_trace_write_failure_is_a_warning_and_finalize_is_done_in_the_live_path_too(
+    ledger, sinks, monkeypatch, caplog
+):
+    from internal.council import prediction_trace
+
+    def trace_fails(*_a, **_kw):
+        raise RuntimeError("trace disk unavailable")
+
+    monkeypatch.setattr(prediction_trace, "record_prediction_resolved", trace_fails)
+    with caplog.at_level(logging.WARNING):
+        resolver._resolve_due_predictions(subnets=[])
+
+    marker = _markers(ledger)["r1"]
+    assert "finalize" in marker["done"], marker
+    assert any("side effects reported after save" in r.getMessage() and "r1" in r.getMessage() for r in caplog.records)
+
+
+def test_a_replayed_pump_calibration_gets_the_prediction_the_live_effect_got(ledger, sinks, monkeypatch):
+    from internal.learning import pump_calibration
+
+    seen: list[object] = []
+    monkeypatch.setattr(
+        pump_calibration,
+        "maybe_adapt_after_resolve",
+        lambda *a, prediction=None, **k: seen.append(prediction),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda _row: True)
+
+    resolver._resolve_due_predictions(subnets=[])
+    live = list(seen)
+    assert len(live) == 1 and live[0] is not None and live[0]["id"] == "r1", live
+
+    seen.clear()
+    ledger.write_text(
+        json.dumps({"predictions": [_second_due_row()], "resolved": [], "stats": {}})
+    )
+    _crash_at_flush(monkeypatch)
+    with pytest.raises(ProcessDied):
+        resolver._resolve_due_predictions(subnets=[])
+    assert seen == []
+
+    expired_recovery.recover_expired_predictions()
+
+    assert len(seen) == 1 and seen[0] is not None and seen[0]["id"] == "r2", seen
+
+
+def test_a_row_recovered_from_expired_replays_pump_calibration_as_before(ledger, sinks, monkeypatch):
+    """Only resolver-stamped rows replay with the prediction. Recovered rows keep the old call."""
+    from internal.council import price_reference
+    from internal.learning import pump_calibration
+
+    seen: list[object] = ["unset"]
+    seen.clear()
+    monkeypatch.setattr(
+        pump_calibration,
+        "maybe_adapt_after_resolve",
+        lambda *a, prediction=None, **k: seen.append(prediction),
+    )
+    monkeypatch.setattr(resolver, "_skip_council_learning", lambda _row: True)
+    monkeypatch.setattr(
+        price_reference, "price_at_resolve_at", lambda *a, **k: ("ok", 110.0, {"price_source": "hourly"})
+    )
+    expired = {
+        "id": "expired-1",
+        "netuid": 7,
+        "status": "expired",
+        "outcome": "expired",
+        "correct": None,
+        "direction": "up",
+        "reference_price": 100.0,
+        "predicted_pct": 5.0,
+        "resolve_at": "2026-07-01T12:00:00Z",
+    }
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [expired], "stats": {}}))
+
+    result = expired_recovery.recover_expired_predictions()
+
+    assert result.get("recovered") == 1, result
+    assert seen == [None], seen

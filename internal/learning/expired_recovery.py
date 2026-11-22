@@ -233,14 +233,18 @@ def _pending_list(row: Dict[str, Any]) -> List[str]:
     return list(_NORMAL_EFFECTS)
 
 
-def _stamp_learning_effects_pending(row: Dict[str, Any], names: Optional[List[str]] = None) -> None:
+def _stamp_learning_effects_pending(
+    row: Dict[str, Any],
+    names: Optional[List[str]] = None,
+    extras: Optional[Dict[str, Any]] = None,
+) -> None:
     existing = row.get("learning_effects")
     if isinstance(existing, dict) and existing.get("pending"):
         return
     done = list((existing or {}).get("done") or []) if isinstance(existing, dict) else []
     # New grade cycle: do not carry a prior outcome's indeterminate list.
     pending = list(names) if names is not None else _pending_list(row)
-    row["learning_effects"] = {"pending": pending, "done": done, "indeterminate": []}
+    row["learning_effects"] = {"pending": pending, "done": done, "indeterminate": [], **(extras or {})}
 
 
 stamp_learning_effects_pending = _stamp_learning_effects_pending
@@ -554,6 +558,11 @@ def recover_expired_predictions(
             else:
                 pending = _pending_list(row)
                 indeterminate = []
+            # Read once, before any effect runs. Settling an effect rewrites the in-memory
+            # marker without these keys. Only the resolver stamps them, so a row recovered
+            # from expired keeps the old replay: no judge nudge, no prediction for pump.
+            live_marker = isinstance(effects_row, dict) and bool(effects_row.get("live"))
+            replay_judge_nudge = live_marker and bool(effects_row.get("judge_nudge"))
             # Dedup: an effect is processed once. Indeterminate names take the
             # receipt-only branch even if they also appear in pending.
             work = pending + [name for name in indeterminate if name not in pending]
@@ -679,7 +688,7 @@ def recover_expired_predictions(
                                 resolved_price=float(item.get("price") if item.get("price") is not None else row.get("resolved_price") or 0),
                                 resolved_at=resolved_at,
                                 price_meta=item.get("meta"),
-                                apply_judge_nudge=False,
+                                apply_judge_nudge=replay_judge_nudge,
                             )
                             warnings_after = list(row.get("side_effect_warnings") or [])
                             fresh_close_warning = any(
@@ -713,7 +722,10 @@ def recover_expired_predictions(
                         elif effect == "pump":
                             from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
-                            maybe_adapt_after_resolve()
+                            if live_marker:
+                                maybe_adapt_after_resolve(prediction=row)
+                            else:
+                                maybe_adapt_after_resolve()
                         # Crash window: if we die after the effect applies and before this
                         # receipt or indeterminate marker lands, retry can double-apply.
                         # If the receipt write fails, retry the indeterminate merge once
