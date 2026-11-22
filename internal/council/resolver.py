@@ -233,6 +233,8 @@ class _LearningDeferral:
 
     def __init__(self) -> None:
         self.items: List[Tuple[Any, str, Any, Dict[str, Any]]] = []
+        # The apply_judge_nudge each row's finalize effect was queued with, by row key.
+        self.judge_nudge: Dict[Any, bool] = {}
         self.impact_value: Optional[float] = None
 
 
@@ -258,6 +260,15 @@ def _run_or_defer(prediction: Dict[str, Any], effect: Any, name: str) -> None:
     _queue_effect(prediction, deferral, effect, name)
 
 
+def _note_judge_nudge(prediction: Dict[str, Any], apply_judge_nudge: bool) -> None:
+    deferral = _learning_deferral.get()
+    if deferral is None:
+        return
+    from internal.learning.predictions_store import _row_key
+
+    deferral.judge_nudge[_row_key(prediction)] = bool(apply_judge_nudge)
+
+
 def _stamp_deferred_learning_pending(deferral: Optional[_LearningDeferral], rows: List[Dict[str, Any]]) -> None:
     """Mark each row with the effects queued for it, so the save carries the marker.
 
@@ -274,9 +285,13 @@ def _stamp_deferred_learning_pending(deferral: Optional[_LearningDeferral], rows
         if key is not None and name not in queued.setdefault(key, []):
             queued[key].append(name)
     for row in rows:
-        names = queued.get(_row_key(row)) if isinstance(row, dict) else None
+        key = _row_key(row) if isinstance(row, dict) else None
+        names = queued.get(key)
         if names:
-            stamp_learning_effects_pending(row, names)
+            # live and judge_nudge let the sweep replay finalize and pump as they were queued.
+            stamp_learning_effects_pending(
+                row, names, {"live": True, "judge_nudge": bool(deferral.judge_nudge.get(key, False))}
+            )
 
 
 def _impact_tier(prediction: Dict[str, Any]) -> Optional[str]:
@@ -477,8 +492,11 @@ def _flush_deferred_learning(deferral: Optional[_LearningDeferral], commit_resul
     Each keyed effect runs under the sweep's apply lock and writes its receipt before the
     lock is released. The markers of the effects that ran are cleared in one ledger write
     at the end. An effect that raises keeps its marker, so the expired-recovery sweep
-    retries it. The first lock timeout, or any other error from the lock or the journal,
-    stops the flush, and the remaining effects stay pending for the sweep. A crash between an effect and its
+    retries it. The first lock timeout, or any other error from the apply lock or the
+    receipt recheck, stops the flush, and the remaining effects stay pending for the
+    sweep. A failed receipt write is different: the effect already ran, so it is marked
+    indeterminate and the flush goes on. Stopping there would send the remaining effects
+    through the sweep's replay, which is a weaker copy of the live effect. A crash between an effect and its
     receipt can replay that one effect, the residual the sweep already accepts.
     """
     if deferral is None:
@@ -1675,6 +1693,7 @@ def resolve_prediction_at_horizon(
         resolved_at=resolved_at,
         price_meta=meta,
     )
+    _note_judge_nudge(prediction, apply_judge_nudge)
     _run_or_defer(
         prediction,
         lambda: _finalize_effects_deferred(prediction, apply_judge_nudge=apply_judge_nudge),
