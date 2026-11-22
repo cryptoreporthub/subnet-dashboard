@@ -262,9 +262,7 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
                 return "indeterminate"
         if stored_kind == "indeterminate":
             logger.warning("hour pick record indeterminate: %s", stored.reason)
-        if stored_kind == "skipped" and (
-            stored.reason == "judge_evaluation_failed" or str(stored.reason).startswith("ledger_")
-        ):
+        if stored_kind == "skipped" and str(stored.reason).startswith("ledger_"):
             return "failed"
         return stored_kind
     except Exception as exc:
