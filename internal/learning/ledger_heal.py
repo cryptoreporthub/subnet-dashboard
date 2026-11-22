@@ -280,16 +280,13 @@ def archive_predictions_epoch(
         return {"ok": False, "reason": "invalid_reset_request_id"}
     preserve_pending = os.environ.get("PREDICTIONS_ARCHIVE_PRESERVE_PENDING", "1") != "0"
     selected: Dict[str, Any] = {}
-    retry = False
 
     def clear_epoch(fresh, raw):
-        nonlocal retry
         history = list(fresh.get("epoch_history") or [])
         _remove_old_uncommitted_stages(dest_dir, history)
         existing = next((entry for entry in history if entry.get("reset_request_id") == request_id), None)
         if existing:
             selected.update(existing)
-            retry = True
             return fresh, [], []
         raw = raw or json.dumps(fresh, sort_keys=True).encode()
         sha = hashlib.sha256(raw).hexdigest()
@@ -341,9 +338,6 @@ def archive_predictions_epoch(
         archive_path = _publish_epoch_archive(dest_dir, selected)
     except (OSError, ValueError, KeyError) as exc:
         return {"ok": False, "reason": str(exc), "heal": {"skipped": True}}
-
-    if retry:
-        return {"ok": True, "archive_path": archive_path, "idempotent_retry": True, "heal": {"skipped": True}}
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:
