@@ -390,6 +390,7 @@ def record_pick(
     except Exception as exc:
         logger.warning("Prediction trace on create failed: %s", exc)
 
+    judge_scores = None
     try:
         from internal.judges.tracker import evaluate_prediction
 
@@ -404,8 +405,8 @@ def record_pick(
         )
         prediction["judge_scores_at_creation"] = judge_scores
     except Exception as exc:
-        logger.warning("Judge evaluation failed: %s", exc)
-        return PickRecord(PickRecordKind.SKIPPED, reason="judge_evaluation_failed")
+        logger.warning("Judge evaluation failed; keeping the pick without judge scores: %s", exc)
+        judge_scores = None
 
     persisted = append_prediction_result(prediction, path=predictions_path)
     if persisted.outcome is PersistOutcome.INDETERMINATE:
@@ -415,14 +416,15 @@ def record_pick(
     if not persisted.committed_keys:
         return PickRecord(PickRecordKind.SKIPPED, reason="duplicate")
 
-    positions_failed = False
-    try:
-        from internal.judges.portfolios import open_positions_for_prediction
+    positions_failed = judge_scores is None
+    if not positions_failed:
+        try:
+            from internal.judges.portfolios import open_positions_for_prediction
 
-        open_positions_for_prediction(prediction, judge_scores)
-    except Exception as exc:
-        logger.warning("Committed pick needs portfolio reconciliation: %s", exc)
-        positions_failed = True
+            open_positions_for_prediction(prediction, judge_scores)
+        except Exception as exc:
+            logger.warning("Committed pick needs portfolio reconciliation: %s", exc)
+            positions_failed = True
 
     _append_mindmap_trail(pick, prediction, horizon_type)
     _mirror_pick_to_soul_map(pick, prediction, horizon_type)
@@ -463,7 +465,7 @@ def record_pick(
 
 def record_pick_prediction(*args, **kwargs) -> Optional[Dict[str, Any]]:
     result = record_pick(*args, **kwargs)
-    return result.prediction if result.kind is PickRecordKind.COMMITTED else None
+    return result.prediction if result.ledger_committed else None
 
 
 def _gradeable_for_judge_close(row: Dict[str, Any]) -> bool:
