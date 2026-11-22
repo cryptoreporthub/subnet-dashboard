@@ -231,6 +231,7 @@ def heal_succeeded(summary: Dict[str, Any]) -> bool:
     """
     return bool(summary.get("healed")) or summary.get("reason") in (
         "ledger_present",
+        "duplicate_skipped",
         "no_published_long",
     )
 
