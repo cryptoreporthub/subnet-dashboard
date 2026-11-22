@@ -18,6 +18,8 @@ exec python -m pytest -q \
   tests/test_pick_history_duplicate_repair.py \
   tests/test_epoch_retry_still_heals.py \
   tests/test_epoch_retry_after_success_keeps_long.py \
+  tests/test_resolver_flush_crash.py \
+  tests/test_hold_learning_trail.py \
   tests/test_mindmap_pending_declined.py \
   tests/test_1578_plan_v31_weights_ledger.py \
   tests/test_1578_ci_lists_in_sync.py \
