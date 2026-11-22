@@ -68,3 +68,25 @@ def test_failed_heal_still_downgrades_to_hold(tmp_path, monkeypatch):
     )
 
     assert _today_action(daily) == "HOLD"
+
+
+def test_row_written_by_another_writer_keeps_the_long_pick(tmp_path, monkeypatch):
+    """The write loses a race: another writer adds today's row first, so the heal reports duplicate_skipped."""
+    from internal.learning import prediction_loop
+
+    custom, daily = _setup(tmp_path, monkeypatch, with_day_row=False)
+    monkeypatch.setattr(prediction_loop, "record_pick_prediction", lambda *_a, **_kw: None)
+    checks = []
+
+    def _present(_netuid, *_args):
+        checks.append(1)
+        return len(checks) > 1  # absent on the pre-check, present after the failed write
+
+    monkeypatch.setattr(ledger_heal, "_day_ledger_present", _present)
+
+    summary = archive_predictions_epoch(
+        predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=True,
+    )
+
+    assert summary["heal"]["reason"] == "duplicate_skipped"
+    assert _today_action(daily) == "LONG"
