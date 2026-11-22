@@ -530,6 +530,9 @@ def reconcile_judge_positions(*, predictions_path: Optional[str] = None) -> int:
     from internal.judges.portfolios import observe_portfolios
 
     observation = observe_portfolios()
+    if observation.get("kind") == "unreadable":
+        # Fail closed: an unreadable book cannot tell us which picks are still open.
+        raise PortfolioUnreadable(observation.get("error") or "portfolios_unreadable")
     open_ids = set()
     if observation.get("kind") == "readable":
         for name in ("oracle", "echo", "pulse"):
@@ -581,7 +584,9 @@ def retry_pending_postmortems(data: Optional[Dict[str, Any]] = None, observation
                 if isinstance(entry, dict) and entry.get("prediction_id") is not None
             }
         except Exception:
-            existing = set()
+            # An unreadable postmortem file must not look empty: writing now would duplicate records.
+            logger.exception("postmortem read failed judge=%s; skipping retry", name)
+            continue
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -691,19 +696,20 @@ def _mirror_pick_to_soul_map(
 ) -> None:
     """Keep soul_map_state.last_pick in sync for dashboard / rotation readers."""
     try:
-        from internal.council.weights import _load_raw, _save_raw
+        from internal.council.weights import SOUL_MAP_PATH, _mutate_raw
 
-        data = _load_raw()
-        sms = data.setdefault("soul_map_state", {})
-        if not isinstance(sms, dict):
-            sms = {}
-            data["soul_map_state"] = sms
-        sms[f"last_{horizon_type}_pick"] = {
-            "pick": pick,
-            "prediction_id": prediction.get("id"),
-            "updated_at": prediction.get("created_at"),
-        }
-        if not _save_raw(data):
+        def _apply(data):
+            sms = data.setdefault("soul_map_state", {})
+            if not isinstance(sms, dict):
+                sms = {}
+                data["soul_map_state"] = sms
+            sms[f"last_{horizon_type}_pick"] = {
+                "pick": pick,
+                "prediction_id": prediction.get("id"),
+                "updated_at": prediction.get("created_at"),
+            }
+
+        if not _mutate_raw(_apply, SOUL_MAP_PATH):
             logger.warning("Soul-map pick mirror refused write")
     except Exception as exc:
         logger.warning("Soul-map pick mirror failed: %s", exc)
@@ -759,23 +765,24 @@ def record_hold_decision(
         logger.warning("HOLD trail emit failed: %s", exc)
 
     try:
-        from internal.council.weights import _load_raw, _save_raw
+        from internal.council.weights import SOUL_MAP_PATH, _mutate_raw
 
-        data = _load_raw()
-        sms = data.setdefault("soul_map_state", {})
-        if not isinstance(sms, dict):
-            sms = {}
-            data["soul_map_state"] = sms
-        entry = {
-            "action": "HOLD",
-            "pick": None,
-            "candidate": cand or None,
-            "reason": reason,
-            "updated_at": now,
-        }
-        sms[f"last_{horizon_type}_pick"] = entry
-        sms[f"last_{horizon_type}_hold"] = entry
-        if not _save_raw(data):
+        def _apply(data):
+            sms = data.setdefault("soul_map_state", {})
+            if not isinstance(sms, dict):
+                sms = {}
+                data["soul_map_state"] = sms
+            entry = {
+                "action": "HOLD",
+                "pick": None,
+                "candidate": cand or None,
+                "reason": reason,
+                "updated_at": now,
+            }
+            sms[f"last_{horizon_type}_pick"] = entry
+            sms[f"last_{horizon_type}_hold"] = entry
+
+        if not _mutate_raw(_apply, SOUL_MAP_PATH):
             logger.warning("HOLD soul-map mirror refused write")
     except Exception as exc:
         logger.warning("HOLD soul-map mirror failed: %s", exc)

@@ -387,7 +387,7 @@ def recover_expired_predictions(
         if indeterminate and outcome not in _RETIRED:
             retryable_indeterminate.append(row)
 
-    if not dry_run and observation.get("kind") == "unreadable" and not retryable_pending:
+    if not dry_run and observation.get("kind") == "unreadable":
         return _fail(
             "portfolio_unobservable",
             error=str(observation.get("error") or observation.get("kind") or "unobservable"),
@@ -770,6 +770,7 @@ def recover_expired_predictions(
             fresh = load_predictions(fail_closed=True)
         except Exception as exc:
             return _fail("ledger_unreadable", error=str(exc), recovered=recovered)
+        from internal.council.capture import capture_from_row
         pending_items = []
         for row in fresh.get("resolved") or []:
             if not isinstance(row, dict):
@@ -786,7 +787,7 @@ def recover_expired_predictions(
                     "price": row.get("resolved_price"),
                     "resolve_at": row.get("resolved_at"),
                     "meta": {"price_source": row.get("price_source")},
-                    "capture": None,
+                    "capture": capture_from_row(row),
                     "expert": row.get("expert"),
                 })
         if pending_items:

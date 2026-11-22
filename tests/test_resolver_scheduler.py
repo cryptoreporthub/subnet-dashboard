@@ -136,6 +136,7 @@ def test_expire_retires_predictions_past_grace_window():
     _write_predictions({
         "predictions": [
             {
+                "id": "expire-grace-1",
                 "netuid": 1,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,
@@ -165,6 +166,7 @@ def test_expire_handles_corrupt_resolve_at():
     _write_predictions({
         "predictions": [
             {
+                "id": "expire-corrupt-1",
                 "netuid": 1,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,

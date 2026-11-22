@@ -112,7 +112,7 @@ def _persist_applied(outcome: Any) -> bool:
 def _write_mutate(mutator: Any, path: str) -> tuple[bool, bool]:
     from internal.store.soul_map_io import write_soul_map
 
-    result = write_soul_map(mutator, path)
+    result = write_soul_map(mutator, path, raise_on_lock_timeout=False)
     return _persist_ok(result.outcome), _persist_applied(result.outcome)
 
 
@@ -120,7 +120,11 @@ def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> bool:
     """Replace the serialized blob; callers intentionally provide full-blob state."""
     from internal.store.soul_map_io import write_soul_map
 
-    result = write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
+    result = write_soul_map(
+        lambda blob: (blob.clear(), blob.update(data)),
+        path,
+        raise_on_lock_timeout=False,
+    )
     return _persist_ok(result.outcome)
 
 
