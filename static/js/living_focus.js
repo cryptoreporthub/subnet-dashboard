@@ -204,7 +204,6 @@
     updateCtaRow();
     root.setAttribute('data-focus-netuid', String(focusNetuid));
     window.LivingFocus = window.LivingFocus || {};
-    window.LivingFocus.netuid = focusNetuid;
     window.LivingFocus.name = focusName;
     var inv = document.getElementById('inv-netuid');
     if (inv) inv.value = String(focusNetuid);
@@ -603,29 +602,31 @@
     return null;
   }
 
+  // Stored postmortems: { postmortems: { <judge>: [record, ...] } }, each record
+  // carrying top-level netuid, created_at, and questions. Newest one for the focus wins.
   function postmortemForFocus(pm) {
-    if (!pm || focusNetuid == null) return null;
-    var posts = pm.postmortems;
-    if (Array.isArray(posts)) {
-      for (var i = 0; i < posts.length; i++) {
-        var p = posts[i];
-        var pred = (p && p.prediction) || {};
-        if (pred.netuid != null && Number(pred.netuid) === focusNetuid) return p;
-      }
-      return null;
+    if (!pm || focusNetuid == null || !pm.postmortems || typeof pm.postmortems !== 'object') return null;
+    var best = null;
+    Object.keys(pm.postmortems).forEach(function (judge) {
+      var list = Array.isArray(pm.postmortems[judge]) ? pm.postmortems[judge] : [];
+      list.forEach(function (rec) {
+        if (!rec || Number(rec.netuid) !== focusNetuid) return;
+        if (!best || String(rec.created_at || '') > String(best.created_at || '')) best = rec;
+      });
+    });
+    return best;
+  }
+
+  function autopsyDetail(rec) {
+    var judge = rec.judge ? String(rec.judge).charAt(0).toUpperCase() + String(rec.judge).slice(1) : 'Judge';
+    var when = String(rec.created_at || '').slice(0, 10);
+    var q = rec.questions || {};
+    var numbers = '';
+    if (rec.predicted_pct != null && rec.actual_pct != null) {
+      numbers = ' ' + rec.direction + ' predicted ' + Number(rec.predicted_pct).toFixed(1) +
+        '%, actual ' + Number(rec.actual_pct).toFixed(1) + '%.';
     }
-    if (posts && typeof posts === 'object') {
-      var keys = Object.keys(posts);
-      for (var j = 0; j < keys.length; j++) {
-        var list = posts[keys[j]] || [];
-        for (var k = 0; k < list.length; k++) {
-          var item = list[k];
-          var pr = (item && item.prediction) || {};
-          if (pr.netuid != null && Number(pr.netuid) === focusNetuid) return item;
-        }
-      }
-    }
-    return null;
+    return judge + ' ' + when + ':' + numbers + (q.what ? ' ' + q.what : '');
   }
 
   function loadChips() {
@@ -633,7 +634,7 @@
     return Promise.all([
       fetchJson('/api/scenario-memory', 8000).catch(function () { return null; }),
       fetchJson('/api/ruggers/subnet/' + focusNetuid, 8000).catch(function () { return null; }),
-      fetchJson('/api/postmortems?limit=20', 8000).catch(function () { return null; }),
+      fetchJson('/api/postmortems', 8000).catch(function () { return null; }),
     ]).then(function (res) {
       var scen = scenarioForFocus(res[0]);
       if (scen && scen.regime) {
@@ -650,8 +651,7 @@
       }
       var pm = postmortemForFocus(res[2]);
       if (pm) {
-        var lesson = pm.lesson || pm.summary || pm.verdict || 'graded autopsy on file';
-        chips.push({ label: 'Autopsy', detail: String(lesson).slice(0, 120), tone: 'muted' });
+        chips.push({ label: 'Autopsy', detail: autopsyDetail(pm).slice(0, 240), tone: 'muted' });
       }
       renderChips(chips);
     });
