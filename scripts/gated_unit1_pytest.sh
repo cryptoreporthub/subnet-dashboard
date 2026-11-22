@@ -15,6 +15,9 @@ exec python -m pytest -q \
   tests/test_pick_effects_survive_position_failure.py \
   tests/test_judge_failure_keeps_pick.py \
   tests/test_judge_failure_reconciles_later.py \
+  tests/test_pick_history_duplicate_repair.py \
+  tests/test_epoch_retry_still_heals.py \
+  tests/test_epoch_retry_after_success_keeps_long.py \
   tests/test_mindmap_pending_declined.py \
   tests/test_1578_plan_v31_weights_ledger.py \
   tests/test_1578_ci_lists_in_sync.py \
