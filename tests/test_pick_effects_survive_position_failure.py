@@ -36,8 +36,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(tmp_path / "portfolios.json"))
     monkeypatch.setattr(prediction_loop, "_link_scenario_memory", lambda *_a, **_kw: None)
     monkeypatch.setattr(prediction_loop, "load_weights", lambda *_a, **_kw: dict(CANON))
-    monkeypatch.setattr(weights, "_load_raw", lambda *_a, **_kw: _read_soul(soul))
-    monkeypatch.setattr(weights, "_save_raw", lambda data, *_a, **_kw: _write_soul(soul, data))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(mindmap_bridge, "MindmapBridge", _TrailSpy)
     _TrailSpy.calls = []
     return SimpleNamespace(ledger=ledger, soul=soul)
@@ -50,11 +49,6 @@ def _read_soul(path):
 def _pick_trail_ids():
     """Prediction ids of pick trail entries. Trail-bus events share the spy but carry no prediction_id."""
     return [c["prediction_id"] for c in _TrailSpy.calls if c.get("prediction_id")]
-
-
-def _write_soul(path, data):
-    path.write_text(json.dumps(data), encoding="utf-8")
-    return True
 
 
 PICK = {
