@@ -41,14 +41,14 @@ def _run_forced_order(monkeypatch, calls):
     results = {}
     original_write = soul_map_io.write_soul_map
 
-    def synchronized_write(mutator, path):
+    def synchronized_write(mutator, path, **kwargs):
         label = current.label
         entered[label].set()
         assert entered[labels[0]].wait(2)
         assert entered[labels[1]].wait(2)
         if label == labels[1]:
             assert first_done.wait(2)
-        result = original_write(mutator, path)
+        result = original_write(mutator, path, **kwargs)
         if label == labels[0]:
             first_done.set()
         return result
