@@ -90,3 +90,19 @@ def test_row_written_by_another_writer_keeps_the_long_pick(tmp_path, monkeypatch
 
     assert summary["heal"]["reason"] == "duplicate_skipped"
     assert _today_action(daily) == "LONG"
+
+
+def test_long_without_a_pick_payload_downgrades_to_hold(tmp_path, monkeypatch):
+    """A LONG with no usable pick cannot be graded, so it must not stay LONG."""
+    custom, daily = _setup(tmp_path, monkeypatch, with_day_row=False)
+    rows = json.loads(daily.read_text())
+    for row in rows:
+        row["pick"] = {}
+    daily.write_text(json.dumps(rows))
+
+    summary = archive_predictions_epoch(
+        predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=True,
+    )
+
+    assert summary["heal"]["reason"] == "no_published_long"
+    assert _today_action(daily) == "HOLD"
