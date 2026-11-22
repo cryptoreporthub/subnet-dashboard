@@ -119,8 +119,9 @@ def test_pump_crash_during_calibration_is_not_repeated(tmp_path, monkeypatch):
     assert row["learning"]["state"] == "indeterminate"
     assert result["learning_indeterminate"] == 1
     later = pump_lead_recover.recover_overdue_pump_leads(path=str(path), hydrate=False)
-    assert later["ok"] is False
-    assert later["learning_indeterminate"] == 1
+    assert later["ok"] is True
+    assert later["learning_indeterminate"] == 0
+    assert later["learning_indeterminate_historic"] == 1
 
 
 def test_concurrent_pump_reconcile_does_not_steal_live_claim(tmp_path, monkeypatch):
