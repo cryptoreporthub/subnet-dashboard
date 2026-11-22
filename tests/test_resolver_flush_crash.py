@@ -1054,7 +1054,10 @@ def test_warnings_are_stamped_only_on_the_row_that_reported_them(ledger, sinks, 
 def _flush_leaves_finalize_pending_with_a_stamped_close_failure(monkeypatch):
     """Close fails live, then the receipt write and the indeterminate mark both fail."""
 
+    close_calls = []
+
     def close_fails(*_a, **_kw):
+        close_calls.append(1)
         raise RuntimeError("portfolio write busy")
 
     real_write = expired_recovery.write_effect_receipt
@@ -1070,18 +1073,20 @@ def _flush_leaves_finalize_pending_with_a_stamped_close_failure(monkeypatch):
     monkeypatch.setattr(resolver, "on_prediction_resolved", close_fails)
     monkeypatch.setattr(expired_recovery, "write_effect_receipt", finalize_receipt_fails)
     monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", mark_fails)
-    return close_fails, real_write
+    return close_calls, real_write
 
 
 def test_a_close_failure_that_repeats_on_replay_keeps_finalize_pending(ledger, sinks, monkeypatch):
-    _close_fails, real_write = _flush_leaves_finalize_pending_with_a_stamped_close_failure(monkeypatch)
+    close_calls, real_write = _flush_leaves_finalize_pending_with_a_stamped_close_failure(monkeypatch)
     resolver._resolve_due_predictions(subnets=[])
     assert _markers(ledger)["r1"]["pending"] == ["finalize"]
     assert "on_prediction_resolved" in _row_on_disk(ledger, "r1")["side_effect_warnings"]
     monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    attempts_before_sweep = len(close_calls)
 
     result = expired_recovery.recover_expired_predictions()
 
+    assert len(close_calls) > attempts_before_sweep, "the sweep must have replayed finalize"
     assert result.get("ok") is False, "the replayed close failed again, so the sweep must stay incomplete"
     assert "finalize" in _markers(ledger)["r1"]["pending"]
 
@@ -1089,7 +1094,7 @@ def test_a_close_failure_that_repeats_on_replay_keeps_finalize_pending(ledger, s
 def test_a_stale_stamped_warning_is_cleared_when_the_replay_succeeds(ledger, sinks, monkeypatch):
     from internal.judges import tracker
 
-    _close_fails, real_write = _flush_leaves_finalize_pending_with_a_stamped_close_failure(monkeypatch)
+    _close_calls, real_write = _flush_leaves_finalize_pending_with_a_stamped_close_failure(monkeypatch)
     resolver._resolve_due_predictions(subnets=[])
     assert "on_prediction_resolved" in _row_on_disk(ledger, "r1")["side_effect_warnings"]
     monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
@@ -1216,3 +1221,163 @@ def test_stamping_warnings_adds_no_ledger_write(ledger, sinks, monkeypatch):
     resolver._resolve_due_predictions(subnets=[])
 
     assert writes["n"] == clean_writes, (writes["n"], clean_writes)
+
+
+def test_a_replay_that_ran_no_finalize_because_of_a_revoke_keeps_the_stamped_warning(ledger, sinks, monkeypatch):
+    from internal.council import prediction_trace
+
+    real_write = expired_recovery.write_effect_receipt
+    real_mark = expired_recovery._mark_effect_indeterminate
+
+    def io_error(*_a, **_kw):
+        raise OSError(errno.EIO, "input/output error")
+
+    monkeypatch.setattr(
+        expired_recovery,
+        "write_effect_receipt",
+        lambda key, effect: io_error() if effect == "finalize" else real_write(key, effect),
+    )
+    monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", io_error)
+    monkeypatch.setattr(
+        prediction_trace, "record_prediction_resolved", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("trace"))
+    )
+    resolver._resolve_due_predictions(subnets=[])
+    assert _row_on_disk(ledger, "r1")["side_effect_warnings"] == ["record_prediction_resolved"]
+    assert _markers(ledger)["r1"]["pending"] == ["finalize"]
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", real_mark)
+    monkeypatch.setattr(resolver, "_cycle_writes_revoked_safe", lambda: True)
+    expired_recovery.recover_expired_predictions()
+
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"], (
+        "a replay that ran no finalize sink has no evidence to replace the stamp with"
+    )
+
+
+def _io_error(*_a, **_kw):
+    raise OSError(errno.EIO, "input/output error")
+
+
+def _receipt_fails_for(monkeypatch, wanted):
+    """wanted: set of (row_id, effect). Receipt write and indeterminate mark both fail for them."""
+    real_write = expired_recovery.write_effect_receipt
+    real_mark = expired_recovery._mark_effect_indeterminate
+
+    def write(key, effect):
+        if (key[1], effect) in wanted:
+            _io_error()
+        return real_write(key, effect)
+
+    def mark(row, effect):
+        if (row.get("id"), effect) in wanted:
+            _io_error()
+        return real_mark(row, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write)
+    monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", mark)
+    return real_write, real_mark
+
+
+def _trace_fails_for(monkeypatch, ids):
+    real = prediction_trace.record_prediction_resolved
+
+    def trace(prediction, *a, **k):
+        if prediction.get("id") in ids:
+            raise RuntimeError("trace")
+        return real(prediction, *a, **k)
+
+    monkeypatch.setattr(prediction_trace, "record_prediction_resolved", trace)
+    return real
+
+
+def test_sweep_moving_a_non_finalize_effect_keeps_the_flush_stamp(ledger, sinks, monkeypatch):
+    """Finalize was receipted with a trace warning; only 'signal' is left for the sweep.
+    The sweep's signal move passes no warnings, so the stamp must stay."""
+    real_write, real_mark = _receipt_fails_for(monkeypatch, {("r1", "signal")})
+    real_trace = _trace_fails_for(monkeypatch, {"r1"})
+    resolver._resolve_due_predictions(subnets=[])
+    assert _markers(ledger)["r1"]["pending"] == ["signal"]
+    assert _row_on_disk(ledger, "r1")["side_effect_warnings"] == ["record_prediction_resolved"]
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", real_mark)
+    monkeypatch.setattr(prediction_trace, "record_prediction_resolved", real_trace)
+    expired_recovery.recover_expired_predictions()
+
+    assert _markers(ledger)["r1"]["pending"] == []
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
+
+
+def test_a_replay_warning_on_one_row_is_not_stamped_on_the_next_row(ledger, sinks, monkeypatch):
+    """r1 replays finalize and its trace fails again; r2 only replays 'signal'. r2 stays clean."""
+    _two_rows(ledger)
+    real_write, real_mark = _receipt_fails_for(monkeypatch, {("r1", "finalize"), ("r2", "signal")})
+    resolver._resolve_due_predictions(subnets=[])
+    assert _markers(ledger)["r1"]["pending"] == ["finalize"]
+    assert _markers(ledger)["r2"]["pending"] == ["signal"]
+    assert "side_effect_warnings" not in _row_on_disk(ledger, "r2")
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", real_mark)
+    _trace_fails_for(monkeypatch, {"r1"})
+    expired_recovery.recover_expired_predictions()
+
+    assert _markers(ledger)["r1"]["pending"] == []
+    assert _markers(ledger)["r2"]["pending"] == []
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
+    assert "side_effect_warnings" not in _row_on_disk(ledger, "r2")
+
+
+def test_a_stamp_that_always_fails_is_tried_exactly_twice_and_logged_once(ledger, sinks, monkeypatch, caplog):
+    calls = {"n": 0}
+
+    def always_fails(pairs, warnings=None):
+        calls["n"] += 1
+        raise RuntimeError("ledger busy")
+
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", always_fails)
+    with caplog.at_level(logging.ERROR, logger="internal.council.resolver"):
+        resolver._resolve_due_predictions(subnets=[])
+
+    msgs = [r.getMessage() for r in caplog.records if "learning markers not cleared" in r.getMessage()]
+    assert calls["n"] == 2, calls
+    assert len(msgs) == 1, msgs
+
+
+def test_a_replay_that_reports_portfolios_unobservable_keeps_finalize_pending(ledger, sinks, monkeypatch):
+    real_write, real_mark = _receipt_fails_for(monkeypatch, {("r1", "finalize")})
+    resolver._resolve_due_predictions(subnets=[])
+    assert _markers(ledger)["r1"]["pending"] == ["finalize"]
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    monkeypatch.setattr(expired_recovery, "_mark_effect_indeterminate", real_mark)
+    monkeypatch.setattr(resolver, "on_prediction_resolved", lambda *a, **k: {"portfolios_unobservable": True})
+    result = expired_recovery.recover_expired_predictions()
+
+    assert result.get("ok") is False, result
+    assert "finalize" in _markers(ledger)["r1"]["pending"]
+
+
+def test_an_indeterminate_finalize_settled_by_the_sweep_keeps_the_flush_stamp(ledger, sinks, monkeypatch):
+    """Finalize ran with a trace warning; its receipt failed but the indeterminate mark landed.
+    The sweep settles it without replaying, so the stamp the flush wrote stays."""
+    real_write = expired_recovery.write_effect_receipt
+
+    def write(key, effect):
+        if effect == "finalize":
+            _io_error()
+        return real_write(key, effect)
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", write)
+    real_trace = _trace_fails_for(monkeypatch, {"r1"})
+    resolver._resolve_due_predictions(subnets=[])
+    assert _markers(ledger)["r1"]["indeterminate"] == ["finalize"], _markers(ledger)["r1"]
+    assert _row_on_disk(ledger, "r1")["side_effect_warnings"] == ["record_prediction_resolved"]
+
+    monkeypatch.setattr(expired_recovery, "write_effect_receipt", real_write)
+    monkeypatch.setattr(prediction_trace, "record_prediction_resolved", real_trace)
+    expired_recovery.recover_expired_predictions()
+
+    assert _markers(ledger)["r1"]["indeterminate"] == []
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]

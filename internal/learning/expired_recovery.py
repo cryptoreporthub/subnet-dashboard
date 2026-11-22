@@ -712,7 +712,9 @@ def recover_expired_predictions(
                                 apply_judge_nudge=replay_judge_nudge,
                             )
                             warnings_after = list(row.get("side_effect_warnings") or [])
-                            replay_warnings = warnings_after
+                            # A replay under a revoke ran no finalize sink, so it has no evidence to
+                            # replace the stamp with. Leave what an earlier run recorded.
+                            replay_warnings = None if resolver._cycle_writes_revoked_safe() else warnings_after
                             fresh_close_warning = any(
                                 name in warnings_after
                                 for name in ("on_prediction_resolved", "portfolios_unobservable")
