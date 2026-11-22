@@ -57,27 +57,6 @@ def test_pump_recover_boot_warns_on_failure(monkeypatch, caplog):
     assert any("pump_lead" in record.message and record.levelno >= logging.WARNING for record in caplog.records)
 
 
-def _declining_write_soul_map(real_write):
-    """DECLINED only when mutator leaves canonical blob unchanged."""
-
-    def wrapper(mutator, path=None):
-        resolved = soul_map_io._resolve_path(path)
-        checked = soul_map_io.read_blob_checked(resolved)
-        if checked.kind == "loaded" and isinstance(checked.blob, dict):
-            blob = copy.deepcopy(checked.blob)
-        elif checked.kind == "missing":
-            blob = {}
-        else:
-            return soul_map_io.WriteResult(WriteOutcome.READ_FAILED, None)
-        prior = copy.deepcopy(blob)
-        mutator(blob)
-        if soul_map_io._canonical_blob_json(blob) == soul_map_io._canonical_blob_json(prior):
-            return soul_map_io.WriteResult(WriteOutcome.DECLINED, prior)
-        return real_write(mutator, path)
-
-    return wrapper
-
-
 # --- B3 ---
 
 
@@ -85,8 +64,6 @@ def test_save_raw_treats_declined_as_persist_ok(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     body = {"adversarial_state": {"council_weights": {"quant": 1.0}}}
     soul.write_text(json.dumps(body), encoding="utf-8")
-    real = soul_map_io.write_soul_map
-    monkeypatch.setattr(soul_map_io, "write_soul_map", _declining_write_soul_map(real))
     assert weights._save_raw(body, str(soul)) is True
 
 
@@ -130,8 +107,6 @@ def test_rebalance_declined_no_trail_state_unchanged(tmp_path, monkeypatch):
         json.dumps({"predictions": [], "resolved": [], "stats": {}}),
         encoding="utf-8",
     )
-    real = soul_map_io.write_soul_map
-    monkeypatch.setattr(soul_map_io, "write_soul_map", _declining_write_soul_map(real))
     emitted: list = []
     monkeypatch.setattr(
         "internal.learning.trail_bus.emit_weight_change",
@@ -173,8 +148,6 @@ def test_nudge_signal_weight_declined_no_emit(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    real = soul_map_io.write_soul_map
-    monkeypatch.setattr(soul_map_io, "write_soul_map", _declining_write_soul_map(real))
     emitted: list = []
     monkeypatch.setattr(
         "internal.learning.trail_bus.emit_weight_change",
@@ -199,8 +172,6 @@ def test_save_calibration_state_declined_no_raise(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    real = soul_map_io.write_soul_map
-    monkeypatch.setattr(soul_map_io, "write_soul_map", _declining_write_soul_map(real))
     before_bytes = soul.read_bytes()
     # Empty patch → canonical blob unchanged → DECLINED (red on pre-honesty _save_raw).
     _save_calibration_state({}, soul_map_path=str(soul))
