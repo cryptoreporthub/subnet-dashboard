@@ -293,7 +293,9 @@ def move_effects_on_ledger(
         raise RuntimeError(f"learning effect ledger stamp not applied: {reason}")
 
 
-def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
+def _move_effect_on_ledger(
+    row: Dict[str, Any], effect: str, warnings: Optional[List[str]] = None
+) -> None:
     from internal.learning.predictions_store import load_predictions, merge_ledger_changes, _row_key
 
     key = _row_key(row)
@@ -311,6 +313,12 @@ def _move_effect_on_ledger(row: Dict[str, Any], effect: str) -> None:
             break
     if target is None:
         return
+    if warnings is not None:
+        # A replayed finalize reports its own warnings. Replace what an earlier run stamped.
+        if warnings:
+            target["side_effect_warnings"] = list(warnings)
+        else:
+            target.pop("side_effect_warnings", None)
     effects = target.setdefault("learning_effects", {"pending": [], "done": [], "indeterminate": []})
     pending = [name for name in (effects.get("pending") or []) if name != effect]
     done = list(effects.get("done") or [])
@@ -578,6 +586,7 @@ def recover_expired_predictions(
             work = pending + [name for name in indeterminate if name not in pending]
             indeterminate_set = set(indeterminate)
             for effect in list(work):
+                replay_warnings = None
                 # Fail-closed: a None key collides in has_effect_receipt and
                 # _ledger_effect_state, so do not consult either.
                 if key is None:
@@ -689,7 +698,9 @@ def recover_expired_predictions(
                                 resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
                             else:
                                 resolved_at = str(resolve_at or row.get("resolved_at") or _utcnow_iso())
-                            warnings_before = list(row.get("side_effect_warnings") or [])
+                            # The flush may have stamped warnings from its own run. Judge this replay
+                            # only by what it reports, then record exactly that on the row.
+                            row.pop("side_effect_warnings", None)
                             resolver.atomic_finalize_resolution(
                                 row,
                                 actual_pct=float(item.get("actual_pct") if item.get("actual_pct") is not None else row.get("actual_pct") or 0),
@@ -701,8 +712,9 @@ def recover_expired_predictions(
                                 apply_judge_nudge=replay_judge_nudge,
                             )
                             warnings_after = list(row.get("side_effect_warnings") or [])
+                            replay_warnings = warnings_after
                             fresh_close_warning = any(
-                                name in warnings_after and name not in warnings_before
+                                name in warnings_after
                                 for name in ("on_prediction_resolved", "portfolios_unobservable")
                             )
                             obs = observe_portfolios()
@@ -767,7 +779,7 @@ def recover_expired_predictions(
                                 incomplete.append(row.get("id"))
                                 receipts_write_failed.append(row.get("id"))
                             continue
-                        _move_effect_on_ledger(row, effect)
+                        _move_effect_on_ledger(row, effect, warnings=replay_warnings)
                 except LearningEffectApplyLockTimeout:
                     logger.exception("expired recovery apply lock timeout")
                     _note_lock_timeout(row, apply_timeout=True)

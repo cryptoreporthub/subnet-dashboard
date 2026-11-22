@@ -568,11 +568,16 @@ def _clear_receipted_markers(
         return
     from internal.learning import expired_recovery
 
-    try:
-        expired_recovery.move_effects_on_ledger(receipted, warnings=warnings)
-    except Exception:
-        # Receipts exist, so the sweep moves these markers without running the effects.
-        logger.exception("learning markers not cleared after flush, the sweep will clear them")
+    for attempt in (1, 2):
+        try:
+            expired_recovery.move_effects_on_ledger(receipted, warnings=warnings)
+            return
+        except Exception:
+            # One retry: a conflict with a concurrent writer is gone on a fresh read.
+            if attempt == 2:
+                # Receipts exist, so the sweep moves these markers without running the
+                # effects. Warnings that were not stamped remain only in the log.
+                logger.exception("learning markers not cleared after flush, the sweep will clear them")
 
 
 def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
