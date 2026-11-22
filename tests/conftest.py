@@ -39,6 +39,17 @@ def _isolate_message_intel_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_learning_effect_receipts(tmp_path, monkeypatch):
+    """The resolver writes effect receipts, so no test may share the repo's journal.
+
+    A receipt left by one run makes the next run skip that effect.
+    """
+    monkeypatch.setenv(
+        "LEARNING_EFFECT_RECEIPTS_PATH", str(tmp_path / "learning_effect_receipts.json")
+    )
+
+
+@pytest.fixture(autouse=True)
 def _isolate_readiness_cache():
     """Prevent readiness cache/refresher state leaking between tests."""
     try:

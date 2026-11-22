@@ -10,7 +10,10 @@ effects. These tests crash the flush, run the sweep, and count the real write si
 
 from __future__ import annotations
 
+import fcntl
 import json
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -80,6 +83,8 @@ def ledger(tmp_path, monkeypatch):
     port_path = tmp_path / "judge_portfolios.json"
     port_path.write_text("{}")
     monkeypatch.setattr(portfolios, "PORTFOLIOS_PATH", str(port_path))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
+    monkeypatch.setattr(trail_bus, "emit_accuracy_update", lambda **_kw: None)
     return path
 
 
@@ -110,6 +115,15 @@ def _counts(calls):
     return {name: calls.count(name) for name in SINKS}
 
 
+def _once(rows: int = 1):
+    return {name: rows for name in SINKS}
+
+
+def _markers(ledger_path):
+    disk = json.loads(ledger_path.read_text())
+    return {r["id"]: r.get("learning_effects") for r in disk["resolved"]}
+
+
 def _crash_at_flush(monkeypatch):
     def die(*_a, **_kw):
         raise ProcessDied()
@@ -129,11 +143,7 @@ def test_learning_survives_a_crash_between_commit_and_flush(ledger, sinks, monke
     result = expired_recovery.recover_expired_predictions()
 
     assert result.get("ok", True), result
-    counts = _counts(sinks)
-    assert counts["expert_nudge"] == 1, counts
-    assert counts["signal_nudge"] == 1, counts
-    assert counts["impact_write"] == 1, counts
-    assert counts["scenario_outcome"] == 1, counts
+    assert _counts(sinks) == _once(), _counts(sinks)
 
 
 def test_recovered_learning_is_applied_once_across_repeated_sweeps(ledger, sinks, monkeypatch):
@@ -142,21 +152,61 @@ def test_recovered_learning_is_applied_once_across_repeated_sweeps(ledger, sinks
         resolver._resolve_due_predictions(subnets=[])
 
     expired_recovery.recover_expired_predictions()
-    once = _counts(sinks)
+    assert _counts(sinks) == _once()
     expired_recovery.recover_expired_predictions()
 
-    assert _counts(sinks) == once, "a second sweep must not apply the effects again"
-    assert once["expert_nudge"] == 1
+    assert _counts(sinks) == _once(), "a second sweep must not apply the effects again"
 
 
 def test_a_clean_cycle_leaves_nothing_for_the_sweep_to_replay(ledger, sinks):
     resolver._resolve_due_predictions(subnets=[])
-    after_cycle = _counts(sinks)
-    assert after_cycle["expert_nudge"] == 1
+    assert _counts(sinks) == _once()
 
     expired_recovery.recover_expired_predictions()
 
-    assert _counts(sinks) == after_cycle, "effects that already ran must not run again"
+    assert _counts(sinks) == _once(), "effects that already ran must not run again"
+
+
+def test_a_clean_cycle_clears_its_markers_on_disk(ledger, sinks):
+    resolver._resolve_due_predictions(subnets=[])
+
+    marker = _markers(ledger)["r1"]
+    assert marker["pending"] == [], marker
+    assert marker["indeterminate"] == [], marker
+    assert sorted(marker["done"]) == ["expert", "finalize", "impact", "scenario", "signal"], marker
+
+
+def test_receipts_alone_stop_the_sweep_when_the_marker_clear_fails(ledger, sinks, monkeypatch):
+    def clear_fails(_pairs):
+        raise RuntimeError("ledger busy")
+
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", clear_fails)
+    resolver._resolve_due_predictions(subnets=[])
+    assert _markers(ledger)["r1"]["pending"], "the clear failed, so the markers stay"
+
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), "receipts must keep the sweep from running the effects again"
+    assert _markers(ledger)["r1"]["pending"] == []
+
+
+def test_the_marker_names_only_the_effects_the_resolver_queued(ledger, sinks, monkeypatch):
+    def staging_fails(*_a, **_kw):
+        raise RuntimeError("soul map unreadable")
+
+    monkeypatch.setattr(resolver, "_stage_impact_strength", staging_fails)
+    _crash_at_flush(monkeypatch)
+    with pytest.raises(ProcessDied):
+        resolver._resolve_due_predictions(subnets=[])
+    assert "impact" not in _markers(ledger)["r1"]["pending"]
+
+    expired_recovery.recover_expired_predictions()
+
+    counts = _counts(sinks)
+    assert counts["impact_write"] == 0, "the sweep ran an effect the resolver chose not to queue"
+    assert {k: v for k, v in counts.items() if k != "impact_write"} == {
+        k: 1 for k in SINKS if k != "impact_write"
+    }, counts
 
 
 def test_crash_after_an_effect_and_before_its_receipt_replays_at_most_that_effect(ledger, sinks, monkeypatch):
@@ -176,10 +226,10 @@ def test_crash_after_an_effect_and_before_its_receipt_replays_at_most_that_effec
     expired_recovery.recover_expired_predictions()
 
     counts = _counts(sinks)
-    assert counts["expert_nudge"] <= 2, counts
-    assert counts["expert_nudge"] >= 1, counts
-    for name in ("signal_nudge", "scenario_outcome", "impact_write"):
-        assert counts[name] == 1, counts
+    assert 1 <= counts["expert_nudge"] <= 2, counts
+    assert {k: v for k, v in counts.items() if k != "expert_nudge"} == {
+        k: 1 for k in SINKS if k != "expert_nudge"
+    }, counts
 
 
 def test_an_effect_that_raises_is_retried_by_the_sweep_and_the_rest_are_not_repeated(ledger, sinks, monkeypatch):
@@ -198,10 +248,7 @@ def test_an_effect_that_raises_is_retried_by_the_sweep_and_the_rest_are_not_repe
 
     expired_recovery.recover_expired_predictions()
 
-    counts = _counts(sinks)
-    assert counts["expert_nudge"] == 1, counts
-    assert counts["signal_nudge"] == 1, counts
-    assert counts["scenario_outcome"] == 1, counts
+    assert _counts(sinks) == _once(), _counts(sinks)
 
 
 def test_learning_dropped_by_a_revoke_is_recovered_by_the_sweep(ledger, sinks, monkeypatch):
@@ -219,10 +266,7 @@ def test_learning_dropped_by_a_revoke_is_recovered_by_the_sweep(ledger, sinks, m
     state["rev"] = False
     expired_recovery.recover_expired_predictions()
 
-    counts = _counts(sinks)
-    assert counts["expert_nudge"] == 1, counts
-    assert counts["signal_nudge"] == 1, counts
-    assert counts["scenario_outcome"] == 1, counts
+    assert _counts(sinks) == _once(), _counts(sinks)
 
 
 NETUID = 7
@@ -278,5 +322,72 @@ def test_regraded_row_learning_survives_a_crash_between_commit_and_flush(regrade
     expired_recovery.recover_expired_predictions()
 
     assert _counts(sinks) == once, "a second sweep must not apply the effects again"
-    for name in ("expert_nudge", "signal_nudge", "scenario_outcome", "impact_write"):
-        assert once[name] == 1, once
+    assert once == _once(), once
+
+
+def _second_due_row():
+    row = _due_row("r2")
+    row["netuid"] = 8
+    return row
+
+
+def test_a_sweep_that_overlaps_the_flush_does_not_apply_an_effect_twice(ledger, sinks, monkeypatch):
+    """The row is committed with its marker before the flush ends, so the sweep can see it."""
+    monkeypatch.setattr(expired_recovery, "APPLY_LOCK_TIMEOUT_SECONDS", 0.3)
+    in_flush = threading.Event()
+    release = threading.Event()
+    state = {"first": True}
+
+    def expert_blocks_once(*_a, **_kw):
+        sinks.append("expert_nudge")
+        if state["first"]:
+            state["first"] = False
+            in_flush.set()
+            release.wait(timeout=20)
+
+    monkeypatch.setattr(weights, "nudge_expert", expert_blocks_once)
+    flush = threading.Thread(target=lambda: resolver._resolve_due_predictions(subnets=[]))
+    flush.start()
+    try:
+        assert in_flush.wait(timeout=20), "the flush never reached its first effect"
+        expired_recovery.recover_expired_predictions()
+    finally:
+        release.set()
+        flush.join(timeout=30)
+    assert not flush.is_alive()
+    expired_recovery.recover_expired_predictions()
+
+    assert _counts(sinks) == _once(), _counts(sinks)
+
+
+def test_a_held_receipts_lock_does_not_stall_the_cycle_and_loses_no_learning(
+    ledger, sinks, monkeypatch, tmp_path
+):
+    """The flush gives up at the first receipts-lock timeout. The sweep finishes the work later."""
+    ledger.write_text(
+        json.dumps({"predictions": [_due_row(), _second_due_row()], "resolved": [], "stats": {}})
+    )
+    monkeypatch.setattr(expired_recovery, "RECEIPTS_LOCK_TIMEOUT_SECONDS", 0.2)
+    real_lock = expired_recovery._receipts_lock
+    attempts = {"n": 0}
+
+    @contextmanager
+    def counted(**kwargs):
+        attempts["n"] += 1
+        with real_lock(**kwargs) as value:
+            yield value
+
+    monkeypatch.setattr(expired_recovery, "_receipts_lock", counted)
+    lock_path = str(tmp_path / "learning_effect_receipts.json") + ".lock"
+    with open(lock_path, "a+", encoding="utf-8") as held:
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX)
+        try:
+            resolver._resolve_due_predictions(subnets=[])
+            waited = attempts["n"]
+        finally:
+            fcntl.flock(held.fileno(), fcntl.LOCK_UN)
+
+    assert waited <= 2, f"the flush waited on the receipts lock {waited} times"
+
+    expired_recovery.recover_expired_predictions()
+    assert _counts(sinks) == _once(rows=2), _counts(sinks)
