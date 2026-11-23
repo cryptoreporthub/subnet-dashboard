@@ -199,6 +199,12 @@ def _confirm_drop(db_path: str, soul_map_path: str, require_drop: bool) -> bool:
     first = db_path not in _drop_retry_after
     if not require_drop and not first and now < _drop_retry_after[db_path]:
         return False
+    try:
+        if _soul_map_migrated(soul_map_path):
+            _drop_retry_after.pop(db_path, None)
+            return True
+    except SoulMapUnreadable:
+        pass  # unreadable: fall through to the locked drop, which quarantines or refuses as before
     patient = require_drop or first
     ok = _drop_imported_keys(soul_map_path, None if patient else _DROP_RETRY_LOCK_SECONDS)
     if ok:

@@ -121,3 +121,36 @@ def test_first_ledger_read_is_not_blocked_by_a_soul_map_writer(tmp_path):
 
     elapsed = reading["elapsed"]
     assert elapsed < READ_BOUND_SECONDS
+
+
+def test_corrupt_soul_map_after_migration_is_quarantined_and_ledger_still_serves(tmp_path):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps({"adversarial_state": {"council_weights": {"quant": 1.4}}, "keep": {"me": [1]}}),
+        encoding="utf-8",
+    )
+    with ledger_db.reader(str(soul)) as conn:
+        assert ledger_db.read_kind(conn, "expert")["quant"] == 1.4
+    assert ledger_db.MIGRATED_KEY in json.loads(soul.read_text(encoding="utf-8"))
+
+    corrupt = b"{not json"
+    soul.write_bytes(corrupt)
+    before = {p.name for p in tmp_path.iterdir()}
+
+    reader = subprocess.run(
+        [sys.executable, "-c", _READER, str(REPO_ROOT), str(soul)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=dict(os.environ),
+    )
+
+    assert reader.returncode == 0, f"fresh reader failed:\n{reader.stderr}"
+    expert = json.loads(reader.stdout.strip().splitlines()[-1])["expert"]
+    assert expert["quant"] == 1.4
+    quarantined = sorted(
+        p for p in tmp_path.iterdir() if p.name not in before and p.name.startswith("soul_map.json.corrupt-")
+    )
+    assert quarantined, f"corrupt soul_map was not quarantined; new files: {sorted({p.name for p in tmp_path.iterdir()} - before)}"
+    assert quarantined[0].read_bytes() == corrupt
