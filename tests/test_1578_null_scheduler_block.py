@@ -44,9 +44,14 @@ def test_null_scheduler_block_is_healed_on_write(tmp_path, write):
     assert stored["adversarial_state"] == {"keep": 1}
 
 
-def test_declined_summary_into_null_block_leaves_file_untouched(tmp_path):
+@pytest.mark.parametrize(
+    "block",
+    [{"prediction_resolver_scheduler": None, "adversarial_state": {"keep": 1}}, {"adversarial_state": {"keep": 1}}],
+    ids=["null", "missing"],
+)
+def test_declined_summary_into_unset_block_leaves_file_untouched(tmp_path, block):
     soul = tmp_path / "soul_map.json"
-    original = json.dumps({"prediction_resolver_scheduler": None, "adversarial_state": {"keep": 1}})
+    original = json.dumps(block)
     soul.write_text(original, encoding="utf-8")
     invalid = {k: v for k, v in SUMMARY.items() if k != "cycle_generation"}
     result = _scheduler(soul)._persist_cycle_summary_locked(invalid, force=True, owned_cycle=True)
