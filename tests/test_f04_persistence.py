@@ -112,6 +112,7 @@ def test_concurrent_disjoint_council_nudges_use_latest_state(
 def test_same_key_nudges_compose(tmp_path):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
+    weights.load_weights(str(soul))
     before = soul.read_bytes()
 
     assert weights.nudge_expert("quant", True, str(soul)) == 1.02

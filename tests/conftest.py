@@ -14,6 +14,7 @@ fixture runs — that's fine, because the lru_cache has already been cleared.
 from __future__ import annotations
 
 import atexit
+import hashlib
 import os
 import shutil
 import tempfile
@@ -26,15 +27,25 @@ _SESSION_LEDGER_DIR = tempfile.mkdtemp(prefix="ledger-session-")
 atexit.register(shutil.rmtree, _SESSION_LEDGER_DIR, True)
 os.environ["LEDGER_DB_PATH"] = os.path.join(_SESSION_LEDGER_DIR, "ledger.db")
 _REAL_LEDGER = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "data", "ledger.db")
-_REAL_LEDGER_EXISTED = os.path.exists(_REAL_LEDGER)
+
+
+def _ledger_signature():
+    try:
+        st = os.stat(_REAL_LEDGER)
+    except OSError:
+        return None
+    with open(_REAL_LEDGER, "rb") as handle:
+        return (st.st_size, hashlib.sha256(handle.read()).hexdigest())
+
+
+_REAL_LEDGER_BEFORE = _ledger_signature()
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """A test run that creates the repo's data/ledger.db has leaked weights into real state."""
-    if not _REAL_LEDGER_EXISTED and os.path.exists(_REAL_LEDGER):
-        os.unlink(_REAL_LEDGER)
+    """A test run that creates or changes the repo's data/ledger.db has leaked weights into real state."""
+    if _ledger_signature() != _REAL_LEDGER_BEFORE:
         session.exitstatus = 1
-        print("\nFAILED: this test run created data/ledger.db; a test is not isolated from it")
+        print("\nFAILED: this test run changed data/ledger.db; a test is not isolated from it")
 
 
 @pytest.fixture(autouse=True)

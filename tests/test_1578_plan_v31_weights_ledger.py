@@ -114,6 +114,7 @@ def test_rebalance_declined_no_trail_state_unchanged(tmp_path, monkeypatch):
         "internal.learning.trail_bus.emit_weight_change",
         lambda *a, **k: emitted.append((a, k)),
     )
+    weights.load_weights(str(soul))
     before_bytes = soul.read_bytes()
     result = weights.rebalance_council_weights(
         predictions_path=str(preds),

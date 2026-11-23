@@ -56,20 +56,21 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def ledger_path_for(anchor_path: Optional[str] = None) -> str:
+def ledger_path_for(anchor_path: Optional[str] = None, *, derived: bool = False) -> str:
     """ledger.db beside the soul_map at ``anchor_path``.
 
     ``soul_map.json`` gets ``ledger.db``. A soul_map under another name gets its own
     ``<name>.ledger.db``, so two soul_map files in one directory never share weights.
     LEDGER_DB_PATH redirects the repo's own data/soul_map.json only (a relative default counts
     when the cwd is the repo root), so a test in a temporary directory keeps its own ledger.
+    ``derived=True`` ignores that override.
     """
     anchor = os.path.abspath(anchor_path or DEFAULT_SOUL_MAP_PATH)
     if anchor == os.path.abspath(DEFAULT_SOUL_MAP_PATH) and os.path.abspath(os.getcwd()) == _REPO_ROOT:
         anchor = _REPO_SOUL_MAP
     directory, base = os.path.split(anchor)
     override = os.environ.get(LEDGER_DB_ENV, "").strip()
-    if override and anchor == _REPO_SOUL_MAP:
+    if override and anchor == _REPO_SOUL_MAP and not derived:
         return override
     return os.path.join(directory, "ledger.db" if base == "soul_map.json" else base + ".ledger.db")
 
@@ -152,6 +153,45 @@ def _ensure(
                 _seeded_missing.add(key)
             else:
                 _seeded_missing.discard(key)
+    if marker == SOUL_MAP_MARKER and state == "loaded" and db_path == ledger_path_for(source_path, derived=True):
+        _drop_imported_keys(source_path)
+
+
+# soul_map keys whose values now live in ledger.db. scripts/compact_soul_map.py insists the root
+# expert_weights and the adversarial_state container stay present, so those two stay (the mirror
+# is frozen at the import and nothing reads it but a rollback).
+_DROPPED_ADVERSARIAL_KEYS = (
+    "council_weights",
+    "signal_weights",
+    "impact_strength",
+    "last_weight_update",
+    "last_impact_strength_update",
+)
+
+
+def _drop_imported_keys(soul_map_path: str) -> None:
+    """Remove the imported weight keys once ledger.db committed them. Every other key is left as is.
+
+    Idempotent: a crash after the ledger commit and before this write only leaves the keys
+    in place, and the next first use drops them. Skipped when LEDGER_DB_PATH redirected the
+    ledger, so a test run cannot strip the developer's real soul_map.
+    """
+    from internal.store.soul_map_io import WriteOutcome, write_soul_map
+
+    def mutate(blob: Dict[str, Any]) -> None:
+        blob.pop("judge_weights", None)
+        adv = blob.get("adversarial_state")
+        if isinstance(adv, dict):
+            for key in _DROPPED_ADVERSARIAL_KEYS:
+                adv.pop(key, None)
+
+    try:
+        result = write_soul_map(mutate, path=soul_map_path, raise_on_lock_timeout=False)
+    except Exception:
+        logger.exception("could not drop imported weight keys from %s", soul_map_path)
+        return
+    if result.outcome not in (WriteOutcome.APPLIED, WriteOutcome.DECLINED):
+        logger.warning("imported weight keys stay in %s: %s", soul_map_path, result.outcome.value)
 
 
 def _rollback(conn: sqlite3.Connection) -> None:

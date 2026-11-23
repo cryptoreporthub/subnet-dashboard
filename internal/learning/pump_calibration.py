@@ -126,7 +126,7 @@ def _online_update_blend_weights(
 ) -> Dict[str, Any]:
     """Apply a bounded per-grade update to the pump blend weights in ledger.db.
 
-    Read, update and write share one transaction. A prediction id applies once.
+    Read, update and write share one transaction.
     """
     from internal.store import ledger_db
 
@@ -142,8 +142,6 @@ def _online_update_blend_weights(
         "flow": max(float(snap.get("buy_ratio") or 0.5) - 0.5, 0.0) * 2.0,
         "chatter": float(snap.get("chatter_intensity") or 0.0),
     }
-    pred_id = prediction.get("id")
-    source_id = f"pump:{pred_id}" if pred_id else None
     with ledger_db.pump_transaction(resolved) as conn:
         weights = dict(_DEFAULTS["blend_weights"])
         weights.update(ledger_db.read_kind(conn, "pump_blend"))
@@ -155,9 +153,7 @@ def _online_update_blend_weights(
         total = sum(weights.values())
         if total > 0:
             weights = {key: round(value / total * 0.95, 4) for key, value in weights.items()}
-        fresh, _ = ledger_db.apply_changes(conn, "pump_blend", weights, source_id=source_id)
-        if not fresh:
-            return cal
+        ledger_db.apply_changes(conn, "pump_blend", weights)
     cal["blend_weights"] = weights
     cal["last_online_update_at"] = _utcnow_z()
     cal["online_updates"] = int(cal.get("online_updates") or 0) + 1

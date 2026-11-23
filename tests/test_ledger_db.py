@@ -37,7 +37,7 @@ def test_a_ledger_beside_soul_map_json_is_ledger_db_and_another_name_gets_its_ow
     assert ledger_db.ledger_path_for(str(tmp_path / "live.json")) == str(tmp_path / "live.json.ledger.db")
 
 
-def test_import_seeds_every_weight_kind_and_keeps_soul_map_bytes(tmp_path):
+def test_import_seeds_every_weight_kind_then_drops_only_the_imported_keys(tmp_path):
     soul = _soul(
         tmp_path,
         {
@@ -50,7 +50,6 @@ def test_import_seeds_every_weight_kind_and_keeps_soul_map_bytes(tmp_path):
             "keep": {"me": [1, 2, 3]},
         },
     )
-    before = open(soul, "rb").read()
     with ledger_db.reader(soul) as conn:
         assert _stored(conn, "expert")["quant"] == 1.4
         assert _stored(conn, "signal:hour")["rsi_crossover"] == 1.3
@@ -58,7 +57,7 @@ def test_import_seeds_every_weight_kind_and_keeps_soul_map_bytes(tmp_path):
         assert _stored(conn, "impact") == {"strength": 0.7}
         assert _stored(conn, "judge") == {"oracle": 0.5, "echo": 0.2, "pulse": 0.3}
         assert ledger_db.weights_known(soul) is True
-    assert open(soul, "rb").read() == before
+    assert json.load(open(soul)) == {"adversarial_state": {}, "keep": {"me": [1, 2, 3]}}
 
 
 def test_missing_soul_map_seeds_defaults_that_are_not_known(tmp_path):

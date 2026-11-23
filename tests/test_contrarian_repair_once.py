@@ -1,7 +1,7 @@
 """A legacy contrarian key is cleared from the two slots the write normalizes.
 
 A legacy contrarian key is repaired once, when the weights are first imported into ledger.db.
-The imported map has no such key, and soul_map.json is left as it was.
+The imported map has no such key, and later loads do not touch soul_map.json.
 """
 
 from __future__ import annotations
@@ -26,15 +26,15 @@ def test_legacy_contrarian_is_cleared_and_later_loads_do_not_rewrite(tmp_path, m
     )
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
 
-    soul_before = soul.read_bytes()
     loaded = weights.load_weights(str(soul))
     assert "contrarian" not in loaded, "legacy key still in council weights"
+    soul_before = soul.read_bytes()
 
     ledger = tmp_path / "ledger.db"
     for _ in range(3):
         assert weights.load_weights(str(soul)) == loaded
     assert ledger.exists()
-    assert soul.read_bytes() == soul_before, "the import must leave soul_map.json as it found it"
+    assert soul.read_bytes() == soul_before, "later loads rewrote the soul map"
 
 
 def test_non_dict_adversarial_state_does_not_crash_the_weight_write(tmp_path):

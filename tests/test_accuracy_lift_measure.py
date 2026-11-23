@@ -103,9 +103,12 @@ def test_accuracy_lift_attributes_hot_signal_without_expert_field():
 def test_evidence_accuracy_lift_no_weight_writes(monkeypatch, tmp_path):
     soul = tmp_path / "soul_map.json"
     soul.write_text(json.dumps({"adversarial_state": {"council_weights": {"quant": 1.0}}}), encoding="utf-8")
-    mtime_before = soul.stat().st_mtime
-
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    from internal.council.weights import load_weights
+
+    load_weights(str(soul))  # the first read imports into ledger.db and drops the imported keys
+    mtime_before = soul.stat().st_mtime
+    weights_before = load_weights(str(soul))
     monkeypatch.setattr(
         "internal.accuracy_lift.measure.build_accuracy_lift_snapshot",
         lambda rows=None: build_accuracy_lift_snapshot(rows=[]),
@@ -115,6 +118,7 @@ def test_evidence_accuracy_lift_no_weight_writes(monkeypatch, tmp_path):
     assert report["accuracy_lift"]["data_available"] is False
     assert report["accuracy_lift"]["full_ledger"]["graded_30d"] == 0
     assert soul.stat().st_mtime == mtime_before
+    assert load_weights(str(soul)) == weights_before
 
 
 def rows_ts(days_ago: float) -> str:

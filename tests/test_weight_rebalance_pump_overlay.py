@@ -256,8 +256,7 @@ def test_rebalance_dry_run_does_not_require_soul_write(tmp_path, monkeypatch):
     assert result["ok"] is True
     assert result["before"]["quant"] == 2.0
     assert result["after"]["technical"] < 1.0
-    stored = json.loads(soul.read_text())
-    assert stored["adversarial_state"]["council_weights"]["quant"] == 2.0
+    assert load_weights(str(soul))["quant"] == 2.0
 
 
 def test_rebalance_reports_archive_usage(tmp_path, monkeypatch):

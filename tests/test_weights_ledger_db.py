@@ -65,11 +65,24 @@ def test_fixture_has_all_ten_production_keys(soul):
     assert len(blob["feedback_logs"]) == 40
 
 
-def test_first_use_import_returns_the_values_soul_map_held_and_leaves_it_byte_identical(soul, tmp_path):
+DROPPED_AFTER_IMPORT = ("judge_weights",)
+
+
+def _expected_after_import() -> dict:
+    """The prod-shaped blob minus the keys ledger.db now owns. expert_weights stays: compaction needs it."""
+    blob = _prod_shaped_soul_map()
+    for key in DROPPED_AFTER_IMPORT:
+        blob.pop(key)
+    adv = blob["adversarial_state"]
+    for key in ("council_weights", "signal_weights", "impact_strength", "last_weight_update"):
+        adv.pop(key)
+    return blob
+
+
+def test_first_use_import_returns_the_values_soul_map_held(soul, tmp_path):
     from internal.council.weights import load_impact_strength, load_signal_weights, load_weights
     from internal.judges.weights import load_judge_weights
 
-    before = soul.read_bytes()
     path = str(soul)
     assert load_weights(path) == {"quant": 1.2, "hype": 0.9, "dark_horse": 1.05, "technical": 1.0}
     assert load_signal_weights(path)["hour"]["rsi_crossover"] == 1.3
@@ -78,15 +91,48 @@ def test_first_use_import_returns_the_values_soul_map_held_and_leaves_it_byte_id
     assert load_impact_strength(path) == 1.25
     assert load_judge_weights(path) == {"oracle": 0.4, "echo": 0.3, "pulse": 0.3}
     assert (tmp_path / "ledger.db").exists(), "weights were not imported into ledger.db"
-    assert soul.read_bytes() == before, "the importer must not touch soul_map.json"
+
+
+def test_the_import_drops_only_the_weight_keys_and_leaves_every_other_key_byte_for_byte(soul):
+    from internal.council.weights import load_weights
+
+    original = json.loads(soul.read_text())
+    load_weights(str(soul))
+    text = soul.read_text()
+    after = json.loads(text)
+    assert tuple(after) == tuple(k for k in PROD_KEYS if k != "judge_weights")
+    assert "council_weights" not in after["adversarial_state"]
+    assert "signal_weights" not in after["adversarial_state"]
+    assert "impact_strength" not in after["adversarial_state"]
+    assert after["expert_weights"] == original["expert_weights"]
+    assert after["adversarial_state"]["calibration"] == {"history": [1]}
+    assert len(after["feedback_logs"]) == 40
+    for key in after:
+        if key == "adversarial_state":
+            continue
+        assert json.dumps(after[key], indent=2) == json.dumps(original[key], indent=2), key
+    assert text == json.dumps(_expected_after_import(), indent=2)
+
+
+def test_a_redirected_ledger_never_strips_the_soul_map_it_imported_from(soul, tmp_path, monkeypatch):
+    """LEDGER_DB_PATH stands in for the real data dir under test, so the real soul_map must keep its keys."""
+    from internal.store import ledger_db
+
+    before = soul.read_bytes()
+    monkeypatch.setattr(ledger_db, "_REPO_SOUL_MAP", str(soul))
+    monkeypatch.setenv("LEDGER_DB_PATH", str(tmp_path / "elsewhere" / "ledger.db"))
+    assert ledger_db.weights_known(str(soul)) is True
+    assert (tmp_path / "elsewhere" / "ledger.db").exists()
+    assert soul.read_bytes() == before
 
 
 def test_weight_writers_leave_every_soul_map_key_byte_for_byte_untouched(soul, tmp_path):
-    from internal.council.weights import nudge_expert, nudge_impact_strength, nudge_signal_weight
+    from internal.council.weights import load_weights, nudge_expert, nudge_impact_strength, nudge_signal_weight
     from internal.judges.weights import nudge_judge
 
-    before = soul.read_bytes()
     path = str(soul)
+    load_weights(path)
+    before = soul.read_bytes()
     assert nudge_expert("quant", True, path) == 1.22
     nudge_signal_weight("hour", "rsi_crossover", False, path)
     nudge_impact_strength(True, "small", path)
@@ -103,10 +149,10 @@ def test_non_weight_soul_map_writes_round_trip_after_import(soul):
     load_weights(str(soul))
     write_soul_map(lambda blob: blob.update(liveness={"resolver": {"at": "later"}}), str(soul))
     blob = read_soul_map(str(soul))
-    expected = _prod_shaped_soul_map()
+    expected = _expected_after_import()
     expected["liveness"] = {"resolver": {"at": "later"}}
     assert blob == expected
-    assert blob["feedback_logs"] == expected["feedback_logs"]
+    assert blob["feedback_logs"] == _prod_shaped_soul_map()["feedback_logs"]
 
 
 def test_missing_soul_map_seeds_defaults_and_creates_no_soul_map(tmp_path):
