@@ -52,7 +52,9 @@ def soul_map(tmp_path, monkeypatch):
 def test_fixture_snapshot_is_fresh_only_while_its_digest_matches_the_live_soul_map(tmp_path, soul_map):
     path = _volume(tmp_path, lambda s: None)
     assert snaps.volume_has_fresh_complete_snapshot(path=path) is True
-    _write_soul(soul_map, 1.7)
+    from internal.council.weights import save_weights
+
+    save_weights({"quant": 1.7, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, str(soul_map))
     assert snaps.volume_has_fresh_complete_snapshot(path=path) is False
 
 

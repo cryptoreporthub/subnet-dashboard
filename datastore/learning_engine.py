@@ -7,6 +7,7 @@ feedback router API so server.py stays compatible.
 """
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -72,7 +73,9 @@ class LearningEngine:
             from internal.council.weights import load_weights, nudge_expert
 
             before = float(load_weights(self.soul_map_path).get(expert, 1.0))
-            after = nudge_expert(expert, correct, self.soul_map_path)
+            after = nudge_expert(
+                expert, correct, self.soul_map_path, source_id=f"feedback:{uuid.uuid4().hex}"
+            )
             if after is not None:
                 try:
                     from internal.learning.trail_bus import emit_weight_change

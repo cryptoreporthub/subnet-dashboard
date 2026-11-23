@@ -1,13 +1,12 @@
 """
 Council Weights — load / save / regime-aware adjustment of expert weights.
 
-Weights persist in data/soul_map.json under `adversarial_state.council_weights`
-(the canonical location read by MindmapBridge.get_expert_weights() and the
-Selector). This keeps the learning loop's weight updates flowing straight
-into the next pick generation.
+Learned weights persist in data/ledger.db (tables ``weights`` and ``weight_applied``,
+see internal/store/ledger_db.py). The first read or write imports today's values
+from soul_map.json, which is never written for weights again. ``path`` arguments
+still name the soul_map beside the ledger.
 
-Signal weights (per-signal, per-horizon) are also stored in the same file under
-`adversarial_state.signal_weights` and are nudged individually when predictions
+Signal weights (per-signal, per-horizon) are nudged individually when predictions
 resolve (Option C — two-tier weighted scoring architecture).
 """
 
@@ -178,10 +177,12 @@ def _council_weight_snapshot(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def _raw_has_legacy_contrarian(data: Dict[str, Any]) -> bool:
     """True when soul_map still stores a separate contrarian weight key."""
+    adv = data.get("adversarial_state")
+    sms = data.get("soul_map_state")
     for slot in (
-        (data.get("adversarial_state") or {}).get("council_weights"),
+        adv.get("council_weights") if isinstance(adv, dict) else None,
         data.get("expert_weights"),
-        (data.get("soul_map_state") or {}).get("expert_weights"),
+        sms.get("expert_weights") if isinstance(sms, dict) else None,
     ):
         if not isinstance(slot, dict):
             continue
@@ -493,7 +494,11 @@ def rebalance_council_weights(
         }:
             blended = apply_rebase_guards(blended, merged_rows)
         saved_ok, saved_applied = save_weights(
-            blended, soul, expected_weights=before, return_outcome=True
+            blended,
+            soul,
+            expected_weights=before,
+            return_outcome=True,
+            source_id=f"rebalance:{_now_iso()}",
         )
         if saved_ok and saved_applied:
             from internal.learning.trail_bus import emit_weight_change
@@ -535,41 +540,20 @@ def rebalance_council_weights(
     }
 
 
-def repair_stale_contrarian_weights(
-    path: str = SOUL_MAP_PATH,
-    predictions_path: Optional[str] = None,
-) -> bool:
-    """Drop legacy contrarian slot and replay learned weights from the ledger."""
-    data = _load_raw(path)
-    if not _raw_has_legacy_contrarian(data):
-        return False
-    if predictions_path is None:
-        base = os.path.dirname(path) or "data"
-        predictions_path = os.path.join(base, "predictions.json")
-    weights = replay_weights_from_predictions(predictions_path)
-    raw_weights = _council_weight_snapshot(data)
-    return save_weights(
-        weights, path, expected_weights=normalize_council_weights(raw_weights or {})
-    )
-
-
 def load_weights(path: Optional[str] = None) -> Dict[str, float]:
-    """Read learned weights from soul_map.json, defaulting to DEFAULT_WEIGHTS."""
-    path = path or SOUL_MAP_PATH
-    for attempt in range(2):
-        try:
-            repair_stale_contrarian_weights(path)
-            break
-        except ConcurrentWeightUpdate as exc:
-            if attempt == 1:
-                raise ConcurrentWeightUpdate(
-                    "legacy weight repair did not settle after bounded retries"
-                ) from exc
-    data = _load_raw(path)
-    raw_weights = _council_weight_snapshot(data)
-    if isinstance(raw_weights, dict):
-        return normalize_council_weights(raw_weights)
-    return dict(DEFAULT_WEIGHTS)
+    """Read learned expert weights from ledger.db."""
+    from internal.store import ledger_db
+
+    with ledger_db.reader(path or SOUL_MAP_PATH) as conn:
+        return normalize_council_weights(ledger_db.read_kind(conn, "expert"))
+
+
+def last_weight_update(path: Optional[str] = None) -> Optional[str]:
+    """When the expert weights last changed, or None before the first nudge."""
+    from internal.store import ledger_db
+
+    with ledger_db.reader(path or SOUL_MAP_PATH) as conn:
+        return ledger_db.get_meta(conn, "last_weight_update")
 
 
 def load_weights_for_ui(path: Optional[str] = None) -> Dict[str, Any]:
@@ -663,19 +647,18 @@ def save_weights(
     *,
     expected_weights: Optional[Dict[str, float]] = None,
     return_outcome: bool = False,
+    source_id: Optional[str] = None,
 ):
-    """Replace the full council weight map and mirror it to the root compatibility map.
+    """Replace the full council weight map in ledger.db.
 
-    The replacement is applied to the latest locked blob, so unrelated keys are
-    retained and a same-key caller wins by serialized write order. Callers that
-    computed a map from a prior snapshot may pass ``expected_weights``; a newer
-    map then raises ``ConcurrentWeightUpdate`` instead of silently overwriting it.
+    Callers that computed a map from a prior snapshot may pass ``expected_weights``;
+    a newer map then raises ``ConcurrentWeightUpdate`` instead of silently overwriting it.
 
-    With ``return_outcome=True``, returns ``(persist_ok, bytes_applied)`` for
+    With ``return_outcome=True``, returns ``(persist_ok, changed)`` for
     callers that must skip side effects when nothing was written.
     """
     outcome = _save_weights_outcome(
-        weights, path, expected_weights=expected_weights
+        weights, path, expected_weights=expected_weights, source_id=source_id
     )
     if return_outcome:
         return outcome
@@ -687,49 +670,29 @@ def _save_weights_outcome(
     path: Optional[str] = None,
     *,
     expected_weights: Optional[Dict[str, float]] = None,
+    source_id: Optional[str] = None,
 ) -> tuple[bool, bool]:
-    """Like save_weights but returns (persist_ok, bytes_applied)."""
-    path = path or SOUL_MAP_PATH
+    """Like save_weights but returns (persist_ok, changed)."""
+    from internal.store import ledger_db
+
     canonical = normalize_council_weights(weights)
     expected = (
         normalize_council_weights(expected_weights)
         if expected_weights is not None
         else None
     )
-
-    def replace_weights(data: Dict[str, Any]) -> None:
-        if expected is not None:
-            current_raw = _council_weight_snapshot(data)
-            current = normalize_council_weights(current_raw or {})
-            if current != expected:
-                raise ConcurrentWeightUpdate("weight map changed before replacement")
-        current_raw = _council_weight_snapshot(data)
-        current = normalize_council_weights(current_raw or {})
-        rounded = {k: round(float(v), 4) for k, v in canonical.items()}
-        root = data.get("expert_weights")
-        root_norm = (
-            normalize_council_weights(root) if isinstance(root, dict) else {}
-        )
-        # A legacy key in the two slots this write normalizes must be removed, even when the
-        # normalized maps match. The soul_map_state slot is not rewritten here, as at base.
-        def _has_contrarian(slot: Any) -> bool:
-            return isinstance(slot, dict) and any(str(k).lower().strip() == "contrarian" for k in slot)
-
-        adv_state = data.get("adversarial_state")
-        council_slot = adv_state.get("council_weights") if isinstance(adv_state, dict) else None
-        stale_slot = _has_contrarian(council_slot) or _has_contrarian(data.get("expert_weights"))
-        if current == canonical and root_norm == canonical and not stale_slot:
-            return
-        adv = data.setdefault("adversarial_state", {})
-        if not isinstance(adv, dict):
-            adv = {}
-            data["adversarial_state"] = adv
-        adv["council_weights"] = rounded
-        adv["last_weight_update"] = _now_iso()
-        # Mirror to root expert_weights so legacy readers always see learned values.
-        data["expert_weights"] = dict(rounded)
-
-    return _write_mutate(replace_weights, path)
+    rounded = {k: round(float(v), 4) for k, v in canonical.items()}
+    try:
+        with ledger_db.transaction(path or SOUL_MAP_PATH) as conn:
+            _, changed = ledger_db.apply_changes(
+                conn, "expert", rounded, source_id=source_id, expected=expected
+            )
+            if changed:
+                ledger_db.mark_expert_weights_written(conn)
+    except ledger_db.LedgerUnreadable:
+        logger.exception("council weight save refused: ledger.db unavailable")
+        return False, False
+    return True, changed
 
 
 def nudge_expert(
@@ -740,56 +703,40 @@ def nudge_expert(
     delta_correct: Optional[float] = None,
     delta_wrong: Optional[float] = None,
     scale: float = 1.0,
+    source_id: Optional[str] = None,
 ) -> Optional[float]:
-    """Single nudge path for resolver + feedback (§27-4). Returns new weight."""
+    """Single nudge path for resolver + feedback (§27-4). Returns new weight.
+
+    With ``source_id`` a repeat of the same source applies nothing and returns None.
+    """
+    from internal.store import ledger_db
+
     if not expert:
         return None
     path = path or SOUL_MAP_PATH
-    # Preserve the legacy contrarian-ledger repair that load_weights() used to
-    # trigger before applying a nudge; the repair produces a fresh full map.
-    try:
-        repair_stale_contrarian_weights(path)
-    except ConcurrentWeightUpdate:
-        # Another same-process nudge repaired the legacy map first; the delta
-        # below recomputes from that latest serialized state.
-        pass
     base = (
         (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
         if correct
         else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
     )
     delta = round(base * max(0.0, float(scale)), 4)
-    desired: Optional[float] = None
-
-    def apply_delta(data: Dict[str, Any]) -> None:
-        nonlocal desired
-        adv = data.get("adversarial_state")
-        raw = adv.get("council_weights") if isinstance(adv, dict) else None
-        if not isinstance(raw, dict):
-            sms = data.get("soul_map_state")
-            raw = sms.get("expert_weights") if isinstance(sms, dict) else None
-        if not isinstance(raw, dict):
-            raw = data.get("expert_weights")
-        weights = normalize_council_weights(raw if isinstance(raw, dict) else {})
-        if expert not in weights:
-            return
-        before = float(weights[expert])
-        desired = round(
-            max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
-            4,
-        )
-        weights[expert] = desired
-        canonical = {k: round(float(v), 4) for k, v in weights.items()}
-        adv = data.setdefault("adversarial_state", {})
-        if not isinstance(adv, dict):
-            adv = {}
-            data["adversarial_state"] = adv
-        adv["council_weights"] = canonical
-        adv["last_weight_update"] = _now_iso()
-        data["expert_weights"] = dict(canonical)
-
-    if not _mutate_raw(apply_delta, path):
-        logger.warning("council weight nudge skipped: soul_map write did not apply")
+    try:
+        with ledger_db.transaction(path) as conn:
+            weights = normalize_council_weights(ledger_db.read_kind(conn, "expert"))
+            if expert not in weights:
+                return None
+            desired = round(
+                max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, weights[expert] + delta)),
+                4,
+            )
+            fresh, _ = ledger_db.apply_changes(
+                conn, "expert", {expert: desired}, source_id=source_id
+            )
+            if source_id is not None and not fresh:
+                return None
+            ledger_db.mark_expert_weights_written(conn)
+    except ledger_db.LedgerUnreadable:
+        logger.warning("council weight nudge skipped: ledger.db write did not apply")
         return None
     return desired
 
@@ -910,19 +857,16 @@ def _now_iso() -> str:
 
 
 def load_signal_weights(path: str = SOUL_MAP_PATH) -> Dict[str, Dict[str, float]]:
-    """Read learned signal weights from soul_map.json, defaulting to DEFAULT_SIGNAL_WEIGHTS."""
+    """Read learned signal weights from ledger.db, defaulting to DEFAULT_SIGNAL_WEIGHTS."""
+    from internal.store import ledger_db
+
     signal_weights = copy.deepcopy(DEFAULT_SIGNAL_WEIGHTS)
-    data = _load_raw(path, copy_blob=False)
-    adv = data.get("adversarial_state")
-    if isinstance(adv, dict) and isinstance(adv.get("signal_weights"), dict):
-        raw = adv["signal_weights"]
-        for horizon in ("hour", "day"):
-            if isinstance(raw.get(horizon), dict):
-                for signal_name, default_val in DEFAULT_SIGNAL_WEIGHTS[horizon].items():
-                    signal_weights[horizon][signal_name] = float(
-                        raw[horizon].get(signal_name, default_val)
-                    )
-        return signal_weights
+    with ledger_db.reader(path) as conn:
+        stored = ledger_db.read_signal_rows(conn)
+    for horizon in ("hour", "day"):
+        for signal_name in DEFAULT_SIGNAL_WEIGHTS[horizon]:
+            if signal_name in stored.get(horizon, {}):
+                signal_weights[horizon][signal_name] = float(stored[horizon][signal_name])
     return signal_weights
 
 
@@ -930,20 +874,19 @@ def save_signal_weights(
     signal_weights: Dict[str, Dict[str, float]],
     path: str = SOUL_MAP_PATH,
 ) -> None:
-    """Replace the full signal-weight map against the latest locked blob."""
+    """Replace the given signal weights in ledger.db."""
+    from internal.store import ledger_db
 
-    def replace_signal_weights(data: Dict[str, Any]) -> None:
-        adv = data.setdefault("adversarial_state", {})
-        if not isinstance(adv, dict):
-            adv = {}
-            data["adversarial_state"] = adv
-        adv["signal_weights"] = {
-            horizon: {k: round(float(v), 4) for k, v in weights.items()}
-            for horizon, weights in signal_weights.items()
-        }
-
-    if not _mutate_raw(replace_signal_weights, path):
-        raise RuntimeError("signal weight persist refused")
+    try:
+        with ledger_db.transaction(path) as conn:
+            for horizon, weights in signal_weights.items():
+                ledger_db.apply_changes(
+                    conn,
+                    f"signal:{horizon}",
+                    {k: round(float(v), 4) for k, v in weights.items()},
+                )
+    except ledger_db.LedgerUnreadable as exc:
+        raise RuntimeError("signal weight persist refused") from exc
 
 
 def nudge_signal_weight(
@@ -954,48 +897,29 @@ def nudge_signal_weight(
     *,
     scale: float = 1.0,
     extra: Optional[Dict[str, Any]] = None,
+    source_id: Optional[str] = None,
 ) -> Optional[float]:
     """Nudge a single signal weight up (correct) or down (wrong), clamped to [0.1, 2.0]."""
+    from internal.store import ledger_db
+
     base = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
     delta = base * max(0.0, float(scale))
-    before = 1.0
-    new_val = 1.0
-
-    def apply_signal_delta(data: Dict[str, Any]) -> None:
-        nonlocal before, new_val
-        signal_weights = copy.deepcopy(DEFAULT_SIGNAL_WEIGHTS)
-        adv = data.get("adversarial_state")
-        raw = adv.get("signal_weights") if isinstance(adv, dict) else None
-        if isinstance(raw, dict):
-            for raw_horizon, raw_weights in raw.items():
-                if isinstance(raw_weights, dict):
-                    clean_weights = {}
-                    for key, value in raw_weights.items():
-                        try:
-                            clean_weights[key] = float(value)
-                        except (TypeError, ValueError):
-                            continue
-                    signal_weights.setdefault(raw_horizon, {}).update(clean_weights)
-        horizon_weights = signal_weights.setdefault(horizon_type, {})
-        before = float(horizon_weights.get(signal_name, 1.0))
-        new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta))
-        horizon_weights[signal_name] = round(new_val, 4)
-        target = data.setdefault("adversarial_state", {})
-        if not isinstance(target, dict):
-            target = {}
-            data["adversarial_state"] = target
-        target["signal_weights"] = {
-            raw_horizon: {
-                key: round(float(value), 4) for key, value in raw_weights.items()
-            }
-            for raw_horizon, raw_weights in signal_weights.items()
-        }
-
-    ok, applied = _write_mutate(apply_signal_delta, path)
-    if not ok:
-        logger.warning("signal weight nudge skipped: soul_map write did not apply")
+    kind = f"signal:{horizon_type}"
+    try:
+        with ledger_db.transaction(path) as conn:
+            stored = ledger_db.current(conn, kind, signal_name)
+            before = float(stored) if stored is not None else 1.0
+            new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta))
+            rounded = round(new_val, 4)
+            fresh, changed = ledger_db.apply_changes(
+                conn, kind, {signal_name: rounded}, source_id=source_id
+            )
+            if source_id is not None and not fresh:
+                return None
+    except ledger_db.LedgerUnreadable:
+        logger.warning("signal weight nudge skipped: ledger.db write did not apply")
         return None
-    if applied and abs(float(new_val) - before) > 0.0001:
+    if changed and abs(float(new_val) - before) > 0.0001:
         try:
             from internal.learning.trail_bus import emit_weight_change
 
@@ -1064,7 +988,9 @@ def replay_signal_weights_from_predictions(
 
 
 def load_impact_strength(path: Optional[str] = None) -> float:
-    """Learned impact tilt from soul_map (default 1.0). Env IMPACT_STRENGTH overrides."""
+    """Learned impact tilt from ledger.db (default 1.0). Env IMPACT_STRENGTH overrides."""
+    from internal.store import ledger_db
+
     path = path or SOUL_MAP_PATH
     env = os.environ.get("IMPACT_STRENGTH")
     if env is not None and str(env).strip() != "":
@@ -1072,34 +998,25 @@ def load_impact_strength(path: Optional[str] = None) -> float:
             return max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, float(env)))
         except (TypeError, ValueError):
             pass
-    data = _load_raw(path, copy_blob=False)
-    adv = data.get("adversarial_state")
-    if isinstance(adv, dict) and adv.get("impact_strength") is not None:
-        try:
-            return max(
-                _IMPACT_STRENGTH_MIN,
-                min(_IMPACT_STRENGTH_MAX, float(adv["impact_strength"])),
-            )
-        except (TypeError, ValueError):
-            pass
-    return DEFAULT_IMPACT_STRENGTH
+    with ledger_db.reader(path) as conn:
+        stored = ledger_db.current(conn, "impact", "strength")
+    if stored is None:
+        return DEFAULT_IMPACT_STRENGTH
+    return max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, float(stored)))
 
 
 def save_impact_strength(strength: float, path: Optional[str] = None) -> float:
-    """Persist impact_strength under adversarial_state for SimiVision learning."""
+    """Persist impact_strength in ledger.db for SimiVision learning."""
+    from internal.store import ledger_db
+
     path = path or SOUL_MAP_PATH
     clamped = max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, float(strength)))
-
-    def replace_impact_strength(data: Dict[str, Any]) -> None:
-        adv = data.setdefault("adversarial_state", {})
-        if not isinstance(adv, dict):
-            adv = {}
-            data["adversarial_state"] = adv
-        adv["impact_strength"] = round(clamped, 4)
-        adv["last_impact_strength_update"] = _now_iso()
-
-    if not _mutate_raw(replace_impact_strength, path):
-        raise RuntimeError("impact strength persist refused")
+    try:
+        with ledger_db.transaction(path) as conn:
+            ledger_db.apply_changes(conn, "impact", {"strength": round(clamped, 4)})
+            ledger_db.set_meta(conn, "last_impact_strength_update", _now_iso())
+    except ledger_db.LedgerUnreadable as exc:
+        raise RuntimeError("impact strength persist refused") from exc
     return clamped
 
 
@@ -1107,6 +1024,7 @@ def nudge_impact_strength(
     correct: bool,
     tier: Optional[str] = None,
     path: Optional[str] = None,
+    source_id: Optional[str] = None,
 ) -> float:
     """Nudge impact strength after a resolved pick.
 
@@ -1117,6 +1035,8 @@ def nudge_impact_strength(
 
     No-op when IMPACT_STRENGTH env override is set (manual dial locked).
     """
+    from internal.store import ledger_db
+
     path = path or SOUL_MAP_PATH
     if os.environ.get("IMPACT_STRENGTH", "").strip() != "":
         return load_impact_strength(path)
@@ -1126,29 +1046,19 @@ def nudge_impact_strength(
     else:
         # small / mid / unknown
         delta = _IMPACT_STRENGTH_DELTA if correct else -_IMPACT_STRENGTH_DELTA
-    new_value = DEFAULT_IMPACT_STRENGTH
-
-    def apply_impact_delta(data: Dict[str, Any]) -> None:
-        nonlocal new_value
-        adv = data.get("adversarial_state")
-        current = DEFAULT_IMPACT_STRENGTH
-        if isinstance(adv, dict) and adv.get("impact_strength") is not None:
-            try:
-                current = float(adv["impact_strength"])
-            except (TypeError, ValueError):
-                pass
-        new_value = max(
-            _IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, current + delta)
-        )
-        target = data.setdefault("adversarial_state", {})
-        if not isinstance(target, dict):
-            target = {}
-            data["adversarial_state"] = target
-        target["impact_strength"] = round(new_value, 4)
-        target["last_impact_strength_update"] = _now_iso()
-
-    if not _mutate_raw(apply_impact_delta, path):
-        logger.warning("impact strength nudge skipped: soul_map write did not apply")
+    try:
+        with ledger_db.transaction(path) as conn:
+            stored = ledger_db.current(conn, "impact", "strength")
+            current = float(stored) if stored is not None else DEFAULT_IMPACT_STRENGTH
+            new_value = max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, current + delta))
+            fresh, _ = ledger_db.apply_changes(
+                conn, "impact", {"strength": round(new_value, 4)}, source_id=source_id
+            )
+            if source_id is not None and not fresh:
+                return current
+            ledger_db.set_meta(conn, "last_impact_strength_update", _now_iso())
+    except ledger_db.LedgerUnreadable:
+        logger.warning("impact strength nudge skipped: ledger.db write did not apply")
         return load_impact_strength(path)
     return new_value
 

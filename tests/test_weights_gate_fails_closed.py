@@ -80,13 +80,7 @@ def test_producer_refuses_to_publish_without_usable_weights_and_keeps_last_good(
     good = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 5.0, "name": "A"}])
     assert snaps.publish_complete_snapshot(good, str(volume))["published"]
     before = volume.read_bytes()
-    if kind == "missing":
-        Path(soul).unlink()
-    else:
-        Path(soul).write_text("{not json")
-    from internal.store import soul_map_io
-
-    soul_map_io._cache.clear()
+    _break_soul_map(soul, kind)
 
     out = snaps.write_full_universe_snapshot()
 
@@ -136,12 +130,15 @@ def test_an_unusable_soul_map_skips_the_build_before_any_loading_or_scoring(tmp_
 
 
 def _break_soul_map(soul, kind):
-    from internal.store import soul_map_io
+    """Make the weights unknown. They live in ledger.db, imported once from the soul_map."""
+    from internal.store import ledger_db, soul_map_io
 
+    ledger = Path(ledger_db.ledger_path_for(soul))
     if kind == "missing":
         Path(soul).unlink()
+        ledger.unlink(missing_ok=True)
     else:
-        Path(soul).write_text("{not json")
+        ledger.write_bytes(b"{not a database}" * 64)
     soul_map_io._cache.clear()
 
 

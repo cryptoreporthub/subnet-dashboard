@@ -5,7 +5,6 @@ import json
 from internal.council.weights import (
     load_weights,
     normalize_council_weights,
-    repair_stale_contrarian_weights,
     replay_weights_from_predictions,
 )
 
@@ -44,10 +43,9 @@ def test_replay_weights_counts_legacy_contrarian_as_dark_horse(tmp_path):
     replayed = replay_weights_from_predictions(str(preds))
     assert replayed["dark_horse"] == 0.96  # 1.0 -0.03 -0.03 +0.02
 
-    assert repair_stale_contrarian_weights(str(soul), str(preds)) is True
-    stored = json.loads(soul.read_text())
-    assert "contrarian" not in stored["adversarial_state"]["council_weights"]
-    assert stored["adversarial_state"]["council_weights"]["dark_horse"] == 0.96
+    stored = load_weights(str(soul))
+    assert "contrarian" not in stored
+    assert stored["dark_horse"] == 0.96
 
 
 def test_load_weights_repairs_stale_contrarian(tmp_path, monkeypatch):
@@ -73,7 +71,7 @@ def test_load_weights_repairs_stale_contrarian(tmp_path, monkeypatch):
 
     weights = load_weights(str(soul))
     assert weights["dark_horse"] == 1.0
-    assert "contrarian" not in json.loads(soul.read_text())["adversarial_state"]["council_weights"]
+    assert "contrarian" not in weights
 
 
 def test_normalize_no_longer_pins_stale_contrarian():

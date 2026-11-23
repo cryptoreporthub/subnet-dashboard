@@ -42,26 +42,24 @@ def normalize_judge_weights(raw: Any) -> Dict[str, float]:
 
 
 def load_judge_weights(path: Optional[str] = None) -> Dict[str, float]:
-    from internal.store.soul_map_io import read_soul_map
+    from internal.store import ledger_db
 
-    resolved = path or SOUL_MAP_PATH
-    data = read_soul_map(resolved)
-    return normalize_judge_weights(data.get("judge_weights"))
+    with ledger_db.reader(path or SOUL_MAP_PATH) as conn:
+        return normalize_judge_weights(ledger_db.read_kind(conn, "judge"))
 
 
 def save_judge_weights(weights: Dict[str, float], path: Optional[str] = None) -> bool:
-    from internal.store.soul_map_io import WriteOutcome, write_soul_map
+    from internal.store import ledger_db
 
     canonical = normalize_judge_weights(weights)
     rounded = {k: round(float(v), 4) for k, v in canonical.items()}
-
-    def _mutate(blob: Dict[str, Any]) -> None:
-        blob["judge_weights"] = rounded
-
-    result = write_soul_map(
-        _mutate, path=path or SOUL_MAP_PATH, raise_on_lock_timeout=False
-    )
-    return result.outcome in (WriteOutcome.APPLIED, WriteOutcome.DECLINED)
+    try:
+        with ledger_db.transaction(path or SOUL_MAP_PATH) as conn:
+            ledger_db.apply_changes(conn, "judge", rounded)
+    except ledger_db.LedgerUnreadable:
+        logger.exception("judge weight save refused: ledger.db unavailable")
+        return False
+    return True
 
 
 def nudge_judge(
@@ -74,10 +72,11 @@ def nudge_judge(
     scale: float = 1.0,
     actual_pct: Optional[float] = None,
     extra: Optional[Dict[str, Any]] = None,
+    source_id: Optional[str] = None,
 ) -> Optional[float]:
     if not judge_name or judge_name not in DEFAULT_JUDGE_WEIGHTS:
         return None
-    from internal.store.soul_map_io import WriteOutcome, write_soul_map
+    from internal.store import ledger_db
 
     resolved_path = path or SOUL_MAP_PATH
     move_scale = max(0.0, float(scale))
@@ -87,38 +86,40 @@ def nudge_judge(
         else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
     )
     delta = round(base * move_scale, 4)
-    updated: Dict[str, float] = {}
-
-    def _mutate(blob: Dict[str, Any]) -> None:
-        weights = normalize_judge_weights(blob.get("judge_weights"))
-        before = weights[judge_name]
-        after = round(max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)), 4)
-        weights[judge_name] = after
-        blob["judge_weights"] = weights
-        updated.update(before=before, after=after)
-
-    result = write_soul_map(_mutate, path=resolved_path, raise_on_lock_timeout=False)
-    if result.outcome is not WriteOutcome.APPLIED:
-        return None
-    before, after = updated["before"], updated["after"]
-    if after != before:
-        try:
-            from internal.learning.trail_bus import emit_weight_change
-
-            emit_weight_change(
-                judge_name,
-                before=before,
-                after=after,
-                reason="judge_pnl",
-                correct=correct,
-                extra={
-                    "scale": move_scale,
-                    "actual_pct": actual_pct,
-                    **(extra or {}),
-                },
+    try:
+        with ledger_db.transaction(resolved_path) as conn:
+            weights = normalize_judge_weights(ledger_db.read_kind(conn, "judge"))
+            before = weights[judge_name]
+            after = round(
+                max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)), 4
             )
-        except Exception:
-            logger.exception("nudge_judge: emit_weight_change failed")
+            if after == before:
+                return None
+            fresh, _ = ledger_db.apply_changes(
+                conn, "judge", {judge_name: after}, source_id=source_id
+            )
+            if not fresh:
+                return None
+    except ledger_db.LedgerUnreadable:
+        logger.warning("judge weight nudge skipped: ledger.db write did not apply")
+        return None
+    try:
+        from internal.learning.trail_bus import emit_weight_change
+
+        emit_weight_change(
+            judge_name,
+            before=before,
+            after=after,
+            reason="judge_pnl",
+            correct=correct,
+            extra={
+                "scale": move_scale,
+                "actual_pct": actual_pct,
+                **(extra or {}),
+            },
+        )
+    except Exception:
+        logger.exception("nudge_judge: emit_weight_change failed")
     return after
 
 

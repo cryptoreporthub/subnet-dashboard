@@ -220,10 +220,12 @@ def test_rebalance_refused_write_returns_not_ok(tmp_path, monkeypatch):
         lambda name, **_k: emits.append(name),
     )
 
-    def _refuse_write(mutator, path=None, **kwargs):
-        return smio.WriteResult(smio.WriteOutcome.UNREADABLE_BLOB, None, detail="test")
+    from internal.store import ledger_db
 
-    monkeypatch.setattr(smio, "write_soul_map", _refuse_write)
+    def _refuse_write(path=None):
+        raise ledger_db.LedgerUnreadable("test")
+
+    monkeypatch.setattr(ledger_db, "transaction", _refuse_write)
     result = rebalance_council_weights(
         predictions_path=str(preds),
         soul_map_path=str(soul),

@@ -273,8 +273,9 @@ def test_weights_digest_is_the_one_taken_at_build_start(tmp_path, monkeypatch):
     soul_holder = {}
 
     def _edit_weights_mid_build():
-        blob = {"adversarial_state": {"council_weights": {"quant": 1.9, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}}
-        write_soul_map(lambda b: (b.clear(), b.update(blob)), soul_holder["path"])
+        from internal.council.weights import save_weights
+
+        save_weights({"quant": 1.9, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, soul_holder["path"])
 
     volume, soul, _ = _producer_env(tmp_path, monkeypatch, universe, scorer=_edit_weights_mid_build)
     soul_holder["path"] = soul
@@ -399,21 +400,20 @@ def test_membership_current_is_null_when_membership_is_not_admissible(tmp_path, 
 
 
 def test_producer_gate_not_current_after_membership_or_weights_change(tmp_path, monkeypatch):
-    from internal.store.soul_map_io import write_soul_map
-
     universe = _universe([1, 2, 3])
     volume, soul, _ = _producer_env(tmp_path, monkeypatch, universe)
     assert snaps.write_full_universe_snapshot()["published"] is True
     assert snaps.volume_has_fresh_complete_snapshot() is True
 
     # Weights move: the reader still serves, the producer gate says "build again".
-    blob = {"adversarial_state": {"council_weights": {"quant": 1.8, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}}
-    write_soul_map(lambda b: (b.clear(), b.update(blob)), soul)
+    from internal.council.weights import save_weights
+
+    save_weights({"quant": 1.8, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, soul)
     assert snaps.volume_has_fresh_complete_snapshot() is False
     assert snaps.read_served_snapshot().state.value == "fresh"
 
     # Weights restored, membership moves.
-    write_soul_map(lambda b: (b.clear(), b.update({"adversarial_state": {"council_weights": {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}})), soul)
+    save_weights({"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, soul)
     assert snaps.volume_has_fresh_complete_snapshot() is True
     monkeypatch.setattr(su, "get_snapshot", lambda: _universe([1, 2]))
     assert snaps.volume_has_fresh_complete_snapshot() is False

@@ -235,6 +235,12 @@ def _expert_stats(lane_id: str) -> Dict[str, Any]:
     return out
 
 
+def _last_weight_update(soul_map_path: str) -> Optional[str]:
+    from internal.council.weights import last_weight_update
+
+    return last_weight_update(soul_map_path)
+
+
 def _learning_loop_state(lane_id: str, soul_map_path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
     """How soul_map + calibration currently adapt this lane."""
     weights = load_weights(soul_map_path)
@@ -247,7 +253,7 @@ def _learning_loop_state(lane_id: str, soul_map_path: str = SOUL_MAP_PATH) -> Di
 
     loop: Dict[str, Any] = {
         "feeds": [
-            "data/soul_map.json → adversarial_state.council_weights (nudge on resolve)",
+            "data/ledger.db → weights (nudge on resolve)",
             "data/predictions.json → resolved outcomes (grading ledger)",
             "internal/council/mindmap_bridge.py → disposition + trail mirror",
             "internal/calibration/pipeline.py → retrain → cert → fire (when enabled)",
@@ -255,7 +261,7 @@ def _learning_loop_state(lane_id: str, soul_map_path: str = SOUL_MAP_PATH) -> Di
         "current_weight": weights.get(lane_id) if lane_id in DEFAULT_WEIGHTS else None,
         "council_weights_version": council_versions.get("current"),
         "last_version_upgrade": (council_versions.get("history") or [])[-1] if council_versions.get("history") else None,
-        "last_weight_update": adv.get("last_weight_update"),
+        "last_weight_update": _last_weight_update(soul_map_path),
         "calibration_last_retrain": cal.get("last_retrain_at"),
         "calibration_status": cal.get("last_cert_status"),
         "version_policy": version_bump_policy(),

@@ -10,6 +10,7 @@ from internal.council.pump_overlay import apply_pump_score_overlay, pump_prior_0
 from internal.council.signal_expert import expert_for_replay_row
 from internal.council.state_vector import score_subnet_for_day
 from internal.council.weights import (
+    load_weights,
     DEFAULT_WEIGHTS,
     merged_replay_rows,
     maybe_rebalance_council_weights_on_boot,
@@ -118,8 +119,7 @@ def test_maybe_rebalance_on_boot_uses_archive_when_near_flat(tmp_path, monkeypat
     result = maybe_rebalance_council_weights_on_boot()
     assert result is not None
     assert result["archive_used"] is True
-    stored = json.loads(soul.read_text())
-    assert stored["adversarial_state"]["council_weights"]["quant"] != 1.04
+    assert load_weights(str(soul))["quant"] != 1.04
 
 
 def test_maybe_rebalance_on_boot_replays_full_ledger_when_near_flat(tmp_path, monkeypatch):

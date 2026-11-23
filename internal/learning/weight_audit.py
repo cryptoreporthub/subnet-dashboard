@@ -89,11 +89,11 @@ def build_weight_audit_report() -> Dict[str, Any]:
         "online_path": {
             "expert": (
                 "resolver._stamp_and_nudge_expert -> nudge_expert -> "
-                "soul_map adversarial_state.council_weights"
+                "ledger.db weights (expert)"
             ),
             "judge": (
                 "judges.tracker.on_prediction_resolved -> nudge_judge -> "
-                "soul_map judge_weights"
+                "ledger.db weights (judge)"
             ),
             "calibration": "calibration.pipeline (cert-gated; dry_run unless certified)",
             "archive_replay_in_prod": False,

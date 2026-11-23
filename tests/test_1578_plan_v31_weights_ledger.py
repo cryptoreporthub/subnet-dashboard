@@ -82,10 +82,12 @@ def test_save_impact_strength_raises_on_replace_failed(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text(json.dumps({}), encoding="utf-8")
 
-    def refuse(*_a, **_k):
-        return soul_map_io.WriteResult(WriteOutcome.REPLACE_FAILED, None)
+    from internal.store import ledger_db
 
-    monkeypatch.setattr(soul_map_io, "write_soul_map", refuse)
+    def refuse(*_a, **_k):
+        raise ledger_db.LedgerUnreadable("write refused")
+
+    monkeypatch.setattr(ledger_db, "transaction", refuse)
     with pytest.raises(RuntimeError, match="impact strength persist refused"):
         weights.save_impact_strength(1.05, str(soul))
 
@@ -128,10 +130,12 @@ def test_save_signal_weights_raises_on_refused(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text(json.dumps({}), encoding="utf-8")
 
-    def refuse(*_a, **_k):
-        return soul_map_io.WriteResult(WriteOutcome.REPLACE_FAILED, None)
+    from internal.store import ledger_db
 
-    monkeypatch.setattr(soul_map_io, "write_soul_map", refuse)
+    def refuse(*_a, **_k):
+        raise ledger_db.LedgerUnreadable("write refused")
+
+    monkeypatch.setattr(ledger_db, "transaction", refuse)
     with pytest.raises(RuntimeError, match="signal weight persist refused"):
         weights.save_signal_weights({"hour": {"rsi_crossover": 1.0}}, str(soul))
 

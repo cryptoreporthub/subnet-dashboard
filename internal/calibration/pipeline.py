@@ -357,14 +357,17 @@ def fire_weights(
 ) -> Dict[str, float]:
     """Atomic swap with verify; rollback to backup on failure."""
     backup = load_weights(soul_map_path)
-    save_weights(proposed, soul_map_path, expected_weights=backup)
+    fired_at = _utcnow_z()
+    save_weights(proposed, soul_map_path, expected_weights=backup, source_id=f"calibration:{fired_at}")
     verify = load_weights(soul_map_path)
     mismatch = any(
         abs(float(verify.get(k, 0) or 0) - float(proposed.get(k, 0) or 0)) > 1e-4
         for k in DEFAULT_WEIGHTS
     )
     if mismatch:
-        save_weights(backup, soul_map_path, expected_weights=proposed)
+        save_weights(
+            backup, soul_map_path, expected_weights=proposed, source_id=f"calibration_rollback:{fired_at}"
+        )
         raise FireError("verify_failed_after_save")
     return verify
 

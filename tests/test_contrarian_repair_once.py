@@ -1,9 +1,7 @@
 """A legacy contrarian key is cleared from the two slots the write normalizes.
 
-Head returned early when the normalized maps matched, so a stale root or council key stayed on
-disk. The fix rewrites those slots once; later loads must not rewrite the file. The
-soul_map_state slot is not cleared by the write, as at base, so the ledger is still replayed on
-each load. That is pre-existing behavior and is not asserted here.
+A legacy contrarian key is repaired once, when the weights are first imported into ledger.db.
+The imported map has no such key, and soul_map.json is left as it was.
 """
 
 from __future__ import annotations
@@ -28,20 +26,22 @@ def test_legacy_contrarian_is_cleared_and_later_loads_do_not_rewrite(tmp_path, m
     )
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
 
-    weights.load_weights(str(soul))
-    stored = json.loads(soul.read_text())
-    assert "contrarian" not in stored["adversarial_state"]["council_weights"], "legacy key still in council weights"
-    assert "contrarian" not in stored["expert_weights"], "legacy key still in root expert weights"
+    soul_before = soul.read_bytes()
+    loaded = weights.load_weights(str(soul))
+    assert "contrarian" not in loaded, "legacy key still in council weights"
 
-    before = soul.read_bytes()
+    ledger = tmp_path / "ledger.db"
     for _ in range(3):
-        weights.load_weights(str(soul))
-    assert soul.read_bytes() == before, "later loads rewrote a repaired soul map"
+        assert weights.load_weights(str(soul)) == loaded
+    assert ledger.exists()
+    assert soul.read_bytes() == soul_before, "the import must leave soul_map.json as it found it"
 
 
 def test_non_dict_adversarial_state_does_not_crash_the_weight_write(tmp_path):
     """A malformed adversarial_state on disk must not crash a weight save."""
     soul = tmp_path / "soul_map.json"
     soul.write_text(json.dumps({"adversarial_state": ["not", "a", "dict"]}))
-    weights.save_weights(dict(CANON), str(soul))
-    assert json.loads(soul.read_text())["adversarial_state"]["council_weights"]
+    before = soul.read_bytes()
+    assert weights.save_weights(dict(CANON), str(soul)) is True
+    assert weights.load_weights(str(soul)) == CANON
+    assert soul.read_bytes() == before

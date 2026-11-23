@@ -71,38 +71,14 @@ def finite_number(value: Any) -> bool:
         return False
 
 
-def _soul_map_usable(path: str) -> bool:
-    """True when ``path`` is a readable JSON object that holds real council weights.
-
-    ``read_soul_map`` answers ``{}`` for a missing, unreadable or corrupt file, which the weight
-    loaders turn into the default weights. That fallback is right for scoring and wrong for an
-    identity: a stamp made from defaults would match any later unreadable soul_map. A file that is
-    valid JSON but carries only unrelated keys (resolver state, tokens) says nothing about the
-    weights either, so it is not usable: at least one council expert must have a finite number.
-    """
-    from internal.council import weights
-    from internal.store.soul_map_io import read_soul_map
-
-    blob = read_soul_map(path, copy_blob=False)
-    if not isinstance(blob, dict) or not blob:
-        return False
-    slot = weights._council_weight_snapshot(blob)
-    if not isinstance(slot, dict):
-        return False
-    experts = set(weights.DEFAULT_WEIGHTS) | {"contrarian", "darkhorse"}
-    return any(
-        str(name).lower().strip() in experts
-        and finite_number(value)
-        for name, value in slot.items()
-    )
-
-
 def current_weights_digest(path: Optional[str] = None) -> Optional[str]:
-    """Digest of the runtime soul_map council + signal weights, or None when it cannot be read.
+    """Digest of the learned council + signal weights in ledger.db, or None when it cannot be read.
 
-    None means "unknown", never "defaults": a missing, empty or corrupt soul_map must not produce
-    a digest, because that digest would equal the one stamped on any snapshot built while the
-    file was equally unreadable. Callers treat None as not fresh and not publishable.
+    None means "unknown", never "defaults": a corrupt soul_map (at first import) or a corrupt
+    ledger.db must not produce a digest, because that digest would equal the one stamped on any
+    snapshot built while the store was equally unreadable. A soul_map that was missing or held no
+    council weight seeds defaults, and defaults stay "unknown" until a weight is written. Callers treat None as not fresh
+    and not publishable.
 
     ``weights.SOUL_MAP_PATH`` is cwd-relative; anchoring it to the repo root keeps the identity
     the same from any cwd (production cwd /app, volume mounted at /app/data).
@@ -112,11 +88,16 @@ def current_weights_digest(path: Optional[str] = None) -> Optional[str]:
     soul = path or weights.SOUL_MAP_PATH
     if not os.path.isabs(soul):
         soul = str(_REPO_ROOT / soul)
-    if not _soul_map_usable(soul):
-        return None
+    from internal.store import ledger_db
+    from internal.store.ledger_db import LedgerUnreadable
+
     try:
+        if not ledger_db.weights_known(soul):
+            return None
         council = weights.load_weights(soul)
         signal = weights.load_signal_weights(soul)
+    except LedgerUnreadable:
+        return None
     except OverflowError:
         # A weight that is a JSON integer too large for a float (the loaders call float() on it) is
         # corrupt: the weights are unknown, not an error for the caller to handle.

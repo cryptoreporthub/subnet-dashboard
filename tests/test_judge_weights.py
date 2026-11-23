@@ -148,8 +148,8 @@ def test_nudge_judge_preserves_unrelated_soul_map_keys(tmp_path):
     )
     nudge_judge("echo", True, path=str(soul_path))
     data = read_soul_map(str(soul_path))
-    assert data.get("some_other_key") == {"foo": 1}
-    assert "judge_weights" in data
+    assert data == {"some_other_key": {"foo": 1}}
+    assert load_judge_weights(str(soul_path))["echo"] == 0.32
 
 
 def test_normalized_judge_weights_sums_to_one(tmp_path):

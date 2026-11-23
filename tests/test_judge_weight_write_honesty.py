@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import threading
 
-import internal.store.soul_map_io as soul_map_io
 from internal.judges import weights as judge_weights
 from internal.judges.weights import load_judge_weights, nudge_judge
 
@@ -18,10 +17,12 @@ def test_nudge_judge_refused_write_returns_none(tmp_path, monkeypatch):
     )
     before = load_judge_weights(str(path))
 
-    def _refuse(*_a, **_k):
-        return soul_map_io.WriteResult(soul_map_io.WriteOutcome.REPLACE_FAILED, None)
+    from internal.store import ledger_db
 
-    monkeypatch.setattr(soul_map_io, "write_soul_map", _refuse)
+    def _refuse(*_a, **_k):
+        raise ledger_db.LedgerUnreadable("write refused")
+
+    monkeypatch.setattr(ledger_db, "transaction", _refuse)
     after = nudge_judge("oracle", True, path=str(path))
     assert after is None
     assert load_judge_weights(str(path)) == before
@@ -51,6 +52,6 @@ def test_concurrent_nudges_preserve_both_judges(tmp_path, monkeypatch):
         thread.join(5)
     assert errors == [], errors
     assert sorted(reached) == ["echo", "oracle"], "a nudge never reached nudge_judge"
-    final = json.loads(path.read_text())["judge_weights"]
+    final = load_judge_weights(str(path))
     assert final["oracle"] == 0.37
     assert final["echo"] == 0.32

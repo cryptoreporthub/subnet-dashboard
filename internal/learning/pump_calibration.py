@@ -52,8 +52,25 @@ def default_calibration() -> Dict[str, Any]:
     return dict(_DEFAULTS)
 
 
+def _stored_blend_weights(resolved: str) -> Dict[str, float]:
+    from internal.store import ledger_db
+
+    with ledger_db.pump_reader(resolved) as conn:
+        stored = ledger_db.read_kind(conn, "pump_blend")
+    blend = dict(_DEFAULTS["blend_weights"])
+    blend.update({name: float(value) for name, value in stored.items() if name in blend})
+    return blend
+
+
 def load_calibration(path: Optional[str] = None) -> Dict[str, Any]:
+    """Thresholds from the calibration JSON; blend weights from ledger.db."""
     resolved = path or CALIBRATION_PATH
+    out = _load_calibration_json(resolved)
+    out["blend_weights"] = _stored_blend_weights(resolved)
+    return out
+
+
+def _load_calibration_json(resolved: str) -> Dict[str, Any]:
     data = safe_read_json(resolved, default={})
     if not isinstance(data, dict) or not data:
         return default_calibration()
@@ -69,15 +86,14 @@ def load_calibration(path: Optional[str] = None) -> Dict[str, Any]:
         pe = dict(out["phase_entry"])
         pe.update({k: float(v) for k, v in data["phase_entry"].items() if k in pe})
         out["phase_entry"] = pe
-    if isinstance(data.get("blend_weights"), dict):
-        bw = dict(out["blend_weights"])
-        bw.update({k: float(v) for k, v in data["blend_weights"].items() if k in bw})
-        out["blend_weights"] = bw
     return out
 
 
 def save_calibration(data: Dict[str, Any], path: Optional[str] = None) -> None:
-    safe_write_json(path or CALIBRATION_PATH, data)
+    """Write thresholds and counters. Blend weights are not stored here."""
+    safe_write_json(
+        path or CALIBRATION_PATH, {k: v for k, v in data.items() if k != "blend_weights"}
+    )
 
 
 def effective_lead_gates(cal: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
@@ -106,8 +122,15 @@ def effective_phase_entry(cal: Optional[Dict[str, Any]] = None) -> Dict[str, flo
 def _online_update_blend_weights(
     cal: Dict[str, Any],
     prediction: Dict[str, Any],
+    path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Apply a bounded per-grade update to pump blend weights."""
+    """Apply a bounded per-grade update to the pump blend weights in ledger.db.
+
+    Read, update and write share one transaction. A prediction id applies once.
+    """
+    from internal.store import ledger_db
+
+    resolved = path or CALIBRATION_PATH
     snap = prediction.get("signal_snapshot") if isinstance(prediction, dict) else {}
     if not isinstance(snap, dict):
         return cal
@@ -119,15 +142,22 @@ def _online_update_blend_weights(
         "flow": max(float(snap.get("buy_ratio") or 0.5) - 0.5, 0.0) * 2.0,
         "chatter": float(snap.get("chatter_intensity") or 0.0),
     }
-    weights = dict(cal.get("blend_weights") or {})
-    learning_rate = 0.005
-    for name, value in features.items():
-        direction = 1.0 if correct else -1.0
-        centered = value - 0.5
-        weights[name] = max(0.02, float(weights.get(name, 0.1)) + learning_rate * direction * centered)
-    total = sum(weights.values())
-    if total > 0:
-        weights = {key: round(value / total * 0.95, 4) for key, value in weights.items()}
+    pred_id = prediction.get("id")
+    source_id = f"pump:{pred_id}" if pred_id else None
+    with ledger_db.pump_transaction(resolved) as conn:
+        weights = dict(_DEFAULTS["blend_weights"])
+        weights.update(ledger_db.read_kind(conn, "pump_blend"))
+        learning_rate = 0.005
+        for name, value in features.items():
+            direction = 1.0 if correct else -1.0
+            centered = value - 0.5
+            weights[name] = max(0.02, float(weights.get(name, 0.1)) + learning_rate * direction * centered)
+        total = sum(weights.values())
+        if total > 0:
+            weights = {key: round(value / total * 0.95, 4) for key, value in weights.items()}
+        fresh, _ = ledger_db.apply_changes(conn, "pump_blend", weights, source_id=source_id)
+        if not fresh:
+            return cal
     cal["blend_weights"] = weights
     cal["last_online_update_at"] = _utcnow_z()
     cal["online_updates"] = int(cal.get("online_updates") or 0) + 1

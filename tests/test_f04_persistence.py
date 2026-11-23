@@ -30,8 +30,10 @@ def _write_weights(path) -> None:
 
 
 def _run_forced_order(monkeypatch, calls):
-    """Run real persistence methods with bounded waits outside the store lock."""
-    import internal.store.soul_map_io as soul_map_io
+    """Run real persistence methods with bounded waits outside the ledger transaction."""
+    import contextlib
+
+    from internal.store import ledger_db
 
     labels = tuple(calls)
     entered = {label: threading.Event() for label in labels}
@@ -39,21 +41,22 @@ def _run_forced_order(monkeypatch, calls):
     current = threading.local()
     errors = []
     results = {}
-    original_write = soul_map_io.write_soul_map
+    original = ledger_db.transaction
 
-    def synchronized_write(mutator, path, **kwargs):
+    @contextlib.contextmanager
+    def synchronized(path=None):
         label = current.label
         entered[label].set()
         assert entered[labels[0]].wait(2)
         assert entered[labels[1]].wait(2)
         if label == labels[1]:
             assert first_done.wait(2)
-        result = original_write(mutator, path, **kwargs)
+        with original(path) as conn:
+            yield conn
         if label == labels[0]:
             first_done.set()
-        return result
 
-    monkeypatch.setattr(soul_map_io, "write_soul_map", synchronized_write)
+    monkeypatch.setattr(ledger_db, "transaction", synchronized)
 
     def run(label, operation):
         try:
@@ -106,25 +109,27 @@ def test_concurrent_disjoint_council_nudges_use_latest_state(
     assert json.loads(soul.read_text(encoding="utf-8"))["sentinel"] == "keep"
 
 
-def test_same_key_nudges_compose_and_mirror_quant(tmp_path):
+def test_same_key_nudges_compose(tmp_path):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
+    before = soul.read_bytes()
 
     assert weights.nudge_expert("quant", True, str(soul)) == 1.02
     assert weights.nudge_expert("quant", True, str(soul)) == 1.04
 
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["adversarial_state"]["council_weights"]["quant"] == 1.04
-    assert data["expert_weights"]["quant"] == 1.04
-    assert data["sentinel"] == "keep"
+    assert weights.load_weights(str(soul))["quant"] == 1.04
+    assert soul.read_bytes() == before
 
 
-def test_nudge_preserves_contrarian_ledger_repair_before_delta(tmp_path):
+def _legacy_contrarian_soul(tmp_path):
     soul = tmp_path / "soul_map.json"
-    predictions = tmp_path / "predictions.json"
+    (tmp_path / "predictions.json").write_text(
+        json.dumps({"predictions": [], "resolved": []}), encoding="utf-8"
+    )
     soul.write_text(
         json.dumps(
             {
+                "sentinel": "keep",
                 "adversarial_state": {
                     "council_weights": {
                         "quant": 1.0,
@@ -132,70 +137,35 @@ def test_nudge_preserves_contrarian_ledger_repair_before_delta(tmp_path):
                         "contrarian": 1.8,
                         "technical": 1.0,
                     }
-                }
+                },
             }
         ),
         encoding="utf-8",
     )
-    predictions.write_text(
-        json.dumps({"predictions": [], "resolved": []}), encoding="utf-8"
-    )
+    return soul
 
-    # repair_stale_contrarian_weights derives predictions.json beside the map.
-    predictions.rename(soul.parent / "predictions.json")
+
+def test_nudge_after_legacy_contrarian_import_applies_to_the_repaired_map(tmp_path):
+    soul = _legacy_contrarian_soul(tmp_path)
     assert weights.nudge_expert("quant", True, str(soul)) == 1.02
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert "contrarian" not in data["adversarial_state"]["council_weights"]
-    assert data["adversarial_state"]["council_weights"]["dark_horse"] == 1.0
-    assert data["expert_weights"]["quant"] == 1.02
+    loaded = weights.load_weights(str(soul))
+    assert "contrarian" not in loaded
+    assert loaded["dark_horse"] == 1.0
+    assert loaded["quant"] == 1.02
 
 
-def test_concurrent_load_weights_retries_legacy_repair_conflict(tmp_path, monkeypatch):
-    soul = tmp_path / "soul_map.json"
-    (soul.parent / "predictions.json").write_text(
-        json.dumps({"predictions": [], "resolved": []}), encoding="utf-8"
-    )
-    soul.write_text(
-        json.dumps(
-            {
-                "adversarial_state": {
-                    "council_weights": {
-                        "quant": 1.0,
-                        "hype": 1.0,
-                        "contrarian": 1.8,
-                        "technical": 1.0,
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    original_repair = weights.repair_stale_contrarian_weights
-    entered = [threading.Event(), threading.Event()]
+def test_concurrent_first_loads_of_a_legacy_map_agree(tmp_path):
+    soul = _legacy_contrarian_soul(tmp_path)
     errors = []
     results = []
-    current = threading.local()
 
-    def synchronized_repair(path):
-        index = current.index
-        entered[index].set()
-        assert entered[0].wait(2)
-        assert entered[1].wait(2)
-        return original_repair(path)
-
-    monkeypatch.setattr(weights, "repair_stale_contrarian_weights", synchronized_repair)
-
-    def run(index):
+    def run():
         try:
-            current.index = index
             results.append(weights.load_weights(str(soul)))
         except BaseException as exc:
             errors.append(exc)
 
-    threads = [
-        threading.Thread(target=run, args=(0,)),
-        threading.Thread(target=run, args=(1,)),
-    ]
+    threads = [threading.Thread(target=run) for _ in range(2)]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -204,8 +174,7 @@ def test_concurrent_load_weights_retries_legacy_repair_conflict(tmp_path, monkey
 
     assert errors == []
     assert len(results) == 2
-    assert all(result["quant"] == 1.0 for result in results)
-    assert all(result["dark_horse"] == 1.0 for result in results)
+    assert all(result["quant"] == 1.0 and result["dark_horse"] == 1.0 for result in results)
 
 
 def test_save_weights_prefers_soul_map_state_expected_snapshot(tmp_path):
@@ -215,102 +184,36 @@ def test_save_weights_prefers_soul_map_state_expected_snapshot(tmp_path):
             {
                 "sentinel": "keep",
                 "soul_map_state": {
-                    "expert_weights": {
-                        "quant": 1.0,
-                        "hype": 1.0,
-                        "dark_horse": 1.0,
-                        "technical": 1.0,
-                    }
+                    "expert_weights": {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
                 },
-                "expert_weights": {
-                    "quant": 1.7,
-                    "hype": 1.0,
-                    "dark_horse": 1.0,
-                    "technical": 1.0,
-                },
+                "expert_weights": {"quant": 1.7, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
             }
         ),
         encoding="utf-8",
     )
-    expected = {
-        "quant": 1.0,
-        "hype": 1.0,
-        "dark_horse": 1.0,
-        "technical": 1.0,
-    }
+    expected = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
     weights.save_weights(
         {"quant": 1.2, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
         str(soul),
         expected_weights=expected,
     )
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["expert_weights"]["quant"] == 1.2
-    assert data["adversarial_state"]["council_weights"]["quant"] == 1.2
-    assert data["sentinel"] == "keep"
+    assert weights.load_weights(str(soul))["quant"] == 1.2
 
 
-def test_concurrent_nudges_repair_legacy_map_then_compose_deltas(tmp_path, monkeypatch):
-    soul = tmp_path / "soul_map.json"
-    (soul.parent / "predictions.json").write_text(
-        json.dumps({"predictions": [], "resolved": []}), encoding="utf-8"
-    )
-    soul.write_text(
-        json.dumps(
-            {
-                "sentinel": "keep",
-                "adversarial_state": {
-                    "council_weights": {
-                        "quant": 1.0,
-                        "hype": 1.0,
-                        "contrarian": 1.8,
-                        "technical": 1.0,
-                    }
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    original_repair = weights.repair_stale_contrarian_weights
-    original_save = weights.save_weights
-    entered = [threading.Event(), threading.Event()]
-    first_saved = threading.Event()
+def test_concurrent_nudges_on_a_legacy_map_compose(tmp_path):
+    soul = _legacy_contrarian_soul(tmp_path)
     errors = []
     results = {}
-    current = threading.local()
-    conflicts = []
 
-    def synchronized_save(weight_map, path, **kwargs):
-        index = current.index
-        entered[index].set()
-        assert entered[0].wait(2)
-        assert entered[1].wait(2)
-        if index == 1:
-            assert first_saved.wait(2)
-        result = original_save(weight_map, path, **kwargs)
-        if index == 0:
-            first_saved.set()
-        return result
-
-    def repair_spy(path):
+    def run(expert, correct):
         try:
-            return original_repair(path)
-        except weights.ConcurrentWeightUpdate:
-            conflicts.append(True)
-            raise
-
-    monkeypatch.setattr(weights, "save_weights", synchronized_save)
-    monkeypatch.setattr(weights, "repair_stale_contrarian_weights", repair_spy)
-
-    def run(index, expert, correct):
-        try:
-            current.index = index
             results[expert] = weights.nudge_expert(expert, correct, str(soul))
         except BaseException as exc:
             errors.append(exc)
 
     threads = [
-        threading.Thread(target=run, args=(0, "quant", True)),
-        threading.Thread(target=run, args=(1, "hype", False)),
+        threading.Thread(target=run, args=("quant", True)),
+        threading.Thread(target=run, args=("hype", False)),
     ]
     for thread in threads:
         thread.start()
@@ -319,14 +222,10 @@ def test_concurrent_nudges_repair_legacy_map_then_compose_deltas(tmp_path, monke
         assert not thread.is_alive()
 
     assert errors == []
-    assert conflicts == [True]
     assert results == {"quant": 1.02, "hype": 0.97}
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["adversarial_state"]["council_weights"]["quant"] == 1.02
-    assert data["adversarial_state"]["council_weights"]["hype"] == 0.97
-    assert data["expert_weights"]["quant"] == 1.02
-    assert data["sentinel"] == "keep"
-    json.dumps(data)
+    final = weights.load_weights(str(soul))
+    assert final["quant"] == 1.02 and final["hype"] == 0.97
+    assert json.loads(soul.read_text(encoding="utf-8"))["sentinel"] == "keep"
 
 
 def test_stale_full_replacement_is_rejected_without_overwrite(tmp_path):
@@ -345,7 +244,7 @@ def test_stale_full_replacement_is_rejected_without_overwrite(tmp_path):
     assert weights.load_weights(str(soul))["quant"] == 1.02
 
 
-def test_concurrent_same_key_nudges_compose_and_mirror_quant(tmp_path, monkeypatch):
+def test_concurrent_same_key_nudges_compose(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
 
@@ -358,10 +257,7 @@ def test_concurrent_same_key_nudges_compose_and_mirror_quant(tmp_path, monkeypat
     )
 
     assert results == {"first": 1.02, "second": 1.04}
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["adversarial_state"]["council_weights"]["quant"] == 1.04
-    assert data["expert_weights"]["quant"] == 1.04
-    assert data["sentinel"] == "keep"
+    assert weights.load_weights(str(soul))["quant"] == 1.04
 
 
 @pytest.mark.parametrize("first_label", ["first", "second"])
@@ -371,9 +267,10 @@ def test_concurrent_save_weights_is_last_writer_wins(
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
     second_label = "second" if first_label == "first" else "first"
-    first_map = {"quant": 1.11, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
-    second_map = {"quant": 1.22, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
-    maps = {"first": first_map, "second": second_map}
+    maps = {
+        "first": {"quant": 1.11, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
+        "second": {"quant": 1.22, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
+    }
 
     _run_forced_order(
         monkeypatch,
@@ -383,11 +280,7 @@ def test_concurrent_save_weights_is_last_writer_wins(
         },
     )
 
-    expected = maps[second_label]["quant"]
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["adversarial_state"]["council_weights"]["quant"] == expected
-    assert data["expert_weights"]["quant"] == expected
-    assert data["sentinel"] == "keep"
+    assert weights.load_weights(str(soul))["quant"] == maps[second_label]["quant"]
 
 
 @pytest.mark.parametrize("first_label", ["first", "second"])
@@ -396,26 +289,23 @@ def test_concurrent_save_signal_weights_is_last_writer_wins(
 ):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
-    first_map = {"hour": {"rsi_crossover": 1.11}, "day": {"macd_cross": 1.12}}
-    second_map = {"hour": {"rsi_crossover": 1.22}, "day": {"macd_cross": 1.23}}
+    maps = {
+        "first": {"hour": {"rsi_crossover": 1.11}, "day": {"macd_cross": 1.12}},
+        "second": {"hour": {"rsi_crossover": 1.22}, "day": {"macd_cross": 1.23}},
+    }
     second_label = "second" if first_label == "first" else "first"
-    maps = {"first": first_map, "second": second_map}
 
     _run_forced_order(
         monkeypatch,
         {
-            first_label: lambda: weights.save_signal_weights(
-                maps[first_label], str(soul)
-            ),
-            second_label: lambda: weights.save_signal_weights(
-                maps[second_label], str(soul)
-            ),
+            first_label: lambda: weights.save_signal_weights(maps[first_label], str(soul)),
+            second_label: lambda: weights.save_signal_weights(maps[second_label], str(soul)),
         },
     )
 
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["adversarial_state"]["signal_weights"] == maps[second_label]
-    assert data["sentinel"] == "keep"
+    loaded = weights.load_signal_weights(str(soul))
+    assert loaded["hour"]["rsi_crossover"] == maps[second_label]["hour"]["rsi_crossover"]
+    assert loaded["day"]["macd_cross"] == maps[second_label]["day"]["macd_cross"]
 
 
 @pytest.mark.parametrize("first_writer", ["council", "signal"])
@@ -434,28 +324,24 @@ def test_concurrent_disjoint_setters_preserve_both_sections(
 
     _run_forced_order(
         monkeypatch,
-        {
-            first_writer: operations[first_writer],
-            second_writer: operations[second_writer],
-        },
+        {first_writer: operations[first_writer], second_writer: operations[second_writer]},
     )
 
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["adversarial_state"]["council_weights"]["quant"] == 1.31
-    assert data["expert_weights"]["quant"] == 1.31
-    assert data["adversarial_state"]["signal_weights"] == signal_map
-    assert data["sentinel"] == "keep"
+    assert weights.load_weights(str(soul))["quant"] == 1.31
+    loaded = weights.load_signal_weights(str(soul))
+    assert loaded["hour"]["rsi_crossover"] == 1.41
+    assert loaded["day"]["macd_cross"] == 1.42
 
 
 def test_save_worker_exception_propagates(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
-    import internal.store.soul_map_io as soul_map_io
+    from internal.store import ledger_db
 
     def boom(*_args, **_kwargs):
         raise RuntimeError("worker persistence failure")
 
-    monkeypatch.setattr(soul_map_io, "write_soul_map", boom)
+    monkeypatch.setattr(ledger_db, "transaction", boom)
     with pytest.raises(RuntimeError, match="worker persistence failure"):
         weights.save_weights(
             {"quant": 1.1, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
@@ -484,34 +370,33 @@ def test_signal_and_impact_nudges_tolerate_unrelated_malformed_signal(tmp_path):
 
     assert weights.nudge_signal_weight("hour", "rsi_crossover", True, str(soul)) == 1.02
     assert weights.nudge_impact_strength(True, tier="small", path=str(soul)) == 1.02
-    data = json.loads(soul.read_text(encoding="utf-8"))
-    assert data["sentinel"] == "keep"
-    assert data["adversarial_state"]["signal_weights"]["hour"]["rsi_crossover"] == 1.02
-    assert data["adversarial_state"]["impact_strength"] == 1.02
+    assert weights.load_signal_weights(str(soul))["hour"]["rsi_crossover"] == 1.02
+    assert weights.load_impact_strength(str(soul)) == 1.02
+    assert json.loads(soul.read_text(encoding="utf-8"))["sentinel"] == "keep"
 
 
 def test_failed_weight_delivery_retries_without_double_application(
     tmp_path, monkeypatch
 ):
+    import sqlite3
+
+    from internal.store import ledger_db
+
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
-
-    import internal.store.soul_map_io as soul_map_io
-
-    original_replace = soul_map_io.os.replace
+    weights.load_weights(str(soul))
+    original = ledger_db.apply_changes
     attempts = 0
 
-    def fail_once(src, dst):
+    def fail_once(*args, **kwargs):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise OSError("simulated delivery failure")
-        return original_replace(src, dst)
+            raise sqlite3.OperationalError("simulated write failure")
+        return original(*args, **kwargs)
 
-    monkeypatch.setattr(soul_map_io.os, "replace", fail_once)
+    monkeypatch.setattr(ledger_db, "apply_changes", fail_once)
 
-    # This only covers a failure before os.replace; delivery/exactly-once after
-    # replace is intentionally outside the guarantee.
     assert weights.nudge_expert("quant", True, str(soul)) is None
     assert weights.load_weights(str(soul))["quant"] == 1.0
     assert weights.nudge_expert("quant", True, str(soul)) == 1.02
