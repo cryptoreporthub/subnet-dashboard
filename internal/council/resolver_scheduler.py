@@ -1690,7 +1690,7 @@ class PredictionResolverScheduler:
         def _history_only_write(sched: Dict[str, Any]) -> None:
             _append_terminal_row(sched, touch_last_cycle=False)
 
-        def _mutator(data: Dict[str, Any]) -> None:
+        def _apply(data: Dict[str, Any]) -> None:
             global _malformed_existing_run_at_logged
             # Phase 3 fix-up: time mutator body alone (persist_summary_mutator_ms).
             t_mut = time.perf_counter()
@@ -1870,6 +1870,17 @@ class PredictionResolverScheduler:
                     timing.record_persist_subtimer(
                         "summary_mutator", (time.perf_counter() - t_mut) * 1000
                     )
+
+        def _mutator(data: Dict[str, Any]) -> None:
+            # A null block heals only when the body writes. Run it on a shadow
+            # copy, so a declined summary leaves the stored blob unchanged.
+            if data.get("prediction_resolver_scheduler") is not None:
+                _apply(data)
+                return
+            shadow = {**data, "prediction_resolver_scheduler": {}}
+            _apply(shadow)
+            if shadow["prediction_resolver_scheduler"]:
+                data["prediction_resolver_scheduler"] = shadow["prediction_resolver_scheduler"]
 
         # Full RMW wall (read+mutator+disk); invariant: rmw >= mutator.
         t_rmw = time.perf_counter()
