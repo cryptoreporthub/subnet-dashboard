@@ -44,6 +44,16 @@ def test_null_scheduler_block_is_healed_on_write(tmp_path, write):
     assert stored["adversarial_state"] == {"keep": 1}
 
 
+def test_declined_summary_into_null_block_leaves_file_untouched(tmp_path):
+    soul = tmp_path / "soul_map.json"
+    original = json.dumps({"prediction_resolver_scheduler": None, "adversarial_state": {"keep": 1}})
+    soul.write_text(original, encoding="utf-8")
+    invalid = {k: v for k, v in SUMMARY.items() if k != "cycle_generation"}
+    result = _scheduler(soul)._persist_cycle_summary_locked(invalid, force=True, owned_cycle=True)
+    assert result.outcome == WriteOutcome.DECLINED, result.detail
+    assert soul.read_text(encoding="utf-8") == original
+
+
 @pytest.mark.parametrize("write", WRITERS, ids=["lifecycle", "cycle_summary"])
 def test_non_null_non_dict_scheduler_block_still_fails_closed(tmp_path, write):
     soul = tmp_path / "soul_map.json"
