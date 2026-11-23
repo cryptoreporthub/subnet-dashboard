@@ -442,7 +442,11 @@ def _write_receipt_for_applied_effect(key: Any, name: str, prediction: Dict[str,
     """Record that an effect ran. False when the marker must stay for the sweep to settle."""
     from internal.learning import expired_recovery
 
+    deferral = _learning_deferral.get()
+    reported = deferral.warnings.get(key) if deferral is not None and name == "finalize" else None
     try:
+        if reported:
+            expired_recovery.record_effect_warnings(key, name, reported)
         expired_recovery.write_effect_receipt(key, name)
         return True
     except Exception as exc:

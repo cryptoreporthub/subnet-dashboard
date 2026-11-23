@@ -217,12 +217,44 @@ def has_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> bool:
         return _receipt_token(row_key, effect) in _load_receipts()
 
 
+def _warnings_token(row_key: Optional[Tuple[Any, ...]], effect: str) -> str:
+    # Three elements, so it can never equal a two-element receipt token.
+    return json.dumps(["warnings", list(row_key) if row_key is not None else None, effect], separators=(",", ":"))
+
+
 def write_effect_receipt(row_key: Optional[Tuple[Any, ...]], effect: str) -> None:
     path = _receipts_path()
     with _receipts_lock(exclusive=True):
         data = _load_receipts()
         data[_receipt_token(row_key, effect)] = _utcnow_iso()
         safe_write_json(path, data, indent=2)
+
+
+def record_effect_warnings(
+    row_key: Optional[Tuple[Any, ...]], effect: str, warnings: Optional[List[str]]
+) -> None:
+    """Keep the warnings an effect reported next to its receipt, written before the receipt.
+
+    A crash then cannot leave a receipt without its warnings, so the sweep can still stamp
+    them on the row when it settles the marker. No warnings removes a stale entry.
+    """
+    path = _receipts_path()
+    token = _warnings_token(row_key, effect)
+    with _receipts_lock(exclusive=True):
+        data = _load_receipts()
+        if warnings:
+            data[token] = list(warnings)
+        elif token in data:
+            del data[token]
+        else:
+            return
+        safe_write_json(path, data, indent=2)
+
+
+def get_receipt_warnings(row_key: Optional[Tuple[Any, ...]], effect: str) -> Optional[List[str]]:
+    with _receipts_lock(exclusive=False):
+        stored = _load_receipts().get(_warnings_token(row_key, effect))
+    return list(stored) if isinstance(stored, list) and stored else None
 
 
 def _pending_list(row: Dict[str, Any]) -> List[str]:
@@ -631,7 +663,9 @@ def recover_expired_predictions(
                             receipts_write_failed.append(row.get("id"))
                             continue
                     try:
-                        _move_effect_on_ledger(row, effect)
+                        _move_effect_on_ledger(
+                            row, effect, warnings=get_receipt_warnings(key, effect) if effect == "finalize" else None
+                        )
                     except Exception:
                         logger.exception("expired recovery receipt stamp failed")
                         effect_incomplete.append(row.get("id"))
@@ -765,6 +799,8 @@ def recover_expired_predictions(
                         # before giving up. If both mark attempts fail, the effect stays
                         # pending (accepted residual). Do not add a pre-effect claim.
                         try:
+                            if effect == "finalize" and replay_warnings is not None:
+                                record_effect_warnings(key, effect, replay_warnings)
                             write_effect_receipt(key, effect)
                         except Exception as write_exc:
                             logger.exception("expired recovery effect applied but receipt write failed")

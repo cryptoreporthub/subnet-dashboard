@@ -1443,13 +1443,15 @@ def test_a_stamp_that_conflicts_on_every_attempt_does_not_raise_and_the_sweep_se
     resolver._resolve_due_predictions(subnets=[])
 
     assert calls["n"] >= 2, "the conflicting write was retried at least once"
-    assert "side_effect_warnings" not in _row_on_disk(ledger, "r1"), "the warning is in the log only"
     assert _markers(ledger)["r1"]["pending"], "r1's markers stay for the sweep"
     assert _markers(ledger)["r2"]["pending"] == []
 
     calls["stop"] = True
     expired_recovery.recover_expired_predictions()
 
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"], (
+        "the sweep settles r1 from its receipt and must still stamp the warning the flush reported"
+    )
     assert _markers(ledger)["r1"]["pending"] == []
     expected = _once(rows=2)
     expected["trace_resolved"] = 1  # r1's trace write is the one that failed
@@ -1616,3 +1618,99 @@ def test_a_retry_that_succeeds_logs_no_failure(ledger, sinks, monkeypatch, caplo
     assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
     assert _markers(ledger)["r1"]["pending"] == [] and _markers(ledger)["r2"]["pending"] == []
     assert [r.getMessage() for r in caplog.records if "markers not cleared" in r.getMessage()] == []
+
+
+def test_a_crash_after_the_finalize_receipt_still_leaves_the_warning_on_the_row(ledger, sinks, monkeypatch):
+    """The process dies after the receipt is written and before the stamping write."""
+    from internal.council import prediction_trace
+
+    monkeypatch.setattr(
+        prediction_trace,
+        "record_prediction_resolved",
+        lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("trace disk unavailable")),
+    )
+
+    def crash(*_a, **_kw):
+        raise SystemExit("process died before the markers were cleared")
+
+    real_move = expired_recovery.move_effects_on_ledger
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", crash)
+    try:
+        resolver._resolve_due_predictions(subnets=[])
+    except SystemExit:
+        pass
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", real_move)
+
+    assert "side_effect_warnings" not in _row_on_disk(ledger, "r1")
+    expired_recovery.recover_expired_predictions()
+
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
+    assert _markers(ledger)["r1"]["pending"] == []
+
+
+def test_a_sweep_replay_that_reports_a_warning_stamps_it_even_if_the_stamp_is_lost(ledger, sinks, monkeypatch):
+    """The sweep replays finalize, writes the receipt, and fails its own ledger stamp once."""
+    from internal.council import prediction_trace
+
+    real_flush = resolver._flush_deferred_learning
+    _crash_at_flush(monkeypatch)
+    with pytest.raises(ProcessDied):
+        resolver._resolve_due_predictions(subnets=[])
+    monkeypatch.setattr(resolver, "_flush_deferred_learning", real_flush)
+    monkeypatch.setattr(
+        prediction_trace,
+        "record_prediction_resolved",
+        lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("trace disk unavailable")),
+    )
+    real_move = expired_recovery._move_effect_on_ledger
+    state = {"failed": False}
+
+    def move(row, effect, warnings=None):
+        if effect == "finalize" and not state["failed"]:
+            state["failed"] = True
+            raise OSError("ledger write failed after the receipt")
+        return real_move(row, effect, warnings=warnings)
+
+    monkeypatch.setattr(expired_recovery, "_move_effect_on_ledger", move)
+    try:
+        expired_recovery.recover_expired_predictions()
+    except Exception:
+        pass
+    assert state["failed"], "the replay must have reached its stamp"
+    expired_recovery.recover_expired_predictions()
+
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
+
+
+def test_warnings_kept_for_a_receipt_are_replaced_and_cleared_by_a_later_replay():
+    key = ("id", "r9")
+    expired_recovery.record_effect_warnings(key, "finalize", ["record_prediction_resolved"])
+    assert expired_recovery.get_receipt_warnings(key, "finalize") == ["record_prediction_resolved"]
+    expired_recovery.record_effect_warnings(key, "finalize", ["pick_history_finalize"])
+    assert expired_recovery.get_receipt_warnings(key, "finalize") == ["pick_history_finalize"]
+    expired_recovery.record_effect_warnings(key, "finalize", [])
+    assert expired_recovery.get_receipt_warnings(key, "finalize") is None
+    assert not expired_recovery.has_effect_receipt(key, "finalize"), "warnings are not a receipt"
+
+
+def test_a_stamp_that_conflicts_on_a_row_with_only_a_marker_to_clear_is_retried(ledger, sinks, monkeypatch):
+    _two_rows(ledger)
+    calls = _conflicting_on_r1(monkeypatch, ledger, times=1)
+
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert calls["n"] == 2, "r1 has markers but no warning, and its conflict must still trigger the retry"
+    assert _markers(ledger)["r1"]["pending"] == [] and _markers(ledger)["r2"]["pending"] == []
+
+
+def test_a_stamp_that_conflicts_on_a_row_with_only_a_warning_to_stamp_is_retried(ledger, sinks, monkeypatch):
+    """Every receipt and indeterminate mark fails for r1, so r1 has a warning and no marker move."""
+    _two_rows(ledger)
+    _trace_fails_for(monkeypatch, {"r1"})
+    _receipt_fails_for(monkeypatch, {("r1", name) for name in ("expert", "impact", "finalize", "scenario", "signal")})
+    calls = _conflicting_on_r1(monkeypatch, ledger, times=1)
+
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert calls["n"] == 2, "r1 has a warning but no marker pair, and its conflict must still trigger the retry"
+    assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
