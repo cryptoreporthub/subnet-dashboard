@@ -326,10 +326,12 @@ def write_soul_map(
     *,
     raise_on_lock_timeout: bool = True,
     pre_replace: Optional[Callable[[], None]] = None,
+    lock_deadline_seconds: Optional[float] = None,
 ) -> WriteResult:
     """Thread-safe read-modify-write under per-path locks with typed outcomes."""
     resolved = _resolve_path(path)
-    deadline = time.monotonic() + _SOUL_MAP_LOCK_DEADLINE_SECONDS
+    wait = _SOUL_MAP_LOCK_DEADLINE_SECONDS if lock_deadline_seconds is None else lock_deadline_seconds
+    deadline = time.monotonic() + wait
     try:
         with _acquire_write_locks(resolved, deadline):
             checked = _read_for_write(resolved)

@@ -436,3 +436,95 @@ def test_save_signal_weights_replaces_the_map_and_drops_removed_signals(soul):
     with ledger_db.reader(path) as conn:
         assert ledger_db.read_signal_rows(conn) == {"hour": {"rsi_crossover": 1.11}}
     assert weights.load_signal_weights(path)["day"]["macd_cross"] == weights.DEFAULT_SIGNAL_WEIGHTS["day"]["macd_cross"]
+
+
+def test_a_timed_out_drop_does_not_let_a_later_deleted_ledger_serve_stale_weights(soul, tmp_path, monkeypatch):
+    import time
+
+    from internal.council import weights
+    from internal.store import ledger_db, soul_map_io
+
+    path = str(soul)
+    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.2)
+    held, release = threading.Event(), threading.Event()
+
+    def hold_soul_map_lock():
+        with soul_map_io._acquire_write_locks(path, time.monotonic() + 30):
+            held.set()
+            release.wait()
+
+    holder = threading.Thread(target=hold_soul_map_lock)
+    holder.start()
+    held.wait()
+    try:
+        first = weights.load_weights(path)
+        assert first["quant"] == 1.2
+        assert ledger_db.MIGRATED_KEY not in json.loads(soul.read_text()), "the lock was supposed to block the drop"
+    finally:
+        release.set()
+        holder.join()
+
+    saved = dict(first, quant=0.55)
+    weights.save_weights(saved, path)
+    assert weights.load_weights(path)["quant"] == 0.55
+    (tmp_path / "ledger.db").unlink()
+
+    for read in (weights.load_weights, ledger_db.weights_known):
+        try:
+            got = read(path)
+        except ledger_db.LedgerUnreadable:
+            continue
+        pytest.fail(f"{read.__name__} returned {got!r} after the ledger was deleted; it must refuse")
+
+
+def test_two_processes_starting_on_a_pre_w1_soul_map_import_it_once_and_agree(tmp_path):
+    import os
+    import subprocess
+    import sys
+    import time
+
+    from internal.store import ledger_db
+
+    path = tmp_path / "soul_map.json"
+    _pre_w1_soul_map(path)
+    gate = tmp_path / "go"
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script = (
+        "import json, os, sys, time\n"
+        "from internal.council import weights\n"
+        "from internal.store import ledger_db\n"
+        f"while not os.path.exists({str(gate)!r}): time.sleep(0.001)\n"
+        f"p = {str(path)!r}\n"
+        "print(json.dumps({'w': weights.load_weights(p), 'known': ledger_db.weights_known(p)}))\n"
+    )
+    env = dict(os.environ, PYTHONPATH=repo)
+    env.pop("LEDGER_DB_PATH", None)
+    procs = [
+        subprocess.Popen(
+            [sys.executable, "-c", script], cwd=str(tmp_path), env=env, stdout=subprocess.PIPE, text=True
+        )
+        for _ in range(2)
+    ]
+    time.sleep(1.0)
+    gate.write_text("x")
+    outs = [json.loads(p.communicate(timeout=60)[0]) for p in procs]
+    assert [p.returncode for p in procs] == [0, 0]
+
+    assert outs[0] == outs[1]
+    assert outs[0]["known"] is True
+    assert outs[0]["w"]["quant"] == 1.2
+
+    soul_after = json.loads(path.read_text())
+    assert soul_after[ledger_db.MIGRATED_KEY] == {"ledger": "ledger.db"}
+    assert "judge_weights" not in soul_after
+    assert "council_weights" not in soul_after["adversarial_state"]
+    conn = sqlite3.connect(str(tmp_path / "ledger.db"))
+    try:
+        imports = conn.execute(
+            "SELECT COUNT(*) FROM ledger_meta WHERE key=?", (ledger_db.SOUL_MAP_MARKER,)
+        ).fetchone()[0]
+        quant = conn.execute("SELECT value FROM weights WHERE kind='expert' AND name='quant'").fetchone()[0]
+    finally:
+        conn.close()
+    assert imports == 1
+    assert quant == 1.2

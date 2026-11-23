@@ -16,6 +16,7 @@ import logging
 import os
 import sqlite3
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -116,9 +117,18 @@ def _ensure(
     seed: Callable[[sqlite3.Connection], str],
     source_path: str,
     soul_map_path: str,
+    *,
+    require_drop: bool = False,
 ) -> None:
     """Create the schema and run ``seed`` once. A ledger seeded while its source file was
     missing and never written since imports the source when it appears.
+
+    A soul_map import is only cached as ready once the drop is confirmed: the migrated
+    marker is in soul_map.json. Until then each call retries the drop from what is on disk.
+    A reader retries at most once per ``_DROP_RETRY_SECONDS`` and waits at most
+    ``_DROP_RETRY_LOCK_SECONDS`` for the soul_map lock. ``require_drop`` (writers) waits the
+    full lock deadline and raises LedgerUnreadable when the marker still cannot land, so a
+    weight is never written while a deleted ledger could re-import older values.
 
     Raises LedgerUnreadable when ``soul_map_path`` carries the migrated marker but the ledger
     is missing or holds no soul_map import row: the weights were dropped from soul_map, so
@@ -162,15 +172,40 @@ def _ensure(
     finally:
         conn.close()
     key = _identity(db_path, marker)
-    if key is not None:
+    confirmed = True
+    if marker == SOUL_MAP_MARKER and state == "loaded" and db_path == ledger_path_for(source_path, derived=True):
+        confirmed = _confirm_drop(db_path, source_path, require_drop)
+    if confirmed and key is not None:
         with _ready_lock:
             _ready.add(key)
             if state == "missing":
                 _seeded_missing.add(key)
             else:
                 _seeded_missing.discard(key)
-    if marker == SOUL_MAP_MARKER and state == "loaded" and db_path == ledger_path_for(source_path, derived=True):
-        _drop_imported_keys(source_path)
+    if not confirmed and require_drop:
+        raise LedgerUnreadable(
+            f"imported weights are still in {source_path}; refusing to write until the migrated marker lands"
+        )
+
+
+_DROP_RETRY_SECONDS = 1.0
+_DROP_RETRY_LOCK_SECONDS = 0.05
+_drop_retry_after: Dict[str, float] = {}
+
+
+def _confirm_drop(db_path: str, soul_map_path: str, require_drop: bool) -> bool:
+    """Run the soul_map drop. True only when the marker is in soul_map.json afterwards."""
+    now = time.monotonic()
+    first = db_path not in _drop_retry_after
+    if not require_drop and not first and now < _drop_retry_after[db_path]:
+        return False
+    patient = require_drop or first
+    ok = _drop_imported_keys(soul_map_path, None if patient else _DROP_RETRY_LOCK_SECONDS)
+    if ok:
+        _drop_retry_after.pop(db_path, None)
+    else:
+        _drop_retry_after[db_path] = time.monotonic() + _DROP_RETRY_SECONDS
+    return ok
 
 
 _MIGRATED_REFUSAL = (
@@ -204,12 +239,14 @@ _DROPPED_ADVERSARIAL_KEYS = (
 )
 
 
-def _drop_imported_keys(soul_map_path: str) -> None:
+def _drop_imported_keys(soul_map_path: str, lock_deadline: Optional[float] = None) -> bool:
     """Remove the imported weight keys once ledger.db committed them. Every other key is left as is.
 
-    Idempotent: a crash after the ledger commit and before this write only leaves the keys
-    in place, and the next first use drops them. Skipped when LEDGER_DB_PATH redirected the
-    ledger, so a test run cannot strip the developer's real soul_map.
+    Returns True when the migrated marker is in soul_map.json afterwards (written now, or
+    already there). Idempotent: a crash after the ledger commit and before this write only
+    leaves the keys in place, and the next call drops them. The caller only runs it for the
+    ledger derived from this soul_map, so a LEDGER_DB_PATH test run cannot strip the
+    developer's real soul_map.
     """
     from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
@@ -224,12 +261,16 @@ def _drop_imported_keys(soul_map_path: str) -> None:
                 adv.pop(key, None)
 
     try:
-        result = write_soul_map(mutate, path=soul_map_path, raise_on_lock_timeout=False)
+        result = write_soul_map(
+            mutate, path=soul_map_path, raise_on_lock_timeout=False, lock_deadline_seconds=lock_deadline
+        )
     except Exception:
         logger.exception("could not drop imported weight keys from %s", soul_map_path)
-        return
+        return False
     if result.outcome not in (WriteOutcome.APPLIED, WriteOutcome.DECLINED):
         logger.warning("imported weight keys stay in %s: %s", soul_map_path, result.outcome.value)
+        return False
+    return True
 
 
 def _rollback(conn: sqlite3.Connection) -> None:
@@ -376,7 +417,7 @@ def reader(soul_map_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
 def transaction(soul_map_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
     path = soul_map_path or DEFAULT_SOUL_MAP_PATH
     db = ledger_path_for(path)
-    _ensure(db, SOUL_MAP_MARKER, _seed_weights_from_soul_map(path), path, path)
+    _ensure(db, SOUL_MAP_MARKER, _seed_weights_from_soul_map(path), path, path, require_drop=True)
     yield from _write(db)
 
 
