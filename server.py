@@ -206,7 +206,7 @@ def _council_weight_rebalance_boot() -> None:
 
         maybe_rebalance_council_weights_on_boot()
     except Exception as exc:
-        logger.debug("council weight rebalance boot skipped: %s", exc)
+        logger.error("council weight rebalance boot skipped: %s", exc)
 
 
 def _registry_name_boot_sync() -> None:

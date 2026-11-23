@@ -76,6 +76,7 @@ def _expected_after_import() -> dict:
     adv = blob["adversarial_state"]
     for key in ("council_weights", "signal_weights", "impact_strength", "last_weight_update"):
         adv.pop(key)
+    blob["weights_ledger_migrated"] = {"ledger": "ledger.db"}
     return blob
 
 
@@ -100,7 +101,7 @@ def test_the_import_drops_only_the_weight_keys_and_leaves_every_other_key_byte_f
     load_weights(str(soul))
     text = soul.read_text()
     after = json.loads(text)
-    assert tuple(after) == tuple(k for k in PROD_KEYS if k != "judge_weights")
+    assert tuple(after) == tuple(k for k in PROD_KEYS if k != "judge_weights") + ("weights_ledger_migrated",)
     assert "council_weights" not in after["adversarial_state"]
     assert "signal_weights" not in after["adversarial_state"]
     assert "impact_strength" not in after["adversarial_state"]
@@ -108,7 +109,7 @@ def test_the_import_drops_only_the_weight_keys_and_leaves_every_other_key_byte_f
     assert after["adversarial_state"]["calibration"] == {"history": [1]}
     assert len(after["feedback_logs"]) == 40
     for key in after:
-        if key == "adversarial_state":
+        if key in ("adversarial_state", "weights_ledger_migrated"):
             continue
         assert json.dumps(after[key], indent=2) == json.dumps(original[key], indent=2), key
     assert text == json.dumps(_expected_after_import(), indent=2)
@@ -297,3 +298,141 @@ def test_rebalance_script_saves_to_ledger_db(soul, tmp_path, monkeypatch):
     finally:
         conn.close()
     assert got == 1.1
+
+
+def _pre_w1_soul_map(path, **extra):
+    """A soul_map as it stood before W1: the learned weights live in it and no marker exists."""
+    path.write_text(json.dumps(dict(_prod_shaped_soul_map(), **extra), indent=2), encoding="utf-8")
+
+
+def test_a_deleted_ledger_after_the_import_refuses_instead_of_reseeding_defaults(soul, tmp_path):
+    from internal.council import weights
+    from internal.judges.weights import load_judge_weights
+    from internal.store import ledger_db
+
+    path = str(soul)
+    assert weights.load_weights(path)["quant"] == 1.2
+    assert "judge_weights" not in json.loads(soul.read_text()), "import did not drop the keys"
+    (tmp_path / "ledger.db").unlink()
+    ledger_db._ready.clear()
+    for read in (
+        weights.load_weights,
+        weights.load_signal_weights,
+        weights.load_impact_strength,
+        load_judge_weights,
+        ledger_db.weights_known,
+    ):
+        with pytest.raises(ledger_db.LedgerUnreadable):
+            read(path)
+    assert not (tmp_path / "ledger.db").exists(), "a refused read must not create an empty ledger"
+
+
+def test_a_ledger_without_its_import_row_refuses_once_soul_map_is_migrated(soul, tmp_path):
+    from internal.council import weights
+    from internal.store import ledger_db
+
+    path = str(soul)
+    weights.load_weights(path)
+    conn = sqlite3.connect(str(tmp_path / "ledger.db"))
+    conn.execute("DELETE FROM ledger_meta WHERE key=?", (ledger_db.SOUL_MAP_MARKER,))
+    conn.commit()
+    conn.close()
+    ledger_db._ready.clear()
+    with pytest.raises(ledger_db.LedgerUnreadable):
+        weights.load_weights(path)
+
+
+def test_the_pump_blend_refuses_when_the_ledger_is_gone_after_the_import(soul, tmp_path):
+    from internal.council import weights
+    from internal.learning import pump_calibration as pc
+    from internal.store import ledger_db
+
+    weights.load_weights(str(soul))
+    cal_path = str(tmp_path / "pump_calibration.json")
+    assert pc.load_calibration(cal_path)["blend_weights"]
+    (tmp_path / "ledger.db").unlink()
+    ledger_db._ready.clear()
+    with pytest.raises(ledger_db.LedgerUnreadable):
+        pc.load_calibration(cal_path)
+    assert not (tmp_path / "ledger.db").exists()
+
+
+def test_a_pre_w1_soul_map_without_the_marker_imports_its_real_values(tmp_path):
+    from internal.council import weights
+    from internal.store import ledger_db
+
+    path = tmp_path / "soul_map.json"
+    _pre_w1_soul_map(path)
+    assert "weights_ledger_migrated" not in json.loads(path.read_text())
+    assert ledger_db.weights_known(str(path)) is True
+    assert weights.load_weights(str(path))["quant"] == 1.2
+    assert weights.load_impact_strength(str(path)) == 1.25
+
+
+def test_a_pre_w1_soul_map_with_only_the_root_mirror_still_counts_as_known(tmp_path):
+    from internal.council import weights
+    from internal.store import ledger_db
+
+    path = tmp_path / "soul_map.json"
+    path.write_text(json.dumps({"expert_weights": {"quant": 1.4}}), encoding="utf-8")
+    assert ledger_db.weights_known(str(path)) is True
+    assert weights.load_weights(str(path))["quant"] == 1.4
+
+
+def test_compaction_keeps_the_migrated_marker(soul, tmp_path, monkeypatch):
+    import importlib.util
+    import shutil
+    import time
+    from pathlib import Path
+
+    from internal.council import weights
+    from internal.store import ledger_db
+
+    spec = importlib.util.spec_from_file_location(
+        "compact_soul_map", Path(__file__).resolve().parents[1] / "scripts" / "compact_soul_map.py"
+    )
+    compact = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(compact)
+
+    weights.load_weights(str(soul))
+    blob = json.loads(soul.read_text())
+    marker = blob[ledger_db.MIGRATED_KEY]
+    blob["feedback_logs"] = [{"i": i, "pad": "x" * 60_000} for i in range(30)]
+    soul.write_text(json.dumps(blob, indent=2), encoding="utf-8")
+    bak = tmp_path / "soul_map.json.bak-pinned"
+    shutil.copy2(soul, bak)
+    import os
+
+    past = time.time() - 30
+    os.utime(soul, (past, past))
+    os.utime(bak, (past, past))
+    monkeypatch.setattr(compact, "SETTLE_SECONDS", 0.05)
+    monkeypatch.setattr(compact, "SIZE_ENVELOPE", (1, 10_000_000))
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+
+    assert compact.execute(str(soul), str(bak)) == 0
+    after = json.loads(soul.read_text())
+    assert len(after["feedback_logs"]) == compact.FEEDBACK_LOGS_KEEP
+    assert after[ledger_db.MIGRATED_KEY] == marker
+
+
+def test_save_weights_whole_blob_replacement_keeps_the_migrated_marker(soul):
+    from internal.council import weights
+    from internal.store import ledger_db
+
+    weights.load_weights(str(soul))
+    marker = json.loads(soul.read_text())[ledger_db.MIGRATED_KEY]
+    assert weights._save_raw({"state": {"value": 1}}, str(soul)) is True
+    assert json.loads(soul.read_text())[ledger_db.MIGRATED_KEY] == marker
+
+
+def test_save_signal_weights_replaces_the_map_and_drops_removed_signals(soul):
+    from internal.council import weights
+    from internal.store import ledger_db
+
+    path = str(soul)
+    weights.load_signal_weights(path)
+    weights.save_signal_weights({"hour": {"rsi_crossover": 1.11}}, path)
+    with ledger_db.reader(path) as conn:
+        assert ledger_db.read_signal_rows(conn) == {"hour": {"rsi_crossover": 1.11}}
+    assert weights.load_signal_weights(path)["day"]["macd_cross"] == weights.DEFAULT_SIGNAL_WEIGHTS["day"]["macd_cross"]

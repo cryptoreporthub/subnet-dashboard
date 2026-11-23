@@ -148,7 +148,7 @@ def test_nudge_judge_preserves_unrelated_soul_map_keys(tmp_path):
     )
     nudge_judge("echo", True, path=str(soul_path))
     data = read_soul_map(str(soul_path))
-    assert data == {"some_other_key": {"foo": 1}}
+    assert data == {"some_other_key": {"foo": 1}, "weights_ledger_migrated": {"ledger": "ledger.db"}}
     assert load_judge_weights(str(soul_path))["echo"] == 0.32
 
 

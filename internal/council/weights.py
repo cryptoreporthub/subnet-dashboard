@@ -116,11 +116,23 @@ def _write_mutate(mutator: Any, path: str) -> tuple[bool, bool]:
 
 
 def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> bool:
-    """Replace the serialized blob; callers intentionally provide full-blob state."""
+    """Replace the serialized blob; callers intentionally provide full-blob state.
+
+    The ledger migration marker survives the replacement: dropping it would let a lost
+    ledger.db re-seed defaults over weights that soul_map no longer holds.
+    """
+    from internal.store.ledger_db import MIGRATED_KEY
     from internal.store.soul_map_io import write_soul_map
 
+    def replace(blob: Dict[str, Any]) -> None:
+        marker = blob.get(MIGRATED_KEY)
+        blob.clear()
+        blob.update(data)
+        if marker is not None:
+            blob[MIGRATED_KEY] = marker
+
     result = write_soul_map(
-        lambda blob: (blob.clear(), blob.update(data)),
+        replace,
         path,
         raise_on_lock_timeout=False,
     )
@@ -874,11 +886,17 @@ def save_signal_weights(
     signal_weights: Dict[str, Dict[str, float]],
     path: str = SOUL_MAP_PATH,
 ) -> None:
-    """Replace the given signal weights in ledger.db."""
+    """Replace the full signal-weight map in ledger.db: a signal absent from the map is removed."""
     from internal.store import ledger_db
 
+    keep = {
+        (f"signal:{horizon}", name) for horizon, weights in signal_weights.items() for name in weights
+    }
     try:
         with ledger_db.transaction(path) as conn:
+            for kind, name in conn.execute("SELECT kind, name FROM weights WHERE kind LIKE 'signal:%'").fetchall():
+                if (kind, name) not in keep:
+                    conn.execute("DELETE FROM weights WHERE kind=? AND name=?", (kind, name))
             for horizon, weights in signal_weights.items():
                 ledger_db.apply_changes(
                     conn,

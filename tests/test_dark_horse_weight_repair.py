@@ -9,6 +9,13 @@ from internal.council.weights import (
 )
 
 
+def _stored_experts(soul):
+    from internal.store import ledger_db
+
+    with ledger_db.reader(str(soul)) as conn:
+        return ledger_db.read_kind(conn, "expert")
+
+
 def test_replay_weights_counts_legacy_contrarian_as_dark_horse(tmp_path):
     soul = tmp_path / "soul_map.json"
     preds = tmp_path / "predictions.json"
@@ -43,7 +50,8 @@ def test_replay_weights_counts_legacy_contrarian_as_dark_horse(tmp_path):
     replayed = replay_weights_from_predictions(str(preds))
     assert replayed["dark_horse"] == 0.96  # 1.0 -0.03 -0.03 +0.02
 
-    stored = load_weights(str(soul))
+    load_weights(str(soul))
+    stored = _stored_experts(soul)
     assert "contrarian" not in stored
     assert stored["dark_horse"] == 0.96
 
@@ -69,9 +77,10 @@ def test_load_weights_repairs_stale_contrarian(tmp_path, monkeypatch):
     preds.write_text(json.dumps({"predictions": [], "resolved": []}))
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
 
-    weights = load_weights(str(soul))
-    assert weights["dark_horse"] == 1.0
-    assert "contrarian" not in weights
+    load_weights(str(soul))
+    stored = _stored_experts(soul)
+    assert stored["dark_horse"] == 1.0
+    assert "contrarian" not in stored
 
 
 def test_normalize_no_longer_pins_stale_contrarian():

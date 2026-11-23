@@ -57,7 +57,11 @@ def test_import_seeds_every_weight_kind_then_drops_only_the_imported_keys(tmp_pa
         assert _stored(conn, "impact") == {"strength": 0.7}
         assert _stored(conn, "judge") == {"oracle": 0.5, "echo": 0.2, "pulse": 0.3}
         assert ledger_db.weights_known(soul) is True
-    assert json.load(open(soul)) == {"adversarial_state": {}, "keep": {"me": [1, 2, 3]}}
+    assert json.load(open(soul)) == {
+        "adversarial_state": {},
+        "keep": {"me": [1, 2, 3]},
+        "weights_ledger_migrated": {"ledger": "ledger.db"},
+    }
 
 
 def test_missing_soul_map_seeds_defaults_that_are_not_known(tmp_path):

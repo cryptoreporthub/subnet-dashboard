@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 
 from internal.council import weights
+from internal.store import ledger_db
 
 CANON = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
 
@@ -27,7 +28,11 @@ def test_legacy_contrarian_is_cleared_and_later_loads_do_not_rewrite(tmp_path, m
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
 
     loaded = weights.load_weights(str(soul))
-    assert "contrarian" not in loaded, "legacy key still in council weights"
+    with ledger_db.reader(str(soul)) as conn:
+        stored = ledger_db.read_kind(conn, "expert")
+    assert "contrarian" not in stored, "legacy key was imported into ledger.db"
+    assert set(stored) == set(CANON)
+    assert stored["dark_horse"] == 1.0
     soul_before = soul.read_bytes()
 
     ledger = tmp_path / "ledger.db"
@@ -41,7 +46,7 @@ def test_non_dict_adversarial_state_does_not_crash_the_weight_write(tmp_path):
     """A malformed adversarial_state on disk must not crash a weight save."""
     soul = tmp_path / "soul_map.json"
     soul.write_text(json.dumps({"adversarial_state": ["not", "a", "dict"]}))
-    before = soul.read_bytes()
+    original = json.loads(soul.read_text())
     assert weights.save_weights(dict(CANON), str(soul)) is True
     assert weights.load_weights(str(soul)) == CANON
-    assert soul.read_bytes() == before
+    assert json.loads(soul.read_text()) == dict(original, weights_ledger_migrated={"ledger": "ledger.db"})

@@ -29,6 +29,14 @@ def _write_weights(path) -> None:
     )
 
 
+def _stored_signal_map(soul):
+    """The signal weights as ledger.db stores them, with no defaults laid over."""
+    from internal.store import ledger_db
+
+    with ledger_db.reader(str(soul)) as conn:
+        return ledger_db.read_signal_rows(conn)
+
+
 def _run_forced_order(monkeypatch, calls):
     """Run real persistence methods with bounded waits outside the ledger transaction."""
     import contextlib
@@ -304,9 +312,7 @@ def test_concurrent_save_signal_weights_is_last_writer_wins(
         },
     )
 
-    loaded = weights.load_signal_weights(str(soul))
-    assert loaded["hour"]["rsi_crossover"] == maps[second_label]["hour"]["rsi_crossover"]
-    assert loaded["day"]["macd_cross"] == maps[second_label]["day"]["macd_cross"]
+    assert _stored_signal_map(soul) == maps[second_label]
 
 
 @pytest.mark.parametrize("first_writer", ["council", "signal"])

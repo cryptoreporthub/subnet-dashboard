@@ -31,6 +31,10 @@ _REPO_SOUL_MAP = os.path.join(_REPO_ROOT, "data", "soul_map.json")
 BUSY_TIMEOUT_MS = 5000
 
 SOUL_MAP_MARKER = "imported:soul_map"
+# Root key of soul_map.json, written in the same locked write that drops the imported weight
+# keys. Once it is there the weights exist nowhere but ledger.db, so a ledger that is missing
+# or lacks its import row must refuse. Seeding defaults would silently discard the learning.
+MIGRATED_KEY = "weights_ledger_migrated"
 PUMP_MARKER = "imported:pump_calibration"
 
 _SCHEMA = (
@@ -111,12 +115,19 @@ def _ensure(
     marker: str,
     seed: Callable[[sqlite3.Connection], str],
     source_path: str,
+    soul_map_path: str,
 ) -> None:
     """Create the schema and run ``seed`` once. A ledger seeded while its source file was
-    missing and never written since imports the source when it appears."""
+    missing and never written since imports the source when it appears.
+
+    Raises LedgerUnreadable when ``soul_map_path`` carries the migrated marker but the ledger
+    is missing or holds no soul_map import row: the weights were dropped from soul_map, so
+    nothing is left to re-import."""
     key = _identity(db_path, marker)
     if key is not None and key in _ready and not (key in _seeded_missing and os.path.exists(source_path)):
         return
+    if key is None and _soul_map_migrated(soul_map_path):
+        raise LedgerUnreadable(_MIGRATED_REFUSAL.format(db=db_path))
     conn = connect(db_path)
     state = ""
     try:
@@ -125,6 +136,11 @@ def _ensure(
             for statement in _SCHEMA:
                 conn.execute(statement)
             row = conn.execute("SELECT value FROM ledger_meta WHERE key=?", (marker,)).fetchone()
+            soul_row = row if marker == SOUL_MAP_MARKER else conn.execute(
+                "SELECT 1 FROM ledger_meta WHERE key=?", (SOUL_MAP_MARKER,)
+            ).fetchone()
+            if soul_row is None and _soul_map_migrated(soul_map_path):
+                raise LedgerUnreadable(_MIGRATED_REFUSAL.format(db=db_path))
             run = row is None
             if row is not None and os.path.exists(source_path):
                 untouched = conn.execute("SELECT 1 FROM weight_applied LIMIT 1").fetchone() is None
@@ -157,6 +173,25 @@ def _ensure(
         _drop_imported_keys(source_path)
 
 
+_MIGRATED_REFUSAL = (
+    "ledger.db at {db} is missing or has no soul_map import row, but soul_map.json says the "
+    "weights moved there. Restore ledger.db from backup; defaults would discard the learned weights."
+)
+
+
+def _soul_map_migrated(soul_map_path: str) -> bool:
+    """True when soul_map.json carries the migrated marker. A missing file has none.
+    A file that cannot be read cannot be ruled out, so it refuses."""
+    from internal.store.soul_map_io import _read_for_write
+
+    read = _read_for_write(soul_map_path)
+    if read.kind == "missing":
+        return False
+    if read.kind == "loaded" and isinstance(read.blob, dict):
+        return MIGRATED_KEY in read.blob
+    raise SoulMapUnreadable(f"soul_map {read.kind} at {soul_map_path}: {read.error}")
+
+
 # soul_map keys whose values now live in ledger.db. scripts/compact_soul_map.py insists the root
 # expert_weights and the adversarial_state container stay present, so those two stay (the mirror
 # is frozen at the import and nothing reads it but a rollback).
@@ -178,7 +213,10 @@ def _drop_imported_keys(soul_map_path: str) -> None:
     """
     from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
+    marker = {"ledger": os.path.basename(ledger_path_for(soul_map_path, derived=True))}
+
     def mutate(blob: Dict[str, Any]) -> None:
+        blob.setdefault(MIGRATED_KEY, marker)
         blob.pop("judge_weights", None)
         adv = blob.get("adversarial_state")
         if isinstance(adv, dict):
@@ -324,7 +362,7 @@ def _seed_pump_blend(cal_path: str) -> Callable[[sqlite3.Connection], str]:
 def reader(soul_map_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
     path = soul_map_path or DEFAULT_SOUL_MAP_PATH
     db = ledger_path_for(path)
-    _ensure(db, SOUL_MAP_MARKER, _seed_weights_from_soul_map(path), path)
+    _ensure(db, SOUL_MAP_MARKER, _seed_weights_from_soul_map(path), path, path)
     conn = connect(db)
     try:
         yield conn
@@ -338,21 +376,25 @@ def reader(soul_map_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
 def transaction(soul_map_path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
     path = soul_map_path or DEFAULT_SOUL_MAP_PATH
     db = ledger_path_for(path)
-    _ensure(db, SOUL_MAP_MARKER, _seed_weights_from_soul_map(path), path)
+    _ensure(db, SOUL_MAP_MARKER, _seed_weights_from_soul_map(path), path, path)
     yield from _write(db)
 
 
 @contextmanager
 def pump_transaction(calibration_path: str) -> Iterator[sqlite3.Connection]:
     db = ledger_path_for(pump_anchor(calibration_path))
-    _ensure(db, PUMP_MARKER, _seed_pump_blend(calibration_path), calibration_path)
+    _ensure(
+        db, PUMP_MARKER, _seed_pump_blend(calibration_path), calibration_path, pump_anchor(calibration_path)
+    )
     yield from _write(db)
 
 
 @contextmanager
 def pump_reader(calibration_path: str) -> Iterator[sqlite3.Connection]:
     db = ledger_path_for(pump_anchor(calibration_path))
-    _ensure(db, PUMP_MARKER, _seed_pump_blend(calibration_path), calibration_path)
+    _ensure(
+        db, PUMP_MARKER, _seed_pump_blend(calibration_path), calibration_path, pump_anchor(calibration_path)
+    )
     conn = connect(db)
     try:
         yield conn
