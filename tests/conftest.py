@@ -13,7 +13,28 @@ fixture runs — that's fine, because the lru_cache has already been cleared.
 
 from __future__ import annotations
 
+import atexit
+import os
+import shutil
+import tempfile
+
 import pytest
+
+# Module-scoped fixtures and boot threads run outside any per-test fixture. They still must
+# not open the repo's data/ledger.db, so the whole session gets a ledger of its own first.
+_SESSION_LEDGER_DIR = tempfile.mkdtemp(prefix="ledger-session-")
+atexit.register(shutil.rmtree, _SESSION_LEDGER_DIR, True)
+os.environ["LEDGER_DB_PATH"] = os.path.join(_SESSION_LEDGER_DIR, "ledger.db")
+_REAL_LEDGER = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "data", "ledger.db")
+_REAL_LEDGER_EXISTED = os.path.exists(_REAL_LEDGER)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """A test run that creates the repo's data/ledger.db has leaked weights into real state."""
+    if not _REAL_LEDGER_EXISTED and os.path.exists(_REAL_LEDGER):
+        os.unlink(_REAL_LEDGER)
+        session.exitstatus = 1
+        print("\nFAILED: this test run created data/ledger.db; a test is not isolated from it")
 
 
 @pytest.fixture(autouse=True)
@@ -143,3 +164,14 @@ def usable_soul_map(tmp_path, monkeypatch):
     from tests.score_snapshot_testutil import install_soul_map
 
     return install_soul_map(tmp_path, monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ledger_db(tmp_path, monkeypatch):
+    """Learned weights live in data/ledger.db, so no test may share the repo's file.
+
+    Code that names the real data directory gets a per-test ledger. Code that names a
+    temporary soul_map already gets its own ledger.db beside it.
+    """
+    monkeypatch.setenv("LEDGER_DB_PATH", str(tmp_path / "isolated_ledger.db"))
+
