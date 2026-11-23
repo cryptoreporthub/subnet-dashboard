@@ -1059,7 +1059,9 @@ class PredictionResolverScheduler:
         }
 
         def _mutator(data: Dict[str, Any]) -> None:
-            block = data.setdefault("prediction_resolver_scheduler", {})
+            block = data.get("prediction_resolver_scheduler")
+            if block is None:
+                block = data["prediction_resolver_scheduler"] = {}
             existing_run = block.get("scheduler_run_id")
             incoming_lc = state.get("lifecycle")
             if (
@@ -1693,7 +1695,9 @@ class PredictionResolverScheduler:
             # Phase 3 fix-up: time mutator body alone (persist_summary_mutator_ms).
             t_mut = time.perf_counter()
             try:
-                sched = data.setdefault("prediction_resolver_scheduler", {})
+                sched = data.get("prediction_resolver_scheduler")
+                if sched is None:
+                    sched = data["prediction_resolver_scheduler"] = {}
                 existing = (
                     sched.get("last_cycle")
                     if isinstance(sched.get("last_cycle"), dict)
