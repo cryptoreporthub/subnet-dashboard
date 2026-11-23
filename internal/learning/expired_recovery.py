@@ -662,10 +662,21 @@ def recover_expired_predictions(
                             incomplete.append(row.get("id"))
                             receipts_write_failed.append(row.get("id"))
                             continue
+                    stored_warnings = None
+                    if effect == "finalize":
+                        try:
+                            stored_warnings = get_receipt_warnings(key, effect)
+                        except LearningEffectReceiptsUnreadable:
+                            logger.exception("expired recovery receipts unreadable")
+                            effect_incomplete.append(row.get("id"))
+                            incomplete.append(row.get("id"))
+                            continue
+                        except LearningEffectReceiptsLockTimeout:
+                            logger.exception("expired recovery receipts lock timeout")
+                            _note_lock_timeout(row, receipts_timeout=True)
+                            continue
                     try:
-                        _move_effect_on_ledger(
-                            row, effect, warnings=get_receipt_warnings(key, effect) if effect == "finalize" else None
-                        )
+                        _move_effect_on_ledger(row, effect, warnings=stored_warnings)
                     except Exception:
                         logger.exception("expired recovery receipt stamp failed")
                         effect_incomplete.append(row.get("id"))

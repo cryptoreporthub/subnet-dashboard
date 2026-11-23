@@ -469,9 +469,13 @@ def _run_keyed_effect_once(key: Any, name: str, effect: Any, prediction: Dict[st
 
     The sweep can pick up a freshly committed row before this flush reaches it, so the
     receipt is rechecked under the same lock the sweep holds while it applies an effect.
-    An unreadable journal does not stop the effect. The sweep applies nothing while the
-    journal is unreadable, so running it now cannot double-apply, and the failed receipt
-    write marks it indeterminate.
+    An unreadable journal does not stop the effect on its own. The sweep applies nothing
+    while the journal is unreadable, but it may have applied this effect before the
+    journal was damaged, so the row's own marker is read first. An effect the marker
+    shows as done or indeterminate is not run again. If the marker cannot be read either,
+    the effect runs and the failed receipt write marks it indeterminate. A sweep crash
+    between its receipt and its marker move, together with outside damage to the journal,
+    can still repeat one effect.
     """
     from internal.learning import expired_recovery
 
@@ -481,6 +485,13 @@ def _run_keyed_effect_once(key: Any, name: str, effect: Any, prediction: Dict[st
                 if expired_recovery.has_effect_receipt(key, name):
                     return True
             except expired_recovery.LearningEffectReceiptsUnreadable:
+                try:
+                    state = expired_recovery._ledger_effect_state(key, name)
+                except Exception:
+                    state = None
+                if state in ("done", "indeterminate"):
+                    logger.warning("receipts unreadable, effect already settled on the row key=%s effect=%s", key, name)
+                    return False
                 logger.warning("receipts unreadable, running learning effect live key=%s effect=%s", key, name)
             try:
                 effect()

@@ -1714,3 +1714,117 @@ def test_a_stamp_that_conflicts_on_a_row_with_only_a_warning_to_stamp_is_retried
 
     assert calls["n"] == 2, "r1 has a warning but no marker pair, and its conflict must still trigger the retry"
     assert _row_on_disk(ledger, "r1").get("side_effect_warnings") == ["record_prediction_resolved"]
+
+
+@pytest.mark.parametrize("error", ["lock_timeout", "unreadable"])
+def test_a_journal_failure_while_reading_stored_warnings_does_not_abort_the_sweep(
+    ledger, sinks, monkeypatch, error
+):
+    """Receipts exist and the markers are pending. Reading the stored warnings then fails."""
+
+    def clear_fails(_pairs, warnings=None):
+        raise RuntimeError("ledger busy")
+
+    real_clear = expired_recovery.move_effects_on_ledger
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", clear_fails)
+    resolver._resolve_due_predictions(subnets=[])
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", real_clear)
+    assert _markers(ledger)["r1"]["pending"], "the clear failed, so the markers stay"
+
+    failure = (
+        expired_recovery.LearningEffectReceiptsLockTimeout("held")
+        if error == "lock_timeout"
+        else expired_recovery.LearningEffectReceiptsUnreadable("damaged")
+    )
+
+    def read_fails(*_a, **_kw):
+        raise failure
+
+    real_read = expired_recovery.get_receipt_warnings
+    monkeypatch.setattr(expired_recovery, "get_receipt_warnings", read_fails)
+    result = expired_recovery.recover_expired_predictions()
+
+    assert result is not None
+    assert _counts(sinks) == _once(), "no effect may run again"
+    assert _markers(ledger)["r1"]["pending"], "the marker stays for a later sweep"
+
+    monkeypatch.setattr(expired_recovery, "get_receipt_warnings", real_read)
+    expired_recovery.recover_expired_predictions()
+    assert _markers(ledger)["r1"]["pending"] == []
+
+
+def test_one_unreadable_read_of_stored_warnings_does_not_stop_the_sweep_settling_the_next_row(
+    ledger, sinks, monkeypatch
+):
+    _two_rows(ledger)
+
+    def clear_fails(_pairs, warnings=None):
+        raise RuntimeError("ledger busy")
+
+    real_clear = expired_recovery.move_effects_on_ledger
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", clear_fails)
+    resolver._resolve_due_predictions(subnets=[])
+    monkeypatch.setattr(expired_recovery, "move_effects_on_ledger", real_clear)
+
+    real_read = expired_recovery.get_receipt_warnings
+    calls = {"n": 0}
+
+    def first_read_fails(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise expired_recovery.LearningEffectReceiptsUnreadable("damaged once")
+        return real_read(*args, **kwargs)
+
+    monkeypatch.setattr(expired_recovery, "get_receipt_warnings", first_read_fails)
+    expired_recovery.recover_expired_predictions()
+
+    assert _markers(ledger)["r2"]["pending"] == [], "the failed read on r1 must not stop r2 settling"
+    assert _counts(sinks) == _once(rows=2)
+
+
+def test_a_journal_that_turns_unreadable_after_the_sweep_applied_an_effect_is_not_repeated_by_the_flush(
+    ledger, sinks, monkeypatch, tmp_path
+):
+    """The sweep settled r1 and cleared its markers. Outside damage then corrupts the journal."""
+    real_flush = resolver._flush_deferred_learning
+
+    def flush_after_the_sweep(deferral, commit_result):
+        expired_recovery.recover_expired_predictions()
+        (tmp_path / "learning_effect_receipts.json").write_text("not json {")
+        real_flush(deferral, commit_result)
+
+    monkeypatch.setattr(resolver, "_flush_deferred_learning", flush_after_the_sweep)
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert _counts(sinks) == _once(), _counts(sinks)
+
+
+def test_an_unreadable_journal_with_an_unreadable_ledger_state_still_runs_the_effect_live(
+    ledger, sinks, monkeypatch, tmp_path
+):
+    (tmp_path / "learning_effect_receipts.json").write_text("not json {")
+
+    def ledger_state_unreadable(*_a, **_kw):
+        raise RuntimeError("ledger unreadable")
+
+    monkeypatch.setattr(expired_recovery, "_ledger_effect_state", ledger_state_unreadable)
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert _counts(sinks) == _once(), "today's behavior is kept when the ledger cannot say either"
+
+
+def test_an_effect_already_marked_indeterminate_is_not_run_by_a_flush_that_finds_the_journal_unreadable(
+    ledger, sinks, monkeypatch, tmp_path
+):
+    real_flush = resolver._flush_deferred_learning
+
+    def flush_after_marking(deferral, commit_result):
+        for _key, name, _effect, prediction in deferral.items:
+            expired_recovery._mark_effect_indeterminate(prediction, name)
+        (tmp_path / "learning_effect_receipts.json").write_text("not json {")
+        real_flush(deferral, commit_result)
+
+    monkeypatch.setattr(resolver, "_flush_deferred_learning", flush_after_marking)
+    resolver._resolve_due_predictions(subnets=[])
+
+    assert _counts(sinks) == {name: 0 for name in SINKS}, _counts(sinks)
