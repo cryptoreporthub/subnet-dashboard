@@ -87,3 +87,10 @@ Merging or retargeting #1606; the weights.py fix and seed restamp; postmortems.p
 ## H. Summary
 
 This phase lands the stack that is ready, fixes the six faults that are plainly wrong, and puts a gate in place so no new ones arrive while the rest waits its turn.
+
+## I. Review follow-ups (2026-11-24, not yet fixed)
+
+- **Skip row replaces a completed success (pre-existing, B/C).** A `heavy_job_busy` skip at `internal/council/resolver_scheduler.py:859-866` (origin/main) calls `_persist_cycle_summary` without `owner_gen` or `force`. With no timing context, the write takes the `not owned_cycle` branch, which runs before the "last_cycle holds completed successes only" rule, so a completed success in `last_cycle` is overwritten by the skip row. That branch dates from `54b3d891` (#1571), already on main. It does not block #1604. It needs its own fix.
+- **#1591 is not test-only.** Its diff includes `internal/council/pump_overlay.py:34`, which adds `st_ino` to the memo key. Its body says 3 files; the diff has 6. The `check_invariants.py --check` gate cannot run at `dfcad050`, because that tree predates `scripts/check_invariants.py` (added on this branch in `b3a34319`). Landing stays held on the owner's GO and an update-branch.
+- **Receipts journal grows without bound.** Ditto nit on #1604. Not triaged.
+- **#1605 path filter leaks (A, blocks #1605 merge-ready).** The filter in `.github/workflows/unit1-slice.yml` is new in #1605 (commits `85ed78fc`..`f6254f49`, not on main). It omits files the 62 gated tests load at runtime, for example `internal/file_utils.py` (43 gated tests reach it through `predictions_store.py` and `soul_map_io.py`) and `tests/conftest.py` (loaded for every gated test). A static import closure of the gated tests, with `server.py` excluded, reaches 206 uncovered Python files. That count is an upper bound: `TYPE_CHECKING` and `try/except ImportError` edges are included. A hand-listed filter cannot track that closure.
