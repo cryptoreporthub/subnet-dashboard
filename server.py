@@ -2799,7 +2799,7 @@ def _safe_simivision_payload(
         subnets, daily_pick, market_context
     )
     board_source = "council-shortlist" if raw_top else "council-shortlist-empty"
-    updated_at = datetime.now(timezone.utc).isoformat() + "Z"
+    updated_at = datetime.now(timezone.utc).isoformat()
     top, weigh_meta = shape_weighing_board(
         raw_top,
         pool_count=total_considered,

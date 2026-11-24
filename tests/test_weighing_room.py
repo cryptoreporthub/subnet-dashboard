@@ -369,3 +369,24 @@ def test_shortlist_wire_reason_on_shaped_rows(monkeypatch):
     assert rows[0]["netuid"] == 1
     assert rows[0]["primary_call"] is True
     assert meta["spine_whisper"] == SPINE_WHISPER
+
+
+def test_weighing_board_updated_ago_reads_producer_timestamp(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    import server
+
+    real_now = datetime.now(timezone.utc)
+
+    class _FiveMinutesAgo(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return real_now - timedelta(minutes=5)
+
+    monkeypatch.setattr(server, "datetime", _FiveMinutesAgo)
+    payload = server._safe_simivision_payload(
+        subnets=[], source="test", daily_pick=None, market_context={}
+    )
+    monkeypatch.undo()
+    meta = payload["data"]["meta"]
+    assert meta["updated_ago"] == "updated 5m ago"
