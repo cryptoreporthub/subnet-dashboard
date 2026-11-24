@@ -98,7 +98,7 @@ stateDiagram-v2
 ```
 
 <details>
-<summary>Full graph, all 118 rows</summary>
+<summary>Full graph, all 119 rows</summary>
 
 Amber is an owner decision, blue is a PR-sized unit, grey dashed is a row that needs a repro first. Dashed arrows are decisions, solid arrows are blockers.
 
@@ -174,6 +174,7 @@ flowchart LR
     n_F20["F20"]:::unit
     n_FINAL["FINAL"]:::unit
     n_RULE["RULE"]:::unit
+    n_SCORECACHE["SCORECACHE"]:::unit
     n_R0["R0"]:::unit
     n_R1["R1"]:::unit
     n_R2["R2"]:::unit
