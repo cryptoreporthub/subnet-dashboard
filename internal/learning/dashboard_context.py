@@ -117,9 +117,11 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
                 "last_updated": engine_stats.get("last_updated"),
             }
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(_load_learning_metrics)
-            ctx["learning_metrics"] = fut.result(timeout=2.0)
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            ctx["learning_metrics"] = pool.submit(_load_learning_metrics).result(timeout=2.0)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
     except Exception as exc:
         logger.warning("fast shell learning metrics failed: %s", exc)
     _FAST_SHELL_CACHE["at"] = now
