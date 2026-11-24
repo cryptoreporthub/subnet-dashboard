@@ -10,7 +10,7 @@ The refactor does not wait for the whole sweep. It waits for three things, and m
 
 | Work | Needs first | Conflicts with | When |
 |---|---|---|---|
-| Fault PRs F1-A (3 timeout sites) and F2-A (timestamps) | nothing | `server.py` hunks differ from #1603 (line 2802 against its hunk near 2733), so a clean merge is likely and untested | now |
+| Fault PRs F1-A (3 timeout sites) and F2-A (timestamps) | nothing | Measured with `git merge-tree`. F1-A and F2-A each merge into #1605 with 0 conflicts, and into each other with 0 conflicts. This is a textual check only. | now |
 | Sweep gate `--fail-on` with a stored baseline | nothing | none | now |
 | `degraded()` helper that only swaps the exception text for a fixed code, then the 26 exception-text routes in files no open PR edits | nothing | none. Post on the agent board first, because `internal/analytics/*` belongs to Agent B | now |
 | Hermetic test fixture and failing-test triage | nothing | `tests/conftest.py` is loaded by every gated test, so it needs its own PR | before R0 |
@@ -53,7 +53,7 @@ All were open on 2026-11-24. The gate column says what must land first.
 
 | Area | Items | Gate |
 |---|---|---|
-| Security | The October survey in #1512 still holds on `main`. The Dockerfile has no `USER`, so the container runs as root. `pytest` is unpinned in `requirements.txt`. Writes are open when `WRITE_API_TOKEN` is unset. Even when it is set, four browser write paths stay public by design (`internal/write_auth.py:19-26`), and one of them, `POST /api/mindmap/feedback`, writes to the learning engine (`server.py:2357`). I did not trace whether that changes expert weights. Five workflows triggered by labels reference secrets. Drafts #1444 and #1445 were written to close that public write path and to bound public inputs. | Prod secret state needs `flyctl`, and agent Fly tokens are invalid. #1444 conflicts with the refactor. |
+| Security | The October survey in #1512 still holds on `main`. The Dockerfile has no `USER`, so the container runs as root. `pytest` is unpinned in `requirements.txt`. Writes are open when `WRITE_API_TOKEN` is unset. Even when it is set, four browser write paths stay public by design (`internal/write_auth.py:19-26`), and one of them, `POST /api/mindmap/feedback`, writes to the learning engine (`server.py:2357`). I did not trace whether that changes expert weights. Four workflows triggered by labels reference secrets (`fly-incident-logs`, `fly-reset-message-intel`, `fly-worker-diag`, and `patchd-capture`). Drafts #1444 and #1445 were written to close that public write path and to bound public inputs. | Prod secret state needs `flyctl`, and agent Fly tokens are invalid. #1444 conflicts with the refactor. |
 | Resolver and ledger | #1559, #1565, #1569, #1552, #1553, #1517, #1521, #1113, #1596 | The #1578 stack, which changes the same files |
 | Designs awaiting owner sign-off | #1508, #1509, #1510 | Owner |
 | Volume and memory | #1399 orphaned temp files, #1496 and #1538 production out-of-memory kills | Fix the temp-file reaper before converting any JSON writes to `safe_write_json` |
