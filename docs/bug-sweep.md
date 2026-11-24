@@ -1,6 +1,6 @@
 # Bug pattern sweep
 
-This register lists every place in the repo that matches a bug pattern first found in `server.py`. It is for whoever fixes bugs next. Run `python scripts/bug_pattern_sweep.py` to reproduce every count. The sweep parsed all tracked Python files outside `tests/` on 2026-11-17 at commit `135b1dd`.
+This register lists every place in the repo that matches a bug pattern first found in `server.py`. It is for whoever fixes bugs next. Run `python scripts/bug_pattern_sweep.py` to reproduce every count. The sweep parsed all tracked Python files outside `tests/`. The counts below are from 2026-11-17 at commit `135b1dd`. On 2026-11-24, `main` at `2a199ae` matched them except for swallowed exceptions, which fell from 225 to 223. Where this register and `docs/roadmap-proposal.md` disagree, the proposal is newer.
 
 The first three sections are faults. Each instance matches a pattern that a probe or a review confirmed in `server.py`. The last three sections are candidates. A match there needs a look before anyone calls it a bug.
 
@@ -14,7 +14,7 @@ A `with ThreadPoolExecutor(...)` block waits for its worker when the block ends.
 - `internal/simivision/chat_service.py:135`
 - `server.py:837`
 
-Fix each one the same way. Create the executor without `with`, and call `shutdown(wait=False, cancel_futures=True)` in a `finally`. The plan covers the first two as D8 and D9. `internal/simivision/chat_service.py:135` is new.
+Create the executor without `with` and call `shutdown(wait=False, cancel_futures=True)` in a `finally`. That stops the caller waiting. It does not stop a running worker, and pool workers are non-daemon, so a hung worker can block interpreter exit and repeated timeouts can stack workers (issue #1113). Add a single-flight guard, and where an exit-time join can hang CI, run the work on a daemon thread as `_warm_homepage_cache` does at `server.py:929`. The fault PR F1-A on `fix/f1a-timeout-bound` fixes all three sites. The chat site still leaks one worker per timed-out message, which the guard closes.
 
 ### Timestamps that end in `+00:00Z` (3 places)
 
@@ -49,7 +49,7 @@ Fix them with the `degraded()` helper that R10 of the refactor plan adds. Log th
 
 ## Look at these next
 
-### Exceptions swallowed with `pass` (225 places)
+### Exceptions swallowed with `pass` (223 places on main at 2a199ae)
 
 An `except Exception: pass` hides the failure and leaves no log line. Some are correct, such as a best-effort cleanup. Each one needs a decision. Either the state it hides is legitimate and deserves a debug log, or it hides a bug.
 
