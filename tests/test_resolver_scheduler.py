@@ -2621,7 +2621,7 @@ def test_heavy_job_skip_does_not_replace_completed_success_in_last_cycle(
     assert state["cycle_history"][-1]["skipped"] == "heavy_job_busy"
 
 
-def test_restart_seeds_generation_past_skip_rows(monkeypatch, tmp_path):
+def test_restart_records_next_cycle_generation_past_skip_rows(monkeypatch, tmp_path):
     """Generations never go backwards across a restart, skip rows included."""
     success = {
         "run_at": "2020-01-01T00:00:00Z",
@@ -2656,7 +2656,11 @@ def test_restart_seeds_generation_past_skip_rows(monkeypatch, tmp_path):
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=_static_subnets
     )
-    sched._ensure_cycle_generation_seeded()
+    sched._active = True
+    sched._tick()
 
-    recorded = max(row["cycle_generation"] for row in [success, *skips])
-    assert sched._cycle_generation + 1 > recorded
+    with open(soul, "r") as f:
+        state = json.load(f)["prediction_resolver_scheduler"]
+    persisted = max(row["cycle_generation"] for row in [success, *skips])
+    assert persisted == 9
+    assert state["last_cycle"]["cycle_generation"] > persisted
