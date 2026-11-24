@@ -105,7 +105,7 @@ This phase lands the stack that is ready, fixes the six faults that are plainly 
   4. If `unit1-slice` becomes a required check, docs-only PRs leave it pending. The old filter behaved the same. Branch protection was not checked.
 - **#1605 title is stale.** It still says "path-filtered". Not edited.
 
-## J. D.5 claims, verified by run (2026-11-24, base origin/main 2a199aec)
+## J. D.5 claims, partly verified by run (2026-11-24, base origin/main 2a199aec)
 
 Runs used a detached worktree at origin/main, removed after. Each number below is one a run printed. Claims a run did not test are labelled "not run" or "read from code". The scripts are in the session scratchpad, not committed: `f1a*.py` (F1-A and F2-A) and `f1b_*.py` (F1-B), with output in each named run folder (`run1/` and `run2/`). Each run stubs only the slow callee.
 
