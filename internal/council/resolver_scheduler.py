@@ -1091,8 +1091,12 @@ class PredictionResolverScheduler:
         data = _load_json(self.soul_map_path)
         sched = data.get("prediction_resolver_scheduler", {})
         last = sched.get("last_cycle") if isinstance(sched.get("last_cycle"), dict) else {}
-        persisted = last.get("cycle_generation")
-        if persisted is not None:
+        history = sched.get("cycle_history")
+        rows = [last, *(history if isinstance(history, list) else [])]
+        for row in rows:
+            persisted = row.get("cycle_generation") if isinstance(row, dict) else None
+            if persisted is None:
+                continue
             try:
                 self._cycle_generation = max(self._cycle_generation, int(persisted))
             except (TypeError, ValueError):
