@@ -9,7 +9,7 @@ R0 to R9 change structure only. R10 and R11 change behavior and wait for operato
 
 ## How to read this
 
-One box is one unit of work. Every box names the evidence that checks it. A nested box is a sub-step of the box above it. Check a box only when its evidence exists, a file, a log line, a screenshot, a test run, or a SHA. The body is a how-to. The appendices explain and record.
+One box is one unit of work. Every box names the evidence that checks it. A nested box is a sub-step of the box above it. Check a box only when its evidence exists, a file, a log line, a screenshot, a test run, or a SHA. Line numbers in this plan come from commit `8cb247e` and drift as the #1578 stack lands. Find code by symbol name, and rerun `scripts/server_inventory.py` for current lines. The body is a how-to. The appendices explain and record.
 
 The program runs `playbooks/autopilot-stack.md` from the poteto-mode skill. The agent builds and verifies the stack. The operator lands every PR, and R10 and R11 stop at merge-ready for review.
 
@@ -48,6 +48,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Open the PR ready, never draft. A stack child targets its parent branch.
 - [ ] Apply the operator's standing review rule of 2026-11-16 to every PR. Run its eleven skills, which are `code-review`, `poteto-mode`, and the nine principle skills it names. A Sonnet 5.5 subagent review is part of the gate. Replit posts its review as a PR comment, and Ditto reviews after each push.
 - [ ] Verify locally with `DATA_DIR` set to a temporary copy. A test run that writes the tracked `data/` directory trips the stop hook.
+- [ ] Narrow a broad `except Exception` only by this rule. Keep it broad at a boundary (a route handler, a thread entry, or a boot hook) and log with context. Narrow it to specific types when the try body is internal code that can raise only programmer errors such as `KeyError`, `TypeError`, or `AttributeError`. Do not narrow a handler in a move PR unless that PR already changes the moved lines. The count in `tests/test_server_budget.py` only goes down.
 - [ ] Run `pytest tests/test_endpoint_contract.py` once before the PR-facing push. Push with hooks on.
 - [ ] Rebase onto current trunk before the code-ready report. Rebase again only on a conflict with trunk or on a CI failure that comes from trunk.
 - [ ] Re-run `python scripts/server_inventory.py` after every rebase. An open PR that added a `server` import or patch shows up as a raised count.
@@ -90,8 +91,8 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Build.**
 
-- [ ] `scripts/route_manifest.py` writes every route as method, path, and endpoint module, plus the SHA-256 of the OpenAPI JSON. It also writes the `/metrics` route, the `/static` mount, and the middleware classes in the order of `app.user_middleware`, and the test compares that order exactly. The test compares the method and path pairs as a set. It checks order only for the 3 pairs of routes that can match the same request, and none of those is defined in `server.py`.
-- [ ] Add a `frozen_world` fixture. It stubs the subnet feed with 5 fixed rows, freezes the clock, points `DATA_DIR` at a seeded temporary copy, and blocks the network.
+- [ ] `scripts/route_manifest.py` writes every route as method, path, and endpoint module, It also writes the `/metrics` route, the `/static` mount, and the middleware classes in the order of `app.user_middleware`, and the test compares that order exactly. The test compares the method and path pairs as a set. It checks order only for the 3 pairs of routes that can match the same request, and none of those is defined in `server.py`.
+- [ ] Add a `frozen_world` fixture. It stubs the subnet feed with 5 fixed rows, freezes the clock, sets `TZ` to `UTC` and a fixed locale, points `DATA_DIR` at a seeded temporary copy, and blocks the network.
 - [ ] `tests/test_server_golden.py` requests every route that `server.py` defines inside `frozen_world` and compares the whole body and four headers with a stored file. The headers are `Cache-Control`, `Access-Control-Allow-Origin`, `X-Frame-Options`, and whether `Server-Timing` is present. One case is a write that `check_write_auth` denies, so that a reply produced by a middleware is pinned too. It stores the HTML of `/` in the cold, emergency, and warm state. A move PR must leave every stored file unchanged.
 - [ ] Know what the stored files capture. `internal/instant_bailout.py:129` to `164` answers `GET /`, `/health`, `/api/health`, `/version`, and `/api/ops/live` before FastAPI runs. The stored bodies for those paths are the wrapper output. Add one case per path that calls the inner FastAPI app, so that the handlers the plan moves are pinned too.
 - [ ] Render `index.html` once with Jinja `StrictUndefined` and store the list of context keys the template reads. The app uses the default `Undefined`, which prints a missing key as an empty string.
@@ -111,7 +112,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R0/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R0/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R0/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R0/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R0/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -168,7 +169,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R1/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R1/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R1/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R1/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R1/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -201,6 +202,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Files.**
 
+- [ ] Create `tests/test_import_layers.py`.
 - [ ] Create `internal/subnets/source.py`.
 - [ ] Create `internal/subnets/registry.py`.
 - [ ] Create `internal/council/market_context.py`.
@@ -215,6 +217,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 - [ ] Move `_market_mood_proxy`, `_market_context_with_weights`, and `_safe_macro_overlay` to `internal/council/market_context.py`.
 - [ ] Change the 13 production modules to import from the new modules. Change `server.py` to import the same names.
 - [ ] `internal/council/build_seed_snapshot.py:36` patches `server._get_subnets_hydrate` in production code. Point that patch at `internal.subnets.source.get_subnets_hydrate` and delete its `import server`. Then run `git grep -nE "patch.object.server|setattr.server" -- internal scripts` and repoint anything else it finds.
+- [ ] Create `tests/test_import_layers.py` with the rules that already hold. A module under `internal/` may import `server` only if it is on an allowlist, and `internal.web` imports no feature package. Each of R2, R3, and R9 removes entries from the allowlist, so layering is enforced while modules appear and not only at the end.
 - [ ] Move the weights import guard at `server.py:189` to `196` into `internal/council/market_context.py` unchanged. `_market_context_with_weights` depends on its fallback.
 - [ ] Move `load_data` to `internal/subnets/registry.py` unchanged. Do not replace it with `safe_read_json`, which hides a corrupt file that `load_data` reports.
 - [ ] Repoint the test patches of `_get_subnets_with_source` (10), `_market_context_with_weights` (6), `load_data` (4), and `_get_subnets_hydrate` (3) to the module that now calls the function. Leave no re-export in `server.py` for tests to patch.
@@ -230,7 +233,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R2/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R2/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R2/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R2/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R2/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -294,7 +297,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R3/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R3/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R3/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R3/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R3/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -349,7 +352,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R4/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R4/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R4/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R4/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R4/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -404,7 +407,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R5/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R5/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R5/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R5/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R5/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -457,7 +460,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R6/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R6/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R6/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R6/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R6/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -515,7 +518,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R7/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R7/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R7/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R7/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R7/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -570,7 +573,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R8/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R8/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R8/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R8/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R8/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -630,7 +633,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R9/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R9/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R9/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R9/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R9/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -789,7 +792,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 **Files.**
 
 - [ ] Edit `tests/test_server_budget.py`.
-- [ ] Create `tests/test_import_layers.py`.
+- [ ] Edit `tests/test_import_layers.py`.
 - [ ] Create `docs/architecture.md`.
 - [ ] Edit `AGENTS.md`.
 - [ ] Edit `tests/test_endpoint_contract.py` docstring.
@@ -799,7 +802,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 - [ ] Set the final budgets. `server.py` has at most 150 lines, `from server import` appears only in `asgi_entry.py` and `scripts/restless_openapi.py`, and tests patch no `server` attribute.
 - [ ] Add a budget case that fails when any file under `internal/` imports `server`.
-- [ ] Add `tests/test_import_layers.py`. It parses every module and fails when anything except `server.py` imports `internal.app`, when `internal.web` imports a feature package, or when a route module imports another route module. `internal/web/` holds what feature packages share, which is templating, settings, and reply helpers.
+- [ ] Finish `tests/test_import_layers.py`, which R2 created. The allowlist is now empty. It parses every module and fails when anything except `server.py` imports `internal.app`, when `internal.web` imports a feature package, or when a route module imports another route module. `internal/web/` holds what feature packages share, which is templating, settings, and reply helpers.
 - [ ] Write `docs/architecture.md`. It holds the module tree from Appendix E, the import rules the two tests enforce, and where a new route, cache, or setting goes.
 - [ ] Add `internal/app/`, `internal/web/`, `internal/home/`, and `internal/subnets/` to the ownership table in `AGENTS.md`.
 - [ ] Update the sections of `AGENTS.md` that describe `server.py`. The conflict line for the two agents becomes the table in `internal/app/routers.py`.
@@ -816,7 +819,7 @@ Each live lane runs at the PR head on its own checkout. No control skill is inst
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `grok-4.7-xhigh-fast` at the PR head, per the boot recipe.
 
-- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R12/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order, and the OpenAPI hash is identical.
+- [ ] Lane 1. Regression lane against trunk. Run `python scripts/route_manifest.py --print` at trunk and at head. Save `/tmp/swarm-R12/worker-1/route-manifest.diff`. Pass when the set of method and path pairs is identical, the three overlapping route pairs keep their order.
 - [ ] Lane 2. Load `/` in Chromium, once cold and once after 5 seconds. Save `/tmp/swarm-R12/worker-2/home-warm.png`. Pass when both loads contain `tribunal-hero` and the console shows zero errors.
 - [ ] Lane 3. Request `/api/subnets?limit=5&sort=emission&order=desc`, `/api/summary`, and `/api/stats`. Save `/tmp/swarm-R12/worker-3/subnets.json`. Pass when each key set equals the trunk key set and `meta.total` is above 0.
 - [ ] Lane 4. Send 20 concurrent `GET /api/daily-pick` requests. Save `/tmp/swarm-R12/worker-4/daily-pick-burst.json`. Pass when all 20 return 200 inside 1 second with the same `date`.
@@ -1067,3 +1070,25 @@ Lines are estimates from the ranges in Appendix E. Test patch sites are exact co
 The patch-site column undercounts the test work. Tests also read or write the moved globals directly at 107 places. About 58 touch homepage state and land in R1 and R7, and about 49 touch the pick and SimiVision caches and land in R3 and R4. The reset fixtures in R4 and R7 replace most of them.
 
 R3 is the largest and riskiest PR. If its owner cannot keep the golden files unchanged in one pass, split it into the SimiVision board first and the pick modules second.
+
+## Appendix H. Pass condition for each bug
+
+Each row is what you can observe when the fix is in. Every fix PR commits the failing test for its row first.
+
+| Id | Pass when |
+|---|---|
+| B1 | A timeout reply from `/api/subnets` carries `Cache-Control: no-store`. |
+| B2 | A route that raises `RuntimeError("secret path")` returns a fixed error code and the reply body does not contain "secret". Usable replies stay HTTP 200 and a reply with no data is 503. |
+| B3 | `/api/simivision` cold, warm, and timed out all return the keys `status` and `data`. |
+| B4 | One default exists for `HOMEPAGE_SHELL_CACHE_SECONDS`, and the public `max-age` on `/` equals the shell cache age. |
+| B5 | Forcing an optional router import to fail makes its name appear under `routers` in the `/api/ops/live` report. |
+| B6 | `GET /api/stats` returns 200 for a row whose `staking_data` is `None`. |
+| D1 | With the subnet feed failing, `GET /api/top-pick/hour` returns a pending or busy shape and `git status` shows no data file changed. |
+| D2 | `GET /api/top-pick/hour` leaves the learning ledger unchanged. |
+| D3 | No timestamp the app emits contains `+00:00Z`, and the sweep key `isoformat_plus_Z_aware` reads 0. |
+| D4 | A row with a non-integer `netuid` does not hide a real subnet from `GET /api/subnet/{id}`. |
+| D5 | `POST /api/mindmap/feedback` with `subnet_id` 0 and a recommendation records the feedback once. |
+| D6 | Six requests to `/api/stats` and `/api/summary` inside the cache window cause one row rebuild. |
+| D7 | The `index` handler and the bailout wrapper return the same HTML for `/` in the cold, emergency, and warm states. |
+| D8, D9 | A worker that hangs returns control within its timeout plus a small slack, and the sweep key `timeout_joined_by_with_block` reads 0. |
+| S1 | The count of broad `except Exception` handlers in `tests/test_server_budget.py` is lower than before. |
