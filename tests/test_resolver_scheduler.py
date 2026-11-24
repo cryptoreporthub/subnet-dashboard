@@ -2664,3 +2664,50 @@ def test_restart_records_next_cycle_generation_past_skip_rows(monkeypatch, tmp_p
     persisted = max(row["cycle_generation"] for row in [success, *skips])
     assert persisted == 9
     assert state["last_cycle"]["cycle_generation"] > persisted
+
+
+def test_restart_skips_non_finite_cycle_generation_rows(monkeypatch, tmp_path):
+    """A row with an Infinity generation is ignored when seeding after a restart."""
+    success = {
+        "run_at": "2020-01-01T00:00:00Z",
+        "ok": True,
+        "cycle_generation": 7,
+        "resolver_cycle_id": "cycle-7",
+        "gap_timing_ms": {"complete": True},
+    }
+    rows = [
+        {
+            "run_at": "2020-01-01T00:01:00Z",
+            "skipped": "cycle_in_flight",
+            "cycle_generation": float("inf"),
+        },
+        {
+            "run_at": "2020-01-01T00:02:00Z",
+            "skipped": "cycle_in_flight",
+            "cycle_generation": 12,
+        },
+    ]
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": success,
+                    "cycle_history": [success, *rows],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_static_subnets
+    )
+    sched._active = True
+    sched._tick()
+
+    with open(soul, "r") as f:
+        state = json.load(f)["prediction_resolver_scheduler"]
+    assert state["last_cycle"]["cycle_generation"] > 12

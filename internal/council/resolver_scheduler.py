@@ -1099,7 +1099,7 @@ class PredictionResolverScheduler:
                 continue
             try:
                 self._cycle_generation = max(self._cycle_generation, int(persisted))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 pass
         self._cycle_generation_seeded = True
 
