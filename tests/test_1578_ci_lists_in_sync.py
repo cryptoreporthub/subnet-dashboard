@@ -27,12 +27,6 @@ ARGUMENT = re.compile(rf"^\s*({TEST_PATH})(::\w+)?( \\)?$")
 FORWARD_ARGS = '"$@"'
 
 
-def _filter_paths(triggers):
-    """Test paths listed as live YAML items. A commented-out item is not a filter."""
-    items = re.findall(rf'^\s*-\s*"({TEST_PATH})"\s*$', triggers, flags=re.MULTILINE)
-    return set(items)
-
-
 def _command_block(text):
     """The backslash-continued pytest command, exactly as the shell reads it.
 
@@ -86,54 +80,25 @@ def _selections():
     triggers, job = _split_workflow(workflow)
     return (
         triggers,
-        _filter_paths(triggers),
         _pytest_arguments(job),
         _pytest_arguments(GATED.read_text(encoding="utf-8")),
     )
 
 
 def test_workflow_and_gated_test_lists_match():
-    _, _, workflow, gated = _selections()
+    _, workflow, gated = _selections()
     assert workflow - gated == set()
     assert gated - workflow == set(GATED_ONLY)
     assert all(GATED_ONLY.values())
 
 
-def test_workflow_test_modules_have_path_filters():
-    _, paths, workflow, _ = _selections()
-    assert paths == workflow
-
-
-def test_required_source_paths_trigger_unit1():
-    triggers, _, _, _ = _selections()
-    for path in (
-        "internal/judges/**",
-        "internal/accuracy_lift/**",
-        "internal/background_boot.py",
-        "scripts/reset_accuracy_epoch.py",
-        "scripts/measure_accuracy_archive.py",
-        "scripts/gated_unit1_pytest.sh",
+def test_sync_and_judge_failure_modules_are_in_both_test_lists():
+    _, workflow, gated = _selections()
+    for module in (
+        TEST_FILE,
+        "tests/test_judge_failure_keeps_pick.py",
+        "tests/test_judge_failure_reconciles_later.py",
     ):
-        assert f'"{path}"' in triggers
-
-
-def test_sync_test_is_selected_by_both_gates():
-    _, paths, workflow, gated = _selections()
-    assert TEST_FILE in paths
-    assert TEST_FILE in workflow
-    assert TEST_FILE in gated
-
-
-JUDGE_FAILURE_MODULES = (
-    "tests/test_judge_failure_keeps_pick.py",
-    "tests/test_judge_failure_reconciles_later.py",
-)
-
-
-def test_judge_failure_modules_are_selected_by_every_gate():
-    _, paths, workflow, gated = _selections()
-    for module in JUDGE_FAILURE_MODULES:
-        assert module in paths, module
         assert module in workflow, module
         assert module in gated, module
 
@@ -248,14 +213,6 @@ def test_a_space_after_a_backslash_fails_the_guard(text):
         _pytest_arguments(broken)
 
 
-def test_a_commented_out_path_filter_entry_is_not_counted():
-    triggers, _ = _split_workflow(WORKFLOW.read_text(encoding="utf-8"))
-    target = sorted(_filter_paths(triggers))[3]
-    commented = triggers.replace(f'- "{target}"', f'# - "{target}"')
-    assert commented != triggers
-    assert _filter_paths(commented) == _filter_paths(triggers) - {target}
-
-
 def test_a_jobs_word_in_a_comment_does_not_confuse_the_split():
     workflow = "# jobs: are defined below\n" + WORKFLOW.read_text(encoding="utf-8")
     triggers, job = _split_workflow(workflow)
@@ -274,18 +231,22 @@ def _missing_files(paths):
 
 
 def test_every_listed_test_file_exists():
-    _, filters, workflow, gated = _selections()
-    assert _missing_files(filters | workflow | gated) == []
+    _, workflow, gated = _selections()
+    assert _missing_files(workflow | gated) == []
 
 
 def test_a_listed_test_file_that_does_not_exist_is_reported():
     assert _missing_files({"tests/test_does_not_exist_zzz.py"}) == ["tests/test_does_not_exist_zzz.py"]
 
 
-def test_the_push_trigger_reuses_the_pull_request_path_filter():
-    triggers, _ = _split_workflow(WORKFLOW.read_text(encoding="utf-8"))
-    assert triggers.count("&unit1_slice_paths") == 1
-    assert triggers.count("*unit1_slice_paths") == 1
+def test_both_triggers_run_on_everything_but_the_docs_only_allowlist():
+    """No hand-listed paths: a change outside docs/** and **/*.md runs the gate."""
+    triggers, _, _ = _selections()
+    assert "paths:" not in triggers, "a paths: allowlist drifts; use paths-ignore"
+    assert triggers.count("paths-ignore: &unit1_slice_ignore") == 1
+    assert triggers.count("paths-ignore: *unit1_slice_ignore") == 1
+    ignored = re.findall(r'^\s*-\s*"([^"]+)"\s*$', triggers, flags=re.MULTILINE)
+    assert ignored == ["docs/**", "**/*.md"]
 
 
 def test_the_real_files_pass_the_strict_command_shape():
