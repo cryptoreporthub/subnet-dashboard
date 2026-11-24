@@ -2711,3 +2711,35 @@ def test_restart_skips_non_finite_cycle_generation_rows(monkeypatch, tmp_path):
     with open(soul, "r") as f:
         state = json.load(f)["prediction_resolver_scheduler"]
     assert state["last_cycle"]["cycle_generation"] > 12
+
+
+def test_restart_tick_completes_with_non_finite_last_cycle_generation(monkeypatch, tmp_path):
+    """An Infinity generation in last_cycle must not crash the first tick after a restart."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": {
+                        "run_at": "2020-01-01T00:00:00Z",
+                        "ok": True,
+                        "cycle_generation": float("inf"),
+                        "resolver_cycle_id": "cycle-inf",
+                        "gap_timing_ms": {"complete": True},
+                    },
+                    "cycle_history": [],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_static_subnets
+    )
+    sched._active = True
+    result = sched._tick()
+
+    assert result["ok"] is True
