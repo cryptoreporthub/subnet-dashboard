@@ -109,7 +109,7 @@ flowchart LR
   classDef need fill:#e5e7eb,stroke:#4b5563,color:#111827,stroke-dasharray:4 3
   classDef gate fill:#bbf7d0,stroke:#166534,color:#052e16,stroke-width:2px
   classDef crit stroke:#b91c1c,stroke-width:3px
-  subgraph g_a["Owner decisions (22)"]
+  subgraph g_a["Owner decisions (23)"]
     direction TB
     n_OD6["OD6"]:::dec
     n_OD7["OD7"]:::dec
@@ -135,7 +135,7 @@ flowchart LR
     n_STATEVECTOR["STATEVECTOR"]:::dec
     n_ISSUES_LIVE["ISSUES_LIVE"]:::dec
   end
-  subgraph g_b["PR-sized units (50)"]
+  subgraph g_b["PR-sized units (51)"]
     direction TB
     n_D1["D1"]:::unit
     n_D2["D2"]:::unit
@@ -189,7 +189,7 @@ flowchart LR
     n_R11["R11"]:::unit
     n_R12["R12"]:::unit
   end
-  subgraph g_c["Needs a repro (27)"]
+  subgraph g_c["Needs a repro (45)"]
     direction TB
     n_F48["F48"]:::need
     n_RECHECK["RECHECK"]:::need
