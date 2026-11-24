@@ -2578,3 +2578,42 @@ def test_r3_stale_skip_is_history_only(monkeypatch, fresh_scheduler):
 def test_r3_fresh_heavy_job_skip_is_recorded(monkeypatch, fresh_scheduler):
     """M3 R3 fresh: heavy_job_busy skip is observable in last_cycle."""
     test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fresh_scheduler)
+
+
+def test_heavy_job_skip_does_not_replace_completed_success_in_last_cycle(
+    monkeypatch, tmp_path
+):
+    """A heavy-job skip must not overwrite the last completed success."""
+    from contextlib import contextmanager
+
+    success = {
+        "run_at": "2020-01-01T00:00:00Z",
+        "ok": True,
+        "cycle_generation": 7,
+        "resolver_cycle_id": "cycle-7",
+        "gap_timing_ms": {"complete": True},
+    }
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        json.dumps({"prediction_resolver_scheduler": {"last_cycle": success}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
+
+    @contextmanager
+    def _always_busy(_name):
+        yield False
+
+    monkeypatch.setattr("internal.heavy_job_gate.heavy_job_slot", _always_busy)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._active = True
+    sched._tick()
+
+    with open(soul, "r") as f:
+        last = json.load(f)["prediction_resolver_scheduler"]["last_cycle"]
+    assert last["ok"] is True
+    assert last["run_at"] == "2020-01-01T00:00:00Z"
+    assert last.get("skipped") is None
