@@ -947,7 +947,7 @@ P10 cache TTL defaults: _CACHE_PATHS['/']= 60 HOMEPAGE_SHELL_CACHE_SECONDS= 45.0
 - Close PR #1330. It was parked on 2026-10-16 with three review blockers, and its patch no longer applies to `main`. The plan carries its fixes that `main` still lacks as R1, D8, and D9.
 - D1 and D2 need no operator input. Reading `internal/learning/prediction_loop.py` and `internal/council/pick_scheduler.py` settled both.
 
-**Open PRs that touch the same code.** #1591 is test-only and applies cleanly to `main`. It adds 5 test patches of `server` attributes. Land it before R0, so that the R0 budgets count them and R2, R5, and R7 repoint them.
+**Open PRs that touch the same code.** The #1578 stack (#1599 to #1605, with #1606 on top of #1578) edits `internal/council/`, `internal/learning/`, and `server.py`. #1603 changes `_record_pick_in_learning_loop` in `server.py`, which R3 moves and R11 stops calling from a GET. It also grows `server.py` from 3,489 to 3,492 lines. Start R0 only after that stack lands, then take the R0 budget numbers from `main`. #1598 is already merged. #1591 is test-only, applies cleanly, and should land before R0. Rebase this branch onto `main` first, because it is 13 commits behind.
 
 **Route order.** FastAPI matches routes in registration order. Appendix A shows that no route in `server.py` overlaps another, and the manifest checks the order of the 3 pairs that do.
 
