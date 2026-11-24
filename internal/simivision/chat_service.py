@@ -132,9 +132,12 @@ def _maybe_investigation_context(message: str) -> Optional[Dict[str, Any]]:
     if wm:
         wallet = wm.group(1)
     try:
-        with ThreadPoolExecutor(max_workers=1) as pool:
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
             fut = pool.submit(build_investigation_context, message, netuid=netuid, wallet=wallet)
             return fut.result(timeout=_INVESTIGATION_TIMEOUT_SEC)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
     except FuturesTimeoutError:
         logger.warning("investigation context timed out after %.0fs", _INVESTIGATION_TIMEOUT_SEC)
         return None
