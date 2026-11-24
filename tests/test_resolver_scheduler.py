@@ -2613,10 +2613,12 @@ def test_heavy_job_skip_does_not_replace_completed_success_in_last_cycle(
     sched._tick()
 
     with open(soul, "r") as f:
-        last = json.load(f)["prediction_resolver_scheduler"]["last_cycle"]
+        state = json.load(f)["prediction_resolver_scheduler"]
+    last = state["last_cycle"]
     assert last["ok"] is True
     assert last["run_at"] == "2020-01-01T00:00:00Z"
     assert last.get("skipped") is None
+    assert state["cycle_history"][-1]["skipped"] == "heavy_job_busy"
 
 
 def test_restart_seeds_generation_past_skip_rows(monkeypatch, tmp_path):
