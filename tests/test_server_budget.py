@@ -1,6 +1,8 @@
-"""Size and coupling budgets for server.py. Lower a number when it drops. Never raise one.
+"""Structural guard, not a behavior test: size and coupling budgets for server.py.
 
-See docs/server-refactor-plan.md. Each budget counts something the refactor removes.
+Lower a number when it drops. Never raise one. A PR that legitimately grows server.py, such as #1603,
+rebases this file with its own number. See docs/server-refactor-plan.md. Delete the file in R12,
+when the final budgets move into tests/test_import_layers.py.
 """
 
 import re
