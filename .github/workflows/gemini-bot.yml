@@ -1,0 +1,95 @@
+name: Gemini Bot
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: gemini-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  respond:
+    # Run when: a new issue is opened, OR a trusted person comments "@gemini-review" on a PR.
+    if: >-
+      (github.event_name == 'issues') ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '@gemini-review') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask Gemini and post a comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          python3 - << 'EOF'
+          import os, json, urllib.request
+
+          GH = "https://api.github.com"
+          repo, num = os.environ["REPO"], os.environ["NUMBER"]
+          gh_headers = {
+              "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          MAX_DIFF_CHARS = 200_000  # keep the prompt a sane size
+
+          def gh(url, data=None, accept="application/vnd.github+json"):
+              req = urllib.request.Request(url, data=data,
+                  headers={**gh_headers, "Accept": accept, "Content-Type": "application/json"})
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return r.read().decode("utf-8")
+
+          def gemini(prompt):
+              url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen:generateContent"
+              body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
+              req = urllib.request.Request(url, data=body, headers={
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": os.environ["GEMINI_API_KEY"],  # header, not URL, so it never lands in logs
+              })
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  data = json.loads(r.read().decode("utf-8"))
+              try:
+                  return data["candidates"][0]["content"]["parts"][0]["text"]
+              except (KeyError, IndexError):
+                  return "Gemini returned no answer (it may have been blocked or empty)."
+
+          if os.environ["EVENT_NAME"] == "issues":
+              prompt = ("A user opened this GitHub issue. Write a helpful, concise first response.\n\n"
+                        f"Title: {os.environ['ISSUE_TITLE']}\n\nBody:\n{os.environ.get('ISSUE_BODY') or '(empty)'}")
+              heading = "### Gemini first response"
+          else:
+              # API diff endpoint works for private repos (the html diff_url does not with a token)
+              diff = gh(f"{GH}/repos/{repo}/pulls/{num}", accept="application/vnd.github.diff")
+              note = ""
+              if len(diff) > MAX_DIFF_CHARS:
+                  diff = diff[:MAX_DIFF_CHARS]
+                  note = f"\n\n_Note: the diff was cut to the first {MAX_DIFF_CHARS:,} characters._"
+              prompt = ("You are reviewing a pull request. Point out bugs, risky changes and missing tests. "
+                        "Be concise and specific, citing file and line.\n\n"
+                        f"Reviewer's request: {os.environ['COMMENT_BODY']}\n\nDiff:\n{diff}")
+              heading = "### Gemini code review"
+              reply_suffix = note
+          reply = gemini(prompt)
+          if os.environ["EVENT_NAME"] != "issues":
+              reply += reply_suffix
+
+          body = json.dumps({"body": f"{heading}\n\n{reply}"}).encode("utf-8")
+          gh(f"{GH}/repos/{repo}/issues/{num}/comments", data=body)
+          print("Comment posted.")
+          EOF
