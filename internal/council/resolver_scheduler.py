@@ -1601,6 +1601,10 @@ class PredictionResolverScheduler:
                         and new_instant < existing_instant
                     ):
                         return
+                    # A skip records history but never replaces a completed success.
+                    if summary.get("skipped") and _is_completed_success(existing):
+                        _history_only_write(sched)
+                        return
                     _commit_write(sched)
                     return
 
