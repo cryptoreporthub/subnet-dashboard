@@ -834,9 +834,11 @@ def _prime_emergency_home_html() -> str:
             ctx = _minimal_index_context(_HomepageStubRequest())
             return templates.get_template("index.html").render(ctx)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(_build)
-            _EMERGENCY_HOME_HTML = fut.result(timeout=8.0)
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        try:
+            _EMERGENCY_HOME_HTML = pool.submit(_build).result(timeout=8.0)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
     except Exception as exc:
         logger.warning("emergency home prime failed: %s — ultra-minimal fallback", exc)
         try:
