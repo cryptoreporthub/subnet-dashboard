@@ -2576,7 +2576,7 @@ def test_r3_stale_skip_is_history_only(monkeypatch, fresh_scheduler):
 
 
 def test_r3_fresh_heavy_job_skip_is_recorded(monkeypatch, fresh_scheduler):
-    """M3 R3 fresh: heavy_job_busy skip is observable in last_cycle."""
+    """M3 R3: a heavy_job_busy skip is observable in last_cycle only when no completed success exists."""
     test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fresh_scheduler)
 
 
