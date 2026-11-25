@@ -73,23 +73,28 @@ def fetch_rotation_token_prices() -> Dict[str, Dict[str, Any]]:
 def _mirror_rotation_snapshot_to_soul_map(tokens: List[Dict[str, Any]]) -> bool:
     """Persist rotation-token snapshot into soul_map; return True if disposition changed."""
     try:
-        from internal.council.weights import SOUL_MAP_PATH, _load_raw, _save_raw
+        from internal.council.weights import SOUL_MAP_PATH, _mutate_raw
 
-        data = _load_raw(SOUL_MAP_PATH)
-        sms = data.setdefault("soul_map_state", {})
-        if not isinstance(sms, dict):
-            sms = {}
-            data["soul_map_state"] = sms
+        outcome: Dict[str, bool] = {}
 
-        prior = sms.get("rotation_tokens_snapshot") or {}
-        prior_tokens = prior.get("tokens") if isinstance(prior, dict) else None
-        changed = prior_tokens != tokens
+        def _apply(data: Dict[str, Any]) -> None:
+            sms = data.setdefault("soul_map_state", {})
+            if not isinstance(sms, dict):
+                sms = {}
+                data["soul_map_state"] = sms
 
-        sms["rotation_tokens_snapshot"] = {
-            "tokens": tokens,
-            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        }
-        _save_raw(data, SOUL_MAP_PATH)
+            prior = sms.get("rotation_tokens_snapshot") or {}
+            prior_tokens = prior.get("tokens") if isinstance(prior, dict) else None
+            outcome["changed"] = prior_tokens != tokens
+
+            sms["rotation_tokens_snapshot"] = {
+                "tokens": tokens,
+                "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            }
+
+        if not _mutate_raw(_apply, SOUL_MAP_PATH):
+            return False
+        changed = outcome["changed"]
 
         from internal.learning.trail_events import emit_rotation_tokens_snapshot
 

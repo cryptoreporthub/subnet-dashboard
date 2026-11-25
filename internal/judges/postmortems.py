@@ -11,12 +11,29 @@ Postmortems are stored per-judge under ``data/postmortems/{judge}.json``.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
+_RECORD_LOCK = threading.Lock()
+POSTMORTEM_LOCK_TIMEOUT_SECONDS = 5.0
+
+
+class PostmortemLockTimeout(Exception):
+    """Raised only when the postmortem lock deadline passes."""
+
+
+class PostmortemFileCorrupt(Exception):
+    """The judge's postmortem file exists but cannot be parsed.
+
+    Writers must not overwrite it, so this is raised instead of returning [].
+    """
+
 
 def _path(judge_name: str) -> str:
     """Resolve the on-disk path for a judge's postmortem file (registry + containment)."""
@@ -36,14 +53,20 @@ def _path(judge_name: str) -> str:
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-def _load(judge_name: str) -> List[Dict[str, Any]]:
+def _load(judge_name: str) -> List[Any]:
+    """Missing file is an empty history. A file that exists but will not parse raises,
+    so the writer in _record_locked never replaces it with a fresh list."""
     path = _path(judge_name)
     try:
         with open(path, "r") as f:
             data = json.load(f)
-        return data if isinstance(data, list) else []
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except FileNotFoundError:
         return []
+    except (json.JSONDecodeError, OSError) as exc:
+        raise PostmortemFileCorrupt(f"{path} is unreadable: {exc}") from exc
+    if not isinstance(data, list):
+        raise PostmortemFileCorrupt(f"{path} root is not a list")
+    return data
 
 def _write_tmp_json(tmp: str, entries: List[Dict[str, Any]]) -> None:
     """Write JSON to a fresh tmp file; refuse pre-existing symlinks (TOCTOU hardening)."""
@@ -129,27 +152,78 @@ def record(
     actual_pct: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Record a new postmortem for a wrong pick."""
-    entries = _load(judge_name)
-    diagnosis = _diagnosis(prediction, actual_pct)
-    entry = {
-        "judge": judge_name.lower(),
-        "prediction_id": prediction.get("id"),
-        "netuid": prediction.get("netuid"),
-        "name": prediction.get("name"),
-        "direction": prediction.get("direction"),
-        "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
-        "actual_pct": round(float(actual_pct or 0), 4),
-        "signal_source": prediction.get("signal_source") or prediction.get("expert"),
-        "questions": diagnosis,
-        "created_at": _utcnow(),
-    }
-    entries.append(entry)
-    _save(judge_name, entries)
-    return entry
+    # Read the timeout constant here so tests can patch it.
+    deadline = time.monotonic() + POSTMORTEM_LOCK_TIMEOUT_SECONDS
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise PostmortemLockTimeout("postmortem lock deadline already passed")
+    acquired = _RECORD_LOCK.acquire(timeout=max(0.0, remaining))
+    try:
+        if not acquired:
+            raise PostmortemLockTimeout("timed out waiting for postmortem mutex")
+        return _record_locked(judge_name, prediction, actual_pct, deadline=deadline)
+    finally:
+        if acquired:
+            _RECORD_LOCK.release()
+
+
+def _record_locked(
+    judge_name: str,
+    prediction: Dict[str, Any],
+    actual_pct: Optional[float] = None,
+    *,
+    deadline: Optional[float] = None,
+) -> Dict[str, Any]:
+    os.makedirs(POSTMORTEMS_DIR, exist_ok=True)
+    path = _path(judge_name)
+    # flock the sidecar, never the data path — _save may replace the data file.
+    lock_path = path + ".lock"
+    if deadline is None:
+        deadline = time.monotonic() + POSTMORTEM_LOCK_TIMEOUT_SECONDS
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                time.sleep(0.05)
+        else:
+            raise PostmortemLockTimeout("timed out waiting for postmortem flock")
+        try:
+            entries = _load(judge_name)
+            pred_id = prediction.get("id")
+            actual = round(float(actual_pct or 0), 4)
+            if pred_id is not None:
+                for existing in entries:
+                    if isinstance(existing, dict) and existing.get("prediction_id") == pred_id:
+                        if existing.get("actual_pct") == actual:
+                            return existing
+                        existing["actual_pct"] = actual
+                        existing["questions"] = _diagnosis(prediction, actual_pct)
+                        _save(judge_name, entries)
+                        return existing
+            diagnosis = _diagnosis(prediction, actual_pct)
+            entry = {
+                "judge": judge_name.lower(),
+                "prediction_id": prediction.get("id"),
+                "netuid": prediction.get("netuid"),
+                "name": prediction.get("name"),
+                "direction": prediction.get("direction"),
+                "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
+                "actual_pct": actual,
+                "signal_source": prediction.get("signal_source") or prediction.get("expert"),
+                "questions": diagnosis,
+                "created_at": _utcnow(),
+            }
+            entries.append(entry)
+            _save(judge_name, entries)
+            return entry
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
-    """Return all postmortems for a judge, newest first."""
-    return list(reversed(_load(judge_name)))
+    """Return all postmortems for a judge, newest first. Rows that are not objects are skipped here; the writer keeps them."""
+    return [row for row in reversed(_load(judge_name)) if isinstance(row, dict)]
 
 
 def _list_for_judge_fail_empty(judge_name: str) -> List[Dict[str, Any]]:

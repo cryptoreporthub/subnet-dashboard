@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 from datetime import datetime, timezone
@@ -22,6 +23,8 @@ CERT_BACKTEST_N = 50
 WEIGHT_FLOOR = 0.3
 WEIGHT_CEILING = 2.0
 MAX_EXPERT_RATIO = 2.0
+
+logger = logging.getLogger(__name__)
 
 _retrain_lock = threading.Lock()
 _retrain_in_progress = False
@@ -59,27 +62,31 @@ def _save_calibration_state(
     patch: Dict[str, Any],
     *,
     soul_map_path: str,
-) -> None:
-    from internal.council.weights import _load_raw, _save_raw
+) -> bool:
+    from internal.council.weights import _mutate_raw
 
-    data = _load_raw(soul_map_path)
-    adv = data.setdefault("adversarial_state", {})
-    if not isinstance(adv, dict):
-        adv = {}
-        data["adversarial_state"] = adv
-    cal = adv.setdefault("calibration", {})
-    if not isinstance(cal, dict):
-        cal = {}
-        adv["calibration"] = cal
-    cal.update(patch)
-    history = cal.get("history")
-    if not isinstance(history, list):
-        history = []
-    event = patch.get("last_event")
-    if isinstance(event, dict):
-        history = (history + [event])[-5:]
-        cal["history"] = history
-    _save_raw(data, soul_map_path)
+    def _apply(data: Dict[str, Any]) -> None:
+        adv = data.setdefault("adversarial_state", {})
+        if not isinstance(adv, dict):
+            adv = {}
+            data["adversarial_state"] = adv
+        cal = adv.setdefault("calibration", {})
+        if not isinstance(cal, dict):
+            cal = {}
+            adv["calibration"] = cal
+        cal.update(patch)
+        history = cal.get("history")
+        if not isinstance(history, list):
+            history = []
+        event = patch.get("last_event")
+        if isinstance(event, dict):
+            history = (history + [event])[-5:]
+            cal["history"] = history
+
+    ok = _mutate_raw(_apply, soul_map_path)
+    if not ok:
+        logger.warning("calibration state write refused for %s", soul_map_path)
+    return ok
 
 
 def _gradeable_row(row: Dict[str, Any]) -> bool:
@@ -435,7 +442,7 @@ def run_calibration_pipeline(
                 "cert": cert,
                 "proposed_weights": proposed,
             }
-            _save_calibration_state(
+            state_persisted = _save_calibration_state(
                 {
                     "last_retrain_at": started_at,
                     "last_cert_status": "failed",
@@ -452,6 +459,7 @@ def run_calibration_pipeline(
                 "proposed_weights": proposed,
                 "cert": cert,
                 "weights": backup,
+                "state_persisted": state_persisted,
             }
 
         fired = fire_weights(proposed, soul_map_path=soul_map_path)
@@ -475,7 +483,7 @@ def run_calibration_pipeline(
             "proposed_weights": proposed,
             "forced": allow_force,
         }
-        _save_calibration_state(
+        state_persisted = _save_calibration_state(
             {
                 "last_retrain_at": started_at,
                 "last_cert_status": "passed" if cert.get("passed") else "forced",
@@ -496,12 +504,13 @@ def run_calibration_pipeline(
             "weights": fired,
             "cert": cert,
             "forced": allow_force,
+            "state_persisted": state_persisted,
         }
-        if version_entry:
+        if version_entry and version_entry.get("persisted") is not False:
             result["formula_version"] = version_entry
         return result
     except FireError as exc:
-        _save_calibration_state(
+        state_persisted = _save_calibration_state(
             {
                 "last_retrain_at": started_at,
                 "last_cert_status": "fire_failed",
@@ -514,6 +523,7 @@ def run_calibration_pipeline(
             "status": "fire_failed",
             "error": str(exc),
             "weights": load_weights(soul_map_path),
+            "state_persisted": state_persisted,
         }
     finally:
         _retrain_in_progress = False
