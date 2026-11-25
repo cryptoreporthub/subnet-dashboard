@@ -474,23 +474,30 @@ def test_boot_heal_runs_when_epoch_archive_reconcile_raises(monkeypatch):
         def start(self):
             self._target()
 
+    reconcile = MagicMock(side_effect=OSError(28, "No space left on device"))
     heal = MagicMock(return_value={"ok": True})
 
-    def _reconcile_fails():
-        raise OSError(28, "No space left on device")
-
     monkeypatch.setattr(background_boot.threading, "Thread", _InlineThread)
+    monkeypatch.setattr(
+        "internal.background_boot.defer_boot", lambda _name, fn, delay=0: fn()
+    )
     monkeypatch.setattr(
         "internal.council.resolver_scheduler.start_prediction_resolver_scheduler",
         MagicMock(return_value={}),
     )
-    monkeypatch.setattr(ledger_heal, "reconcile_epoch_archives", _reconcile_fails)
+    monkeypatch.setattr(ledger_heal, "reconcile_epoch_archives", reconcile)
     monkeypatch.setattr(ledger_heal, "heal_daily_pick_ledger", heal)
     monkeypatch.setattr(
         "internal.learning.pump_lead_recover.recover_overdue_pump_leads",
         MagicMock(return_value={"ok": False}),
     )
 
+    order = MagicMock()
+    order.attach_mock(reconcile, "reconcile")
+    order.attach_mock(heal, "heal")
+
     background_boot._start_resolver()
 
-    heal.assert_called_once_with(dry_run=False)
+    from unittest.mock import call
+
+    assert order.mock_calls == [call.reconcile(), call.heal(dry_run=False)]

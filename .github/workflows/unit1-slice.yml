@@ -1,0 +1,121 @@
+# Unit 1 slice (predictions ledger + soul-map write honesty).
+# Skips only when every changed file is docs-only (paths-ignore below); any other
+# change runs the gate, so a new dependency of the gated tests cannot drift
+# outside a hand-listed filter.
+name: Unit 1 slice
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore: &unit1_slice_ignore
+      - "docs/**"
+      - "**/*.md"
+  push:
+    branches: [main]
+    paths-ignore: *unit1_slice_ignore
+
+permissions:
+  contents: read
+
+jobs:
+  unit1-slice:
+    name: unit1-slice
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
+      - name: Unit 1 predictions and soul-map slice
+        env:
+          DISABLE_BACKGROUND_SCANS: "1"
+        run: |
+          python -m pytest -q \
+            tests/test_predictions_store_patch_contract.py \
+            tests/test_predictions_store_contract.py \
+            tests/test_expiry_ledger.py \
+            tests/test_acc0_ledger_heal.py \
+            tests/test_resolver_corrupt_ledger_tick.py \
+            tests/test_compact_soul_map.py \
+            tests/test_soul_map_io.py \
+            tests/test_soul_map_io_failure.py \
+            tests/test_soul_map_write_honesty.py \
+            tests/test_judge_weight_write_honesty.py \
+            tests/test_prediction_loop_judge_rollback.py \
+            tests/test_pick_effects_survive_position_failure.py \
+            tests/test_judge_failure_keeps_pick.py \
+            tests/test_judge_failure_reconciles_later.py \
+            tests/test_pick_history_duplicate_repair.py \
+            tests/test_epoch_retry_still_heals.py \
+            tests/test_epoch_retry_after_success_keeps_long.py \
+            tests/test_resolver_flush_crash.py \
+            tests/test_hold_learning_trail.py \
+            tests/test_mindmap_pending_declined.py \
+            tests/test_resolver_predictions_unreadable.py \
+            tests/test_resolver_persist_honesty_outcomes.py \
+            tests/test_resolver_soul_map_read_wedge.py \
+            tests/test_1578_plan_v31_weights_ledger.py \
+            tests/test_1578_ci_lists_in_sync.py \
+            tests/test_1578_ledger_single_writer.py \
+            tests/test_1578_single_ledger_writer_boundary.py \
+            tests/test_1578_commit_then_learn.py \
+            tests/test_1578_archive_readers.py \
+            tests/test_1578_redesign.py \
+            tests/test_soul_map_fsync.py \
+            tests/test_1578_review_fixes.py \
+            tests/test_background_boot.py \
+            tests/test_cold_cache_alert.py \
+            tests/test_contrarian_repair_once.py \
+            tests/test_daily_pick_stall_report.py \
+            tests/test_dev_radar_github_sync.py \
+            tests/test_expert_attribution.py \
+            tests/test_expired_recovery.py \
+            tests/test_fq4_combined_angles.py \
+            tests/test_judge_feedback_confidence.py \
+            tests/test_judge_weights.py \
+            tests/test_ledger_stats_preserved.py \
+            tests/test_names_deltas_fix.py \
+            tests/test_outcome_snapshot.py \
+            tests/test_pick_history_concurrent_writers.py \
+            tests/test_pick_scheduler_commit_truth.py \
+            tests/test_prediction_signal_impact_persist.py \
+            tests/test_predictions_ledger_fsync.py \
+            tests/test_proof_scout.py \
+            tests/test_pump_recover_stats.py \
+            tests/test_regrade_commit_before_learn.py \
+            tests/test_resolver_commit_before_learn.py \
+            tests/test_resolver_finalize_replay.py \
+            tests/test_resolver_lock_order_tripwire.py \
+            tests/test_resolver_nudge_orphan.py \
+            tests/test_resolver_seed_once.py \
+            tests/test_resolver_stop_repeat.py \
+            tests/test_server_pick_positions_incomplete.py \
+            tests/test_soul_map_empty_file.py \
+            tests/test_1578_backfill_route_refusal.py \
+            tests/test_1578_null_scheduler_block.py \
+            tests/test_conflict_return_matches_committed.py \
+            tests/test_epoch_reset_keeps_long_pick.py \
+            tests/test_epoch_reset_reheal_reads_custom_ledger.py \
+            tests/test_expire_conflict_not_reported.py \
+            tests/test_expire_conflict_stats.py \
+            tests/test_pick_finalize_retry.py \
+            tests/test_pick_scheduler_duplicate_reread.py \
+            tests/test_pick_survives_judge_failure.py \
+            tests/test_prediction_loop_fail_closed.py \
+            tests/test_reconcile_unreadable_book.py \
+            tests/test_recovery_finalize_once_per_sweep.py \
+            tests/test_recovery_retry_capture.py \
+            tests/test_recovery_retry_keeps_capture.py \
+            tests/test_recovery_unreadable_book_fail_closed.py \
+            tests/test_reheal_missing_row_lands_in_custom.py \
+            tests/test_replay_terminal_rows_close.py \
+            tests/test_tracker_per_judge_close_fault.py \
+            tests/test_trust_stats.py \
+            tests/test_weighing_room.py
