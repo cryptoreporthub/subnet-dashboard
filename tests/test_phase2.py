@@ -343,6 +343,7 @@ def test_server_predictions_resolved_endpoint(nudge_spy, monkeypatch):
     data = {
         "predictions": [
             {
+                "id": "phase2-endpoint-1",
                 "netuid": 29,
                 "reference_price": 20.0,
                 "predicted_pct": 5.0,
