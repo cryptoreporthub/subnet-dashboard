@@ -725,6 +725,15 @@ def _commit_ledger_changes(before, after, *, path, caller, trigger):
     return result
 
 
+def _adopt_committed_ledger(data: Dict[str, Any], commit_result: Any) -> None:
+    """Replace the in-memory ledger view with the snapshot the commit left on disk."""
+    ledger = getattr(commit_result, "ledger", None)
+    if ledger is None:  # a commit result without a snapshot: keep the in-memory view
+        return
+    for bucket in ("predictions", "resolved", "stats"):
+        data[bucket] = ledger[bucket]
+
+
 def _committed_only(rows: List[Dict[str, Any]], commit_result: Any) -> List[Dict[str, Any]]:
     """Keep only rows whose ledger write committed. A conflicted row stays pending on disk."""
     if not getattr(commit_result, "conflicts", None):
@@ -1947,7 +1956,9 @@ def expire_stale_predictions(
     if commit_result.conflicts:
         # Conflicted rows were not written, so they did not expire now.
         expired_now = _committed_only(expired_now, commit_result)
-        data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
+        _adopt_committed_ledger(data, commit_result)
+        still_pending, resolved = data["predictions"], data["resolved"]
+        data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
 
     return {
         "expired_now": expired_now,
@@ -2185,7 +2196,9 @@ def _resolve_due_predictions_body(
         # Conflicted rows were not written, so they are not resolved or expired now.
         resolved_now = _committed_only(resolved_now, commit_result)
         expired_now = _committed_only(expired_now, commit_result)
-        data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
+        _adopt_committed_ledger(data, commit_result)
+        still_pending, resolved = data["predictions"], data["resolved"]
+        data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
 
     # Cold-cache spike alert — log at WARNING level so operators see it without
     # log diving.  Emitted once per resolver run when the ratio exceeds threshold.
@@ -2362,7 +2375,7 @@ def _regrade_expired_predictions_body(
         _flush_deferred_learning(_learning_deferral.get(), commit_result)
         regraded = _committed_only(regraded, commit_result)
         if commit_result.conflicts:
-            data["stats"] = _load_json(PREDICTIONS_PATH, {}).get("stats", data["stats"])
+            _adopt_committed_ledger(data, commit_result)
 
     return {
         "attempted": attempted,
