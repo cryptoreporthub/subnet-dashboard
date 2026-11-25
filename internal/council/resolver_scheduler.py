@@ -297,16 +297,6 @@ def _cancel_resolver_jobs(job_ids: Tuple[str, ...]) -> Dict[str, bool]:
     return results
 
 
-def _load_json(path: str) -> Dict[str, Any]:
-    """Bootstrap/cycle reads degrade like the legacy API (never wedge the scheduler)."""
-    from internal.store.soul_map_io import read_blob_checked
-
-    checked = read_blob_checked(path)
-    if checked.kind == "loaded" and checked.blob is not None:
-        return checked.blob
-    return {}
-
-
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     try:
         from internal.file_utils import ensure_data_dir
@@ -1463,18 +1453,28 @@ class PredictionResolverScheduler:
                 subnets = self._subnet_provider() or []
             timing.mark_checkpoint("t3")
 
+            from internal.store.soul_map_io import read_blob_checked
+
             with timing.stage("soul_map_load", persist_partial):
-                soul_data = _load_json(self.soul_map_path)
+                checked = read_blob_checked(self.soul_map_path)
             timing.mark_checkpoint("t4")
-            sched_state = soul_data.get("prediction_resolver_scheduler", {})
-            if not isinstance(sched_state, dict):
-                sched_state = {}
-            cursor = int(sched_state.get("round_robin_cursor", 0) or 0)
-            batch, next_cursor = _round_robin_batch(
-                subnets, cursor, RESOLVER_BATCH_SIZE
-            )
-            result["batch_size"] = len(batch)
-            result["round_robin_cursor"] = next_cursor
+            if checked.kind in ("unreadable", "transient"):
+                # Do not guess a cursor: result["round_robin_cursor"] stays unset, so the
+                # summary write keeps the one already saved.
+                logger.warning(
+                    "soul_map unreadable for cursor read (%s: %s); keeping saved cursor",
+                    checked.kind, checked.error,
+                )
+            else:
+                sched_state = (checked.blob or {}).get("prediction_resolver_scheduler", {})
+                if not isinstance(sched_state, dict):
+                    sched_state = {}
+                cursor = int(sched_state.get("round_robin_cursor", 0) or 0)
+                batch, next_cursor = _round_robin_batch(
+                    subnets, cursor, RESOLVER_BATCH_SIZE
+                )
+                result["batch_size"] = len(batch)
+                result["round_robin_cursor"] = next_cursor
 
             # 1. Grade predictions whose horizon has elapsed against the live
             #    price feed. This also nudges expert weights (learning loop).
