@@ -506,7 +506,7 @@ def run_calibration_pipeline(
             "forced": allow_force,
             "state_persisted": state_persisted,
         }
-        if version_entry:
+        if version_entry and version_entry.get("persisted") is not False:
             result["formula_version"] = version_entry
         return result
     except FireError as exc:

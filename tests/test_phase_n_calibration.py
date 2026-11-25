@@ -220,3 +220,32 @@ def test_retrain_dry_run_endpoint():
     resp = client.post("/api/calibration/retrain", json={"dry_run": True, "async": False})
     assert resp.status_code == 200
     assert resp.json()["status"] in {"dry_run", "cert_failed"}
+
+
+def _fire_pipeline(isolate_paths):
+    from pathlib import Path
+
+    pred_path = isolate_paths["pred"]
+    _write_predictions(
+        Path(pred_path),
+        [_resolved_row("quant", True, idx=i) for i in range(35)],
+    )
+    return cal.run_calibration_pipeline(
+        force=True,
+        soul_map_path=isolate_paths["soul"],
+        predictions_path=pred_path,
+    )
+
+
+def test_fired_result_carries_formula_version_when_persisted(isolate_paths):
+    result = _fire_pipeline(isolate_paths)
+    assert result["status"] == "fired"
+    assert result["formula_version"].get("persisted") is not False
+
+
+def test_fired_result_omits_formula_version_when_write_refused(isolate_paths, monkeypatch):
+    # Refuse only the formula-version write; fire_weights keeps its own writer.
+    monkeypatch.setattr("internal.council.formula_versions._mutate_raw", lambda *_a, **_k: False)
+    result = _fire_pipeline(isolate_paths)
+    assert result["status"] == "fired"
+    assert "formula_version" not in result, result.get("formula_version")
