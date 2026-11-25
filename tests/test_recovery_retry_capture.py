@@ -36,6 +36,10 @@ def test_retry_passes_stored_capture_to_effects(tmp_path, monkeypatch):
         "actual_pct": 10.0,
         "predicted_pct": 5.0,
         "resolve_at": "2026-07-01T12:00:00Z",
+        "band": "near_hit",
+        "capture_raw": 0.6,
+        "capture_capped": 0.6,
+        "capture_reason": "stored_partial_capture",
         "learning_effects": {"pending": ["signal"], "indeterminate": []},
     }
     ledger = tmp_path / "predictions.json"
@@ -43,7 +47,7 @@ def test_retry_passes_stored_capture_to_effects(tmp_path, monkeypatch):
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(ledger))
 
     expected = capture_mod.capture_from_row(row)
-    assert expected is not None, "fixture must carry a stored capture"
+    assert expected.capture_reason == "stored_partial_capture", "fixture must carry a stored capture"
 
     from internal.council import price_reference, resolver
 
