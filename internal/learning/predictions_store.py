@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -86,6 +86,8 @@ class PersistResult:
     reason: Optional[PersistReason] = None
     committed_keys: tuple = ()
     conflicts: tuple = ()
+    # The ledger this commit left on disk. Set only on an APPLIED result.
+    ledger: Optional[Dict[str, Any]] = field(default=None, repr=False, compare=False)
 
 
 def parse_predictions_ledger(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -298,7 +300,7 @@ def mutate_predictions(fn, *, path=None, caller, trigger) -> PersistResult:
                     PersistOutcome.REFUSED, PersistReason.CONFLICT_ONLY, (), tuple(conflicts)
                 )
             if not keys:
-                return PersistResult(PersistOutcome.APPLIED)
+                return PersistResult(PersistOutcome.APPLIED, ledger=data)
             replaced = False
 
             def mark_replaced():
@@ -321,7 +323,9 @@ def mutate_predictions(fn, *, path=None, caller, trigger) -> PersistResult:
                 canonicalize_ledger(expected)
                 if actual != expected:
                     return PersistResult(PersistOutcome.FAILED, PersistReason.POST_REPLACE_ERROR)
-            return PersistResult(PersistOutcome.APPLIED, None, tuple(keys), tuple(conflicts))
+            return PersistResult(
+                PersistOutcome.APPLIED, None, tuple(keys), tuple(conflicts), updated
+            )
     except FileLockTimeout:
         return PersistResult(PersistOutcome.FAILED, PersistReason.LOCK_TIMEOUT)
     except OSError:
