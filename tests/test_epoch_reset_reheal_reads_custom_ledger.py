@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 
 from internal.learning.ledger_heal import archive_predictions_epoch
@@ -35,6 +36,7 @@ def test_reheal_sees_the_day_row_kept_in_the_custom_ledger(tmp_path, monkeypatch
 
     summary = archive_predictions_epoch(
         predictions_path=str(custom), archive_dir=str(tmp_path / "archive"), re_heal_daily=True,
+        reset_request_id=str(uuid.uuid4()),
     )
 
     assert default.read_bytes() == default_bytes, "re-heal wrote into the default ledger"

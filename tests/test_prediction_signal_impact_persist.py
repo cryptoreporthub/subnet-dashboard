@@ -1,5 +1,7 @@
 """signal_impact must persist on prediction rows."""
 
+import json
+
 from internal.learning.prediction_loop import record_pick_prediction
 
 
@@ -9,11 +11,11 @@ def test_record_pick_prediction_persists_signal_impact(monkeypatch, tmp_path):
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "internal.learning.prediction_loop.append_prediction",
-        lambda pred: pred,
+        "internal.judges.portfolios.PORTFOLIOS_PATH",
+        str(tmp_path / "portfolios.json"),
     )
     monkeypatch.setattr(
-        "internal.judges.tracker.on_prediction_created",
+        "internal.judges.tracker.evaluate_prediction",
         lambda *_a, **_k: {"oracle": {"score": 0.5, "confidence": 0.5}},
     )
     monkeypatch.setattr(
@@ -38,6 +40,8 @@ def test_record_pick_prediction_persists_signal_impact(monkeypatch, tmp_path):
         "signal_impact": si,
         "expert_contributions": {"quant": 0.5, "hype": 0.6, "dark_horse": 0.4, "technical": 0.5},
     }
-    pred = record_pick_prediction(pick, pick["subnet"], horizon_type="hour")
+    ledger = tmp_path / "predictions.json"
+    pred = record_pick_prediction(pick, pick["subnet"], horizon_type="hour", predictions_path=str(ledger))
     assert isinstance(pred.get("signal_impact"), dict)
     assert pred["signal_impact"]["net_direction"] == "bullish"
+    assert json.loads(ledger.read_text())["predictions"][0]["signal_impact"] == si

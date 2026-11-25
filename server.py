@@ -2730,16 +2730,19 @@ def _record_pick_in_learning_loop(
             logger.warning("HOLD learning record failed (%s): %s", horizon_type, exc)
         return
     try:
-        from internal.learning.prediction_loop import record_pick_prediction
+        from internal.learning.prediction_loop import record_pick
 
         subnet = _subnet_for_pick(subnets, pick)
         if subnet.get("price"):
-            stored = record_pick_prediction(
+            record = record_pick(
                 pick,
                 subnet,
                 horizon_type=horizon_type,
                 market_context=market_context,
             )
+            # Committed, or committed with incomplete judge positions: the ledger row is
+            # real, so pick history must record it. Same rule as pick_scheduler (PickRecord.ledger_committed).
+            stored = record.prediction if record.ledger_committed else None
             if stored and horizon_type == "hour":
                 try:
                     from internal.council import pick_history

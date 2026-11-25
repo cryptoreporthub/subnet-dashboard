@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import hashlib
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -81,7 +82,7 @@ def _prediction_resolved_recorded(prediction_id: Any) -> bool:
     return False
 
 
-def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) -> None:
+def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) -> Any:
     """Trail event when a prediction resolves and nudges expert weights."""
     prediction_id = prediction.get("id")
     if prediction_id is not None and _prediction_resolved_recorded(prediction_id):
@@ -90,7 +91,12 @@ def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) 
     correct = prediction.get("correct")
     outcome = prediction.get("outcome")
     impact = prediction.get("market_impact") if isinstance(prediction.get("market_impact"), dict) else {}
-    emit_trail_event(
+    learning = prediction.get("learning")
+    event_extra = None
+    if isinstance(learning, dict) and learning.get("key"):
+        material = f"{learning['key']}|prediction_resolved|0"
+        event_extra = {"event_id": hashlib.sha256(material.encode()).hexdigest()[:16]}
+    return emit_trail_event(
         "prediction_resolved",
         subnet=prediction.get("name"),
         netuid=prediction.get("netuid"),
@@ -110,6 +116,7 @@ def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) 
         decision="weight_nudge_up" if correct else "weight_nudge_down",
         prediction=prediction.get("statement"),
         judge=expert,
+        extra=event_extra,
         resolved_prediction_id=prediction_id,
     )
 
