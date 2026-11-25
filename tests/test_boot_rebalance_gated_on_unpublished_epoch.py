@@ -181,10 +181,29 @@ def _non_list_epoch_history(archive, tmp_path):
     _edit_ledger(tmp_path, lambda d: d.update(epoch_history={"reset_request_id": "req-2"}))
 
 
+def _epoch_history_is(value):
+    def corrupt(archive, tmp_path):
+        _edit_ledger(tmp_path, lambda d: d.update(epoch_history=value))
+
+    return corrupt
+
+
+def _symlinked_final(archive, tmp_path):
+    decoy = tmp_path / "outside" / "decoy.json"
+    decoy.parent.mkdir()
+    decoy.write_bytes((archive / ".staging-req-2.json").read_bytes())
+    (archive / EPOCH_2_NAME).symlink_to(decoy)
+
+
 @pytest.mark.parametrize("run_boot", [_worker_boot, _web_boot])
 @pytest.mark.parametrize(
     "corrupt",
     [
+        _epoch_history_is(None),
+        _epoch_history_is(""),
+        _epoch_history_is(0),
+        _epoch_history_is(False),
+        _symlinked_final,
         _zero_byte_final,
         _wrong_hash_final,
         _name_is_the_archive_dir,
@@ -209,3 +228,25 @@ def test_boot_rebalances_when_published_archive_matches_its_digest(ledger, tmp_p
     (ledger / ".staging-req-2.json").rename(ledger / EPOCH_2_NAME)
     run_boot(monkeypatch)
     assert round(weights.load_weights()["quant"], 3) == EXPECTED_QUANT_FULL_LEDGER
+
+
+def test_symlinked_archive_is_reported_unpublished_even_when_target_digest_matches(ledger, tmp_path):
+    _symlinked_final(ledger, tmp_path)
+    assert ledger_heal.rebalance_blocked_by_unpublished_epochs() is True
+    assert ledger_heal.unpublished_epoch_receipts() == ["req-2"]
+
+
+@pytest.mark.parametrize("value", [None, "", 0, False], ids=["null", "empty-string", "zero", "false"])
+def test_present_but_non_list_epoch_history_is_unpublished(ledger, tmp_path, value):
+    _epoch_history_is(value)(ledger, tmp_path)
+    assert ledger_heal.rebalance_blocked_by_unpublished_epochs() is True
+    assert ledger_heal.unpublished_epoch_receipts() == ["<epoch_history is not a list>"]
+
+
+@pytest.mark.parametrize("run_boot", [_worker_boot, _web_boot])
+def test_ledger_without_epoch_history_key_does_not_block_boot(ledger, tmp_path, monkeypatch, run_boot):
+    _edit_ledger(tmp_path, lambda d: d.pop("epoch_history"))
+    assert ledger_heal.unpublished_epoch_receipts() == []
+    assert ledger_heal.rebalance_blocked_by_unpublished_epochs() is False
+    run_boot(monkeypatch)
+    assert (tmp_path / "data" / "soul_map.json").exists()
