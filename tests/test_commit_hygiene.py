@@ -56,3 +56,22 @@ def test_exact_attribution_trailer_passes():
         "Claude-Session: https://claude.ai/code/session_015j9k47guTSMhRzbRougRrX"
     )
     assert hyg.violations([], message) == []
+
+
+def test_attribution_trailer_for_the_serving_model_passes():
+    for family in ("Haiku", "Sonnet", "Opus", "Fable"):
+        message = (
+            "Fix retry loss\n\n"
+            f"Co-Authored-By: Claude {family} 5.5 <noreply@anthropic.com>\n"
+            "Claude-Session: https://claude.ai/code/session_015j9k47guTSMhRzbRougRrX"
+        )
+        assert hyg.violations([], message) == [], family
+
+
+def test_trailer_look_alikes_and_prose_model_names_are_still_blocked():
+    spoofed_email = "Fix\n\nCo-Authored-By: Claude Sonnet 5.5 <someone@example.com>"
+    assert hyg.violations([], spoofed_email)
+    padded = "Fix\n\nCo-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com> reviewed"
+    assert hyg.violations([], padded)
+    prose = "Fix\n\nFound by Claude Sonnet 5.5 review."
+    assert hyg.violations([], prose)

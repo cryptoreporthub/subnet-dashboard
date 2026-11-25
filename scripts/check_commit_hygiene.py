@@ -29,8 +29,11 @@ SCORER_FILES = (
 )
 SCORER_SEED = "data_seeds/score_snapshots.json"
 PATH_TOKENS = re.compile(r"CLAUDE\.md|\.claude/\S*")
-# Attribution lines the harness may append. Only these exact forms pass.
-ATTRIBUTION_EXACT = {"Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>"}
+# Attribution lines the harness may append. The trailer names whichever model
+# serves the session, so the family may vary; the rest of the line must match.
+ATTRIBUTION_TRAILER = re.compile(
+    r"Co-Authored-By: Claude (Haiku|Sonnet|Opus|Fable) \d+\.\d+ <noreply@anthropic\.com>"
+)
 ATTRIBUTION_PREFIXES = ("Claude-Session: https://claude.ai/code/",)
 MODEL_NAME = re.compile(
     r"claude[- ](haiku|sonnet|opus|fable|instant)|claude-\d"
@@ -51,7 +54,7 @@ def violations(staged: Iterable[str], message: Optional[str] = None) -> List[str
         )
     if message is not None:
         for n, line in enumerate(message.splitlines(), 1):
-            if line.strip() in ATTRIBUTION_EXACT or line.startswith(
+            if ATTRIBUTION_TRAILER.fullmatch(line.strip()) or line.startswith(
                 ATTRIBUTION_PREFIXES
             ):
                 continue
