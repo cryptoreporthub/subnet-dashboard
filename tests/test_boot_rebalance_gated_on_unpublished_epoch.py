@@ -145,3 +145,67 @@ def test_boot_writes_nothing_when_ledger_is_unreadable(ledger, tmp_path, monkeyp
         run_boot(monkeypatch)
     assert not (tmp_path / "data" / "soul_map.json").exists()
     assert "rebalance skipped" in caplog.text and "unreadable" in caplog.text
+
+
+EPOCH_2_NAME = "pre-epoch-2026-01-02T000000Z-bbbbbbbb.json"
+
+
+def _edit_ledger(tmp_path, edit):
+    path = tmp_path / "data" / "predictions.json"
+    data = json.loads(path.read_text())
+    edit(data)
+    path.write_text(json.dumps(data))
+
+
+def _zero_byte_final(archive, tmp_path):
+    (archive / EPOCH_2_NAME).write_bytes(b"")
+
+
+def _wrong_hash_final(archive, tmp_path):
+    (archive / EPOCH_2_NAME).write_bytes(b'{"predictions": [], "resolved": []}')
+
+
+def _name_is_the_archive_dir(archive, tmp_path):
+    _edit_ledger(tmp_path, lambda d: d["epoch_history"][1].update(archive_name=""))
+
+
+def _name_is_a_parent_file(archive, tmp_path):
+    _edit_ledger(tmp_path, lambda d: d["epoch_history"][1].update(archive_name="../predictions.json"))
+
+
+def _non_dict_receipt(archive, tmp_path):
+    _edit_ledger(tmp_path, lambda d: d["epoch_history"].append("not-a-receipt"))
+
+
+def _non_list_epoch_history(archive, tmp_path):
+    _edit_ledger(tmp_path, lambda d: d.update(epoch_history={"reset_request_id": "req-2"}))
+
+
+@pytest.mark.parametrize("run_boot", [_worker_boot, _web_boot])
+@pytest.mark.parametrize(
+    "corrupt",
+    [
+        _zero_byte_final,
+        _wrong_hash_final,
+        _name_is_the_archive_dir,
+        _name_is_a_parent_file,
+        _non_dict_receipt,
+        _non_list_epoch_history,
+    ],
+)
+def test_boot_keeps_weights_when_published_archive_is_unverified(
+    ledger, tmp_path, monkeypatch, caplog, corrupt, run_boot
+):
+    corrupt(ledger, tmp_path)
+    with caplog.at_level(logging.WARNING):
+        run_boot(monkeypatch)
+    assert weights.load_weights()["quant"] == 1.0
+    assert not (tmp_path / "data" / "soul_map.json").exists()
+    assert "rebalance skipped" in caplog.text
+
+
+@pytest.mark.parametrize("run_boot", [_worker_boot, _web_boot])
+def test_boot_rebalances_when_published_archive_matches_its_digest(ledger, tmp_path, monkeypatch, run_boot):
+    (ledger / ".staging-req-2.json").rename(ledger / EPOCH_2_NAME)
+    run_boot(monkeypatch)
+    assert round(weights.load_weights()["quant"], 3) == EXPECTED_QUANT_FULL_LEDGER

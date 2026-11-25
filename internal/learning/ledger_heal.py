@@ -239,19 +239,30 @@ def _remove_old_uncommitted_stages(dest_dir: str, history: List[Dict[str, Any]])
             os.unlink(path)
 
 
+def _archive_published(dest_dir: str, receipt: Any) -> bool:
+    """True only when the receipt's archive is a regular file in dest_dir whose digest matches the receipt."""
+    try:
+        final = os.path.join(dest_dir, receipt["archive_name"])
+        return os.path.isfile(final) and _archive_digest(final) == receipt["archive_sha256"]
+    except (OSError, KeyError, TypeError, ValueError):
+        return False
+
+
 def unpublished_epoch_receipts(*, predictions_path: Optional[str] = None, archive_dir: Optional[str] = None) -> List[str]:
-    """Request ids of epoch receipts whose published archive file is missing. Read-only; raises if the ledger is unreadable."""
+    """Request ids of epoch receipts whose published archive is missing or unverified. Read-only; raises if the ledger is unreadable."""
     src, dest_dir = predictions_path or predictions_store.PREDICTIONS_PATH, archive_dir or ARCHIVE_DIR
     history = predictions_store.load_predictions(path=src, fail_closed=True).get("epoch_history") or []
+    if not isinstance(history, list):
+        return ["<epoch_history is not a list>"]
     return [
-        str(receipt.get("reset_request_id"))
+        str(receipt.get("reset_request_id") or "<no reset_request_id>") if isinstance(receipt, dict) else "<malformed receipt>"
         for receipt in history
-        if not os.path.exists(os.path.join(dest_dir, str(receipt.get("archive_name"))))
+        if not _archive_published(dest_dir, receipt)
     ]
 
 
 def rebalance_blocked_by_unpublished_epochs() -> bool:
-    """True, with a warning, when a boot must skip the council weight rebalance: an epoch archive is unpublished or the ledger is unreadable."""
+    """True, with a warning, when a boot must skip the council weight rebalance: an epoch archive is missing or unverified, or the ledger is unreadable."""
     try:
         unpublished = unpublished_epoch_receipts()
     except predictions_store.PredictionsLedgerUnreadable as exc:
