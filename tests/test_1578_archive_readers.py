@@ -1,0 +1,137 @@
+import hashlib
+import json
+
+from internal.accuracy_lift.measure import load_archive
+
+
+def test_archive_reader_reports_bad_file_and_keeps_valid_legacy_and_new(tmp_path):
+    legacy = tmp_path / "pre-epoch-2026-08-18T120000Z"
+    newer = tmp_path / "pre-epoch-2026-08-18T120000Z-12345678.json"
+    broken = tmp_path / "pre-epoch-2026-08-18T120001Z"
+    legacy.write_text(json.dumps({"resolved": [{"id": "legacy"}]}))
+    newer.write_text(json.dumps({"resolved": [{"id": "new"}]}))
+    broken.write_text("{broken")
+    (tmp_path / "pre-epoch-2026-08-18T120002Z.partial").write_text("{partial")
+    (tmp_path / ".staging-123.json").write_text("{partial")
+    result = load_archive(str(tmp_path))
+    assert [row["id"] for row in result["resolved"]] == ["legacy", "new"]
+    assert any("pre-epoch-2026-08-18T120001Z" in str(err) for err in result["archive_errors"])
+    assert len(result["archive_errors"]) == 1
+
+
+def test_archive_reader_ignores_staging_and_partial_files(tmp_path):
+    legacy = tmp_path / "pre-epoch-2026-08-18T120000Z"
+    legacy.write_text(json.dumps({"resolved": [{"id": "legacy"}]}))
+    (tmp_path / "pre-epoch-2026-08-18T120000Z.partial").write_text("{partial")
+    (tmp_path / ".staging-request.json").write_text("{partial")
+    result = load_archive(str(tmp_path))
+    assert result["archive_files"] == [legacy.name]
+    assert result.get("archive_errors", []) == []
+
+
+def test_measure_script_exits_nonzero_when_an_archive_is_corrupt(tmp_path, monkeypatch):
+    import sys
+    from scripts.measure_accuracy_archive import main
+
+    (tmp_path / "pre-epoch-2026-08-18T120000Z").write_text(json.dumps({"resolved": []}))
+    (tmp_path / "pre-epoch-2026-08-18T120001Z").write_text("{broken")
+    monkeypatch.setattr(sys, "argv", [
+        "measure_accuracy_archive.py", "--archive", str(tmp_path),
+        "--out-json", str(tmp_path / "summary.json"), "--out-md", str(tmp_path / "summary.md"),
+    ])
+    try:
+        status = main()
+    except Exception as exc:
+        raise AssertionError("corrupt archive was not reported cleanly") from exc
+    assert status != 0
+
+
+def test_replay_warns_and_keeps_rows_from_valid_archive(tmp_path, caplog):
+    from internal.council.weights import _archive_replay_rows
+
+    (tmp_path / "pre-epoch-2026-08-18T120000Z").write_text(json.dumps({
+        "resolved": [{"id": "valid", "correct": True, "outcome": "hit"}],
+    }))
+    (tmp_path / "pre-epoch-2026-08-18T120001Z").write_text("{broken")
+    rows = _archive_replay_rows(str(tmp_path))
+    assert [row["id"] for row in rows] == ["valid"]
+    assert "pre-epoch-2026-08-18T120001Z" in caplog.text
+
+
+def test_single_corrupt_archive_reports_error_without_crashing(tmp_path):
+    broken = tmp_path / "pre-epoch-2026-08-18T120001Z"
+    broken.write_text("{broken")
+    result = load_archive(str(broken))
+    assert result["resolved"] == []
+    assert result["archive_errors"][0]["file"] == broken.name
+
+
+def test_one_bad_epoch_receipt_does_not_block_later_epochs(tmp_path):
+    """A missing archive for an older epoch must not stop a newer staged archive from publishing."""
+    from internal.learning import ledger_heal, predictions_store
+
+    dest = tmp_path / "archives"
+    dest.mkdir()
+    newer = b'{"predictions": [], "resolved": []}'
+    newer_sha = hashlib.sha256(newer).hexdigest()
+    (dest / ".staging-r2.json").write_bytes(newer)
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({
+        "predictions": [], "resolved": [], "stats": {},
+        "epoch_history": [
+            {"reset_request_id": "r1", "archive_name": "pre-epoch-old.json", "archive_sha256": "0" * 64},
+            {"reset_request_id": "r2", "archive_name": "pre-epoch-new.json", "archive_sha256": newer_sha},
+        ],
+    }))
+
+    result = ledger_heal.reconcile_epoch_archives(predictions_path=str(ledger), archive_dir=str(dest))
+
+    assert (dest / "pre-epoch-new.json").read_bytes() == newer, "newer epoch was not published"
+    assert result["ok"] is False
+    assert [f["reset_request_id"] for f in result["failures"]] == ["r1"]
+
+
+def test_archive_lock_timeout_returns_not_ok_instead_of_raising(tmp_path, monkeypatch):
+    """A lost lock race during archive must come back as ok: False, not escape as an exception."""
+    from internal.learning import ledger_heal, predictions_store
+
+    ledger = tmp_path / "predictions.json"
+    ledger.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}))
+
+    def lock_lost(*_a, **_kw):
+        raise predictions_store.FileLockTimeout("predictions lock timed out")
+
+    monkeypatch.setattr(predictions_store, "mutate_predictions", lock_lost)
+    result = ledger_heal.archive_predictions_epoch(
+        reset_request_id="6f1c2a4e-9b7d-4e8a-8c31-2d5f7a9b0c11",
+        predictions_path=str(ledger),
+        archive_dir=str(tmp_path / "archives"),
+    )
+    assert result["ok"] is False
+
+
+def test_effect_receipt_is_fsynced_before_rename(tmp_path, monkeypatch):
+    """An effect receipt must reach disk before it replaces the old receipt journal."""
+    import os as _os
+
+    from internal.learning import expired_recovery
+
+    receipts = tmp_path / "receipts.json"
+    monkeypatch.setenv("LEARNING_EFFECT_RECEIPTS_PATH", str(receipts))
+    events = []
+    real_fsync, real_replace = _os.fsync, _os.replace
+
+    def record_fsync(fd):
+        events.append("fsync")
+        return real_fsync(fd)
+
+    def record_replace(src, dst):
+        events.append("replace")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(_os, "fsync", record_fsync)
+    monkeypatch.setattr(_os, "replace", record_replace)
+    expired_recovery.write_effect_receipt(("id", "row-1"), "expert")
+
+    assert receipts.exists()
+    assert "fsync" in events and events.index("fsync") < events.index("replace"), events

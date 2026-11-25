@@ -18,8 +18,8 @@ def test_trust_banner_expired_rate_uses_resolved_flow() -> None:
     banner = build_trust_banner(
         {"correct": 0, "wrong": 0, "expired": 11, "duplicate": 2, "pending": 3, "total": 16}
     )
-    assert banner["expired_rate"] == pytest.approx(11 / 13)  # graded+expired+duplicate
-    assert banner["expired_total_rate"] == pytest.approx(11 / 16)
+    assert banner["expired_rate"] == 0.846  # round(expired/resolved_total, 3)
+    assert banner["expired_total_rate"] == 0.688
     assert banner["graded"] == 0
 
 

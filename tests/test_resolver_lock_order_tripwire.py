@@ -203,7 +203,7 @@ def test_learning_writes_under_release_guard_take_no_scheduler_lock(pass_env, mo
     _spy(monkeypatch, prediction_trace, "record_prediction_resolved", "trace", calls)
     _spy(monkeypatch, trail_events, "emit_prediction_resolved", "trail", calls)
     _spy(monkeypatch, pick_history, "finalize_from_prediction", "pick_history", calls)
-    _spy(monkeypatch, resolver, "atomic_finalize_resolution", "finalize", calls)
+    _spy(monkeypatch, resolver, "_finalize_effects", "finalize", calls)
 
     errors = _run_pass_under_guard(sched, gen=1)
 

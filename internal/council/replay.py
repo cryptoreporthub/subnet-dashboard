@@ -12,7 +12,7 @@ from internal.council.resolver import (
     PREDICTIONS_PATH,
     _compute_stats,
     _load_json,
-    _save_json,
+    _commit_ledger_changes,
     replay_mode,
     resolve_prediction_at_horizon,
 )
@@ -51,7 +51,7 @@ def rebuild_judge_portfolios_from_stream(
 ) -> Dict[str, Any]:
     """Rebuild open/closed judge positions from a unified prediction stream."""
     from internal.judges import portfolios as jp
-    from internal.judges.tracker import on_prediction_created, on_prediction_resolved
+    from internal.judges.tracker import on_prediction_created
 
     old_path = jp.PORTFOLIOS_PATH
     jp.PORTFOLIOS_PATH = portfolios_path
@@ -61,6 +61,8 @@ def rebuild_judge_portfolios_from_stream(
             stream,
             key=lambda p: _parse_dt(p.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
         )
+        from internal.judges import postmortems
+
         for pred in sorted_stream:
             if not isinstance(pred, dict):
                 continue
@@ -68,14 +70,21 @@ def rebuild_judge_portfolios_from_stream(
             if status in {"duplicate", "expired"} and pred.get("outcome") == "duplicate":
                 continue
             if status in {"resolved", "expired", "ungradeable"}:
-                # Ledger-terminal rows never open live, so open-then-close would drop them.
+                actual_pct = pred.get("actual_pct")
+                outcome = pred.get("outcome")
                 for name in ("oracle", "echo", "pulse"):
                     jp.backfill_closed_position(
-                        name,
-                        pred,
-                        actual_pct=pred.get("actual_pct"),
-                        outcome=pred.get("outcome"),
+                        name, pred, actual_pct=actual_pct, outcome=outcome
                     )
+                stored_correct = pred.get("correct")
+                if stored_correct is None:
+                    stored_correct = str(outcome or "").lower() == "hit"
+                if not stored_correct and outcome not in {"expired", "ungradeable", "unknown", None}:
+                    for name in ("oracle", "echo", "pulse"):
+                        try:
+                            postmortems.record(name, pred, actual_pct=actual_pct)
+                        except Exception:
+                            continue
                 continue
             on_prediction_created(pred)
         return jp.all_portfolios()
@@ -141,7 +150,10 @@ def replay_predictions(
         out["replay"]["after_stats"] = dict(out["stats"])
 
         if persist:
-            _save_json(predictions_path, out)
+            result = _commit_ledger_changes(
+                data, out, path=predictions_path, caller="replay", trigger="replay"
+            )
+            out["persist_outcome"] = result.outcome.value
         return out
 
 

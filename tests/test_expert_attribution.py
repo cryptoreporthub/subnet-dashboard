@@ -55,7 +55,7 @@ def test_regime_hits_skip_unclassified(monkeypatch):
 
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",
-        lambda: rows,
+        lambda *_a, **_k: rows,
     )
     hits = _expert_hits_by_regime()
     chop = hits.get("chop", {})
@@ -175,3 +175,39 @@ def test_backfill_expert_attribution_dry_run(tmp_path, monkeypatch):
 
     data = json.loads(pred_path.read_text(encoding="utf-8"))
     assert "expert" not in data["resolved"][0]
+
+
+def test_backfill_refusal_reports_reason_value_not_enum_repr(tmp_path, monkeypatch):
+    import json
+
+    from internal.learning import expert_backfill
+    from internal.learning.predictions_store import PersistOutcome, PersistReason, PersistResult
+
+    pred_path = tmp_path / "predictions.json"
+    pred_path.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "r1",
+                        "correct": True,
+                        "signal_impact": {
+                            "impacts": [{"signal_type": "hot", "magnitude_pct": 2.0}],
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(pred_path))
+    monkeypatch.setattr(
+        expert_backfill,
+        "merge_ledger_changes",
+        lambda *args, **kwargs: PersistResult(PersistOutcome.REFUSED, PersistReason.LOCK_TIMEOUT),
+    )
+
+    result = expert_backfill.backfill_expert_attribution(dry_run=False)
+    assert result["ok"] is False
+    assert result["reason"] == "lock_timeout"

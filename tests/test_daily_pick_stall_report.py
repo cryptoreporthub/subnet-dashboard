@@ -25,13 +25,17 @@ def tick(tmp_path, monkeypatch):
         except Exception:
             return None
 
-    def _write(mutator):
-        blob = _read() or {}
-        mutator(blob)
-        soul.write_text(json.dumps(blob), encoding="utf-8")
+    from internal.store import soul_map_io as smio
+
+    def _write(mutator, path=None, **kwargs):
+        target = str(soul) if path is None else path
+        return smio.write_soul_map(mutator, target, **kwargs)
+
+    def _read_soul(path=None, **kwargs):
+        return smio.read_soul_map(str(soul) if path is None else path, **kwargs)
 
     monkeypatch.setattr(liveness, "write_soul_map", _write)
-    monkeypatch.setattr(liveness, "read_soul_map", _read)
+    monkeypatch.setattr(liveness, "read_soul_map", _read_soul)
 
     cache_path = str(tmp_path / "pick_score_cache.json")
     monkeypatch.setattr(pick_score_cache, "CACHE_PATH", cache_path)
