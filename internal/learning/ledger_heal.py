@@ -239,6 +239,44 @@ def _remove_old_uncommitted_stages(dest_dir: str, history: List[Dict[str, Any]])
             os.unlink(path)
 
 
+def _archive_published(dest_dir: str, receipt: Any) -> bool:
+    """True only when the receipt's archive is a regular file in dest_dir whose digest matches the receipt."""
+    from internal.accuracy_lift.measure import ARCHIVE_NAME
+
+    try:
+        if not ARCHIVE_NAME.fullmatch(receipt["archive_name"]):
+            return False
+        final = os.path.join(dest_dir, receipt["archive_name"])
+        return os.path.isfile(final) and not os.path.islink(final) and _archive_digest(final) == receipt["archive_sha256"]
+    except (OSError, KeyError, TypeError, ValueError):
+        return False
+
+
+def unpublished_epoch_receipts(*, predictions_path: Optional[str] = None, archive_dir: Optional[str] = None) -> List[str]:
+    """Request ids of epoch receipts whose published archive is missing or unverified. Read-only; raises if the ledger is unreadable."""
+    src, dest_dir = predictions_path or predictions_store.PREDICTIONS_PATH, archive_dir or ARCHIVE_DIR
+    history = predictions_store.load_predictions(path=src, fail_closed=True).get("epoch_history", [])
+    if not isinstance(history, list):
+        return ["<epoch_history is not a list>"]
+    return [
+        str(receipt.get("reset_request_id") or "<no reset_request_id>") if isinstance(receipt, dict) else "<malformed receipt>"
+        for receipt in history
+        if not _archive_published(dest_dir, receipt)
+    ]
+
+
+def rebalance_blocked_by_unpublished_epochs() -> bool:
+    """True, with a warning, when a boot must skip the council weight rebalance: an epoch archive is missing or unverified, or the ledger is unreadable."""
+    try:
+        unpublished = unpublished_epoch_receipts()
+    except predictions_store.PredictionsLedgerUnreadable as exc:
+        logger.warning("council weight rebalance skipped: predictions ledger unreadable: %s", exc)
+        return True
+    if unpublished:
+        logger.warning("council weight rebalance skipped: epoch archives unpublished for %s", unpublished)
+    return bool(unpublished)
+
+
 def reconcile_epoch_archives(*, predictions_path: Optional[str] = None, archive_dir: Optional[str] = None) -> Dict[str, Any]:
     src, dest_dir = predictions_path or predictions_store.PREDICTIONS_PATH, archive_dir or ARCHIVE_DIR
     os.makedirs(dest_dir, exist_ok=True)

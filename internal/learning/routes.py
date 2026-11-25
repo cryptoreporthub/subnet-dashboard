@@ -1177,6 +1177,10 @@ async def api_learning_rebalance_weights(
 ):
     """Slice R — replay council weights from ledger with re-attribution + soft reset."""
     from internal.council.weights import rebalance_council_weights
+    from internal.learning.ledger_heal import rebalance_blocked_by_unpublished_epochs
+
+    if not dry_run and rebalance_blocked_by_unpublished_epochs():
+        raise HTTPException(status_code=409, detail="epoch_archive_unpublished")
 
     try:
         result = rebalance_council_weights(replay_share=replay_share, save=not dry_run)
