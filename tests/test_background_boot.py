@@ -481,6 +481,9 @@ def test_boot_heal_runs_when_epoch_archive_reconcile_raises(monkeypatch):
 
     monkeypatch.setattr(background_boot.threading, "Thread", _InlineThread)
     monkeypatch.setattr(
+        "internal.background_boot.defer_boot", lambda _name, fn, delay=0: fn()
+    )
+    monkeypatch.setattr(
         "internal.council.resolver_scheduler.start_prediction_resolver_scheduler",
         MagicMock(return_value={}),
     )
