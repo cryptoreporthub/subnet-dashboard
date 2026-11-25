@@ -247,7 +247,7 @@ def _archive_published(dest_dir: str, receipt: Any) -> bool:
         if not ARCHIVE_NAME.fullmatch(receipt["archive_name"]):
             return False
         final = os.path.join(dest_dir, receipt["archive_name"])
-        return os.path.isfile(final) and _archive_digest(final) == receipt["archive_sha256"]
+        return os.path.isfile(final) and not os.path.islink(final) and _archive_digest(final) == receipt["archive_sha256"]
     except (OSError, KeyError, TypeError, ValueError):
         return False
 
@@ -255,7 +255,7 @@ def _archive_published(dest_dir: str, receipt: Any) -> bool:
 def unpublished_epoch_receipts(*, predictions_path: Optional[str] = None, archive_dir: Optional[str] = None) -> List[str]:
     """Request ids of epoch receipts whose published archive is missing or unverified. Read-only; raises if the ledger is unreadable."""
     src, dest_dir = predictions_path or predictions_store.PREDICTIONS_PATH, archive_dir or ARCHIVE_DIR
-    history = predictions_store.load_predictions(path=src, fail_closed=True).get("epoch_history") or []
+    history = predictions_store.load_predictions(path=src, fail_closed=True).get("epoch_history", [])
     if not isinstance(history, list):
         return ["<epoch_history is not a list>"]
     return [
