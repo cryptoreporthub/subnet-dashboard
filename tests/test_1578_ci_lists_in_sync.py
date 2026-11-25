@@ -103,6 +103,35 @@ def test_sync_and_judge_failure_modules_are_in_both_test_lists():
         assert module in gated, module
 
 
+STACK_MODULES = (
+    "tests/test_1578_backfill_route_refusal.py",
+    "tests/test_1578_null_scheduler_block.py",
+    "tests/test_conflict_return_matches_committed.py",
+    "tests/test_epoch_reset_keeps_long_pick.py",
+    "tests/test_epoch_reset_reheal_reads_custom_ledger.py",
+    "tests/test_expire_conflict_not_reported.py",
+    "tests/test_expire_conflict_stats.py",
+    "tests/test_pick_finalize_retry.py",
+    "tests/test_pick_scheduler_duplicate_reread.py",
+    "tests/test_pick_survives_judge_failure.py",
+    "tests/test_prediction_loop_fail_closed.py",
+    "tests/test_reconcile_unreadable_book.py",
+    "tests/test_recovery_finalize_once_per_sweep.py",
+    "tests/test_recovery_retry_capture.py",
+    "tests/test_recovery_retry_keeps_capture.py",
+    "tests/test_recovery_unreadable_book_fail_closed.py",
+    "tests/test_reheal_missing_row_lands_in_custom.py",
+    "tests/test_replay_terminal_rows_close.py",
+    "tests/test_tracker_per_judge_close_fault.py",
+)
+
+
+def test_modules_added_by_the_1578_stack_are_in_both_test_lists():
+    _, workflow, gated = _selections()
+    assert set(STACK_MODULES) - workflow == set()
+    assert set(STACK_MODULES) - gated == set()
+
+
 def _argument_lines(text):
     return [i for i, line in enumerate(text.split("\n")) if ARGUMENT.match(line)]
 
