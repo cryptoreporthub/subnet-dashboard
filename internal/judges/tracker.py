@@ -88,6 +88,7 @@ def on_prediction_resolved(
     }
 
     from internal.judges.portfolios import (
+        PortfolioLockTimeout,
         PortfolioUnreadable,
         holds_closed,
         holds_open,
@@ -98,12 +99,13 @@ def on_prediction_resolved(
     netuid = prediction.get("netuid")
     portfolios_unobservable = False
     for judge in all_judges():
+        judge_unobservable = False
         with portfolios_operation_deadline():
             closed = None
             try:
                 closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
-            except PortfolioUnreadable:
-                portfolios_unobservable = True
+            except (PortfolioUnreadable, PortfolioLockTimeout):
+                portfolios_unobservable = judge_unobservable = True
                 closed = None
         if closed and apply_judge_nudge:
             try:
@@ -164,7 +166,7 @@ def on_prediction_resolved(
         postmortem = None
         # Replay returns None after a durable close; still retry a missing postmortem.
         # Skip if this judge still has the id open (the close itself failed).
-        if wrong and not portfolios_unobservable:
+        if wrong and not judge_unobservable:
             try:
                 held = closed is not None or holds_closed(judge.name, pred_id, netuid=netuid, row=prediction)
                 still_open = holds_open(judge.name, pred_id, netuid=netuid, row=prediction)
