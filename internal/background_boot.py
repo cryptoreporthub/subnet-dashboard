@@ -172,6 +172,10 @@ def _start_resolver() -> None:
                 logger.warning("pump_lead recover boot failed: %s", exc)
 
             try:
+                from internal.learning.ledger_heal import rebalance_blocked_by_unpublished_epochs
+
+                if rebalance_blocked_by_unpublished_epochs():
+                    return
                 from internal.council.weights import maybe_rebalance_council_weights_on_boot
 
                 summary = maybe_rebalance_council_weights_on_boot()
