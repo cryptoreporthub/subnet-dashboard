@@ -241,7 +241,11 @@ def _remove_old_uncommitted_stages(dest_dir: str, history: List[Dict[str, Any]])
 
 def _archive_published(dest_dir: str, receipt: Any) -> bool:
     """True only when the receipt's archive is a regular file in dest_dir whose digest matches the receipt."""
+    from internal.accuracy_lift.measure import ARCHIVE_NAME
+
     try:
+        if not ARCHIVE_NAME.fullmatch(receipt["archive_name"]):
+            return False
         final = os.path.join(dest_dir, receipt["archive_name"])
         return os.path.isfile(final) and _archive_digest(final) == receipt["archive_sha256"]
     except (OSError, KeyError, TypeError, ValueError):
