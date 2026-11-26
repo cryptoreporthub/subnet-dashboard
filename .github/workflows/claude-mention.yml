@@ -1,8 +1,9 @@
 name: Claude mention
 
 # Runs Claude when an owner, member or collaborator writes "@claude" in a
-# PR or issue comment. The GitHub App reacts to the mention, but this
-# workflow does the work. Requires the repo secret ANTHROPIC_API_KEY.
+# PR or issue comment, or when cursor[bot] (Cursor Auto-Review automation)
+# does. The GitHub App reacts to the mention, but this workflow does the
+# work. Requires the repo secret ANTHROPIC_API_KEY.
 
 on:
   issue_comment:
@@ -23,7 +24,7 @@ jobs:
       contains(github.event.comment.body, '@claude') &&
       github.event.comment.user.login != 'claude[bot]' &&
       (
-        contains(fromJSON('["simi-revision[bot]","simibot[bot]"]'), github.event.comment.user.login) ||
+        contains(fromJSON('["simi-revision[bot]","simibot[bot]","cursor[bot]"]'), github.event.comment.user.login) ||
         (
           github.event.comment.performed_via_github_app == null &&
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
@@ -39,5 +40,6 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Joshua chose Haiku to save subscription quota (no Opus).
           claude_args: "--model haiku"
-          # Only our own two GitHub Apps may tag Claude; claude[bot] is never allowed.
-          allowed_bots: simi-revision,simibot
+          # simi-revision, simibot, and cursor[bot] (Auto-Review) may tag Claude;
+          # claude[bot] is never allowed.
+          allowed_bots: simi-revision,simibot,cursor
