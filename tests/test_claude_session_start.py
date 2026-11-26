@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -263,10 +264,12 @@ def test_interrupted_ditto_swap_is_recovered_next_session(env):
     # Killed after the swap but before the old copy was removed: an up-to-date
     # session still clears it.
     (share / "session-ditto-cli.old.4343").mkdir()
+    (share / "session-ditto-cli.Ab12Cd").mkdir()  # a temp dir from a killed npm ci
     env["npm_fail"].unlink()
     run(env["env"], script)
     run(env["env"], script)
     assert not list(share.glob("session-ditto-cli.old.*"))
+    assert not (share / "session-ditto-cli.Ab12Cd").exists()
 
 
 def test_interrupted_swap_is_recovered_even_without_a_lockfile(env):
@@ -278,6 +281,30 @@ def test_interrupted_swap_is_recovered_even_without_a_lockfile(env):
     run(env["env"], script)
     assert os.access(env["home"] / ".local" / "bin" / "heyditto", os.X_OK)
     assert not list(share.glob("session-ditto-cli.old.*"))
+
+
+@pytest.mark.skipif(shutil.which("flock") is None, reason="needs flock")
+def test_ditto_install_waits_for_another_sessions_lock(env):
+    script = pinned_script(env["tmp"], publish_bundle(env["work"], {"poteto-mode": "v1"}))
+    share = env["home"] / ".local" / "share"
+    share.mkdir(parents=True, exist_ok=True)
+    # Another session holds the Ditto lock for 2 seconds.
+    holder = subprocess.Popen(
+        ["flock", str(share / "session-ditto-cli.lock"), "sh", "-c", "echo held; sleep 2"],
+        stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        assert holder.stdout.readline().strip() == "held"
+        start = time.monotonic()
+        run(env["env"], script)
+        assert time.monotonic() - start >= 1.5
+    finally:
+        try:
+            holder.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            holder.kill()
+        holder.stdout.close()
+    assert os.access(env["home"] / ".local" / "bin" / "heyditto", os.X_OK)
 
 
 def test_ditto_lockfile_pins_every_package():

@@ -98,9 +98,13 @@ install_ditto_cli() {
   local lock="$ditto_src/package-lock.json" want tmp
   # Two sessions sharing one HOME must not restore and swap at the same time.
   # The lock is held until this script exits.
+  # ponytail: ceiling: a session that waits past 120s skips the Ditto install
+  # for that run; the next session installs it.
   mkdir -p "$(dirname "$ditto_dir")"
+  local locked=0
   if command -v flock >/dev/null 2>&1 && exec 9>"$ditto_dir.lock"; then
     flock -w 120 9 || { log "another session is installing the Ditto CLI; skipping"; return 0; }
+    locked=1
   fi
   # A session killed mid-swap can leave the old install under $ditto_dir.old.PID
   # with nothing at $ditto_dir: put it back, and clear any other leftover.
@@ -113,6 +117,14 @@ install_ditto_cli() {
       rm -rf "$stale"
     fi
   done
+  # A session killed during npm ci leaves its temp dir (mktemp's six-character
+  # suffix). Only with the lock held is any such dir known to be stale.
+  if [ "$locked" = 1 ]; then
+    for stale in "$ditto_dir".??????; do
+      case "$stale" in *.old.*) continue ;; esac
+      [ -d "$stale" ] && [ ! -L "$stale" ] && rm -rf "$stale"
+    done
+  fi
   if [ ! -f "$lock" ] || [ ! -f "$ditto_src/package.json" ]; then
     log "Ditto CLI lockfile missing; continuing without it"
     return 0
