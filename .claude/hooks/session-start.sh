@@ -53,6 +53,10 @@ install_pstack_skills() {
   local names="$tmp/names" failed=0
   : > "$names"
   for dir in "$tmp"/pstack-skills/*/; do
+    dir="${dir%/}"
+    # A link could point outside the bundle: skip a skill dir that is one, and
+    # drop any link inside a skill after copying it.
+    [ -L "$dir" ] && continue
     name="$(basename "$dir")"
     [ "$name" = "synced" ] && continue
     # Keep a skill this hook did not install, such as one the platform synced.
@@ -61,7 +65,8 @@ install_pstack_skills() {
     fi
     # Record the name first, so a half-copied skill still counts as ours.
     echo "$name" >> "$names"
-    if ! { rm -rf "${skills_dir:?}/$name" && cp -R "$dir" "$skills_dir/$name"; }; then
+    if ! { rm -rf "${skills_dir:?}/$name" && cp -RP "$dir" "$skills_dir/$name" \
+      && find "$skills_dir/$name" -type l -delete; }; then
       log "could not install skill $name"
       failed=1
     fi

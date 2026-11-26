@@ -160,6 +160,27 @@ def test_drops_skills_a_new_bundle_no_longer_ships(env):
     assert skill(env["home"], "kept") == "platform copy"
 
 
+def test_bundle_links_are_never_installed(env):
+    secret = env["tmp"] / "outside.txt"
+    secret.write_text("outside the bundle")
+    skills = env["work"] / "pstack-skills"
+    shutil.rmtree(skills, ignore_errors=True)
+    (skills / "poteto-mode").mkdir(parents=True)
+    (skills / "poteto-mode" / "SKILL.md").write_text("v1")
+    (skills / "poteto-mode" / "leak").symlink_to(secret)
+    (skills / "linked").symlink_to(env["tmp"])
+    git(env["work"], "add", "-A")
+    git(env["work"], "commit", "-qm", "bundle")
+    git(env["work"], "push", "-q", "-f", "origin", "HEAD:refs/heads/pstack-skills-bundle")
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=env["work"], check=True,
+                         capture_output=True, text=True).stdout.strip()
+    run(env["env"], pinned_script(env["tmp"], sha))
+    installed = env["home"] / ".claude" / "skills"
+    assert skill(env["home"], "poteto-mode") == "v1"
+    assert not os.path.lexists(installed / "poteto-mode" / "leak")
+    assert not (installed / "linked").exists()
+
+
 def ditto_installs(env):
     log = env["npm_log"]
     return [l for l in log.read_text().splitlines() if l.startswith("ci")] if log.exists() else []
