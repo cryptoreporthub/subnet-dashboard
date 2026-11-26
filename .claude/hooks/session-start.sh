@@ -100,6 +100,12 @@ install_ditto_cli() {
     log "Ditto CLI lockfile missing; continuing without it"
     return 0
   fi
+  # Two sessions sharing one HOME must not restore and swap at the same time.
+  # The lock is held until this script exits.
+  mkdir -p "$(dirname "$ditto_dir")"
+  if command -v flock >/dev/null 2>&1 && exec 9>"$ditto_dir.lock"; then
+    flock -w 120 9 || { log "another session is installing the Ditto CLI; skipping"; return 0; }
+  fi
   # A session killed mid-swap can leave the old install under $ditto_dir.old.PID
   # with nothing at $ditto_dir: put it back, and clear any other leftover.
   local stale
@@ -126,7 +132,7 @@ install_ditto_cli() {
   # Move any old install aside, then swap the new one in. mv -T never nests
   # tmp inside an existing dir; on failure the old one is put back.
   local old="$ditto_dir.old.$$"
-  if (cd "$tmp" && npm ci --ignore-scripts --no-fund --no-audit >&2) \
+  if (cd "$tmp" && npm ci --ignore-scripts --no-fund --no-audit >&2 9>&-) \
     && echo "$want" > "$tmp/.lock-sha" \
     && { [ ! -e "$ditto_dir" ] || mv -T "$ditto_dir" "$old"; } \
     && { mv -T "$tmp" "$ditto_dir" || { [ ! -e "$old" ] || mv -T "$old" "$ditto_dir"; false; }; } \

@@ -6,6 +6,7 @@
 **main:** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
 **Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  
 **Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
+**Model decision (2026-11-26, PR #1621):** the owner retired the September ban on Sonnet 4.5/4.6 and the "Claude is offline" line. `model-guide.md` and `.cursor/rules/subagent-models.mdc` are current.  
 **Plans:** `ditto-opus-transition-handoff-2026-08-03.md` · `post-hero-finish-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
 
 ## STATUS SNAPSHOT (2026-08-03)

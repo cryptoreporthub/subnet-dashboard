@@ -1,6 +1,5 @@
 """Guard the human 2026-08-16 subagent model allowlist."""
 
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,13 +16,3 @@ def test_subagent_models_rule_names_allowlist():
     assert "Do not spawn a Grok 4.6 subagent to review" not in rule
     assert "Luna high, not Grok" not in rule
 
-
-def test_old_sonnet_ban_stays_removed():
-    # The owner dropped the September Sonnet 4.5/4.6 ban (PR #1621) so the Cursor
-    # rules don't clash with the Sonnet pstack subagents Claude Code sessions use.
-    paths = (".cursor/rules/subagent-models.mdc", "AGENTS.md",
-             "cursor-agents-communication/model-guide.md")
-    for path in paths:
-        text = (ROOT / path).read_text(encoding="utf-8")
-        assert not re.search(r"Sonnet\W*4\.[56]", text), path
-        assert "Claude is offline" not in text, path

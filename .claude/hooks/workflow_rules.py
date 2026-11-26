@@ -234,10 +234,14 @@ def _messages(turn: list[dict]) -> list[list[dict]]:
 def _is_advisor(block: dict) -> bool:
     if block.get("type") == "advisor_tool_result" or block.get("name") == "advisor":
         return True
+    tool_input = block.get("input") or {}
+    # Same rule as the PreToolUse gate, so a non-Opus advisor call (which that
+    # gate denies) never counts as the review, however its result is written.
     return (
         block.get("type") == "tool_use"
         and block.get("name") in AGENT_TOOLS
-        and (block.get("input") or {}).get("subagent_type") == ADVISOR_AGENT
+        and tool_input.get("subagent_type") == ADVISOR_AGENT
+        and subagent_verdict(tool_input) is None
     )
 
 
@@ -308,6 +312,9 @@ def turn_summary(turn: list[dict]) -> tuple[bool, bool]:
 
 
 def _read_transcript(path: str) -> list[dict]:
+    # ponytail: parses the whole JSONL on every Stop. Fine for a session's
+    # transcript (a few MB); if Stop gets slow on very long sessions, read
+    # backwards from the end to the turn start instead.
     entries = []
     with open(path, encoding="utf-8") as fh:
         for line in fh:

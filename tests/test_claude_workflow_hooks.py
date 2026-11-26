@@ -182,6 +182,23 @@ def test_stop_blocks_when_the_advisor_call_errored(tmp_path):
     assert out["decision"] == "block"
 
 
+def test_non_opus_advisor_call_does_not_count(tmp_path):
+    # Even if the denied call's result were written without is_error.
+    call = tool_use("Agent", subagent_type="opus-advisor", model="haiku", prompt="check")
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Bash", command="ls")),
+            tool_result(),
+            assistant(call),
+            tool_result(),
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
 def test_stop_allows_advisor_after_another_tool_failed(tmp_path):
     bash = tool_use("Bash", command="false")
     bash["id"] = "toolu_bash"
