@@ -198,6 +198,21 @@ def test_mention_workflow_also_runs_the_reviewed_action_commit():
     assert uses == ["anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c"]
 
 
+def test_sandbox_dependencies_are_installed_before_the_review():
+    # The scrub makes the CLI require its Bash sandbox. Without bubblewrap and socat,
+    # every Bash call fails and the review posts nothing (CLI 2.1.332, local probe).
+    wf = _load()
+    steps = wf["jobs"]["review"]["steps"]
+    install = _named_step(wf, "Install Bash sandbox dependencies")
+    assert steps.index(install) < steps.index(_step(wf, "anthropics/claude-code-action"))
+    assert "bubblewrap socat" in install["run"]
+    assert "apparmor_restrict_unprivileged_userns=0" in install["run"]
+    # Fail loudly here rather than as a silent, empty review later.
+    assert "continue-on-error" not in install
+    assert "bwrap --unshare-all" in install["run"]
+    assert "env" not in install
+
+
 def test_review_job_opts_into_subprocess_env_scrub():
     # The action scrubs secrets from Bash children only when this is "1" (or when
     # allowed_non_write_users is set, which this job does not use). Source-derived:
