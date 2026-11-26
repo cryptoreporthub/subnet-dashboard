@@ -1,9 +1,14 @@
 name: Claude mention
 
-# Runs Claude when an owner, member or collaborator writes "@claude" in a
-# PR or issue comment, or when cursor[bot] (Cursor Auto-Review automation)
-# does. The GitHub App reacts to the mention, but this workflow does the
-# work. Requires the repo secret ANTHROPIC_API_KEY.
+# Humans (owner, member or collaborator) trigger Claude with "@claude" in a
+# PR or issue comment. Bot comments never start a run, and the job is skipped
+# for any other commenter: only an owner, member or collaborator can start it.
+# The claude-human job holds the Claude login (CLAUDE_CODE_OAUTH_TOKEN) and a
+# token that can push (the action sets it up so Claude can push fixes). The
+# env scrub below only hides secrets from Bash children; it does not remove
+# that token. The only protection is who may trigger the job.
+# The GitHub App reacts to the mention, but this workflow does the
+# work. Requires the repo secret CLAUDE_CODE_OAUTH_TOKEN.
 
 on:
   issue_comment:
@@ -11,35 +16,65 @@ on:
   pull_request_review_comment:
     types: [created]
 
-permissions:
-  contents: write # Joshua chose: Claude may push fixes (Oct 31)
-  pull-requests: write
-  issues: write
-  id-token: write # required by claude-code-action to get its GitHub token
-  actions: read # lets Claude read CI results on PRs
+# No permissions by default. A job without its own block gets none, instead of
+# the repo default (write).
+permissions: {}
 
 jobs:
-  claude:
+  claude-human:
     if: >-
       contains(github.event.comment.body, '@claude') &&
-      github.event.comment.user.login != 'claude[bot]' &&
-      (
-        contains(fromJSON('["simi-revision[bot]","simibot[bot]","cursor[bot]"]'), github.event.comment.user.login) ||
-        (
-          github.event.comment.performed_via_github_app == null &&
-          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
-        )
-      )
+      !endsWith(github.event.comment.user.login, '[bot]') &&
+      github.event.comment.performed_via_github_app == null &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    timeout-minutes: 45
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Joshua chose: Claude may push fixes (Oct 31)
+      pull-requests: write
+      issues: write
+      id-token: write # required by claude-code-action to get its GitHub token
+      actions: read # lets Claude read CI results on PRs
+    env:
+      # Best-effort scrub of Anthropic and GitHub secrets from Bash child processes.
+      # Opt-in in the action; off unless set. Reduces, does not eliminate, exposure.
+      # This job does not restrict --allowedTools, so Claude can run Bash (and may
+      # push fixes). The scrub makes the CLI require its Bash sandbox, so the next
+      # step installs bubblewrap and socat, matching the review job.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The action replaces checkout credentials with its own token before
+          # Claude runs (see configureGitAuth in claude-code-action), so git push
+          # still works. Leaving the checkout token in .git/config would let a
+          # prompt-injected run read it.
+          persist-credentials: false
+      - name: Install Bash sandbox dependencies
+        # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, the Claude CLI runs Bash only inside
+        # its sandbox, which needs bubblewrap and socat. Without them every Bash call
+        # fails with "Sandbox is required but failed to initialize", and a @claude
+        # run that needs a shell (including git) would stall. The action installs
+        # them only when allowed_non_write_users is set, which this job does not use,
+        # so install them here. The sandbox also hides the CLI process from Bash
+        # (PID namespace).
+        run: |
+          echo "before: bwrap=$(command -v bwrap || echo missing) socat=$(command -v socat || echo missing)"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bubblewrap socat
+          # Ubuntu 24.04+ restricts unprivileged user namespaces, which bubblewrap needs.
+          if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          bwrap --unshare-all --ro-bind / / true
+          command -v socat
       - name: Run Claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
         with:
           # Uses Joshua's Claude subscription (no per-token API billing).
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Joshua chose Haiku to save subscription quota (no Opus).
-          claude_args: "--model haiku"
-          # simi-revision, simibot, and cursor[bot] (Auto-Review) may tag Claude;
-          # claude[bot] is never allowed.
-          allowed_bots: simi-revision,simibot,cursor
+          # --setting-sources user ignores .claude settings and hooks a PR adds.
+          # The action still writes its own settings to ~/.claude/settings.json (the
+          # user source), and allowed/disallowed tools are passed as SDK options.
+          claude_args: "--model haiku --setting-sources user --strict-mcp-config"

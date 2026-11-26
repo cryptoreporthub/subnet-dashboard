@@ -1,0 +1,109 @@
+name: Claude review
+
+# Reviews every push to a ready, same-repository pull request. It listens to
+# pull_request, never to comments, so a bot comment cannot start a run that
+# holds the repo secret. Fork PRs and drafts are skipped.
+# Requires the repo secret CLAUDE_CODE_OAUTH_TOKEN.
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      # Best-effort scrub of Anthropic and GitHub secrets from Bash child processes.
+      # Opt-in in the action; off unless set. Reduces, does not eliminate, exposure.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install Bash sandbox dependencies
+        # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, the Claude CLI runs Bash only inside
+        # its sandbox, which needs bubblewrap and socat. Without them every Bash call
+        # (gh pr diff, gh pr comment) fails with "Sandbox is required but failed to
+        # initialize", and nothing is posted. The action installs them only when
+        # allowed_non_write_users is set, which this job does not use, so install them
+        # here. The sandbox also hides the CLI process from Bash (PID namespace).
+        run: |
+          echo "before: bwrap=$(command -v bwrap || echo missing) socat=$(command -v socat || echo missing)"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bubblewrap socat
+          # Ubuntu 24.04+ restricts unprivileged user namespaces, which bubblewrap needs.
+          if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          bwrap --unshare-all --ro-bind / / true
+          command -v socat
+      - name: Review pull request
+        uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
+        with:
+          # The job-scoped workflow token limits this run to the permissions above.
+          github_token: ${{ github.token }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Cursor opens same-repo PRs as this bot. Only this one bot is allowed.
+          allowed_bots: "cursor[bot]"
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request for bugs, security issues and unclear code.
+            The PR's merge commit is checked out. Use `gh pr diff` for the changes.
+            Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`)
+            for issues in specific lines.
+            Post one summary with exactly this form (the number first, then `--body`, and the
+            text in a quoted heredoc, because a quoted newline followed by `#` is refused):
+            gh pr comment ${{ github.event.pull_request.number }} --body "$(cat <<'EOF'
+            <!-- claude-review-run:${{ github.run_id }}-${{ github.run_attempt }} -->
+            <your summary here>
+            EOF
+            )"
+            The first line of the summary must be exactly the marker comment shown above.
+            Do not use --body-file, -F, --editor, -e, --edit-last, --delete-last, --create-if-none or --attach: they are blocked.
+            Only post GitHub comments. Do not edit files.
+          # Same model as the mention workflow, to keep subscription quota low.
+          claude_args: >-
+            --model haiku
+            --permission-mode default
+            --setting-sources user
+            --strict-mcp-config
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment * --body *),Bash(gh pr diff:*),Bash(gh pr view:*),Read(./**),Grep(./**),Glob(./**)"
+            --disallowedTools "Read(//proc/**),Grep(//proc/**),Glob(//proc/**),Bash(gh pr comment* --body-file*),Bash(gh pr comment* -F*),Bash(gh pr comment* --editor*),Bash(gh pr comment* -e),Bash(gh pr comment* -e *),Bash(gh pr comment* --edit-last*),Bash(gh pr comment* --delete-last*),Bash(gh pr comment* --create-if-none*),Bash(gh pr comment* --attach*)"
+      - name: Fail if no review or summary was posted
+        # A green run that posted nothing looks like a passed review. The action hides
+        # tool output, so look on GitHub for this run's marker, which the prompt requires
+        # on the first line of the summary. The marker holds the run id and attempt, so
+        # another workflow's comment, or an earlier attempt's, cannot satisfy it.
+        # Read-only: it adds no permission.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          MARKER: "<!-- claude-review-run:${{ github.run_id }}-${{ github.run_attempt }} -->"
+        run: |
+          found=0
+          for path in "issues/${PR}/comments" "pulls/${PR}/reviews"; do
+            n=$(gh api --paginate "repos/${REPO}/${path}" | jq -s --arg marker "$MARKER" \
+              '[.[][] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains($marker)))] | length')
+            echo "${path}: ${n} with this run's marker"
+            found=$((found + n))
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::Claude review run finished but posted no review or summary with ${MARKER} on PR ${PR}."
+            exit 1
+          fi
