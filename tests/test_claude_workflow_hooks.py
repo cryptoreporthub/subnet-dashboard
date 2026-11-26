@@ -265,13 +265,9 @@ def advisor_bash(command, agent_type="opus-advisor"):
         "git log --oneline -5",
         "git diff --stat --name-only",
         "git show HEAD:.claude/settings.json",
-        "python -m pytest -q --noconftest -p no:cacheprovider tests/test_x.py",
-        "GITHUB_ACTIONS=true python3 -m pytest -q tests/test_x.py",
-        "pytest -q -k stop",
-        "pytest -x --tb=short tests/test_x.py::test_one",
     ],
 )
-def test_advisor_may_read_and_test(command):
+def test_advisor_may_read_git(command):
     assert not denied(advisor_bash(command))
 
 
@@ -291,8 +287,8 @@ def test_advisor_may_read_and_test(command):
         "git -c core.pager=sh log",
         "git status $(touch x)",
         "python -c 'print(1)'",
-        "pytest -p evil_plugin",
-        "pytest -pevil",
+        "python -m pytest -q tests/test_x.py",
+        "pytest -q tests/test_added_by_the_diff.py",
         "LD_PRELOAD=x.so pytest",
         "git diff {--output=/tmp/x,--stat}",
         "pytest {--basetemp=/x,-q}",
@@ -304,7 +300,7 @@ def test_advisor_may_read_and_test(command):
         "pytest -o addopts=-pevil",
         "pytest /tmp/any.py",
         "pytest ../outside/test_x.py",
-        "pytest -p",
+        "GITHUB_ACTIONS=true git diff",
         "git diff 'unclosed",
         "",
     ],

@@ -7,8 +7,8 @@ One script, three modes, picked by the first argument:
   subagent  PreToolUse on Agent/Task: deny a subagent that would not run on
             Sonnet (the Opus advisor is the one exception).
   bash      PreToolUse on Bash: inside the Opus advisor, allow only read-only
-            git commands and pytest, since the advisor reads untrusted text
-            (the worker's summary, the diff, PR text).
+            git commands, since the advisor reads untrusted text (the
+            worker's summary, the diff, PR text).
   stop      Stop: block the end of a turn whose last tool work came after
             the last advisor call. Re-checks after each block (so work done on
             the advisor's FIX FIRST is reviewed too), up to MAX_STOP_BLOCKS
@@ -141,20 +141,16 @@ def on_subagent(event: dict) -> None:
     )
 
 
-# What the advisor's Bash may run. Everything else is denied, so an
-# instruction injected into the text it reviews can't push, post or merge.
-# Accepted risk: pytest imports the working tree's tests and conftest.py,
-# so it runs whatever code the diff under review adds. That is the same code,
-# in the same session with the same credentials, that the worker already ran
-# to test its change; the gate stops injected *instructions*, not repo code.
+# What the advisor's Bash may run: read-only git, nothing that runs repo code.
+# Everything else is denied, so an instruction injected into the text it
+# reviews can't push, post, merge or write files. Test runs go to the worker
+# (the advisor asks under Fix first): a test file is code the diff can add,
+# and injected text could pick which one to run.
 ADVISOR_GIT = {"diff", "log", "show", "status", "ls-files", "rev-parse", "blame"}
 ADVISOR_GIT_DENIED = ("--output", "--ext-diff", "--textconv", "--open-files-in-pager", "-O")
 # Includes brace, glob and tilde expansion, which bash applies before the
 # command runs and which could produce words this check never saw.
 ADVISOR_SHELL_CHARS = set(";&|<>`$()\\\n\r{}*?[]~")
-ADVISOR_PYTEST = (["pytest"], ["python", "-m", "pytest"], ["python3", "-m", "pytest"])
-ADVISOR_PYTEST_FLAGS = {"-q", "-qq", "-v", "-vv", "-x", "-s", "--noconftest"}
-ADVISOR_PYTEST_TB = {"auto", "long", "short", "line", "native", "no"}
 
 
 def advisor_bash_verdict(command: str) -> str | None:
@@ -162,8 +158,8 @@ def advisor_bash_verdict(command: str) -> str | None:
     reason = (
         "Denied: the advisor's Bash runs only `git "
         + "|".join(sorted(ADVISOR_GIT))
-        + "` and pytest, one command with no pipes, redirects or `;`. "
-        "Ask the worker under Fix first to run anything else."
+        + "`, one command with no pipes, redirects or `;`. "
+        "Ask the worker under Fix first to run tests or anything else."
     )
     if any(c in ADVISOR_SHELL_CHARS for c in command):
         return reason
@@ -171,13 +167,8 @@ def advisor_bash_verdict(command: str) -> str | None:
         words = shlex.split(command)
     except ValueError:
         return reason
-    while words and words[0].startswith("GITHUB_ACTIONS="):
-        words = words[1:]
     if len(words) >= 2 and words[0] == "git" and words[1] in ADVISOR_GIT:
         return reason if any(_git_arg_denied(w) for w in words[2:]) else None
-    for prefix in ADVISOR_PYTEST:
-        if words[: len(prefix)] == prefix:
-            return None if _pytest_args_ok(words[len(prefix):]) else reason
     return reason
 
 
@@ -189,30 +180,6 @@ def _git_arg_denied(word: str) -> bool:
     return len(name) > 2 and name.startswith("--") and any(
         opt.startswith(name) for opt in ADVISOR_GIT_DENIED if opt.startswith("--")
     )
-
-
-def _pytest_args_ok(args: list[str]) -> bool:
-    """Only flags that change output, and test paths inside the repo.
-
-    Anything else is denied: --basetemp empties a folder, --junitxml and
-    friends write files, --pastebin posts output, -c/-o swap the config.
-    """
-    n = 0
-    while n < len(args):
-        arg = args[n]
-        if arg in ADVISOR_PYTEST_FLAGS or arg.startswith("-pno:"):
-            n += 1
-        elif arg == "-p" and n + 1 < len(args) and args[n + 1].startswith("no:"):
-            n += 2  # -p no:<name> disables a plugin; loading one is denied
-        elif arg == "-k" and n + 1 < len(args):
-            n += 2
-        elif arg.startswith("--tb=") and arg[5:] in ADVISOR_PYTEST_TB:
-            n += 1
-        elif arg and not arg.startswith(("-", "/")) and ".." not in arg.split("::")[0]:
-            n += 1  # a test path relative to the repo, optionally ::test_name
-        else:
-            return False
-    return True
 
 
 def on_bash(event: dict) -> None:
@@ -297,7 +264,7 @@ def _messages(turn: list[dict]) -> list[list[dict]]:
     Claude Code writes one entry per content block, so parallel tool calls
     from one message share a message id across several entries. A subagent's
     own entries (isSidechain) are skipped: its work already counts through the
-    parent's Agent call, and the advisor rerunning tests must not undo itself.
+    parent's Agent call, and the advisor's own git reads must not undo its review.
     """
     groups: dict = {}
     for n, entry in enumerate(turn):
