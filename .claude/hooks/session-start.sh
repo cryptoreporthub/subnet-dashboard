@@ -52,15 +52,46 @@ set_aside() {
       # Something else took the name meanwhile: keep the copy out of the stage.
       log "moved a platform copy of skill $name to ~/.claude/.pstack-orphans; check it"
     fi
-    # ponytail: ceiling: a crash between the two moves leaves that platform
-    # copy in the stage, which the next install run deletes.
+    # A crash between the two moves leaves that copy in the stage; the next
+    # run puts it back first (recover_set_aside).
     return 1
   fi
   return 0
 }
 
+# Before the stage is cleared, put back anything in it that isn't the hook's
+# own: a platform copy that set_aside moved and a crash kept from moving back.
+# The skills dir gets it back if the name is free, else ~/.claude/.pstack-orphans.
+recover_set_aside() {
+  local dir name
+  for dir in "$stage_dir"/old/*; do
+    [ -e "$dir" ] || [ -L "$dir" ] || continue
+    [ ! -L "$dir" ] && [ -f "$dir/$owner_mark" ] && continue
+    name="$(basename "$dir")"
+    if [ ! -e "$skills_dir/$name" ] && [ ! -L "$skills_dir/$name" ] && mv -T "$dir" "$skills_dir/$name"; then
+      log "put back a platform copy of skill $name left by an interrupted install"
+    elif mkdir -p "$HOME/.claude/.pstack-orphans" \
+      && mv -T "$dir" "$HOME/.claude/.pstack-orphans/$name.$$"; then
+      log "moved a platform copy of skill $name to ~/.claude/.pstack-orphans; check it"
+    else
+      log "could not put back $dir (a platform copy of skill $name); move it into $skills_dir or delete it. pstack skills not installed"
+      return 1
+    fi
+  done
+}
+
+# Delete the hook's set-aside copy of skill $1. It is first renamed into
+# trash/, so a crash mid-delete never leaves a half-deleted, unmarked copy in
+# old/, where recover_set_aside would take it for a platform copy.
+discard() {
+  [ -d "$stage_dir/old/$1" ] || return 0
+  mv -T "$stage_dir/old/$1" "$stage_dir/trash/$1" && rm -rf "${stage_dir:?}/trash/$1"
+}
+
 install_pstack_skills() {
   local commit="$bundle_sha" tmp name dest ref="refs/remotes/origin/$bundle_branch"
+  # Runs every session, so a copy left in the stage never waits for a new pin.
+  recover_set_aside || return 0
   if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
     git -C "$repo" -c gc.autoDetach=false fetch --quiet origin "+refs/heads/$bundle_branch:$ref" 9>&- ||
       log "could not fetch $bundle_branch"
@@ -97,7 +128,7 @@ install_pstack_skills() {
   # ponytail: ceiling: a platform sync that has only made an empty dir when
   # the rename runs is replaced; its later writes land in our dir.
   # A stage left by a killed session is never ours to finish: start clean.
-  rm -rf "${stage_dir:?}" && mkdir -p "$skills_dir" "$stage_dir/new" "$stage_dir/old" || {
+  rm -rf "${stage_dir:?}" && mkdir -p "$skills_dir" "$stage_dir/new" "$stage_dir/old" "$stage_dir/trash" || {
     log "could not prepare $stage_dir; pstack skills not installed"
     rm -rf "$tmp"
     return 0
@@ -140,7 +171,7 @@ install_pstack_skills() {
         failed=1
       fi
     fi
-    rm -rf "${stage_dir:?}/old/$name"
+    discard "$name"
   done
   # Only links or "synced": keep what is installed, as for an empty bundle.
   if [ ! -s "$names" ]; then
@@ -154,7 +185,7 @@ install_pstack_skills() {
     name="$(basename "$dir")"
     [ -L "$dir" ] || [ ! -f "$dir/$owner_mark" ] && continue
     grep -Fqx -- "$name" "$names" && continue
-    set_aside "$name" && rm -rf "${stage_dir:?}/old/$name"
+    set_aside "$name" && discard "$name"
   done
   rm -rf "$tmp"
   # The manifest only records which bundle is fully installed, so the next

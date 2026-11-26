@@ -348,6 +348,87 @@ def test_crash_while_deleting_an_old_copy_leaves_no_stuck_skill(env, deleted):
     assert skill(env["home"], "kept") == "platform copy"
 
 
+@pytest.mark.parametrize("name_taken", [False, True])
+def test_crash_while_putting_back_a_platform_copy_loses_nothing(env, name_taken):
+    # The platform replaces the hook's z-platform after the hook checked it
+    # (the shim swaps in a platform copy just as the hook moves it aside), and
+    # the session dies just before moving it back. The next session puts it
+    # back before clearing the stage, or, if something else took the name
+    # meanwhile, keeps it in ~/.claude/.pstack-orphans (Replit's sequence).
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "z-platform": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    skills = env["home"] / ".claude" / "skills"
+    shim = env["tmp"] / "crash-put-back.sh"
+    shim.write_text(
+        'mv() {\n'
+        '  case "${@: -2:1}" in\n'
+        '    %(s)s/z-platform)\n'
+        '      command rm -f %(s)s/z-platform/.pstack-bundle-skill\n'
+        '      builtin printf "platform copy" > %(s)s/z-platform/SKILL.md ;;\n'
+        '    */.pstack-stage/old/z-platform) kill -9 $$ ;;\n'
+        '  esac\n'
+        '  command mv "$@"\n'
+        '}\n' % {"s": skills}
+    )
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "z-platform": "v2"})
+    proc = subprocess.run(
+        ["bash", str(pinned_script(env["tmp"], v2))],
+        env={**env["env"], "BASH_ENV": str(shim)}, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode != 0
+    assert skill(env["home"], "z-platform") is None
+    if name_taken:
+        (skills / "z-platform").mkdir()
+        (skills / "z-platform" / "SKILL.md").write_text("newer platform copy")
+    run(env["env"], pinned_script(env["tmp"], v2))
+    orphans = list((env["home"] / ".claude" / ".pstack-orphans").glob("z-platform.*"))
+    if name_taken:
+        assert skill(env["home"], "z-platform") == "newer platform copy"
+        assert len(orphans) == 1 and (orphans[0] / "SKILL.md").read_text() == "platform copy"
+    else:
+        assert skill(env["home"], "z-platform") == "platform copy"
+        assert orphans == []
+    assert skill(env["home"], "poteto-mode") == "v2"
+
+
+def test_failed_put_back_keeps_the_stage_for_the_next_session(env):
+    # Same crash as above, but the next session can't move the platform copy
+    # out of the stage either: it must not clear the stage, and a later
+    # session that can still puts the copy back.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "z-platform": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    skills = env["home"] / ".claude" / "skills"
+    shim = env["tmp"] / "crash-put-back.sh"
+    shim.write_text(
+        'mv() {\n'
+        '  case "${@: -2:1}" in\n'
+        '    %(s)s/z-platform)\n'
+        '      command rm -f %(s)s/z-platform/.pstack-bundle-skill\n'
+        '      builtin printf "platform copy" > %(s)s/z-platform/SKILL.md ;;\n'
+        '    */.pstack-stage/old/z-platform) kill -9 $$ ;;\n'
+        '  esac\n'
+        '  command mv "$@"\n'
+        '}\n' % {"s": skills}
+    )
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "z-platform": "v2"})
+    script = pinned_script(env["tmp"], v2)
+    proc = subprocess.run(
+        ["bash", str(script)],
+        env={**env["env"], "BASH_ENV": str(shim)}, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode != 0
+    stuck = env["tmp"] / "mv-fails.sh"
+    stuck.write_text(
+        'mv() { case "${@: -2:1}" in */.pstack-stage/old/z-platform) return 1 ;; esac; command mv "$@"; }\n'
+    )
+    run({**env["env"], "BASH_ENV": str(stuck)}, script)
+    staged = env["home"] / ".claude" / ".pstack-stage" / "old" / "z-platform" / "SKILL.md"
+    assert staged.read_text() == "platform copy"
+    run(env["env"], script)
+    assert skill(env["home"], "z-platform") == "platform copy"
+    assert skill(env["home"], "poteto-mode") == "v2"
+
+
 @pytest.mark.parametrize("when", ["before its turn", "while it is staged", "as it is placed"])
 def test_platform_copy_synced_mid_install_is_kept(env, when):
     # The platform syncs a skill while the hook runs: before the hook reaches
