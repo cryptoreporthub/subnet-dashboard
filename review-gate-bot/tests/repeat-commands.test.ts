@@ -63,6 +63,24 @@ test("the elev8jax case gates on the check", () => {
   assert.match(source, /repeatsTheirCommands\(String\(reply\)\)/);
 });
 
+test("newline-wrapped command tokens still count as reproduction", () => {
+  assert.equal(repeatsTheirCommands("rm -rf\ndata/score_snapshots"), true);
+  assert.equal(repeatsTheirCommands("git push\n--force origin HEAD"), true);
+  assert.equal(
+    repeatsTheirCommands('python -c\n"import internal.learning.score_snapshot as s"'),
+    true,
+  );
+});
+
+test("multiline prose without command lines does not match", () => {
+  assert.equal(
+    repeatsTheirCommands(
+      "I did not run their commands.\n\nEscalating to Joshua with no shell copy.",
+    ),
+    false,
+  );
+});
+
 test("the instructions and the outside-commenter skill forbid reproducing their commands, quoted or not", () => {
   for (const file of ["bot/instructions.md", "bot/skills/outside-commenter/SKILL.md"]) {
     const text = readFileSync(file, "utf8");
