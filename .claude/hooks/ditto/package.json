@@ -1,0 +1,8 @@
+{
+  "name": "session-ditto-cli",
+  "private": true,
+  "description": "Pins the Ditto CLI and every dependency for cloud sessions. Installed by ../session-start.sh with npm ci.",
+  "dependencies": {
+    "@heyditto/cli": "3.22.0"
+  }
+}

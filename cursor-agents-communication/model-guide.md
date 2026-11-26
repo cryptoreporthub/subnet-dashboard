@@ -7,7 +7,7 @@
 
 > **2026-08-16:** Token-budget **brevity** is retired (`token-budget-rules.md`). Do not force short Grok LOCKs, Composer-fast-only, or terse human replies. `.cursorignore` (skip `data/*.json`) still applies.
 >
-> **Subagent pool (human 2026-08-16):** Composer **slow** (usual parent/build), Cursor **Grok 4.6 medium**, **GPT-4.6 Luna high**. **Not a hard lane** — each reviews what they are best at; **the other is the final pass**. **Never Sonnet 4.5 or Sonnet 4.6.** Always-on: `.cursor/rules/subagent-models.mdc`.
+> **Subagent pool (human 2026-08-16):** Composer **slow** (usual parent/build), Cursor **Grok 4.6 medium**, **GPT-4.6 Luna high**. **Not a hard lane** — each reviews what they are best at; **the other is the final pass**. Always-on: `.cursor/rules/subagent-models.mdc`.
 
 ## Models
 
@@ -17,7 +17,7 @@
 | **Grok 4.7** | parent seat; `inherit` when the parent is already Grok 4.7 | Epistemic lead: why, design, root-cause — not Grok 4.6 or Grok 4.5 |
 | **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | AC / honesty / contract / line-by-line match |
 
-**Forbidden:** Claude Sonnet **4.5** and **4.6** (any effort). Do not use `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families unless the human asks.
+**Forbidden unless the human asks:** `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families.
 
 **Default build:** **Composer 2.5 slow** (`composer-2.5`).
 
