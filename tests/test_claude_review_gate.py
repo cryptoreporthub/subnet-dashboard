@@ -285,6 +285,17 @@ def test_marker_is_unique_to_the_run_and_required_by_the_prompt():
     assert "--body \"$(cat <<'EOF'" in prompt
 
 
+def test_prompt_requires_untested_labels_and_keeps_the_marker():
+    # Adversarial review lives in the prompt, not as runner skills. Keep the
+    # posting contract: the marker and heredoc form must still be required.
+    prompt = _prompt(_load())
+    assert "UNTESTED" in prompt
+    marker = "<!-- claude-review-run:${{ github.run_id }}-${{ github.run_attempt }} -->"
+    assert marker in prompt
+    assert "first line of the summary" in prompt
+    assert "--body \"$(cat <<'EOF'" in prompt
+
+
 def test_post_check_adds_no_permission_and_no_secret():
     wf = _load()
     check = _named_step(wf, "Fail if no review or summary was posted")

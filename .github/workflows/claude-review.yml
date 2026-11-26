@@ -64,6 +64,11 @@ jobs:
 
             Review this pull request for bugs, security issues and unclear code.
             The PR's merge commit is checked out. Use `gh pr diff` for the changes.
+            Verify every claim in the PR against the actual code, not the description.
+            Try to break the change: edge cases, error paths, concurrency, and security.
+            Look for issues the PR does not mention, including blast radius on callers.
+            Label anything you did not actually check as UNTESTED.
+            Report findings by severity with file:line. Do not approve on vibes.
             Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`)
             for issues in specific lines.
             Post one summary with exactly this form (the number first, then `--body`, and the
