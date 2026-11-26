@@ -1,10 +1,8 @@
 name: Claude mention
 
 # Humans (owner, member or collaborator) trigger Claude with "@claude" in a
-# PR or issue comment. Bots (cursor[bot], simi-revision[bot], simibot[bot])
-# trigger it only when the comment starts with "@claude handoff-review", so a
-# quoted "@claude" never starts a run. Bot-triggered runs cannot write
-# repository contents; they may post PR and issue comments.
+# PR or issue comment. Bot comments never start a run, so an agent that reads
+# untrusted comment text is never given the repo secret.
 # The GitHub App reacts to the mention, but this workflow does the
 # work. Requires the repo secret CLAUDE_CODE_OAUTH_TOKEN.
 
@@ -43,30 +41,3 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Joshua chose Haiku to save subscription quota (no Opus).
           claude_args: "--model haiku"
-
-  claude-bot:
-    if: >-
-      startsWith(github.event.comment.body, '@claude handoff-review') &&
-      contains(fromJSON('["simi-revision[bot]","simibot[bot]","cursor[bot]"]'), github.event.comment.user.login)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-      actions: read # lets Claude read CI results on PRs
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Run Claude
-        uses: anthropics/claude-code-action@v1
-        with:
-          # Use the job-scoped workflow token, so contents: read limits this run.
-          github_token: ${{ github.token }}
-          # Uses Joshua's Claude subscription (no per-token API billing).
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Joshua chose Haiku to save subscription quota (no Opus).
-          claude_args: "--model haiku"
-          # simi-revision, simibot, and cursor[bot] (Auto-Review) may tag Claude;
-          # claude[bot] is never allowed.
-          allowed_bots: simi-revision,simibot,cursor

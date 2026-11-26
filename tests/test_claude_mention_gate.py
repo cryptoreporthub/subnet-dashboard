@@ -1,8 +1,7 @@
 """Regression test: which jobs of claude-mention.yml run for a given comment.
 
-A bot comment that merely quotes "@claude" must not start a write-capable run.
-Bots may start a run only with the "@claude handoff-review" phrase, and that
-run must not have contents: write.
+Bot comments must never start a run. Only human OWNER, MEMBER or COLLABORATOR
+comments that mention "@claude" start the write-capable claude-human job.
 """
 
 import json
@@ -173,7 +172,7 @@ def _writes_contents(perms):
 
 
 CASES = [
-    ("a_bot_handoff", _payload("cursor[bot]", "@claude handoff-review please check the diff"), "bot-readonly"),
+    ("a_bot_handoff", _payload("cursor[bot]", "@claude handoff-review please check the diff"), "none"),
     (
         "b_bot_quoted_mention",
         _payload("cursor[bot]", "Quoting the bot: > @claude handoff-review and also @claude review"),
@@ -195,28 +194,9 @@ def test_which_jobs_run(payload, expected):
     runs = _runs(payload)
     if expected == "none":
         assert runs == {}, f"jobs ran that must not: {sorted(runs)}"
-    elif expected == "bot-readonly":
-        assert set(runs) == {"claude-bot"}, f"jobs that ran: {sorted(runs)}"
-        assert not _writes_contents(runs["claude-bot"]), f"bot run has contents: write: {runs['claude-bot']}"
     else:
         assert set(runs) == {"claude-human"}, f"jobs that ran: {sorted(runs)}"
         assert _writes_contents(runs["claude-human"]), f"human run lacks contents: write: {runs['claude-human']}"
-
-
-def test_bot_job_requests_no_oidc_token():
-    wf = yaml.safe_load(WORKFLOW.read_text())
-    assert "id-token" not in wf["jobs"]["claude-bot"]["permissions"], (
-        "claude-bot passes github_token, so the action never requests an OIDC token; id-token is unused"
-    )
-
-
-def test_bot_job_uses_job_scoped_token():
-    wf = yaml.safe_load(WORKFLOW.read_text())
-    step = next(s for s in wf["jobs"]["claude-bot"]["steps"] if s.get("name") == "Run Claude")
-    assert step["with"].get("github_token") == "${{ github.token }}", (
-        "claude-bot must pass github_token: ${{ github.token }}. Without this input the action "
-        "mints a GitHub App token whose scope the job's permissions block does not bound."
-    )
 
 
 def test_workflow_denies_default_permissions():
@@ -225,21 +205,3 @@ def test_workflow_denies_default_permissions():
         "the workflow needs a top-level `permissions: {}`. Without it, any job that omits its own "
         "block gets the repo default token (write)."
     )
-
-
-def test_bot_job_permissions_are_exactly_these():
-    wf = yaml.safe_load(WORKFLOW.read_text())
-    assert wf["jobs"]["claude-bot"]["permissions"] == {
-        "contents": "read",
-        "pull-requests": "write",
-        "issues": "write",
-        "actions": "read",
-    }
-
-
-def test_bot_job_allowed_bots_is_exactly_the_reviewed_list():
-    wf = yaml.safe_load(WORKFLOW.read_text())
-    step = next(s for s in wf["jobs"]["claude-bot"]["steps"] if s.get("name") == "Run Claude")
-    allowed = step["with"]["allowed_bots"]
-    assert allowed == "simi-revision,simibot,cursor"
-    assert "claude" not in allowed.split(","), "claude must not be an allowed bot"
