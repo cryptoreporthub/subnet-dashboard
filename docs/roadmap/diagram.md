@@ -1,10 +1,10 @@
 ## Bug roadmap diagrams
 
-Hand-maintained since 2026-11-26. The generator build_diagram.py is not in the repo. Counts are typed. The 45 blocker and 18 decision edges were re-counted by hand on 2026-11-26. Edge counts, unresolved references, orphan rows and the critical path check are in `diagram_counts.txt`.
+Hand-maintained since 2026-11-26. The generator build_diagram.py is not in the repo. Counts are typed. The 45 blocker and 18 decision edges were re-counted by hand on 2026-11-26. The file `diagram_counts.txt` is not in the repo, so edge counts, unresolved references, orphan rows and the critical path check have no checked-in source and are hand-maintained.
 
 ### Gating view (21 nodes)
 
-Read top to bottom. Dashed arrows are owner decisions that gate a row (10 drawn). Solid arrows are one row blocking another (13 drawn, thick ones included). The red outline marks every node on the critical path from section 7.3, in the order that section gives: PATHFILTER, D3, STACKVERIFY, SKIPROW, NB1, R0GATE, then lanes R0 to R9. Thick arrows are only the path steps that have a direct blocker edge in the row data (3 of 6). The other path steps are 1 drawn as a dashed decision edge and 2 with no arrow, which section 7.3 orders alone. diagram_counts.txt lists them. Rows with no gate are left out here and appear in the full graph.
+Read top to bottom. Dashed arrows are owner decisions that gate a row (10 drawn). Solid arrows are one row blocking another (13 drawn, thick ones included). The red outline marks every node on the critical path from section 7.3, in the order that section gives: PATHFILTER, D3, STACKVERIFY, SKIPROW, NB1, R0GATE, then lanes R0 to R9. Thick arrows are only the path steps that have a direct blocker edge in the row data (3 of 6). The other path steps are 1 drawn as a dashed decision edge and 2 with no arrow, which section 7.3 orders alone. No file in the repo lists them; they are hand-maintained. Rows with no gate are left out here and appear in the full graph.
 
 ```mermaid
 flowchart TB
