@@ -359,7 +359,10 @@ function failSafeRedactEnd(
   if (!quotedLike) {
     while (end > valueStart && end <= input.length && input[end - 1] === "\\") {
       const at = skipLineBreak(input, end);
-      end = Math.max(end, assignmentLineEnd(input, at));
+      const next = assignmentLineEnd(input, at);
+      // No progress means a trailing backslash at end of input: stop instead of looping forever.
+      if (next <= end) break;
+      end = next;
     }
     return end;
   }

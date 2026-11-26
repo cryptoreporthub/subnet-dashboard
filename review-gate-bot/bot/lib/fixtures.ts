@@ -99,6 +99,9 @@ function parseDiffFixture(name: string, value: unknown): Diff {
       }
       diffFile.previousPath = entry.previousPath;
     }
+    if (entry.patch === undefined && entry.patchOmitted === undefined) {
+      throw new FixtureMalformedError(name, `files[${index}] needs a patch or a patchOmitted reason`);
+    }
     if (entry.patch !== undefined) {
       if (typeof entry.patch !== "string") {
         throw new FixtureMalformedError(name, `files[${index}].patch must be a string`);
