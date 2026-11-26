@@ -215,3 +215,11 @@ def test_bot_job_uses_job_scoped_token():
         "claude-bot must pass github_token: ${{ github.token }}. Without this input the action "
         "mints a GitHub App token whose scope the job's permissions block does not bound."
     )
+
+
+def test_workflow_denies_default_permissions():
+    wf = yaml.safe_load(WORKFLOW.read_text())
+    assert wf.get("permissions") == {}, (
+        "the workflow needs a top-level `permissions: {}`. Without it, any job that omits its own "
+        "block gets the repo default token (write)."
+    )

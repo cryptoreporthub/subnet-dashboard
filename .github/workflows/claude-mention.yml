@@ -3,7 +3,8 @@ name: Claude mention
 # Humans (owner, member or collaborator) trigger Claude with "@claude" in a
 # PR or issue comment. Bots (cursor[bot], simi-revision[bot], simibot[bot])
 # trigger it only when the comment starts with "@claude handoff-review", so a
-# quoted "@claude" never starts a run. Bot-triggered runs are read-only.
+# quoted "@claude" never starts a run. Bot-triggered runs cannot write
+# repository contents; they may post PR and issue comments.
 # The GitHub App reacts to the mention, but this workflow does the
 # work. Requires the repo secret ANTHROPIC_API_KEY.
 
