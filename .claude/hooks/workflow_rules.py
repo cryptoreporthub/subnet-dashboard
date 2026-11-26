@@ -150,14 +150,15 @@ TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUI
 def _starts_turn(entry: dict) -> bool:
     """A user entry that opens a turn: a message the person typed.
 
-    System-written entries (isMeta: relayed messages, reminders) never start a
-    turn, so none of them can hide the work done before it. A relayed message
+    System-written entries (isMeta: relayed messages, reminders; and the
+    isCompactSummary entry written after a compaction) never start a turn,
+    so none of them can hide the work done before it. A relayed message
     therefore extends the previous turn, which can only add a block, never
     remove one. The Stop hook's own block reason needs no rule here: once a
     Stop chain starts, on_stop reuses the window it stored and never looks for
     a turn start again.
     """
-    if entry.get("type") != "user" or entry.get("isMeta"):
+    if entry.get("type") != "user" or entry.get("isMeta") or entry.get("isCompactSummary"):
         return False
     if any(entry.get(key) is not None for key in TOOL_DERIVED_KEYS):
         return False
@@ -204,6 +205,16 @@ def _is_advisor(block: dict) -> bool:
     )
 
 
+def _advisor_errored(block: dict) -> bool:
+    """A built-in advisor result whose content is the API's error object."""
+    content = block.get("content")
+    return (
+        block.get("type") == "advisor_tool_result"
+        and isinstance(content, dict)
+        and content.get("type") == "advisor_tool_result_error"
+    )
+
+
 def _is_work(block: dict) -> bool:
     return (
         block.get("type") == "tool_use"
@@ -228,15 +239,22 @@ def turn_summary(turn: list[dict]) -> tuple[bool, bool]:
     failed = {
         b.get("tool_use_id")
         for entry in turn
-        if entry.get("type") == "user"
         for b in _blocks(entry)
-        if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error")
+        if isinstance(b, dict)
+        and (
+            (b.get("type") == "tool_result" and b.get("is_error"))
+            or _advisor_errored(b)
+        )
     }
+
+    def reviewed(b: dict) -> bool:
+        return _is_advisor(b) and not _advisor_errored(b) and b.get("id") not in failed
+
     worked = consulted = False
     for blocks in _messages(turn):
         if any(_is_work(b) for b in blocks):
             worked, consulted = True, False
-        elif any(_is_advisor(b) and b.get("id") not in failed for b in blocks):
+        elif any(reviewed(b) for b in blocks):
             consulted = True
     return worked, consulted
 

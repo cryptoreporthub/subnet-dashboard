@@ -186,6 +186,41 @@ def test_stop_allows_advisor_after_another_tool_failed(tmp_path):
     assert run_hook("stop", {"transcript_path": path}) is None
 
 
+def test_stop_blocks_when_the_builtin_advisor_errored(tmp_path):
+    call = {"type": "server_tool_use", "id": "srvtoolu_1", "name": "advisor", "input": {}}
+    result = {"type": "advisor_tool_result", "tool_use_id": "srvtoolu_1",
+              "content": {"type": "advisor_tool_result_error", "error_code": "overloaded"}}
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Edit", file_path="a.py")),
+            tool_result(),
+            assistant(call, result),
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+def test_compaction_summary_does_not_hide_earlier_work(tmp_path):
+    summary = {"type": "user", "isCompactSummary": True, "isVisibleInTranscriptOnly": True,
+               "uuid": uuid.uuid4().hex,
+               "message": {"content": "This session is being continued from an earlier one"}}
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Edit", file_path="a.py")),
+            tool_result(),
+            summary,
+            assistant({"type": "text", "text": "done"}),
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
 def test_stop_allows_after_advisor_tool(tmp_path):
     path = write_transcript(
         tmp_path,
