@@ -100,6 +100,17 @@ install_ditto_cli() {
     log "Ditto CLI lockfile missing; continuing without it"
     return 0
   fi
+  # A session killed mid-swap can leave the old install under $ditto_dir.old.PID
+  # with nothing at $ditto_dir: put it back, and clear any other leftover.
+  local stale
+  for stale in "$ditto_dir".old.*; do
+    [ -d "$stale" ] || continue
+    if [ ! -e "$ditto_dir" ]; then
+      mv -T "$stale" "$ditto_dir" && log "restored the Ditto CLI from an interrupted install"
+    else
+      rm -rf "$stale"
+    fi
+  done
   want="$(sha256sum "$lock" | cut -d' ' -f1)"
   if [ "$(cat "$ditto_dir/.lock-sha" 2>/dev/null)" = "$want" ] \
     && [ -x "$ditto_dir/node_modules/.bin/heyditto" ] \

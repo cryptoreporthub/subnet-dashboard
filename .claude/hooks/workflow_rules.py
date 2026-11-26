@@ -6,9 +6,6 @@ One script, three modes, picked by the first argument:
   prompt    UserPromptSubmit: restate the workflow rules every turn.
   subagent  PreToolUse on Agent/Task: deny a subagent that would not run on
             Sonnet (the Opus advisor is the one exception).
-  bash      PreToolUse on Bash: inside the Opus advisor, allow only read-only
-            git commands, since the advisor reads untrusted text (the
-            worker's summary, the diff, PR text).
   stop      Stop: block the end of a turn whose last tool work came after
             the last advisor call. Re-checks after each block (so work done on
             the advisor's FIX FIRST is reviewed too), up to MAX_STOP_BLOCKS
@@ -26,7 +23,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shlex
 import stat
 import sys
 import tempfile
@@ -53,8 +49,10 @@ MAX_STOP_BLOCKS = 3
 
 STOP_REASON = (
     "Before you finish, consult the Opus advisor on this turn's work since its "
-    f"last check: start the `{ADVISOR_AGENT}` agent with the task, what you did "
-    "and your evidence (or call the built-in `advisor` tool if it is on). Then "
+    f"last check: start the `{ADVISOR_AGENT}` agent with the task, what you did, "
+    "your evidence and the diff (it has no Bash, so paste it, or save it to a "
+    "scratch file first and give the path in the next message), or call the "
+    "built-in `advisor` tool if it is on. Then "
     "act on what it says and end the turn. If you change anything after it "
     "answers, it checks again."
 )
@@ -76,7 +74,8 @@ RULES = (
     f"`{WORKER_AGENT}` agent (or another agent with model sonnet). Other "
     "subagents are denied.\n"
     f"3. Before you end a turn that did work, consult the Opus advisor: the "
-    f"`{ADVISOR_AGENT}` agent, or the built-in `advisor` tool if it is on.\n"
+    f"`{ADVISOR_AGENT}` agent (give it the diff; it has no Bash), or the "
+    "built-in `advisor` tool if it is on.\n"
     "4. Gemini step (the user relays to Gemini; you can't reach it). Gemini items "
     f"(medium-to-high impact only) are {GEMINI_ITEMS}. Never for routine work "
     "(small fixes, routine review, CI or config tweaks). On one, tell the user "
@@ -155,78 +154,6 @@ def on_subagent(event: dict) -> None:
     )
 
 
-# What the advisor's Bash may run: read-only git, nothing that runs repo code.
-# Everything else is denied, so an instruction injected into the text it
-# reviews can't push, post, merge or write files. Test runs go to the worker
-# (the advisor asks under Fix first): a test file is code the diff can add,
-# and injected text could pick which one to run.
-# The gate keys on the `agent_type` that Claude Code puts on hook events from
-# inside a subagent, next to `agent_id` (all but its remote-served path). A
-# subagent's Bash with `agent_id` but no `agent_type` can't be told apart, so
-# it is denied too. The main session's events carry neither and pass. If the
-# hook itself errors it fails open, like every hook here.
-ADVISOR_GIT = {"diff", "log", "show", "status", "ls-files", "rev-parse", "blame"}
-ADVISOR_GIT_DENIED = ("--output", "--ext-diff", "--textconv", "--open-files-in-pager", "-O")
-# Includes brace, glob and tilde expansion, which bash applies before the
-# command runs and which could produce words this check never saw.
-ADVISOR_SHELL_CHARS = set(";&|<>`$()\\\n\r{}*?[]~")
-
-
-def advisor_bash_verdict(command: str) -> str | None:
-    """Return a deny reason, or None when the advisor may run the command."""
-    reason = (
-        "Denied: the advisor's Bash runs only `git "
-        + "|".join(sorted(ADVISOR_GIT))
-        + "`, one command with no pipes, redirects or `;`. "
-        "Ask the worker under Fix first to run tests or anything else."
-    )
-    if any(c in ADVISOR_SHELL_CHARS for c in command):
-        return reason
-    try:
-        words = shlex.split(command)
-    except ValueError:
-        return reason
-    if len(words) >= 2 and words[0] == "git" and words[1] in ADVISOR_GIT:
-        return reason if any(_git_arg_denied(w) for w in words[2:]) else None
-    return reason
-
-
-def _git_arg_denied(word: str) -> bool:
-    """A denied git option, also as an abbreviation of its long name."""
-    if word.startswith(ADVISOR_GIT_DENIED):
-        return True
-    name = word.split("=", 1)[0]
-    return len(name) > 2 and name.startswith("--") and any(
-        opt.startswith(name) for opt in ADVISOR_GIT_DENIED if opt.startswith("--")
-    )
-
-
-def on_bash(event: dict) -> None:
-    if event.get("tool_name") != "Bash":
-        return
-    if event.get("agent_id") and not event.get("agent_type"):
-        reason = (
-            "Denied: this subagent's type is unknown, so its Bash can't be "
-            "checked. Run it from the main session or a named subagent."
-        )
-    elif event.get("agent_type") != ADVISOR_AGENT:
-        return
-    else:
-        command = (event.get("tool_input") or {}).get("command")
-        reason = advisor_bash_verdict(command if isinstance(command, str) else "")
-    if reason is None:
-        return
-    _emit(
-        {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": reason,
-            }
-        }
-    )
-
-
 def _blocks(entry: dict) -> list:
     content = (entry.get("message") or {}).get("content")
     return content if isinstance(content, list) else []
@@ -291,7 +218,7 @@ def _messages(turn: list[dict]) -> list[list[dict]]:
     Claude Code writes one entry per content block, so parallel tool calls
     from one message share a message id across several entries. A subagent's
     own entries (isSidechain) are skipped: its work already counts through the
-    parent's Agent call, and the advisor's own git reads must not undo its review.
+    parent's Agent call, and a subagent's own steps must not undo the review that called it.
     """
     groups: dict = {}
     for n, entry in enumerate(turn):
@@ -479,7 +406,7 @@ def on_stop(event: dict) -> None:
     )
 
 
-MODES = {"prompt": on_prompt, "subagent": on_subagent, "bash": on_bash, "stop": on_stop}
+MODES = {"prompt": on_prompt, "subagent": on_subagent, "stop": on_stop}
 
 
 def main() -> int:

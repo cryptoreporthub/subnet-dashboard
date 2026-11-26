@@ -268,100 +268,13 @@ def test_subagent_prompt_does_not_hide_earlier_work(tmp_path):
     assert out["decision"] == "block"
 
 
-def advisor_bash(command, agent_type="opus-advisor"):
-    event = {"tool_name": "Bash", "tool_input": {"command": command}}
-    if agent_type:
-        event["agent_type"] = agent_type
-    return run_hook("bash", event)
-
-
-@pytest.mark.parametrize(
-    "command",
-    [
-        "git diff origin/main...HEAD",
-        "git log --oneline -5",
-        "git diff --stat --name-only",
-        "git show HEAD:.claude/settings.json",
-    ],
-)
-def test_advisor_may_read_git(command):
-    assert not denied(advisor_bash(command))
-
-
-@pytest.mark.parametrize(
-    "command",
-    [
-        "git push origin HEAD",
-        "gh pr merge 1621",
-        "git diff; git push",
-        "git diff && gh pr comment 1 -b x",
-        "git log | sh",
-        "git diff > /tmp/x",
-        "git log --output=/tmp/x",
-        "git log --outp=/tmp/x",
-        "git diff --ext-dif",
-        "git diff --ext-diff",
-        "git -c core.pager=sh log",
-        "git status $(touch x)",
-        "python -c 'print(1)'",
-        "python -m pytest -q tests/test_x.py",
-        "pytest -q tests/test_added_by_the_diff.py",
-        "LD_PRELOAD=x.so pytest",
-        "git diff {--output=/tmp/x,--stat}",
-        "pytest {--basetemp=/x,-q}",
-        "git log -- *",
-        "pytest --basetemp=/home/user/subnet-dashboard",
-        "pytest --junitxml=out.xml",
-        "pytest --pastebin=all",
-        "pytest -c other.ini",
-        "pytest -o addopts=-pevil",
-        "pytest /tmp/any.py",
-        "pytest ../outside/test_x.py",
-        "GITHUB_ACTIONS=true git diff",
-        "git diff 'unclosed",
-        "",
-    ],
-)
-def test_advisor_cannot_write_push_or_post(command):
-    assert denied(advisor_bash(command))
-
-
-def cli_pre_tool_use(command, agent_type):
-    """A PreToolUse event in the shape Claude Code 2.1.332 builds: its base hook
-    input (session, transcript, cwd, permission mode, agent id and type) plus
-    the PreToolUse fields. Copied from the CLI's code; a live session confirms it."""
-    return {
-        "session_id": "s1",
-        "transcript_path": "/tmp/t.jsonl",
-        "cwd": "/home/user/subnet-dashboard",
-        "permission_mode": "default",
-        "agent_id": "a1b2c3",
-        "agent_type": agent_type,
-        "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {"command": command, "description": "x"},
-        "tool_use_id": "toolu_1",
-    }
-
-
-def test_advisor_gate_on_the_real_payload_shape():
-    assert denied(run_hook("bash", cli_pre_tool_use("git push origin HEAD", "opus-advisor")))
-    assert not denied(run_hook("bash", cli_pre_tool_use("git diff --stat", "opus-advisor")))
-    assert run_hook("bash", cli_pre_tool_use("git push origin HEAD", "pstack-worker")) is None
-
-
-def test_subagent_bash_without_a_type_is_denied():
-    # A subagent event with no agent_type could be the advisor, so it isn't trusted.
-    event = cli_pre_tool_use("git push origin HEAD", None)
-    del event["agent_type"]
-    assert denied(run_hook("bash", event))
-    del event["agent_id"]
-    assert run_hook("bash", event) is None  # the main session's own Bash
-
-
-def test_bash_outside_the_advisor_is_untouched():
-    assert advisor_bash("git push origin HEAD", agent_type=None) is None
-    assert advisor_bash("git push origin HEAD", agent_type="pstack-worker") is None
+def test_advisor_has_no_bash_or_write_tools():
+    # The advisor reads untrusted text (the diff, the worker's summary, PR text),
+    # so it gets read-only tools only: nothing it reads can make it run anything.
+    agent = (SCRIPT.parents[1] / "agents" / "opus-advisor.md").read_text(encoding="utf-8")
+    tools_line = next(l for l in agent.splitlines() if l.startswith("tools:"))
+    tools = {t.strip() for t in tools_line.split(":", 1)[1].split(",")}
+    assert tools == {"Read", "Grep", "Glob"}
 
 
 def test_background_notification_does_not_hide_earlier_work(tmp_path):
@@ -397,7 +310,7 @@ def test_message_typed_by_a_person_starts_a_new_turn(tmp_path):
     assert (out or {}).get("decision", "allow") == "allow"
 
 
-def test_advisor_rerunning_tests_still_counts_as_consulted(tmp_path):
+def test_subagents_own_steps_do_not_undo_the_advisor_call(tmp_path):
     path = write_transcript(
         tmp_path,
         [

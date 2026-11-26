@@ -245,6 +245,30 @@ def test_failed_ditto_swap_keeps_the_previous_one(env):
     assert marker.read_text() != before  # retried on the next session
 
 
+def test_interrupted_ditto_swap_is_recovered_next_session(env):
+    sha = publish_bundle(env["work"], {"poteto-mode": "v1"})
+    script = pinned_script(env["tmp"], sha)
+    run(env["env"], script)
+    share = env["home"] / ".local" / "share"
+    heyditto = env["home"] / ".local" / "bin" / "heyditto"
+    # A session killed right after moving the old install aside.
+    (share / "session-ditto-cli").rename(share / "session-ditto-cli.old.4242")
+    assert not os.access(heyditto, os.X_OK)
+    lock = env["repo"] / ".claude" / "hooks" / "ditto" / "package-lock.json"
+    lock.write_text(lock.read_text() + "\n")
+    env["npm_fail"].touch()  # and the next install fails too
+    run(env["env"], script)
+    assert os.access(heyditto, os.X_OK)
+    assert not list(share.glob("session-ditto-cli.old.*"))
+    # Killed after the swap but before the old copy was removed: an up-to-date
+    # session still clears it.
+    (share / "session-ditto-cli.old.4343").mkdir()
+    env["npm_fail"].unlink()
+    run(env["env"], script)
+    run(env["env"], script)
+    assert not list(share.glob("session-ditto-cli.old.*"))
+
+
 def test_ditto_lockfile_pins_every_package():
     manifest = json.loads((DITTO / "package.json").read_text())
     lock = json.loads((DITTO / "package-lock.json").read_text())
