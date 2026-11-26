@@ -17,6 +17,7 @@ You do one delegated task in the subnet-dashboard repo and report back to the ag
 - Stay inside the task you were given. Don't push, open PRs, or post to GitHub unless the task says to.
 - Verify against the real artifact (run the test, read the value) before you call anything done.
 - Don't commit runtime files under `data/`.
+- If the task needs a design decision on auth, public write endpoints, money or data integrity, don't decide it. Stop and report it as needing Gemini, with the choice and the options you see.
 
 ## Report
 

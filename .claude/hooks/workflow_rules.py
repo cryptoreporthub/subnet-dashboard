@@ -63,7 +63,20 @@ RULES = (
     f"`{WORKER_AGENT}` agent (or another agent with model sonnet). Other "
     "subagents are denied.\n"
     f"3. Before you end a turn that did work, consult the Opus advisor: the "
-    f"`{ADVISOR_AGENT}` agent, or the built-in `advisor` tool if it is on."
+    f"`{ADVISOR_AGENT}` agent, or the built-in `advisor` tool if it is on.\n"
+    "4. Gemini step. The user relays to Gemini; you can't reach it. Use it only "
+    "for medium-to-high impact items. These are: design decisions, important "
+    "bug-fix designs, anything touching auth, public write endpoints, money or "
+    "data integrity, and adversarial testing of a finished feature. Low-impact "
+    "and routine work (small fixes, routine review, CI or config tweaks) never "
+    "triggers it. When one comes up, tell the user \"Time for Gemini\", with one "
+    "line on why and a ready-to-paste Gemini prompt: the context, the exact "
+    "question or the thing to attack, and what a good answer looks like. For a "
+    "design, don't code it or hand it to a worker until the user replies; other "
+    "work can go on. For adversarial testing, ask before the PR is marked ready "
+    "for review. If the user skips Gemini for an item, or Gemini already "
+    "reviewed it, don't raise it again. When you consult the advisor, give the "
+    "Gemini status of any such item."
 )
 
 

@@ -47,6 +47,32 @@ def test_prompt_mode_restates_rules():
     assert "opus-advisor" in context
 
 
+def test_prompt_mode_says_when_to_bring_in_gemini():
+    """Every prompt carries the Gemini step: what it's for, and to stop and hand over a prompt."""
+    context = run_hook("prompt", {"prompt": "hi"})["hookSpecificOutput"]["additionalContext"]
+    assert "Time for Gemini" in context
+    for trigger in ("design decisions", "auth", "public write endpoints", "data integrity", "adversarial"):
+        assert trigger in context
+    assert "ready-to-paste Gemini prompt" in context
+    assert "medium-to-high impact" in context
+    assert "never triggers it" in context
+    assert "hand it to a worker" in context
+    assert "don't raise it again" in context
+
+
+def test_advisor_checks_for_a_missed_gemini_step():
+    advisor_md = (SCRIPT.parent.parent / "agents" / "opus-advisor.md").read_text()
+    assert "Does anything here need Gemini?" in advisor_md
+    assert "Time for Gemini" in advisor_md
+    assert "medium-to-high impact" in advisor_md
+    assert "chose to skip it" in advisor_md
+
+
+def test_worker_reports_gemini_designs_instead_of_deciding():
+    worker_md = (SCRIPT.parent.parent / "agents" / "pstack-worker.md").read_text()
+    assert "report it as needing Gemini" in worker_md
+
+
 def test_sonnet_subagents_are_allowed():
     assert run_hook("subagent", agent_call(subagent_type="pstack-worker")) is None
     assert run_hook("subagent", agent_call(subagent_type="architect")) is None
