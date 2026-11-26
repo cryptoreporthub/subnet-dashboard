@@ -37,6 +37,19 @@ log() { echo "[session-start] $*" >&2; }
 # True when $1 is a skill dir this hook installed (a real dir with its marker).
 owned() { [ ! -L "$1" ] && [ -f "$1/$owner_mark" ]; }
 
+# Rename $1 to the free name $2 in one step that never replaces anything at
+# $2, not even an empty dir a platform sync has only just made (GNU mv -n is
+# renameat2 RENAME_NOREPLACE). An mv that skips without failing still leaves
+# $1, which counts as a failure. Errors other than mv's "not replacing" note
+# are logged. mv runs in this shell (no $(...)), so a kill stops it too.
+place() {
+  local err="$stage_dir/place.err"
+  mv -n -T "$1" "$2" 2>"$err"
+  grep -v "not replacing" "$err" >&2
+  rm -f "$err"
+  [ ! -e "$1" ] && [ ! -L "$1" ]
+}
+
 # Move $1, a platform copy of skill $2, to ~/.claude/.pstack-orphans under a
 # fresh name, so an earlier orphan never blocks the move.
 orphan() {
@@ -55,7 +68,7 @@ set_aside() {
     return 1
   fi
   if ! owned "$stage_dir/old/$name"; then
-    if mv -T "$stage_dir/old/$name" "$skills_dir/$name"; then
+    if place "$stage_dir/old/$name" "$skills_dir/$name"; then
       log "kept a platform copy of skill $name that appeared during the install"
     elif orphan "$stage_dir/old/$name" "$name"; then
       # Something else took the name meanwhile: keep the copy out of the stage.
@@ -80,7 +93,7 @@ recover_set_aside() {
       continue
     fi
     name="$(basename "$dir")"
-    if [ ! -e "$skills_dir/$name" ] && [ ! -L "$skills_dir/$name" ] && mv -T "$dir" "$skills_dir/$name"; then
+    if place "$dir" "$skills_dir/$name"; then
       log "put back a platform copy of skill $name left by an interrupted install"
     elif orphan "$dir" "$name"; then
       log "moved a platform copy of skill $name to ~/.claude/.pstack-orphans; check it"
@@ -134,10 +147,11 @@ install_pstack_skills() {
   # removed. Every change at a skill's name is one rename on the same
   # filesystem: a new copy is staged with its marker and renamed in, and an
   # old one is renamed aside before it is deleted, so a crash never leaves a
-  # half-deleted, unmarked dir at the name. rename never replaces a non-empty
-  # dir, so a platform copy that lands at a free name mid-install wins.
-  # ponytail: ceiling: a platform sync that has only made an empty dir when
-  # the rename runs is replaced; its later writes land in our dir.
+  # half-deleted, unmarked dir at the name. Nothing is ever renamed onto a
+  # name that is taken, even by an empty dir (place), so a platform copy that
+  # lands at a free name mid-install wins.
+  # ponytail: ceiling: on a filesystem without RENAME_NOREPLACE, mv -n checks
+  # then renames, which leaves a race of a few microseconds.
   # A stage left by a killed session is never ours to finish: start clean.
   rm -rf "${stage_dir:?}" && mkdir -p "$skills_dir" "$stage_dir/new" "$stage_dir/old" "$stage_dir/trash" || {
     log "could not prepare $stage_dir; pstack skills not installed"
@@ -173,14 +187,14 @@ install_pstack_skills() {
       [ -e "$dest" ] || failed=1
       continue
     fi
-    if ! mv -T "$stage_dir/new/$name" "$dest"; then
+    if ! place "$stage_dir/new/$name" "$dest"; then
       rm -rf "${stage_dir:?}/new/$name"
-      if [ -e "$dest" ]; then
+      if [ -e "$dest" ] || [ -L "$dest" ]; then
         log "kept a platform copy of skill $name that appeared during the install"
       else
         log "could not install skill $name"
         # Put the old copy back, so the skill keeps working until the retry.
-        [ -d "$stage_dir/old/$name" ] && mv -T "$stage_dir/old/$name" "$dest"
+        [ -d "$stage_dir/old/$name" ] && place "$stage_dir/old/$name" "$dest"
         failed=1
       fi
     fi

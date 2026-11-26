@@ -461,6 +461,34 @@ def test_platform_copy_synced_mid_install_is_kept(env, when):
     assert skill(env["home"], "a-first") is None
 
 
+@pytest.mark.parametrize("owned_before", [False, True])
+def test_empty_platform_dir_made_just_before_placing_is_never_taken(env, owned_before):
+    # The platform sync has only made an empty dir at a skill's name when the
+    # hook moves its copy there (Replit's sequence). A plain rename would
+    # replace the empty dir and mark it as the hook's, so the platform's later
+    # files would be deleted with it once a bundle drops the skill. The hook
+    # must leave the dir alone, whether the name was free or held the hook's
+    # older copy.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", **({"z-platform": "v1"} if owned_before else {})})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    platform = env["home"] / ".claude" / "skills" / "z-platform"
+    shim = env["tmp"] / "empty-dir.sh"
+    shim.write_text(
+        'mv() {\n'
+        '  case "${@: -2:1}" in */.pstack-stage/new/z-platform) [ -e %(p)s ] || command mkdir %(p)s ;; esac\n'
+        '  command mv "$@"\n'
+        '}\n' % {"p": platform}
+    )
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "z-platform": "v2"})
+    run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
+    assert platform.is_dir() and not (platform / ".pstack-bundle-skill").exists()
+    (platform / "SKILL.md").write_text("platform copy")  # the sync finishes
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "z-platform") == "platform copy"
+    assert skill(env["home"], "poteto-mode") == "v3"
+
+
 # Counts every file command the hook runs. At call SWEEP_INJECT it plays the
 # platform syncing skill "late" (if the name is free) and at call SWEEP_KILL
 # it kills the hook. Matching on call order, not on paths, keeps the sweep
