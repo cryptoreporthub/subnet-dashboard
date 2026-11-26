@@ -98,6 +98,7 @@ def test_allowed_tools_is_the_pinned_allowlist():
     assert {entry for entry in entries if entry.startswith("Bash")} == {
         "Bash(gh pr comment:*)",
         "Bash(gh pr diff:*)",
+        "Bash(gh pr view:*)",
     }
 
 
