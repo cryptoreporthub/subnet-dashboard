@@ -96,10 +96,6 @@ install_pstack_skills() {
 
 install_ditto_cli() {
   local lock="$ditto_src/package-lock.json" want tmp
-  if [ ! -f "$lock" ] || [ ! -f "$ditto_src/package.json" ]; then
-    log "Ditto CLI lockfile missing; continuing without it"
-    return 0
-  fi
   # Two sessions sharing one HOME must not restore and swap at the same time.
   # The lock is held until this script exits.
   mkdir -p "$(dirname "$ditto_dir")"
@@ -117,6 +113,10 @@ install_ditto_cli() {
       rm -rf "$stale"
     fi
   done
+  if [ ! -f "$lock" ] || [ ! -f "$ditto_src/package.json" ]; then
+    log "Ditto CLI lockfile missing; continuing without it"
+    return 0
+  fi
   want="$(sha256sum "$lock" | cut -d' ' -f1)"
   if [ "$(cat "$ditto_dir/.lock-sha" 2>/dev/null)" = "$want" ] \
     && [ -x "$ditto_dir/node_modules/.bin/heyditto" ] \

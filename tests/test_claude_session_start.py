@@ -269,6 +269,17 @@ def test_interrupted_ditto_swap_is_recovered_next_session(env):
     assert not list(share.glob("session-ditto-cli.old.*"))
 
 
+def test_interrupted_swap_is_recovered_even_without_a_lockfile(env):
+    script = pinned_script(env["tmp"], publish_bundle(env["work"], {"poteto-mode": "v1"}))
+    run(env["env"], script)
+    share = env["home"] / ".local" / "share"
+    (share / "session-ditto-cli").rename(share / "session-ditto-cli.old.4242")
+    (env["repo"] / ".claude" / "hooks" / "ditto" / "package-lock.json").unlink()
+    run(env["env"], script)
+    assert os.access(env["home"] / ".local" / "bin" / "heyditto", os.X_OK)
+    assert not list(share.glob("session-ditto-cli.old.*"))
+
+
 def test_ditto_lockfile_pins_every_package():
     manifest = json.loads((DITTO / "package.json").read_text())
     lock = json.loads((DITTO / "package-lock.json").read_text())
