@@ -1,5 +1,6 @@
 """Behavior tests for .claude/hooks/session-start.sh against a throwaway git origin."""
 
+import json
 import os
 import re
 import shutil
@@ -9,6 +10,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "session-start.sh"
+DITTO = SCRIPT.parent / "ditto"
 
 pytestmark = pytest.mark.skipif(
     not (shutil.which("bash") and shutil.which("git") and shutil.which("tar")),
@@ -55,11 +57,17 @@ def env(tmp_path):
     (home / ".claude" / "skills" / "kept" / "SKILL.md").write_text("platform copy")
     stub_bin = tmp_path / "bin"
     stub_bin.mkdir()
+    shutil.copytree(DITTO, repo / ".claude" / "hooks" / "ditto")
     npm_log = tmp_path / "npm.log"
-    npm_installed = tmp_path / "npm-installed"
+    npm_fail = tmp_path / "npm-fail"
+    # npm ci stub: logs its arguments and lays down the heyditto bin, or fails
+    # while npm-fail exists.
     (stub_bin / "npm").write_text(
         f'#!/bin/bash\necho "$*" >> {npm_log}\n'
-        f'[ "$1" = ls ] && {{ [ -e {npm_installed} ] && exit 0 || exit 1; }}\nexit 0\n'
+        f'[ -e {npm_fail} ] && exit 1\n'
+        '[ "$1" = ci ] && mkdir -p node_modules/.bin '
+        '&& printf "#!/bin/sh\\n" > node_modules/.bin/heyditto '
+        '&& chmod +x node_modules/.bin/heyditto\nexit 0\n'
     )
     (stub_bin / "npm").chmod(0o755)
     run_env = {
@@ -74,7 +82,8 @@ def env(tmp_path):
         "home": home,
         "env": run_env,
         "npm_log": npm_log,
-        "npm_installed": npm_installed,
+        "npm_fail": npm_fail,
+        "repo": repo,
         "tmp": tmp_path,
     }
 
@@ -117,9 +126,10 @@ def test_installs_bundle_and_turns_on_poteto_mode(env):
     assert skill(home, "tdd") == "v1"
     assert skill(home, "kept") == "platform copy"
     assert skill(home, "synced") is None
-    install = [l for l in env["npm_log"].read_text().splitlines() if l.startswith("install")]
-    assert install and "@heyditto/cli@" in install[0]
-    assert "--ignore-scripts" in install[0].split()  # no dependency lifecycle scripts
+    installs = env["npm_log"].read_text().splitlines()
+    assert len(installs) == 1 and installs[0].split()[0] == "ci"  # lockfile only
+    assert "--ignore-scripts" in installs[0].split()  # no lifecycle scripts
+    assert os.access(home / ".local" / "bin" / "heyditto", os.X_OK)
 
 
 def test_installs_the_pinned_commit_not_the_branch_tip(env):
@@ -150,12 +160,54 @@ def test_drops_skills_a_new_bundle_no_longer_ships(env):
     assert skill(env["home"], "kept") == "platform copy"
 
 
-def test_skips_ditto_install_when_the_pinned_version_is_present(env):
+def ditto_installs(env):
+    log = env["npm_log"]
+    return [l for l in log.read_text().splitlines() if l.startswith("ci")] if log.exists() else []
+
+
+def test_skips_ditto_install_while_the_lockfile_is_unchanged(env):
     sha = publish_bundle(env["work"], {"poteto-mode": "v1"})
-    env["npm_installed"].touch()
-    run(env["env"], pinned_script(env["tmp"], sha))
-    log = env["npm_log"].read_text()
-    assert "ls -g" in log and "install" not in log
+    script = pinned_script(env["tmp"], sha)
+    run(env["env"], script)
+    run(env["env"], script)
+    assert len(ditto_installs(env)) == 1
+
+
+def test_reinstalls_ditto_when_the_lockfile_changes(env):
+    sha = publish_bundle(env["work"], {"poteto-mode": "v1"})
+    script = pinned_script(env["tmp"], sha)
+    run(env["env"], script)
+    lock = env["repo"] / ".claude" / "hooks" / "ditto" / "package-lock.json"
+    lock.write_text(lock.read_text() + "\n")
+    run(env["env"], script)
+    assert len(ditto_installs(env)) == 2
+
+
+def test_failed_ditto_install_keeps_the_previous_one(env):
+    sha = publish_bundle(env["work"], {"poteto-mode": "v1"})
+    script = pinned_script(env["tmp"], sha)
+    run(env["env"], script)
+    lock = env["repo"] / ".claude" / "hooks" / "ditto" / "package-lock.json"
+    lock.write_text(lock.read_text() + "\n")
+    env["npm_fail"].touch()
+    out = run(env["env"], script)
+    assert "Poteto mode is on" in out
+    assert os.access(env["home"] / ".local" / "bin" / "heyditto", os.X_OK)
+    env["npm_fail"].unlink()
+    run(env["env"], script)
+    assert len(ditto_installs(env)) == 3  # retried on the next session
+
+
+def test_ditto_lockfile_pins_every_package():
+    manifest = json.loads((DITTO / "package.json").read_text())
+    lock = json.loads((DITTO / "package-lock.json").read_text())
+    (version,) = manifest["dependencies"].values()
+    assert lock["packages"][""]["dependencies"] == manifest["dependencies"]
+    assert lock["packages"]["node_modules/@heyditto/cli"]["version"] == version
+    for path, pkg in lock["packages"].items():
+        if path:
+            assert pkg["resolved"].startswith("https://registry.npmjs.org/"), path
+            assert pkg["integrity"].startswith("sha512-"), path
 
 
 def test_failed_copy_retries_next_session(env):

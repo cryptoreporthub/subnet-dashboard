@@ -2,7 +2,8 @@
 # SessionStart hook: sets up a Claude Code cloud session for this repo's workflow.
 #  1. Installs the pstack skills from the pstack-skills-bundle branch into
 #     ~/.claude/skills, so the main agent and every subagent can load them.
-#  2. Installs the Ditto memory CLI (heyditto), pinned.
+#  2. Installs the Ditto memory CLI (heyditto) and every dependency from the
+#     lockfile in .claude/hooks/ditto.
 #  3. Turns on poteto mode for the session.
 # Each step is idempotent and skips work that is already done.
 set -uo pipefail
@@ -20,13 +21,12 @@ bundle_branch="pstack-skills-bundle"
 # Pinned bundle commit. Skills are instructions, so a new bundle only lands by
 # bumping this pin in a reviewed PR, never by moving the branch.
 bundle_sha="53f1161a6a549a5319d655943296ce875c12efda"
-# Pins the CLI itself only; its dependencies are caret ranges with no lockfile,
-# so they can drift per session. The package runs no install scripts.
-# ponytail: --ignore-scripts stops any dependency's lifecycle script from
-# running at install; the ceiling is that unlocked dependency code still runs
-# when heyditto runs. Upgrade path: vendor a package-lock.json and install
-# with npm ci into a fixed prefix.
-ditto_version="3.22.0"
+# The Ditto CLI and all its dependencies are pinned by .claude/hooks/ditto's
+# package-lock.json, which npm ci checks by integrity hash. To upgrade, change
+# the version in its package.json and regenerate the lockfile in a reviewed PR.
+ditto_src="$repo/.claude/hooks/ditto"
+ditto_dir="$HOME/.local/share/session-ditto-cli"
+ditto_bin="$HOME/.local/bin/heyditto"
 
 log() { echo "[session-start] $*" >&2; }
 
@@ -90,18 +90,40 @@ install_pstack_skills() {
 }
 
 install_ditto_cli() {
-  if npm ls -g --depth=0 "@heyditto/cli@$ditto_version" >/dev/null 2>&1; then
+  local lock="$ditto_src/package-lock.json" want tmp
+  if [ ! -f "$lock" ] || [ ! -f "$ditto_src/package.json" ]; then
+    log "Ditto CLI lockfile missing; continuing without it"
     return 0
   fi
-  if npm install -g --ignore-scripts --no-fund --no-audit "@heyditto/cli@$ditto_version" >&2; then
-    log "Ditto CLI $ditto_version installed (command: heyditto)"
+  want="$(sha256sum "$lock" | cut -d' ' -f1)"
+  if [ "$(cat "$ditto_dir/.lock-sha" 2>/dev/null)" = "$want" ] \
+    && [ -x "$ditto_dir/node_modules/.bin/heyditto" ] \
+    && [ "$(readlink "$ditto_bin" 2>/dev/null)" = "$ditto_dir/node_modules/.bin/heyditto" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$ditto_dir")" "$(dirname "$ditto_bin")" \
+    && tmp="$(mktemp -d "$ditto_dir.XXXXXX")" \
+    || { log "Ditto CLI install failed; continuing without it"; return 0; }
+  cp "$ditto_src/package.json" "$lock" "$tmp/"
+  # npm ci installs exactly what the lockfile lists, checks each package's
+  # integrity hash, and fails on any mismatch. No lifecycle scripts run.
+  if (cd "$tmp" && npm ci --ignore-scripts --no-fund --no-audit >&2) \
+    && echo "$want" > "$tmp/.lock-sha" \
+    && rm -rf "$ditto_dir" && mv "$tmp" "$ditto_dir" \
+    && ln -sfn "$ditto_dir/node_modules/.bin/heyditto" "$ditto_bin"; then
+    log "Ditto CLI installed from the lockfile (command: heyditto)"
   else
+    rm -rf "$tmp"
     log "Ditto CLI install failed; continuing without it"
   fi
 }
 
 install_pstack_skills
 install_ditto_cli
+# Put the locked heyditto ahead of any other copy for this session's commands.
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$CLAUDE_ENV_FILE"
+fi
 
 if [ -f "$skills_dir/poteto-mode/SKILL.md" ]; then
   echo "Poteto mode is on for this session. Before your first action, read $skills_dir/poteto-mode/SKILL.md in full and follow it."
