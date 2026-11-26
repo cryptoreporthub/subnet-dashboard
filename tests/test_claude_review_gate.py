@@ -36,6 +36,18 @@ def _allowed_tools(wf):
     return args[args.index("--allowedTools") + 1].split(",")
 
 
+def _disallowed_tools(wf):
+    args = shlex.split(_step(wf, "anthropics/claude-code-action")["with"]["claude_args"])
+    assert "--disallowedTools" in args
+    return args[args.index("--disallowedTools") + 1].split(",")
+
+
+def _named_step(wf, name):
+    steps = [s for s in wf["jobs"]["review"]["steps"] if s.get("name") == name]
+    assert len(steps) == 1, f"expected one step named {name!r}, found {len(steps)}"
+    return steps[0]
+
+
 def _ctx(action, draft=False, head_repo=REPO):
     return {
         "false": False,
@@ -91,15 +103,76 @@ def test_pull_request_target_is_not_used_anywhere():
 
 
 def test_allowed_tools_is_the_pinned_allowlist():
-    # The allowlist is the security contract. Read, Grep and Glob reach the runner
-    # filesystem, including /proc/self/environ, so every entry is pinned, not a deny list.
+    # The allowlist is the security contract, so every entry is pinned, not a deny list.
+    # Read, Grep and Glob run inside the CLI process, so each is scoped to the checkout
+    # with `./**`. Local probe on CLI 2.1.332 (the version the pinned action installs):
+    # unscoped, they read files outside the checkout, also through a symlink inside it;
+    # scoped, those reads are denied. The CLI itself also refuses /proc and /dev paths.
     entries = _allowed_tools(_load())
-    assert {entry.split("(", 1)[0] for entry in entries} == {"mcp__github_inline_comment__create_inline_comment", "Bash"}
+    assert {entry.split("(", 1)[0] for entry in entries} == {
+        "mcp__github_inline_comment__create_inline_comment",
+        "Bash",
+        "Read",
+        "Grep",
+        "Glob",
+    }
     assert {entry for entry in entries if entry.startswith("Bash")} == {
         "Bash(gh pr comment:*)",
         "Bash(gh pr diff:*)",
         "Bash(gh pr view:*)",
     }
+    assert {entry for entry in entries if entry.split("(", 1)[0] in {"Read", "Grep", "Glob"}} == {
+        "Read(./**)",
+        "Grep(./**)",
+        "Glob(./**)",
+    }
+
+
+def test_file_tools_are_never_unscoped():
+    # A bare `Read`, `Grep` or `Glob` would allow any path on the runner.
+    for entry in _allowed_tools(_load()):
+        assert entry not in {"Read", "Grep", "Glob", "Bash"}, entry
+        assert not entry.startswith("Bash(*"), entry
+
+
+def test_proc_is_denied_to_the_file_tools():
+    # Belt and braces: `//proc/**` is an absolute path rule. A single-slash `/proc/**`
+    # would mean "relative to the project root", and would not match /proc.
+    assert set(_disallowed_tools(_load())) == {
+        "Read(//proc/**)",
+        "Grep(//proc/**)",
+        "Glob(//proc/**)",
+    }
+
+
+def test_review_job_fails_when_nothing_was_posted():
+    wf = _load()
+    steps = wf["jobs"]["review"]["steps"]
+    review_index = steps.index(_step(wf, "anthropics/claude-code-action"))
+    check = _named_step(wf, "Fail if no review or summary was posted")
+    # It runs after the review, on success only, so a green job means something was posted.
+    assert steps.index(check) > review_index
+    assert "if" not in check
+    assert "continue-on-error" not in check
+    script = check["run"]
+    for endpoint in ("issues/${PR}/comments", "pulls/${PR}/reviews", "pulls/${PR}/comments"):
+        assert endpoint in script
+    assert 'select(.user.login == "github-actions[bot]"' in script
+    assert "$since" in script
+    assert "exit 1" in script
+    # Start time is recorded by an earlier step and read through the step output.
+    started = _named_step(wf, "Record job start")
+    assert steps.index(started) < review_index
+    assert check["env"]["SINCE"] == "${{ steps." + started["id"] + ".outputs.at }}"
+
+
+def test_post_check_adds_no_permission_and_no_secret():
+    wf = _load()
+    check = _named_step(wf, "Fail if no review or summary was posted")
+    assert set(check["env"]) == {"GH_TOKEN", "REPO", "PR", "SINCE"}
+    assert check["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert "secrets." not in str(check)
+    assert wf["jobs"]["review"]["permissions"] == {"contents": "read", "pull-requests": "write"}
 
 
 def test_actions_run_the_reviewed_commit():
@@ -111,6 +184,18 @@ def test_actions_run_the_reviewed_commit():
     }
     for prefix, sha in reviewed.items():
         assert _step(_load(), prefix)["uses"] == f"{prefix}@{sha}"
+
+
+def test_mention_workflow_also_runs_the_reviewed_action_commit():
+    mention = WORKFLOW.parent / "claude-mention.yml"
+    wf = yaml.safe_load(mention.read_text())
+    uses = [
+        s["uses"]
+        for job in wf["jobs"].values()
+        for s in job["steps"]
+        if str(s.get("uses", "")).startswith("anthropics/claude-code-action")
+    ]
+    assert uses == ["anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c"]
 
 
 def test_review_job_opts_into_subprocess_env_scrub():
