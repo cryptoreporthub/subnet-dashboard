@@ -110,7 +110,14 @@ def subagent_verdict(tool_input: dict) -> str | None:
     agent = (tool_input.get("subagent_type") or "").strip()
     model = (tool_input.get("model") or "").strip().lower()
     if agent == ADVISOR_AGENT:
-        return None
+        # The call's model overrides the agent file, so a review on another
+        # model would pass the Stop gate as the Opus one.
+        if model in ("", "opus", "opus[1m]") or model.startswith("claude-opus"):
+            return None
+        return (
+            f"Denied: `{ADVISOR_AGENT}` must run on Opus. Leave model unset "
+            "(the agent file pins opus) or pass model: opus."
+        )
     if agent in SONNET_AGENTS and model in ("", "sonnet"):
         return None
     if agent != "fork" and (model == "sonnet" or model.startswith("claude-sonnet")):

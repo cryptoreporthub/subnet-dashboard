@@ -86,6 +86,16 @@ def test_sonnet_subagents_are_allowed():
     )
 
 
+@pytest.mark.parametrize("model", ["haiku", "sonnet", "claude-sonnet-5-5", "inherit", "opusplan", "best"])
+def test_advisor_on_another_model_is_denied(model):
+    assert denied(run_hook("subagent", agent_call(subagent_type="opus-advisor", model=model)))
+
+
+@pytest.mark.parametrize("model", ["opus", "opus[1m]", "claude-opus-5-5"])
+def test_advisor_on_opus_is_allowed(model):
+    assert not denied(run_hook("subagent", agent_call(subagent_type="opus-advisor", model=model)))
+
+
 def test_opus_advisor_is_allowed():
     assert run_hook("subagent", agent_call(subagent_type="opus-advisor")) is None
 
