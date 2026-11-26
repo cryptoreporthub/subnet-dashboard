@@ -112,9 +112,14 @@ install_ditto_cli() {
   cp "$ditto_src/package.json" "$lock" "$tmp/"
   # npm ci installs exactly what the lockfile lists, checks each package's
   # integrity hash, and fails on any mismatch. No lifecycle scripts run.
+  # Move any old install aside, then swap the new one in. mv -T never nests
+  # tmp inside an existing dir; on failure the old one is put back.
+  local old="$ditto_dir.old.$$"
   if (cd "$tmp" && npm ci --ignore-scripts --no-fund --no-audit >&2) \
     && echo "$want" > "$tmp/.lock-sha" \
-    && rm -rf "$ditto_dir" && mv "$tmp" "$ditto_dir" \
+    && { [ ! -e "$ditto_dir" ] || mv -T "$ditto_dir" "$old"; } \
+    && { mv -T "$tmp" "$ditto_dir" || { [ ! -e "$old" ] || mv -T "$old" "$ditto_dir"; false; }; } \
+    && rm -rf "$old" \
     && ln -sfn "$ditto_dir/node_modules/.bin/heyditto" "$ditto_bin"; then
     log "Ditto CLI installed from the lockfile (command: heyditto)"
   else

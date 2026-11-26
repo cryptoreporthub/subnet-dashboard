@@ -32,6 +32,15 @@
             "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/workflow_rules.py subagent"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/workflow_rules.py bash"
+          }
+        ]
       }
     ],
     "Stop": [

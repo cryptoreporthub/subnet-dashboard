@@ -233,6 +233,138 @@ def test_compaction_summary_does_not_hide_earlier_work(tmp_path):
     assert out["decision"] == "block"
 
 
+def test_subagent_prompt_does_not_hide_earlier_work(tmp_path):
+    worker_prompt = {**user("read a.py and report"), "isSidechain": True}
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Edit", file_path="a.py")),
+            tool_result(),
+            assistant(tool_use("Agent", subagent_type="pstack-worker", prompt="read a.py")),
+            worker_prompt,
+            {**assistant(tool_use("Read", file_path="a.py")), "isSidechain": True},
+            assistant({"type": "text", "text": "done"}),
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+def advisor_bash(command, agent_type="opus-advisor"):
+    event = {"tool_name": "Bash", "tool_input": {"command": command}}
+    if agent_type:
+        event["agent_type"] = agent_type
+    return run_hook("bash", event)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git diff origin/main...HEAD",
+        "git log --oneline -5",
+        "git show HEAD:.claude/settings.json",
+        "python -m pytest -q --noconftest -p no:cacheprovider tests/test_x.py",
+        "GITHUB_ACTIONS=true python3 -m pytest -q tests/test_x.py",
+        "pytest -q -k stop",
+        "pytest -x --tb=short tests/test_x.py::test_one",
+    ],
+)
+def test_advisor_may_read_and_test(command):
+    assert not denied(advisor_bash(command))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git push origin HEAD",
+        "gh pr merge 1621",
+        "git diff; git push",
+        "git diff && gh pr comment 1 -b x",
+        "git log | sh",
+        "git diff > /tmp/x",
+        "git log --output=/tmp/x",
+        "git diff --ext-diff",
+        "git -c core.pager=sh log",
+        "git status $(touch x)",
+        "python -c 'print(1)'",
+        "pytest -p evil_plugin",
+        "pytest -pevil",
+        "LD_PRELOAD=x.so pytest",
+        "git diff {--output=/tmp/x,--stat}",
+        "pytest {--basetemp=/x,-q}",
+        "git log -- *",
+        "pytest --basetemp=/home/user/subnet-dashboard",
+        "pytest --junitxml=out.xml",
+        "pytest --pastebin=all",
+        "pytest -c other.ini",
+        "pytest -o addopts=-pevil",
+        "pytest /tmp/any.py",
+        "pytest ../outside/test_x.py",
+        "pytest -p",
+        "git diff 'unclosed",
+        "",
+    ],
+)
+def test_advisor_cannot_write_push_or_post(command):
+    assert denied(advisor_bash(command))
+
+
+def test_bash_outside_the_advisor_is_untouched():
+    assert advisor_bash("git push origin HEAD", agent_type=None) is None
+    assert advisor_bash("git push origin HEAD", agent_type="pstack-worker") is None
+
+
+def test_background_notification_does_not_hide_earlier_work(tmp_path):
+    notice = {**user("<task-notification>worker finished</task-notification>"),
+              "origin": {"kind": "task-notification"}}
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Edit", file_path="a.py")),
+            tool_result(),
+            notice,
+            assistant({"type": "text", "text": "done"}),
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+def test_message_typed_by_a_person_starts_a_new_turn(tmp_path):
+    typed = {**user("thanks, what's next?"), "origin": {"kind": "human"}}
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Edit", file_path="a.py")),
+            tool_result(),
+            typed,
+            assistant({"type": "text", "text": "the roadmap"}),
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert (out or {}).get("decision", "allow") == "allow"
+
+
+def test_advisor_rerunning_tests_still_counts_as_consulted(tmp_path):
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Edit", file_path="a.py")),
+            tool_result(),
+            assistant(tool_use("Agent", subagent_type="opus-advisor", prompt="check")),
+            {**assistant(tool_use("Bash", command="pytest")), "isSidechain": True},
+            tool_result(),
+            assistant({"type": "text", "text": "done"}),
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert (out or {}).get("decision", "allow") == "allow"
+
+
 def test_stop_allows_after_advisor_tool(tmp_path):
     path = write_transcript(
         tmp_path,

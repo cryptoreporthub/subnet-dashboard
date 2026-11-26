@@ -219,6 +219,32 @@ def test_failed_ditto_install_keeps_the_previous_one(env):
     assert len(ditto_installs(env)) == 3  # retried on the next session
 
 
+def test_failed_ditto_swap_keeps_the_previous_one(env):
+    sha = publish_bundle(env["work"], {"poteto-mode": "v1"})
+    script = pinned_script(env["tmp"], sha)
+    run(env["env"], script)
+    heyditto = env["home"] / ".local" / "bin" / "heyditto"
+    marker = env["home"] / ".local" / "share" / "session-ditto-cli" / ".lock-sha"
+    before = marker.read_text()
+    lock = env["repo"] / ".claude" / "hooks" / "ditto" / "package-lock.json"
+    lock.write_text(lock.read_text() + "\n")
+    # npm ci succeeds, then moving the new install into place fails.
+    stub_mv = env["tmp"] / "bin" / "mv"
+    stub_mv.write_text(
+        '#!/bin/bash\ncase "$2" in *session-ditto-cli.old.*) ;; '
+        f'*session-ditto-cli.*) exit 1;; esac\nexec {shutil.which("mv")} "$@"\n'
+    )
+    stub_mv.chmod(0o755)
+    out = run(env["env"], script)
+    assert "Poteto mode is on" in out
+    assert len(ditto_installs(env)) == 2
+    assert os.access(heyditto, os.X_OK)
+    assert marker.read_text() == before  # the old install is back in place
+    stub_mv.unlink()
+    run(env["env"], script)
+    assert marker.read_text() != before  # retried on the next session
+
+
 def test_ditto_lockfile_pins_every_package():
     manifest = json.loads((DITTO / "package.json").read_text())
     lock = json.loads((DITTO / "package-lock.json").read_text())

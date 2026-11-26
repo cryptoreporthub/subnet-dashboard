@@ -6,6 +6,9 @@ One script, three modes, picked by the first argument:
   prompt    UserPromptSubmit: restate the workflow rules every turn.
   subagent  PreToolUse on Agent/Task: deny a subagent that would not run on
             Sonnet (the Opus advisor is the one exception).
+  bash      PreToolUse on Bash: inside the Opus advisor, allow only read-only
+            git commands and pytest, since the advisor reads untrusted text
+            (the worker's summary, the diff, PR text).
   stop      Stop: block the end of a turn whose last tool work came after
             the last advisor call. Re-checks after each block (so work done on
             the advisor's FIX FIRST is reviewed too), up to MAX_STOP_BLOCKS
@@ -23,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import stat
 import sys
 import tempfile
@@ -137,11 +141,97 @@ def on_subagent(event: dict) -> None:
     )
 
 
+# What the advisor's Bash may run. Everything else is denied, so an
+# instruction injected into the text it reviews can't push, post or merge.
+# pytest runs the repo's own tests, which the worker could run anyway.
+ADVISOR_GIT = {"diff", "log", "show", "status", "ls-files", "rev-parse", "blame"}
+ADVISOR_GIT_DENIED = ("--output", "--ext-diff", "--textconv", "--open-files-in-pager", "-O")
+# Includes brace, glob and tilde expansion, which bash applies before the
+# command runs and which could produce words this check never saw.
+ADVISOR_SHELL_CHARS = set(";&|<>`$()\\\n\r{}*?[]~")
+ADVISOR_PYTEST = (["pytest"], ["python", "-m", "pytest"], ["python3", "-m", "pytest"])
+ADVISOR_PYTEST_FLAGS = {"-q", "-qq", "-v", "-vv", "-x", "-s", "--noconftest"}
+ADVISOR_PYTEST_TB = {"auto", "long", "short", "line", "native", "no"}
+
+
+def advisor_bash_verdict(command: str) -> str | None:
+    """Return a deny reason, or None when the advisor may run the command."""
+    reason = (
+        "Denied: the advisor's Bash runs only `git "
+        + "|".join(sorted(ADVISOR_GIT))
+        + "` and pytest, one command with no pipes, redirects or `;`. "
+        "Ask the worker under Fix first to run anything else."
+    )
+    if any(c in ADVISOR_SHELL_CHARS for c in command):
+        return reason
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return reason
+    while words and words[0].startswith("GITHUB_ACTIONS="):
+        words = words[1:]
+    if len(words) >= 2 and words[0] == "git" and words[1] in ADVISOR_GIT:
+        bad = [w for w in words[2:] if w.startswith(ADVISOR_GIT_DENIED)]
+        return reason if bad else None
+    for prefix in ADVISOR_PYTEST:
+        if words[: len(prefix)] == prefix:
+            return None if _pytest_args_ok(words[len(prefix):]) else reason
+    return reason
+
+
+def _pytest_args_ok(args: list[str]) -> bool:
+    """Only flags that change output, and test paths inside the repo.
+
+    Anything else is denied: --basetemp empties a folder, --junitxml and
+    friends write files, --pastebin posts output, -c/-o swap the config.
+    """
+    n = 0
+    while n < len(args):
+        arg = args[n]
+        if arg in ADVISOR_PYTEST_FLAGS or arg.startswith("-pno:"):
+            n += 1
+        elif arg == "-p" and n + 1 < len(args) and args[n + 1].startswith("no:"):
+            n += 2  # -p no:<name> disables a plugin; loading one is denied
+        elif arg == "-k" and n + 1 < len(args):
+            n += 2
+        elif arg.startswith("--tb=") and arg[5:] in ADVISOR_PYTEST_TB:
+            n += 1
+        elif arg and not arg.startswith(("-", "/")) and ".." not in arg.split("::")[0]:
+            n += 1  # a test path relative to the repo, optionally ::test_name
+        else:
+            return False
+    return True
+
+
+def on_bash(event: dict) -> None:
+    if event.get("tool_name") != "Bash" or event.get("agent_type") != ADVISOR_AGENT:
+        return
+    command = (event.get("tool_input") or {}).get("command")
+    reason = advisor_bash_verdict(command if isinstance(command, str) else "")
+    if reason is None:
+        return
+    _emit(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": reason,
+            }
+        }
+    )
+
+
 def _blocks(entry: dict) -> list:
     content = (entry.get("message") or {}).get("content")
     return content if isinstance(content, list) else []
 
 
+# The origin kind Claude Code (2.1.332) treats as a person's message, as its
+# own rule does (an absent origin counts too). Every other kind (a task or PR
+# notification, a channel, a peer, an auto-continuation, a kind added later)
+# never starts a turn; that only widens the window, which can add a block but
+# never remove one.
+HUMAN_ORIGINS = {"human"}
 # Fields Claude Code sets on user entries that a tool produced (tool results,
 # a loaded skill's text) rather than a new message that starts a turn.
 TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUID")
@@ -150,17 +240,28 @@ TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUI
 def _starts_turn(entry: dict) -> bool:
     """A user entry that opens a turn: a message the person typed.
 
-    System-written entries (isMeta: relayed messages, reminders; and the
-    isCompactSummary entry written after a compaction) never start a turn,
-    so none of them can hide the work done before it. A relayed message
-    therefore extends the previous turn, which can only add a block, never
-    remove one. The Stop hook's own block reason needs no rule here: once a
-    Stop chain starts, on_stop reuses the window it stored and never looks for
-    a turn start again.
+    System-written entries never start a turn, so none of them can hide the
+    work done before it: isMeta (relayed messages, reminders), the
+    isCompactSummary entry written after a compaction, a subagent's prompt
+    (isSidechain), and any entry whose origin is not a person's (a background
+    task or PR notification, for one). Such an entry extends the previous
+    turn, which can only add a block, never remove one. The Stop hook's own
+    block reason needs no rule here: once a Stop chain starts, on_stop reuses
+    the window it stored and never looks for a turn start again.
     """
-    if entry.get("type") != "user" or entry.get("isMeta") or entry.get("isCompactSummary"):
+    if (
+        entry.get("type") != "user"
+        or entry.get("isMeta")
+        or entry.get("isCompactSummary")
+        or entry.get("isSidechain")
+    ):
         return False
     if any(entry.get(key) is not None for key in TOOL_DERIVED_KEYS):
+        return False
+    origin = entry.get("origin")
+    if origin is not None and (
+        not isinstance(origin, dict) or origin.get("kind") not in HUMAN_ORIGINS
+    ):
         return False
     content = (entry.get("message") or {}).get("content")
     if not isinstance(content, str):
@@ -182,11 +283,13 @@ def _messages(turn: list[dict]) -> list[list[dict]]:
     """The turn's assistant content blocks, grouped by API message.
 
     Claude Code writes one entry per content block, so parallel tool calls
-    from one message share a message id across several entries.
+    from one message share a message id across several entries. A subagent's
+    own entries (isSidechain) are skipped: its work already counts through the
+    parent's Agent call, and the advisor rerunning tests must not undo itself.
     """
     groups: dict = {}
     for n, entry in enumerate(turn):
-        if entry.get("type") != "assistant":
+        if entry.get("type") != "assistant" or entry.get("isSidechain"):
             continue
         key = (entry.get("message") or {}).get("id") or ("entry", n)
         groups.setdefault(key, []).extend(
@@ -370,7 +473,7 @@ def on_stop(event: dict) -> None:
     )
 
 
-MODES = {"prompt": on_prompt, "subagent": on_subagent, "stop": on_stop}
+MODES = {"prompt": on_prompt, "subagent": on_subagent, "bash": on_bash, "stop": on_stop}
 
 
 def main() -> int:
