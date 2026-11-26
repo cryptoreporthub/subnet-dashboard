@@ -6,7 +6,7 @@ name: Claude mention
 # quoted "@claude" never starts a run. Bot-triggered runs cannot write
 # repository contents; they may post PR and issue comments.
 # The GitHub App reacts to the mention, but this workflow does the
-# work. Requires the repo secret ANTHROPIC_API_KEY.
+# work. Requires the repo secret CLAUDE_CODE_OAUTH_TOKEN.
 
 on:
   issue_comment:

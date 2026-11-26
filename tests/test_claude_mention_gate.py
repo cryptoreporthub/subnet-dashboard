@@ -223,3 +223,13 @@ def test_workflow_denies_default_permissions():
         "the workflow needs a top-level `permissions: {}`. Without it, any job that omits its own "
         "block gets the repo default token (write)."
     )
+
+
+def test_bot_job_permissions_are_exactly_these():
+    wf = yaml.safe_load(WORKFLOW.read_text())
+    assert wf["jobs"]["claude-bot"]["permissions"] == {
+        "contents": "read",
+        "pull-requests": "write",
+        "issues": "write",
+        "actions": "read",
+    }
