@@ -114,6 +114,11 @@ install_pstack_skills() {
     return 0
   fi
   while read -r name; do
+    # The platform can sync a skill after the selection above: check again
+    # just before claiming it, and keep a copy this hook doesn't own.
+    if [ -e "$skills_dir/$name" ] && ! grep -Fqx -- "$name" "$manifest" 2>/dev/null; then
+      continue
+    fi
     # $claimed only grows once the manifest listing this skill is written.
     if ! { cat "$claimed" && echo "$name"; } > "$claimed.next" ||
       ! write_manifest incomplete "$owned" "$claimed.next" ||

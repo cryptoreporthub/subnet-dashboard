@@ -304,39 +304,67 @@ def test_crash_leaves_skills_not_reached_unclaimed(env):
 
 
 def test_failed_claim_stops_before_the_skill(env):
-    # The manifest write that would claim the second new skill fails: that
+    # The manifest that would claim the second new skill can't be saved: that
     # skill and the rest are not copied, the first stays owned, and a platform
     # copy under a name never reached is left alone by a later bundle.
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
-    v2 = publish_bundle(env["work"], {"a-first": "v2", "poteto-mode": "v2", "z-new": "v2"})
-    count = env["tmp"] / "incomplete-writes"
-    shim = env["tmp"] / "fail-third-claim.sh"
+    v2 = publish_bundle(env["work"], {"a-first": "v2", "b-second": "v2", "poteto-mode": "v2"})
+    shim = env["tmp"] / "fail-claim.sh"
     shim.write_text(
-        'echo() {\n'
-        '  if [ "${1-}" = incomplete ]; then\n'
-        '    local n=$(( $(cat %s 2>/dev/null || builtin echo 0) + 1 ))\n'
-        '    builtin echo "$n" > %s\n'
-        '    [ "$n" = 3 ] && return 1\n'
-        '  fi\n'
-        '  builtin echo "$@"\n'
-        '}\n' % (count, count)
+        'mv() {\n'
+        '  case "$1" in *.pstack-bundle.tmp)\n'
+        '    grep -Fqx b-second "$1" && return 1 ;;\n'
+        '  esac\n'
+        '  command mv "$@"\n'
+        '}\n'
     )
     run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
     manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
     assert manifest.read_text().splitlines()[0] == "incomplete"
     assert skill(env["home"], "a-first") == "v2"
+    assert skill(env["home"], "b-second") is None
     assert skill(env["home"], "poteto-mode") == "v1"
-    assert skill(env["home"], "z-new") is None
-    platform = env["home"] / ".claude" / "skills" / "z-new"
+    platform = env["home"] / ".claude" / "skills" / "b-second"
     platform.mkdir()
     (platform / "SKILL.md").write_text("platform copy")
     v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
     run(env["env"], pinned_script(env["tmp"], v3))
-    assert skill(env["home"], "z-new") == "platform copy"
+    assert skill(env["home"], "b-second") == "platform copy"
     assert skill(env["home"], "a-first") is None
     assert skill(env["home"], "old") is None
     assert skill(env["home"], "poteto-mode") == "v3"
+
+
+def test_platform_copy_synced_mid_install_is_kept(env):
+    # The platform syncs a skill after the hook picked it to install but
+    # before its turn comes (here, while the first skill is being claimed):
+    # the hook keeps that copy and never lists it as its own (Cursor's race).
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"a-first": "v2", "poteto-mode": "v2", "z-platform": "v2"})
+    platform = env["home"] / ".claude" / "skills" / "z-platform"
+    shim = env["tmp"] / "sync-mid-install.sh"
+    shim.write_text(
+        'mv() {\n'
+        '  case "$1" in *.pstack-bundle.tmp)\n'
+        '    if grep -Fqx a-first "$1" && [ ! -e %(p)s ]; then\n'
+        '      mkdir %(p)s && builtin printf "platform copy" > %(p)s/SKILL.md\n'
+        '    fi ;;\n'
+        '  esac\n'
+        '  command mv "$@"\n'
+        '}\n' % {"p": platform}
+    )
+    run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    assert skill(env["home"], "z-platform") == "platform copy"
+    assert skill(env["home"], "a-first") == "v2"
+    assert skill(env["home"], "poteto-mode") == "v2"
+    assert manifest.read_text().splitlines() == [v2, "a-first", "poteto-mode"]
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "z-platform") == "platform copy"
+    assert skill(env["home"], "a-first") is None
 
 
 def test_bundle_links_are_never_installed(env):
