@@ -153,6 +153,22 @@ def test_advisor_with_non_text_model_is_no_review(tmp_path, odd):
     assert out["decision"] == "block"
 
 
+def test_null_model_reads_as_omitted(tmp_path):
+    # null is how JSON tools often send an unset optional field. It runs on
+    # the agent file's model (opus for the advisor), so it is allowed and
+    # counts as the review, exactly like an omitted model.
+    assert run_hook("subagent", agent_call(subagent_type="opus-advisor", model=None)) is None
+    assert run_hook("subagent", agent_call(subagent_type="pstack-worker", model=None)) is None
+    assert denied(run_hook("subagent", agent_call(subagent_type="Explore", model=None)))
+    call = tool_use("Agent", subagent_type="opus-advisor", model=None, prompt="check")
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result(),
+         assistant(call), tool_result()],
+    )
+    assert run_hook("stop", {"transcript_path": path, "stop_hook_active": False}) is None
+
+
 @pytest.mark.parametrize("kind", [["human"], {"k": "human"}])
 def test_odd_origin_kind_cannot_end_the_turn_unchecked(tmp_path, kind):
     typed = {**user("fix it"), "origin": {"kind": kind}}

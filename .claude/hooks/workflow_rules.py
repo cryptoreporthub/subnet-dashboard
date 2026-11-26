@@ -123,6 +123,9 @@ def subagent_verdict(tool_input: dict) -> str | None:
     """Return a deny reason, or None when the subagent call is allowed."""
     if not isinstance(tool_input, dict):
         tool_input = {}
+    # null reads as omitted, as JSON tools commonly send an unset optional
+    # field; the call then runs on the agent file's model (opus for the
+    # advisor, sonnet for the workers). Any other non-text value is denied.
     if any(
         tool_input.get(key) is not None and not isinstance(tool_input.get(key), str)
         for key in ("subagent_type", "model")
