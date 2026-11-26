@@ -263,6 +263,7 @@ def advisor_bash(command, agent_type="opus-advisor"):
     [
         "git diff origin/main...HEAD",
         "git log --oneline -5",
+        "git diff --stat --name-only",
         "git show HEAD:.claude/settings.json",
         "python -m pytest -q --noconftest -p no:cacheprovider tests/test_x.py",
         "GITHUB_ACTIONS=true python3 -m pytest -q tests/test_x.py",
@@ -284,6 +285,8 @@ def test_advisor_may_read_and_test(command):
         "git log | sh",
         "git diff > /tmp/x",
         "git log --output=/tmp/x",
+        "git log --outp=/tmp/x",
+        "git diff --ext-dif",
         "git diff --ext-diff",
         "git -c core.pager=sh log",
         "git status $(touch x)",

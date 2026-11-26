@@ -143,7 +143,10 @@ def on_subagent(event: dict) -> None:
 
 # What the advisor's Bash may run. Everything else is denied, so an
 # instruction injected into the text it reviews can't push, post or merge.
-# pytest runs the repo's own tests, which the worker could run anyway.
+# Accepted risk: pytest imports the working tree's tests and conftest.py,
+# so it runs whatever code the diff under review adds. That is the same code,
+# in the same session with the same credentials, that the worker already ran
+# to test its change; the gate stops injected *instructions*, not repo code.
 ADVISOR_GIT = {"diff", "log", "show", "status", "ls-files", "rev-parse", "blame"}
 ADVISOR_GIT_DENIED = ("--output", "--ext-diff", "--textconv", "--open-files-in-pager", "-O")
 # Includes brace, glob and tilde expansion, which bash applies before the
@@ -171,12 +174,21 @@ def advisor_bash_verdict(command: str) -> str | None:
     while words and words[0].startswith("GITHUB_ACTIONS="):
         words = words[1:]
     if len(words) >= 2 and words[0] == "git" and words[1] in ADVISOR_GIT:
-        bad = [w for w in words[2:] if w.startswith(ADVISOR_GIT_DENIED)]
-        return reason if bad else None
+        return reason if any(_git_arg_denied(w) for w in words[2:]) else None
     for prefix in ADVISOR_PYTEST:
         if words[: len(prefix)] == prefix:
             return None if _pytest_args_ok(words[len(prefix):]) else reason
     return reason
+
+
+def _git_arg_denied(word: str) -> bool:
+    """A denied git option, also as an abbreviation of its long name."""
+    if word.startswith(ADVISOR_GIT_DENIED):
+        return True
+    name = word.split("=", 1)[0]
+    return len(name) > 2 and name.startswith("--") and any(
+        opt.startswith(name) for opt in ADVISOR_GIT_DENIED if opt.startswith("--")
+    )
 
 
 def _pytest_args_ok(args: list[str]) -> bool:
