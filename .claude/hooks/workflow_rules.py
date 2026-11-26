@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import sys
 import tempfile
 
@@ -228,10 +229,20 @@ def _read_transcript(path: str) -> list[dict]:
     return entries
 
 
+def _state_dir() -> str:
+    """A private (0700, owned by us, not a symlink) dir for the Stop counter."""
+    path = os.path.join(tempfile.gettempdir(), f"claude-workflow-hooks-{os.getuid()}")
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    info = os.lstat(path)
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise OSError(f"unsafe state dir {path}")
+    return path
+
+
 def _state_path(event: dict) -> str:
     session = str(event.get("session_id") or event.get("transcript_path"))
     name = hashlib.sha256(session.encode()).hexdigest()[:32] + ".json"
-    return os.path.join(tempfile.gettempdir(), "claude-workflow-hooks", name)
+    return os.path.join(_state_dir(), name)
 
 
 def _blocks_so_far(event: dict) -> int | None:
@@ -243,7 +254,8 @@ def _blocks_so_far(event: dict) -> int | None:
     if not event.get("stop_hook_active"):
         return 0
     try:
-        with open(_state_path(event), encoding="utf-8") as fh:
+        fd = os.open(_state_path(event), os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, encoding="utf-8") as fh:
             state = json.load(fh)
     except (OSError, ValueError):
         return None
@@ -252,10 +264,10 @@ def _blocks_so_far(event: dict) -> int | None:
 
 
 def _record_block(event: dict, count: int) -> bool:
-    path = _state_path(event)
     try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path + ".tmp", "w", encoding="utf-8") as fh:
+        path = _state_path(event)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+        with os.fdopen(os.open(path + ".tmp", flags, 0o600), "w", encoding="utf-8") as fh:
             json.dump({"blocks": count}, fh)
         os.replace(path + ".tmp", path)
         return True

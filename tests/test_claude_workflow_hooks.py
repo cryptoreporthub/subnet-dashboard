@@ -325,7 +325,7 @@ def test_stop_without_counter_falls_back_to_one_block(tmp_path):
     """If the counter can't be stored, Claude Code's own one-shot guard still prevents a loop."""
     tmp = tmp_path / "tmp"
     tmp.mkdir()
-    (tmp / "claude-workflow-hooks").write_text("a file where the counter dir should be")
+    (tmp / f"claude-workflow-hooks-{os.getuid()}").write_text("a file where the counter dir should be")
     path = write_transcript(tmp_path, [user("go"), assistant(tool_use("Bash", command="ls"))])
     env = {**CLOUD, "TMPDIR": str(tmp)}
     for active, expect in ((False, "block"), (True, None)):
@@ -338,6 +338,28 @@ def test_stop_without_counter_falls_back_to_one_block(tmp_path):
         )
         out = json.loads(proc.stdout) if proc.stdout.strip() else None
         assert (out and out["decision"]) == expect
+
+
+def test_stop_refuses_a_shared_or_linked_state_dir(tmp_path):
+    """Another user's or a world-writable counter dir is not trusted: fall back to one block."""
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    target = tmp_path / "elsewhere"
+    target.mkdir()
+    (tmp / f"claude-workflow-hooks-{os.getuid()}").symlink_to(target)
+    path = write_transcript(tmp_path, [user("go"), assistant(tool_use("Bash", command="ls"))])
+    env = {**CLOUD, "TMPDIR": str(tmp)}
+    for active, expect in ((False, "block"), (True, None)):
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "stop"],
+            input=json.dumps({"transcript_path": path, "stop_hook_active": active, "session_id": "s"}),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        out = json.loads(proc.stdout) if proc.stdout.strip() else None
+        assert (out and out["decision"]) == expect
+    assert list(target.iterdir()) == []  # nothing written through the link
 
 
 def test_hooks_do_nothing_outside_cloud_sessions(tmp_path):
