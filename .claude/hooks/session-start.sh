@@ -213,9 +213,14 @@ install_pstack_skills() {
     if ! owned "$dir"; then
       continue
     fi
-    # Remove only on a clean "not listed" (grep status 1); a grep error keeps it.
+    # Remove only on a clean "not listed" (grep status 1). A grep error keeps
+    # the skill and leaves the install unfinished, so the next session retries.
     grep -Fqx -- "$name" "$names"
-    [ "$?" = 1 ] || continue
+    case "$?" in
+      0) continue ;;
+      1) ;;
+      *) failed=1; continue ;;
+    esac
     set_aside "$name" && discard "$name"
   done
   rm -rf "$tmp"

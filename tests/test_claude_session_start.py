@@ -489,6 +489,26 @@ def test_empty_platform_dir_made_just_before_placing_is_never_taken(env, owned_b
     assert skill(env["home"], "poteto-mode") == "v3"
 
 
+def test_stale_skill_is_kept_when_the_name_check_errors(env):
+    # The check for "is this skill still in the bundle" errors (grep exits 2).
+    # The hook must keep the skill and not read the error as "dropped".
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2"})
+    shim = env["tmp"] / "grep-errors.sh"
+    shim.write_text('grep() { case " $* " in *" -Fqx "*) return 2 ;; esac; command grep "$@"; }\n')
+    script = pinned_script(env["tmp"], v2)
+    run({**env["env"], "BASH_ENV": str(shim)}, script)
+    assert skill(env["home"], "old") == "v1"
+    assert skill(env["home"], "poteto-mode") == "v2"
+    # Not recorded as fully installed, so the next session finishes the job.
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    assert manifest.read_text().strip() == v1
+    run(env["env"], script)
+    assert skill(env["home"], "old") is None
+    assert manifest.read_text().strip() == v2
+
+
 # Counts every file command the hook runs. At call SWEEP_INJECT it plays the
 # platform syncing skill "late" (if the name is free) and at call SWEEP_KILL
 # it kills the hook. Matching on call order, not on paths, keeps the sweep
