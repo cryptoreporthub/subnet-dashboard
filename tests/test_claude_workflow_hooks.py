@@ -96,6 +96,28 @@ def test_advisor_on_opus_is_allowed(model):
     assert not denied(run_hook("subagent", agent_call(subagent_type="opus-advisor", model=model)))
 
 
+@pytest.mark.parametrize("model", ["sonnet[1m]", "claude-sonnet-5-5[1m]"])
+def test_sonnet_1m_variant_is_allowed(model):
+    assert run_hook("subagent", agent_call(subagent_type="pstack-worker", model=model)) is None
+    assert run_hook("subagent", agent_call(subagent_type="Explore", model=model)) is None
+
+
+def test_background_advisor_is_denied():
+    call = agent_call(subagent_type="opus-advisor", run_in_background=True)
+    assert denied(run_hook("subagent", call))
+
+
+def test_background_advisor_call_does_not_count(tmp_path):
+    call = tool_use("Agent", subagent_type="opus-advisor", run_in_background=True, prompt="check")
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result(),
+         assistant(call), tool_result()],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
 def test_opus_advisor_is_allowed():
     assert run_hook("subagent", agent_call(subagent_type="opus-advisor")) is None
 
@@ -439,6 +461,14 @@ def test_stop_read_only_turn_needs_no_advisor(tmp_path):
         [user("what does main.py do?"), assistant(tool_use("Read", file_path="main.py")),
          tool_result(), assistant(tool_use("Grep", pattern="def ")), tool_result(),
          assistant({"type": "text", "text": "It starts the app."})],
+    )
+    assert run_hook("stop", {"transcript_path": path}) is None
+
+
+def test_stop_turn_that_only_asks_needs_no_advisor(tmp_path):
+    path = write_transcript(
+        tmp_path,
+        [user("set it up"), assistant(tool_use("AskUserQuestion", questions=[])), tool_result()],
     )
     assert run_hook("stop", {"transcript_path": path}) is None
 

@@ -40,7 +40,13 @@ AGENT_TOOLS = {"Agent", "Task"}
 NON_WORK_TOOLS = {
     "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill",
     "Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead",
+    # Asking the user or planning changes nothing either. SendMessage stays work:
+    # it can resume a subagent that then changes things.
+    "AskUserQuestion", "ExitPlanMode", "ScheduleWakeup",
 }
+# ponytail: Skill counts as non-work because the pstack skills are instructions
+# loaded in place. If a skill ever runs its own subagent that edits files, move
+# Skill out of this set.
 # ponytail: names are matched exactly, so read-only MCP tools (for example
 # mcp__github__pull_request_read) still count as work and ask for the advisor.
 # That only over-blocks; guessing from verbs like "get" could let a write through.
@@ -110,10 +116,19 @@ def subagent_verdict(tool_input: dict) -> str | None:
     """Return a deny reason, or None when the subagent call is allowed."""
     agent = (tool_input.get("subagent_type") or "").strip()
     model = (tool_input.get("model") or "").strip().lower()
+    # The 1M-context variant runs the same model, so check it as the base name.
+    model = model.removesuffix("[1m]")
     if agent == ADVISOR_AGENT:
+        # A background run returns at once, so the Stop gate would count a
+        # review that hasn't happened yet.
+        if tool_input.get("run_in_background"):
+            return (
+                f"Denied: run `{ADVISOR_AGENT}` in the foreground, so its review is "
+                "back before the turn ends."
+            )
         # The call's model overrides the agent file, so a review on another
         # model would pass the Stop gate as the Opus one.
-        if model in ("", "opus", "opus[1m]") or model.startswith("claude-opus"):
+        if model in ("", "opus") or model.startswith("claude-opus"):
             return None
         return (
             f"Denied: `{ADVISOR_AGENT}` must run on Opus. Leave model unset "
