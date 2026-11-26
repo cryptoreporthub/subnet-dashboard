@@ -39,6 +39,9 @@ NON_WORK_TOOLS = {
     "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill",
     "Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead",
 }
+# ponytail: names are matched exactly, so read-only MCP tools (for example
+# mcp__github__pull_request_read) still count as work and ask for the advisor.
+# That only over-blocks; guessing from verbs like "get" could let a write through.
 
 # Blocks per Stop chain (one turn): the first plus two re-checks. The cap stops an endless
 # advisor loop; past it the turn may end without another review.
@@ -128,8 +131,8 @@ TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUI
 def _starts_turn(entry: dict) -> bool:
     """A user entry that opens a turn: a message the person typed.
 
-    System-written entries (isMeta: relayed messages, reminders, a hook's own
-    block reason) never start a turn, so none of them can hide the work done
+    System-written entries (isMeta: relayed messages, reminders) and the Stop
+    hook's own block reason never start a turn, so none of them can hide the work done
     before it. A relayed message therefore extends the previous turn, which
     can only add a block, never remove one.
     """
@@ -139,10 +142,15 @@ def _starts_turn(entry: dict) -> bool:
         return False
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, str):
-        return True
-    return not any(
-        isinstance(b, dict) and b.get("type") == "tool_result" for b in content or []
-    )
+        text = content
+    else:
+        blocks = [b for b in content or [] if isinstance(b, dict)]
+        if any(b.get("type") == "tool_result" for b in blocks):
+            return False
+        text = "".join(b.get("text") or "" for b in blocks if b.get("type") == "text")
+    # The Stop hook's own reason, however it is written back, never starts a
+    # turn. A typed prompt with this exact opening only adds a block.
+    return not text.lstrip().startswith("Stop hook feedback")
 
 
 def turn_start(entries: list[dict]) -> int:

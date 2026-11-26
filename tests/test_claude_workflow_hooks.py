@@ -253,10 +253,11 @@ def block_feedback(reason, shape):
                 "blockingError": {"blockingError": reason, "command": "workflow_rules.py stop"},
             },
         }
-    return {**user(f"Stop hook feedback:\n{reason}"), "isMeta": True}
+    entry = user(f"Stop hook feedback:\n{reason}")
+    return {**entry, "isMeta": True} if shape == "user" else entry
 
 
-SHAPES = pytest.mark.parametrize("shape", ["attachment", "user"])
+SHAPES = pytest.mark.parametrize("shape", ["attachment", "user", "user-plain"])
 
 
 @SHAPES
@@ -299,8 +300,11 @@ def test_stop_blocks_at_most_three_times_per_turn(tmp_path, shape):
     assert [o and o["decision"] for o in outs] == ["block", "block", "block", None]
 
 
-def test_typed_prompt_with_feedback_words_still_starts_a_turn(tmp_path):
-    """Only a system (isMeta) entry can be hook feedback; a typed prompt always starts a turn."""
+def test_prompt_opening_like_block_reason_fails_toward_blocking(tmp_path):
+    """Known ceiling: a typed prompt that opens like the block reason doesn't start a turn.
+
+    That can only add a block (the earlier work still needs the advisor), never hide work.
+    """
     path = write_transcript(
         tmp_path,
         [
@@ -311,7 +315,7 @@ def test_typed_prompt_with_feedback_words_still_starts_a_turn(tmp_path):
             assistant({"type": "text", "text": "It means..."}),
         ],
     )
-    assert stop(path) is None
+    assert stop(path)["decision"] == "block"
 
 
 def test_stop_cap_resets_on_a_new_turn(tmp_path):
