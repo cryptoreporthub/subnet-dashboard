@@ -55,6 +55,14 @@ STOP_REASON = (
     "answers, it checks again."
 )
 
+# The one list of Gemini items. The opus-advisor and pstack-worker agent files
+# quote it word for word, and a test keeps the three copies the same.
+GEMINI_ITEMS = (
+    "design decisions, important bug-fix designs, "
+    "anything touching auth, public write endpoints, money or data integrity, "
+    "and adversarial testing of a finished feature"
+)
+
 RULES = (
     "Workflow rules for this repo (hooks enforce them):\n"
     "1. Poteto mode is on: follow ~/.claude/skills/poteto-mode/SKILL.md and the "
@@ -64,19 +72,16 @@ RULES = (
     "subagents are denied.\n"
     f"3. Before you end a turn that did work, consult the Opus advisor: the "
     f"`{ADVISOR_AGENT}` agent, or the built-in `advisor` tool if it is on.\n"
-    "4. Gemini step. The user relays to Gemini; you can't reach it. Use it only "
-    "for medium-to-high impact items. These are: design decisions, important "
-    "bug-fix designs, anything touching auth, public write endpoints, money or "
-    "data integrity, and adversarial testing of a finished feature. Low-impact "
-    "and routine work (small fixes, routine review, CI or config tweaks) never "
-    "triggers it. When one comes up, tell the user \"Time for Gemini\", with one "
-    "line on why and a ready-to-paste Gemini prompt: the context, the exact "
-    "question or the thing to attack, and what a good answer looks like. For a "
-    "design, don't code it or hand it to a worker until the user replies; other "
-    "work can go on. For adversarial testing, ask before the PR is marked ready "
-    "for review. If the user skips Gemini for an item, or Gemini already "
-    "reviewed it, don't raise it again. When you consult the advisor, give the "
-    "Gemini status of any such item."
+    "4. Gemini step (the user relays to Gemini; you can't reach it). Gemini items "
+    f"(medium-to-high impact only) are {GEMINI_ITEMS}. Never for routine work "
+    "(small fixes, routine review, CI or config tweaks). On one, tell the user "
+    "\"Time for Gemini\": one line on why and a ready-to-paste Gemini prompt (the "
+    "context, the exact question or thing to attack, what a good answer looks "
+    "like). Don't code the item or hand it to a worker until they reply. For "
+    "adversarial testing, ask before the PR is marked ready instead. Don't raise "
+    "an item again once the user skipped it or Gemini reviewed it. Give the "
+    "advisor each item's Gemini status; it only sees turns with tool work, so a "
+    "design-only answer is yours to check."
 )
 
 

@@ -1,5 +1,6 @@
 """Behavior tests for .claude/hooks/workflow_rules.py (the session workflow hooks)."""
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -47,30 +48,36 @@ def test_prompt_mode_restates_rules():
     assert "opus-advisor" in context
 
 
+def _gemini_items():
+    spec = importlib.util.spec_from_file_location("workflow_rules", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.GEMINI_ITEMS
+
+
 def test_prompt_mode_says_when_to_bring_in_gemini():
-    """Every prompt carries the Gemini step: what it's for, and to stop and hand over a prompt."""
+    """Every prompt carries the Gemini step: which items, and to stop and hand over a prompt."""
     context = run_hook("prompt", {"prompt": "hi"})["hookSpecificOutput"]["additionalContext"]
+    assert _gemini_items() in context
     assert "Time for Gemini" in context
-    for trigger in ("design decisions", "auth", "public write endpoints", "data integrity", "adversarial"):
-        assert trigger in context
     assert "ready-to-paste Gemini prompt" in context
-    assert "medium-to-high impact" in context
-    assert "never triggers it" in context
-    assert "hand it to a worker" in context
-    assert "don't raise it again" in context
+    assert "Never for routine work" in context
+    assert "Don't code the item or hand it to a worker until they reply" in context
+    assert "once the user skipped it or Gemini reviewed it" in context
 
 
-def test_advisor_checks_for_a_missed_gemini_step():
-    advisor_md = (SCRIPT.parent.parent / "agents" / "opus-advisor.md").read_text()
-    assert "Does anything here need Gemini?" in advisor_md
-    assert "Time for Gemini" in advisor_md
-    assert "medium-to-high impact" in advisor_md
-    assert "chose to skip it" in advisor_md
+@pytest.mark.parametrize("agent", ["opus-advisor", "pstack-worker"])
+def test_agents_quote_the_same_gemini_items(agent):
+    """The advisor and the worker carry the hook's own list, so the three copies can't drift."""
+    text = (SCRIPT.parent.parent / "agents" / f"{agent}.md").read_text()
+    assert _gemini_items() in text
 
 
-def test_worker_reports_gemini_designs_instead_of_deciding():
-    worker_md = (SCRIPT.parent.parent / "agents" / "pstack-worker.md").read_text()
-    assert "report it as needing Gemini" in worker_md
+def test_worker_goes_ahead_once_gemini_is_settled():
+    """The worker can't see the Gemini status, so the brief settles it and approved work goes on."""
+    text = (SCRIPT.parent.parent / "agents" / "pstack-worker.md").read_text()
+    assert "that the brief doesn't settle, don't decide it" in text
+    assert "Gemini reviewed it or the user skipped it, go ahead" in text
 
 
 def test_sonnet_subagents_are_allowed():
