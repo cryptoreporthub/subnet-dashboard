@@ -23,6 +23,7 @@ jobs:
       !endsWith(github.event.comment.user.login, '[bot]') &&
       github.event.comment.performed_via_github_app == null &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
       contents: write # Joshua chose: Claude may push fixes (Oct 31)
@@ -30,8 +31,39 @@ jobs:
       issues: write
       id-token: write # required by claude-code-action to get its GitHub token
       actions: read # lets Claude read CI results on PRs
+    env:
+      # Best-effort scrub of Anthropic and GitHub secrets from Bash child processes.
+      # Opt-in in the action; off unless set. Reduces, does not eliminate, exposure.
+      # This job does not restrict --allowedTools, so Claude can run Bash (and may
+      # push fixes). The scrub makes the CLI require its Bash sandbox, so the next
+      # step installs bubblewrap and socat, matching the review job.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The action replaces checkout credentials with its own token before
+          # Claude runs (see configureGitAuth in claude-code-action), so git push
+          # still works. Leaving the checkout token in .git/config would let a
+          # prompt-injected run read it.
+          persist-credentials: false
+      - name: Install Bash sandbox dependencies
+        # With CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, the Claude CLI runs Bash only inside
+        # its sandbox, which needs bubblewrap and socat. Without them every Bash call
+        # fails with "Sandbox is required but failed to initialize", and a @claude
+        # run that needs a shell (including git) would stall. The action installs
+        # them only when allowed_non_write_users is set, which this job does not use,
+        # so install them here. The sandbox also hides the CLI process from Bash
+        # (PID namespace).
+        run: |
+          echo "before: bwrap=$(command -v bwrap || echo missing) socat=$(command -v socat || echo missing)"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bubblewrap socat
+          # Ubuntu 24.04+ restricts unprivileged user namespaces, which bubblewrap needs.
+          if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          bwrap --unshare-all --ro-bind / / true
+          command -v socat
       - name: Run Claude
         uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1.0.290
         with:

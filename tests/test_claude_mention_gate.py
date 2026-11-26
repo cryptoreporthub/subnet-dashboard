@@ -205,3 +205,55 @@ def test_workflow_denies_default_permissions():
         "the workflow needs a top-level `permissions: {}`. Without it, any job that omits its own "
         "block gets the repo default token (write)."
     )
+
+def _load():
+    return yaml.safe_load(WORKFLOW.read_text())
+
+
+def _human():
+    return _load()["jobs"]["claude-human"]
+
+
+def _step(uses_prefix=None, name=None):
+    steps = _human()["steps"]
+    if uses_prefix is not None:
+        found = [s for s in steps if str(s.get("uses", "")).startswith(uses_prefix)]
+        assert len(found) == 1, f"expected one step using {uses_prefix}, found {len(found)}"
+        return found[0]
+    found = [s for s in steps if s.get("name") == name]
+    assert len(found) == 1, f"expected one step named {name!r}, found {len(found)}"
+    return found[0]
+
+
+def test_human_job_times_out_after_45_minutes():
+    # A hung agent would otherwise hold contents: write until the runner default (6h).
+    assert _human()["timeout-minutes"] == 45
+
+
+def test_checkout_is_pinned_and_does_not_persist_the_workflow_token():
+    # Same pin as the review job. The action replaces checkout credentials with its
+    # own token before Claude runs, so git push still works without a persisted
+    # checkout token sitting in .git/config.
+    step = _step(uses_prefix="actions/checkout")
+    assert step["uses"] == "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
+    assert step["with"]["persist-credentials"] is False
+
+
+def test_human_job_opts_into_subprocess_env_scrub():
+    # claude_args is only `--model haiku`, so Claude can run Bash. The scrub without
+    # the sandbox deps would stall those calls, as it did on the review job.
+    assert _human()["env"]["CLAUDE_CODE_SUBPROCESS_ENV_SCRUB"] == "1"
+    args = _step(uses_prefix="anthropics/claude-code-action")["with"]["claude_args"]
+    assert "--allowedTools" not in args
+
+
+def test_sandbox_dependencies_are_installed_before_claude():
+    # Mirror of the review job: install bubblewrap and socat, then fail loudly if
+    # bwrap cannot start, before a secret-holding run begins.
+    steps = _human()["steps"]
+    install = _step(name="Install Bash sandbox dependencies")
+    assert steps.index(install) < steps.index(_step(uses_prefix="anthropics/claude-code-action"))
+    assert "bubblewrap socat" in install["run"]
+    assert "apparmor_restrict_unprivileged_userns=0" in install["run"]
+    assert "continue-on-error" not in install
+    assert "bwrap --unshare-all" in install["run"]
