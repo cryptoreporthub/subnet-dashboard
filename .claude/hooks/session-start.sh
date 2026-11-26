@@ -100,17 +100,29 @@ install_pstack_skills() {
     rm -rf "$tmp"
     return 0
   fi
-  # Record ownership before copying anything: every name the old manifest owns
-  # plus every skill about to be copied, marked incomplete. Whatever fails
-  # after this, every skill this hook put on disk stays listed, so a later
-  # bundle can still remove it, and the next session retries. If this write
-  # fails, nothing is copied.
-  if ! write_manifest incomplete "$owned" "$names"; then
+  # Ownership is recorded one skill ahead of the copy: the manifest, marked
+  # incomplete, lists every name the old manifest owns plus each skill this
+  # run has started to copy, and nothing it has not touched yet. A crash or a
+  # failed write at any point leaves every skill this hook put on disk listed,
+  # so a later bundle can still remove it, and a platform copy under a name
+  # not reached yet stays unclaimed. The next session retries.
+  local claimed="$tmp/claimed"
+  : > "$claimed"
+  if ! write_manifest incomplete "$owned" "$claimed"; then
     log "could not write the skills manifest; nothing changed, the next session retries"
     rm -rf "$tmp"
     return 0
   fi
   while read -r name; do
+    # $claimed only grows once the manifest listing this skill is written.
+    if ! { cat "$claimed" && echo "$name"; } > "$claimed.next" ||
+      ! write_manifest incomplete "$owned" "$claimed.next" ||
+      ! mv "$claimed.next" "$claimed"; then
+      # Can't record this skill as ours, so it and the rest are not copied.
+      log "could not write the skills manifest; stopped before skill $name"
+      failed=1
+      break
+    fi
     if ! { rm -rf "${skills_dir:?}/$name" && cp -RP "$tmp/pstack-skills/$name" "$skills_dir/$name" \
       && find "$skills_dir/$name" -type l -delete; }; then
       log "could not install skill $name"
@@ -123,14 +135,24 @@ install_pstack_skills() {
       rm -rf "${skills_dir:?}/$name"
     fi
   done < "$owned"
-  # On a failed copy, record the names but not the commit, so the next session
-  # retries. If this write fails, the incomplete manifest above stays.
-  # ponytail: ceiling: that manifest can still list a skill the loop above
-  # removed; a platform copy later synced under exactly that name is treated
-  # as ours until a run succeeds. Over-listing never orphans a skill.
+  # The final manifest lists the skills this run touched plus the old ones
+  # this bundle still ships (on a stopped run, some of those were not
+  # reached). On a failed copy or write it keeps the incomplete header, so
+  # the next session retries. If this write fails, the incomplete manifest
+  # above stays.
+  local kept="$tmp/kept"
+  grep -Fx -f "$names" -- "$owned" > "$kept"
+  if [ "$?" -gt 1 ]; then
+    log "could not finish the skills manifest; the next session retries"
+    rm -rf "$tmp"
+    return 0
+  fi
+  # ponytail: ceiling: that manifest can still list an old skill the loop
+  # above already removed; a platform copy synced under exactly that name
+  # before the next successful run is treated as ours.
   local header="$commit"
   [ "$failed" = 0 ] || header="incomplete"
-  if ! write_manifest "$header" "$names"; then
+  if ! write_manifest "$header" "$claimed" "$kept"; then
     log "could not finish the skills manifest; the next session retries"
     failed=1
   fi
