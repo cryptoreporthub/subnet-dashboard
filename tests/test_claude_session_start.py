@@ -161,6 +161,32 @@ def test_drops_skills_a_new_bundle_no_longer_ships(env):
     assert skill(env["home"], "kept") == "platform copy"
 
 
+@pytest.mark.parametrize("bundle", ["no-skills-dir", "no-skill-dirs"])
+def test_bundle_without_skills_leaves_installed_ones(env, bundle):
+    # A pin whose archive fails, or holds no skill dirs, must not read as
+    # "every installed skill was dropped".
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    before = manifest.read_text()
+    work = env["work"]
+    if bundle == "no-skill-dirs":
+        shutil.rmtree(work / "pstack-skills")
+        (work / "pstack-skills").mkdir()
+        (work / "pstack-skills" / "README.md").write_text("empty")
+        git(work, "add", "-A")
+        git(work, "commit", "-qm", bundle)
+        git(work, "push", "-q", "-f", "origin", "HEAD:refs/heads/pstack-skills-bundle")
+        empty = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=work, check=True, capture_output=True, text=True
+        ).stdout.strip()
+    else:
+        empty = publish_bundle(work, {})
+    run(env["env"], pinned_script(env["tmp"], empty))
+    assert skill(env["home"], "poteto-mode") == "v1"
+    assert manifest.read_text() == before
+
+
 def test_bundle_links_are_never_installed(env):
     secret = env["tmp"] / "outside.txt"
     secret.write_text("outside the bundle")

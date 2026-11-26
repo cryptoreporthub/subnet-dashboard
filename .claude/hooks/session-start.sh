@@ -49,6 +49,14 @@ install_pstack_skills() {
     rm -rf "$tmp"
     return 0
   fi
+  # A bundle with no skill dirs leaves the glob unmatched; touching nothing is
+  # safer than reading it as "every installed skill was dropped".
+  set -- "$tmp"/pstack-skills/*/
+  if [ ! -d "${1-}" ]; then
+    log "pinned bundle ${commit:0:7} has no skills; nothing changed"
+    rm -rf "$tmp"
+    return 0
+  fi
   mkdir -p "$skills_dir"
   local names="$tmp/names" failed=0
   : > "$names"
@@ -72,7 +80,8 @@ install_pstack_skills() {
     fi
   done
   # Remove skills an earlier bundle installed that this bundle no longer ships.
-  if [ -f "$manifest" ]; then
+  # With no names recorded (only links or "synced"), skip it rather than drop all.
+  if [ -f "$manifest" ] && [ -s "$names" ]; then
     tail -n +2 "$manifest" | while read -r name; do
       if [ -n "$name" ] && ! grep -Fqx "$name" "$names"; then
         rm -rf "${skills_dir:?}/$name"
