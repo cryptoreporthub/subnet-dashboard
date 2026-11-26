@@ -136,13 +136,24 @@ def test_allowed_tools_is_the_pinned_allowlist():
     assert {entry for entry in entries if entry.startswith("Bash")} == {
         "Bash(gh pr comment * --body *)",
         "Bash(gh pr diff:*)",
-        "Bash(gh pr view:*)",
     }
     assert {entry for entry in entries if entry.split("(", 1)[0] in {"Read", "Grep", "Glob"}} == {
         "Read(./**)",
         "Grep(./**)",
         "Glob(./**)",
     }
+
+
+def test_review_job_has_a_thirty_minute_timeout():
+    assert _load()["jobs"]["review"]["timeout-minutes"] == 30
+
+
+def test_review_job_does_not_allow_or_prompt_gh_pr_view():
+    # The PR number and run marker are injected by the workflow, so the bot
+    # does not need `gh pr view` to post or to satisfy the post-check.
+    assert "Bash(gh pr view:*)" not in _allowed_tools(_load())
+    assert "gh pr view" not in _prompt(_load())
+    assert "gh pr diff" in _prompt(_load())
 
 
 def test_review_job_uses_only_user_setting_sources():

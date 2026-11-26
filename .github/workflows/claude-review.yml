@@ -20,6 +20,7 @@ jobs:
     if: >-
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -87,7 +88,7 @@ jobs:
             --permission-mode default
             --setting-sources user
             --strict-mcp-config
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment * --body *),Bash(gh pr diff:*),Bash(gh pr view:*),Read(./**),Grep(./**),Glob(./**)"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment * --body *),Bash(gh pr diff:*),Read(./**),Grep(./**),Glob(./**)"
             --disallowedTools "Read(//proc/**),Grep(//proc/**),Glob(//proc/**),Bash(gh pr comment* --body-file*),Bash(gh pr comment* -F*),Bash(gh pr comment* --editor*),Bash(gh pr comment* -e),Bash(gh pr comment* -e *),Bash(gh pr comment* --edit-last*),Bash(gh pr comment* --delete-last*),Bash(gh pr comment* --create-if-none*),Bash(gh pr comment* --attach*)"
       - name: Fail if no review or summary was posted
         # A green run that posted nothing looks like a passed review. The action hides
