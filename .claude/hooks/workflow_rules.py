@@ -34,6 +34,10 @@ WORKER_AGENT = "pstack-worker"
 # would run on its own model. Fine for a workflow guard, not a security boundary.
 SONNET_AGENTS = {WORKER_AGENT, "architect", "pr-review"}
 AGENT_TOOLS = {"Agent", "Task"}
+# Workflow starts agents from a script, which this gate can't check: it is
+# denied, so agents go through the Agent tool and its model check. (The other
+# known route, a skill with context: fork, is in the ponytail below.)
+SCRIPTED_AGENT_TOOLS = {"Workflow"}
 # Tools that change nothing, so they don't count as work: bookkeeping, and
 # read-only lookups, so a turn that only reads and answers needs no advisor.
 # Bash always counts, since a command can change anything.
@@ -45,8 +49,9 @@ NON_WORK_TOOLS = {
     "AskUserQuestion", "ExitPlanMode", "ScheduleWakeup",
 }
 # ponytail: Skill counts as non-work because the pstack skills are instructions
-# loaded in place. If a skill ever runs its own subagent that edits files, move
-# Skill out of this set.
+# loaded in place. A skill whose frontmatter sets context: fork (or an agent or
+# model) runs in its own subagent that this gate never sees; no installed skill
+# does today. If one ever does, move Skill out of this set and gate it.
 # ponytail: names are matched exactly, so read-only MCP tools (for example
 # mcp__github__pull_request_read) still count as work and ask for the advisor.
 # That only over-blocks; guessing from verbs like "get" could let a write through.
@@ -173,9 +178,16 @@ def subagent_verdict(tool_input: dict) -> str | None:
 
 
 def on_subagent(event: dict) -> None:
-    if event.get("tool_name") not in AGENT_TOOLS:
+    tool = event.get("tool_name")
+    if tool in SCRIPTED_AGENT_TOOLS:
+        reason = (
+            f"{tool} starts agents this check can't see. Run each step with "
+            "the Agent tool on a Sonnet pstack subagent instead."
+        )
+    elif tool in AGENT_TOOLS:
+        reason = subagent_verdict(event.get("tool_input") or {})
+    else:
         return
-    reason = subagent_verdict(event.get("tool_input") or {})
     if reason is None:
         return
     _emit(

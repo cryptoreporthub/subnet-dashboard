@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -842,3 +843,16 @@ def test_agents_trusted_as_sonnet_pin_sonnet():
         assert "\nmodel: sonnet\n" in front, f"{name}.md does not pin model: sonnet"
     advisor = (agents_dir / f"{workflow_rules.ADVISOR_AGENT}.md").read_text().split("---")[1]
     assert "\nmodel: opus\n" in advisor
+
+
+def test_workflow_tool_is_denied_and_matched():
+    # A Workflow script starts its own agents, which this gate never sees, so
+    # it would get round the Sonnet-only rule. It is denied, and the settings
+    # route it to the gate.
+    assert denied(run_hook("subagent", {"tool_name": "Workflow", "tool_input": {"script": "x"}}))
+    assert run_hook("subagent", {"tool_name": "Bash", "tool_input": {"command": "ls"}}) is None
+    settings_path = Path(__file__).resolve().parent.parent / ".claude" / "settings.json"
+    settings = json.loads(settings_path.read_text())
+    matchers = [m["matcher"] for m in settings["hooks"]["PreToolUse"]]
+    assert any(re.fullmatch(m, "Workflow") for m in matchers)
+    assert any(re.fullmatch(m, "Agent") for m in matchers)

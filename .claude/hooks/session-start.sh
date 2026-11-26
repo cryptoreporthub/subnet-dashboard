@@ -113,7 +113,7 @@ discard() {
 }
 
 install_pstack_skills() {
-  local commit="$bundle_sha" tmp name dest ref="refs/remotes/origin/$bundle_branch"
+  local commit="$bundle_sha" tmp name dest dir ref="refs/remotes/origin/$bundle_branch"
   # Runs every session, so a copy left in the stage never waits for a new pin.
   recover_set_aside || return 0
   if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
