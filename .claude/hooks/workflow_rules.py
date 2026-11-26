@@ -64,7 +64,8 @@ GEMINI_ITEMS = (
 )
 
 RULES = (
-    "Workflow rules for this repo (hooks enforce rules 2 and 3; follow 1 and 4 yourself):\n"
+    "Workflow rules for this repo (hooks back up rules 2 and 3 when they run; "
+    "follow all four yourself):\n"
     "1. Poteto mode is on: follow ~/.claude/skills/poteto-mode/SKILL.md and the "
     "pstack skills in ~/.claude/skills.\n"
     f"2. Use Sonnet pstack subagents for ALL tasks: delegate work to the "
