@@ -125,6 +125,9 @@ install_pstack_skills() {
   done < "$owned"
   # On a failed copy, record the names but not the commit, so the next session
   # retries. If this write fails, the incomplete manifest above stays.
+  # ponytail: ceiling: that manifest can still list a skill the loop above
+  # removed; a platform copy later synced under exactly that name is treated
+  # as ours until a run succeeds. Over-listing never orphans a skill.
   local header="$commit"
   [ "$failed" = 0 ] || header="incomplete"
   if ! write_manifest "$header" "$names"; then

@@ -77,6 +77,8 @@ def env(tmp_path):
         "PATH": f"{stub_bin}:{os.environ['PATH']}",
         "CLAUDE_PROJECT_DIR": str(repo),
         "CLAUDE_CODE_REMOTE": "true",
+        # A killed run never removes its mktemp dir: keep those inside tmp_path.
+        "TMPDIR": str(tmp_path),
     }
     return {
         "work": work,
@@ -226,10 +228,11 @@ def test_failed_manifest_write_copies_nothing(env):
 
 @pytest.mark.parametrize("failing_header", ["incomplete", "commit"])
 def test_failed_manifest_write_keeps_ownership(env, failing_header):
-    # One manifest write fails (echo is shadowed through BASH_ENV for that
-    # header): before the copy ("incomplete") or after it ("commit"). Either
-    # way every skill on disk stays owned, so a later bundle removes both the
-    # dropped old skill and one the failed session added.
+    # One manifest write fails (echo and printf are shadowed through BASH_ENV
+    # to fail on that header): before the copy ("incomplete") or after it
+    # ("commit"). Either way every skill on disk stays owned, so a later
+    # bundle removes both the dropped old skill and one the failed session
+    # added.
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
     manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
@@ -237,7 +240,9 @@ def test_failed_manifest_write_keeps_ownership(env, failing_header):
     header = v2 if failing_header == "commit" else "incomplete"
     shim = env["tmp"] / "fail-header.sh"
     shim.write_text(
-        'echo() { [ "${1-}" = "%s" ] && return 1; builtin echo "$@"; }\n' % header
+        '_names_header() { local a; for a in "$@"; do [ "$a" = "%s" ] && return 0; done; return 1; }\n'
+        'echo() { _names_header "$@" && return 1; builtin echo "$@"; }\n'
+        'printf() { _names_header "$@" && return 1; builtin printf "$@"; }\n' % header
     )
     run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
     assert manifest.read_text().splitlines()[0] != v2
@@ -248,6 +253,29 @@ def test_failed_manifest_write_keeps_ownership(env, failing_header):
     assert skill(env["home"], "added") is None
     assert skill(env["home"], "kept") == "platform copy"
     assert manifest.read_text().splitlines() == [v3, "poteto-mode"]
+
+
+def test_crash_mid_copy_keeps_ownership(env):
+    # The session dies right after copying "added" (cp kills the script through
+    # BASH_ENV): the provisional manifest must already list the old skills and
+    # the new one, so a later bundle removes both the one this bundle dropped
+    # and the one copied before the crash.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "added": "v2"})
+    shim = env["tmp"] / "crash-cp.sh"
+    shim.write_text('cp() { command cp "$@"; case "$*" in *"/added"*) kill -9 $$ ;; esac; }\n')
+    proc = subprocess.run(
+        ["bash", str(pinned_script(env["tmp"], v2))],
+        env={**env["env"], "BASH_ENV": str(shim)}, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode != 0
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "poteto-mode") == "v3"
+    assert skill(env["home"], "old") is None
+    assert skill(env["home"], "added") is None
+    assert skill(env["home"], "kept") == "platform copy"
 
 
 def test_bundle_links_are_never_installed(env):
