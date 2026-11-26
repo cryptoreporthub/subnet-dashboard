@@ -249,9 +249,11 @@ def _chain_state(event: dict, entries: list[dict]) -> tuple[int, int] | None:
 
     A chain is the run of Stops that Claude Code marks stop_hook_active, so it
     starts over with each new turn whatever the transcript holds. The first
-    Stop finds the turn start; later Stops in the chain reuse the one it
-    stored, so however the block reason is written back, it can't move the
-    window.
+    Stop finds the turn start; later Stops in the chain find the same entry by
+    the uuid it stored, so however the block reason is written back, it can't
+    move the window. If that entry is gone (the transcript was rewritten, as by
+    compaction) or had no uuid, the window is the whole transcript, which can
+    only add a block.
     """
     if not event.get("stop_hook_active"):
         return turn_start(entries), 0
@@ -263,22 +265,22 @@ def _chain_state(event: dict, entries: list[dict]) -> tuple[int, int] | None:
         return None
     if not isinstance(state, dict):
         return None
-    start, count = state.get("start"), state.get("blocks")
-    if not isinstance(start, int) or not isinstance(count, int):
+    start_uuid, count = state.get("start_uuid"), state.get("blocks")
+    if not isinstance(count, int):
         return None
-    # ponytail: a transcript rewritten mid-chain (compaction) can leave the
-    # stored index pointing at other entries; it is only bounds-checked here.
-    if not -1 <= start < len(entries):
-        return None
-    return start, count
+    for i, entry in enumerate(entries):
+        if start_uuid is not None and entry.get("uuid") == start_uuid:
+            return i, count
+    return -1, count
 
 
-def _record_block(event: dict, start: int, count: int) -> bool:
+def _record_block(event: dict, entries: list[dict], start: int, count: int) -> bool:
+    start_uuid = entries[start].get("uuid") if start >= 0 else None
     try:
         path = _state_path(event)
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
         with os.fdopen(os.open(path + ".tmp", flags, 0o600), "w", encoding="utf-8") as fh:
-            json.dump({"start": start, "blocks": count}, fh)
+            json.dump({"start_uuid": start_uuid, "blocks": count}, fh)
         os.replace(path + ".tmp", path)
         return True
     except OSError:
@@ -301,7 +303,7 @@ def on_stop(event: dict) -> None:
     worked, consulted = turn_summary(entries[start + 1 :])
     if not worked or consulted:
         return
-    if not _record_block(event, start, count + 1) and event.get("stop_hook_active"):
+    if not _record_block(event, entries, start, count + 1) and event.get("stop_hook_active"):
         return
     _emit(
         {

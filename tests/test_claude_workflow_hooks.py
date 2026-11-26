@@ -80,7 +80,7 @@ def write_transcript(tmp_path, entries):
 
 
 def user(text):
-    return {"type": "user", "message": {"role": "user", "content": text}}
+    return {"type": "user", "uuid": uuid.uuid4().hex, "message": {"role": "user", "content": text}}
 
 
 def tool_result():
@@ -317,6 +317,20 @@ def test_prompt_opening_like_block_reason_is_an_ordinary_prompt(tmp_path):
         ],
     )
     assert stop(path) is None
+
+
+def test_stop_rewritten_transcript_falls_back_to_the_whole_transcript(tmp_path):
+    """If the stored turn start is gone (as after compaction), the re-check widens, never narrows."""
+    session = uuid.uuid4().hex
+    turn = [user("earlier"), assistant({"type": "text", "text": "hi"}), user("go")]
+    turn += [assistant(tool_use("Edit", file_path="a.py")), tool_result()]
+    out = stop(write_transcript(tmp_path, turn), session=session)
+    assert out["decision"] == "block"
+    rewritten = [user("summary of earlier work"), assistant(tool_use("Edit", file_path="a.py"))]
+    rewritten += [tool_result(), block_feedback(out["reason"], "user-unprefixed")]
+    rewritten += [assistant({"type": "text", "text": "done"})]
+    out = stop(write_transcript(tmp_path, rewritten), active=True, session=session)
+    assert out["decision"] == "block"
 
 
 def test_stop_cap_resets_on_a_new_turn(tmp_path):
