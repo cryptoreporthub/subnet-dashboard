@@ -184,7 +184,11 @@ install_pstack_skills() {
     fi
     if [ -e "$dest" ] && ! set_aside "$name"; then
       rm -rf "${stage_dir:?}/new/$name"
-      [ -e "$dest" ] || failed=1
+      # Done only if a platform copy now holds the name. The hook's old copy
+      # still there (the move failed) or a free name both need a retry.
+      if owned "$dest" || { [ ! -e "$dest" ] && [ ! -L "$dest" ]; }; then
+        failed=1
+      fi
       continue
     fi
     if ! place "$stage_dir/new/$name" "$dest"; then
@@ -221,7 +225,14 @@ install_pstack_skills() {
       1) ;;
       *) failed=1; continue ;;
     esac
-    set_aside "$name" && discard "$name"
+    if set_aside "$name"; then
+      discard "$name"
+    elif owned "$dir"; then
+      # The move failed and the dropped skill is still installed: retry. A
+      # platform copy that set_aside could not put back waits in the stage
+      # for recover_set_aside, which runs every session.
+      failed=1
+    fi
   done
   rm -rf "$tmp"
   # The manifest only records which bundle is fully installed, so the next

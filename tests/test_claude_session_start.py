@@ -509,6 +509,59 @@ def test_stale_skill_is_kept_when_the_name_check_errors(env):
     assert manifest.read_text().strip() == v2
 
 
+@pytest.mark.parametrize("case", ["update", "dropped"])
+def test_failed_set_aside_leaves_the_install_unfinished(env, case):
+    # Moving the hook's old copy of a skill aside fails (mv errors), so the
+    # old copy stays. The hook must not record the new bundle as installed,
+    # or the next session would skip the retry and keep the old copy for good.
+    name = "poteto-mode" if case == "update" else "old"
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2"})
+    shim = env["tmp"] / "set-aside-fails.sh"
+    shim.write_text(
+        'mv() {\n'
+        '  case "${@: -1}" in */.pstack-stage/old/%s) return 1 ;; esac\n'
+        '  command mv "$@"\n'
+        '}\n' % name
+    )
+    script = pinned_script(env["tmp"], v2)
+    run({**env["env"], "BASH_ENV": str(shim)}, script)
+    assert skill(env["home"], name) == "v1"
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    assert manifest.read_text().strip() == v1
+    run(env["env"], script)
+    assert skill(env["home"], "poteto-mode") == "v2"
+    assert skill(env["home"], "old") is None
+    assert manifest.read_text().strip() == v2
+
+
+@pytest.mark.parametrize("case", ["update", "dropped"])
+def test_platform_copy_swapped_in_as_a_skill_is_set_aside_counts_as_done(env, case):
+    # The platform replaces the hook's copy with its own right before the hook
+    # moves it aside. set_aside puts the platform copy back, and that name is
+    # settled: the install is complete, not left for a retry.
+    name = "poteto-mode" if case == "update" else "old"
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2"})
+    platform = env["home"] / ".claude" / "skills" / name
+    shim = env["tmp"] / "swap-on-set-aside.sh"
+    shim.write_text(
+        'mv() {\n'
+        '  case "${@: -1}" in */.pstack-stage/old/%(n)s)\n'
+        '    command rm -rf %(p)s && mkdir %(p)s && builtin printf "platform copy" > %(p)s/SKILL.md ;;\n'
+        '  esac\n'
+        '  command mv "$@"\n'
+        '}\n' % {"n": name, "p": platform}
+    )
+    run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
+    assert skill(env["home"], name) == "platform copy"
+    assert not (platform / ".pstack-bundle-skill").exists()
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    assert manifest.read_text().strip() == v2
+
+
 # Counts every file command the hook runs. At call SWEEP_INJECT it plays the
 # platform syncing skill "late" (if the name is free) and at call SWEEP_KILL
 # it kills the hook. Matching on call order, not on paths, keeps the sweep
