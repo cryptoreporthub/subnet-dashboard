@@ -29,7 +29,9 @@ import tempfile
 
 ADVISOR_AGENT = "opus-advisor"
 WORKER_AGENT = "pstack-worker"
-# Agent files in .claude/agents that already pin model: sonnet.
+# Agent files in .claude/agents that already pin model: sonnet. The gate trusts
+# these names: an agent of the same name from a source that takes precedence
+# would run on its own model. Fine for a workflow guard, not a security boundary.
 SONNET_AGENTS = {WORKER_AGENT, "architect", "pr-review"}
 AGENT_TOOLS = {"Agent", "Task"}
 # Tools that change nothing, so they don't count as work: bookkeeping, and
