@@ -202,43 +202,52 @@ def test_bundle_with_nothing_installable_keeps_ownership(env):
 
 
 @pytest.mark.skipif(not os.path.exists("/dev/full"), reason="needs /dev/full")
-def test_failed_manifest_write_keeps_the_old_manifest(env):
-    # A full disk while writing the manifest must not lose the names it owns:
-    # a later bundle still removes a skill the first one installed.
+def test_failed_manifest_write_copies_nothing(env):
+    # A full disk while recording ownership must not copy anything: the old
+    # manifest and the skills it owns stay as they were, and a later bundle
+    # still removes a skill the first one installed.
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
     manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
     before = manifest.read_text()
     tmp_manifest = Path(str(manifest) + ".tmp")
     tmp_manifest.symlink_to("/dev/full")
-    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2"})
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2", "added": "v2"})
     run(env["env"], pinned_script(env["tmp"], v2))
     assert manifest.read_text() == before
     assert not tmp_manifest.is_symlink()
+    assert skill(env["home"], "poteto-mode") == "v1"
+    assert skill(env["home"], "added") is None
     v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
     run(env["env"], pinned_script(env["tmp"], v3))
     assert skill(env["home"], "poteto-mode") == "v3"
     assert skill(env["home"], "old") is None
 
 
-def test_failed_manifest_header_write_keeps_the_old_manifest(env):
-    # Only the header line fails (echo is shadowed through BASH_ENV): the
-    # names after it must not be promoted as a manifest without its header.
+@pytest.mark.parametrize("failing_header", ["incomplete", "commit"])
+def test_failed_manifest_write_keeps_ownership(env, failing_header):
+    # One manifest write fails (echo is shadowed through BASH_ENV for that
+    # header): before the copy ("incomplete") or after it ("commit"). Either
+    # way every skill on disk stays owned, so a later bundle removes both the
+    # dropped old skill and one the failed session added.
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
     manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
-    before = manifest.read_text()
-    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2"})
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2", "added": "v2"})
+    header = v2 if failing_header == "commit" else "incomplete"
     shim = env["tmp"] / "fail-header.sh"
     shim.write_text(
-        'echo() { [ "${1-}" = "%s" ] && return 1; builtin echo "$@"; }\n' % v2
+        'echo() { [ "${1-}" = "%s" ] && return 1; builtin echo "$@"; }\n' % header
     )
     run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
-    assert manifest.read_text() == before
+    assert manifest.read_text().splitlines()[0] != v2
     v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
     run(env["env"], pinned_script(env["tmp"], v3))
     assert skill(env["home"], "poteto-mode") == "v3"
     assert skill(env["home"], "old") is None
+    assert skill(env["home"], "added") is None
+    assert skill(env["home"], "kept") == "platform copy"
+    assert manifest.read_text().splitlines() == [v3, "poteto-mode"]
 
 
 def test_bundle_links_are_never_installed(env):
