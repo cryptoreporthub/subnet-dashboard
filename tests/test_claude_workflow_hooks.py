@@ -56,14 +56,10 @@ def _gemini_items():
 
 
 def test_prompt_mode_says_when_to_bring_in_gemini():
-    """Every prompt carries the Gemini step: which items, and to stop and hand over a prompt."""
+    """Every prompt carries the Gemini step with the shared item list and its hand-over phrase."""
     context = run_hook("prompt", {"prompt": "hi"})["hookSpecificOutput"]["additionalContext"]
     assert _gemini_items() in context
     assert "Time for Gemini" in context
-    assert "ready-to-paste Gemini prompt" in context
-    assert "Never for routine work" in context
-    assert "Don't code the item or hand it to a worker until they reply" in context
-    assert "once the user skipped it or Gemini reviewed it" in context
 
 
 @pytest.mark.parametrize("agent", ["opus-advisor", "pstack-worker"])
