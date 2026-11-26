@@ -1,8 +1,12 @@
 name: Claude mention
 
 # Humans (owner, member or collaborator) trigger Claude with "@claude" in a
-# PR or issue comment. Bot comments never start a run, so an agent that reads
-# untrusted comment text is never given the repo secret.
+# PR or issue comment. Bot comments never start a run, and the job is skipped
+# for any other commenter: only an owner, member or collaborator can start it.
+# The claude-human job holds the Claude login (CLAUDE_CODE_OAUTH_TOKEN) and a
+# token that can push (the action sets it up so Claude can push fixes). The
+# env scrub below only hides secrets from Bash children; it does not remove
+# that token. The only protection is who may trigger the job.
 # The GitHub App reacts to the mention, but this workflow does the
 # work. Requires the repo secret CLAUDE_CODE_OAUTH_TOKEN.
 
@@ -73,4 +77,4 @@ jobs:
           # --setting-sources user ignores .claude settings and hooks a PR adds.
           # The action still writes its own settings to ~/.claude/settings.json (the
           # user source), and allowed/disallowed tools are passed as SDK options.
-          claude_args: "--model haiku --setting-sources user"
+          claude_args: "--model haiku --setting-sources user --strict-mcp-config"

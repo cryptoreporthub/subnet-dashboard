@@ -154,6 +154,13 @@ def test_review_job_uses_only_user_setting_sources():
     assert args[args.index("--setting-sources") + 1] == "user"
 
 
+def test_review_job_uses_only_the_actions_own_mcp_servers():
+    # The action passes its own servers (the inline-comment tool) with --mcp-config, which
+    # --strict-mcp-config keeps. It drops every other source, such as a .mcp.json a PR adds.
+    args = shlex.split(_step(_load(), "anthropics/claude-code-action")["with"]["claude_args"])
+    assert "--strict-mcp-config" in args
+
+
 def test_file_tools_are_never_unscoped():
     # A bare `Read`, `Grep` or `Glob` would allow any path on the runner.
     for entry in _allowed_tools(_load()):
@@ -168,13 +175,21 @@ def test_proc_is_denied_to_the_file_tools():
     assert {"Read(//proc/**)", "Grep(//proc/**)", "Glob(//proc/**)"} <= denied
 
 
-def test_comment_file_and_editor_flags_are_denied():
+def test_comment_file_editor_and_edit_flags_are_denied():
+    # `gh pr comment* --flag*` has no space after `comment`, so it also matches a flag
+    # placed before the PR number. The old `gh pr comment * --flag*` form did not: with
+    # `gh pr comment -F /f 1 --body hi` the allow rule matched and no deny did, so the
+    # command ran (proved on CLI 2.1.332; see the PR body).
     assert {d for d in _disallowed_tools(_load()) if d.startswith("Bash")} == {
-        "Bash(gh pr comment * --body-file*)",
-        "Bash(gh pr comment * -F*)",
-        "Bash(gh pr comment * --editor*)",
-        "Bash(gh pr comment * -e)",
-        "Bash(gh pr comment * -e *)",
+        "Bash(gh pr comment* --body-file*)",
+        "Bash(gh pr comment* -F*)",
+        "Bash(gh pr comment* --editor*)",
+        "Bash(gh pr comment* -e)",
+        "Bash(gh pr comment* -e *)",
+        "Bash(gh pr comment* --edit-last*)",
+        "Bash(gh pr comment* --delete-last*)",
+        "Bash(gh pr comment* --create-if-none*)",
+        "Bash(gh pr comment* --attach*)",
     }
 
 
@@ -183,28 +198,60 @@ def test_gh_pr_comment_runs_only_with_body():
         'gh pr comment 1 --body "hello world"',
         "gh pr comment 1 --body 'Review summary: all good'",
         "gh pr comment 1 --body \"$(cat <<'EOF'\n## Summary\n<!-- claude-review-run:1-1 -->\nEOF\n)\"",
+        # Flag names in backticks inside the body are normal review text and stay allowed.
+        "gh pr comment 1 --body \"$(cat <<'EOF'\nThe denies (`--body-file*`, `-F*`, `--editor*`) hold.\nEOF\n)\"",
+        'gh pr comment 1 --body "non-Final pre-Fix re-use"',
     ]
-    blocked = [
-        "gh pr comment 1 --body-file /tmp/x",
-        "gh pr comment 1 -F /tmp/x",
-        "gh pr comment 1 -F -",
-        "gh pr comment 1 --body hi --body-file /tmp/x",
-        "gh pr comment 1 --body-file /tmp/x --body hi",
-        "gh pr comment 1 --body hi --body-file=/tmp/x",
-        "gh pr comment 1 --body hi -F/tmp/x",
-        "gh pr comment 1 --body hi -F /tmp/x",
-        "gh pr comment 1 --editor",
-        "gh pr comment 1 -e",
-        "gh pr comment 1 --body hi --editor",
-        "gh pr comment 1 --body hi -e",
-        "gh pr comment 1",
-        "gh pr comment --body-file /tmp/x 1",
-        "gh pr comment 1 -R o/r --body-file /tmp/x",
+    flags = [
+        "--body-file /tmp/x",
+        "--body-file=/tmp/x",
+        "-F /tmp/x",
+        "-F/tmp/x",
+        "-F -",
+        "--editor",
+        "-e",
+        "--edit-last",
+        "--delete-last",
+        "--create-if-none",
+        "--attach /tmp/x",
     ]
+    blocked = ["gh pr comment 1"]
+    for flag in flags:
+        # Before the PR number, after it, and after the body.
+        blocked += [
+            f"gh pr comment {flag} 1 --body hi",
+            f"gh pr comment 1 {flag} --body hi",
+            f"gh pr comment 1 --body hi {flag}",
+            f"gh pr comment 1 -R o/r {flag}",
+        ]
     for command in ok:
         assert _bash_comment_allowed(command), command
     for command in blocked:
         assert not _bash_comment_allowed(command), command
+
+
+def test_each_new_deny_blocks_on_its_own():
+    # Remove one deny at a time: its flag must then get through, so no deny is dead weight.
+    wf = _load()
+    allow = [e[len("Bash("):-1] for e in _allowed_tools(wf) if e.startswith("Bash(gh pr comment")]
+    deny = [e[len("Bash("):-1] for e in _disallowed_tools(wf) if e.startswith("Bash(gh pr comment")]
+    probes = {
+        "gh pr comment* --body-file*": "gh pr comment --body-file /f 1 --body hi",
+        "gh pr comment* -F*": "gh pr comment -F /f 1 --body hi",
+        "gh pr comment* --editor*": "gh pr comment --editor 1 --body hi",
+        "gh pr comment* -e": "gh pr comment 1 --body hi -e",
+        "gh pr comment* -e *": "gh pr comment -e 1 --body hi",
+        "gh pr comment* --edit-last*": "gh pr comment --edit-last 1 --body hi",
+        "gh pr comment* --delete-last*": "gh pr comment --delete-last 1 --body hi",
+        "gh pr comment* --create-if-none*": "gh pr comment --create-if-none 1 --body hi",
+        "gh pr comment* --attach*": "gh pr comment --attach /f 1 --body hi",
+    }
+    assert set(probes) == set(deny)
+    for glob, command in probes.items():
+        others = [g for g in deny if g != glob]
+        assert any(fnmatch.fnmatchcase(command, g) for g in allow), command
+        assert not any(fnmatch.fnmatchcase(command, g) for g in others), (glob, command)
+        assert fnmatch.fnmatchcase(command, glob), (glob, command)
 
 
 def test_review_job_fails_when_no_marked_summary_was_posted():

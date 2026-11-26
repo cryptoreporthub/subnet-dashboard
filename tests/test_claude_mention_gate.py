@@ -265,3 +265,22 @@ def test_human_job_uses_only_user_setting_sources():
     assert args[args.index("--setting-sources") + 1] == "user"
     # The only other arg is the model, as Joshua chose.
     assert "--model" in args and args[args.index("--model") + 1] == "haiku"
+
+
+def test_human_job_uses_only_the_actions_own_mcp_servers():
+    # The mention job runs the action in tag mode, which passes its GitHub servers with
+    # --mcp-config; --strict-mcp-config keeps those and drops any other MCP source.
+    import shlex
+    args = shlex.split(_step(uses_prefix="anthropics/claude-code-action")["with"]["claude_args"])
+    assert "--strict-mcp-config" in args
+
+
+def test_header_says_the_job_holds_the_login_and_a_push_token():
+    # The header must not claim the job runs without secrets: it holds the Claude login
+    # and a token that can push, so the trigger check is the protection.
+    header = WORKFLOW.read_text().split("\non:\n", 1)[0]
+    flat = " ".join(line.lstrip("# ").strip() for line in header.splitlines())
+    assert "holds the Claude login (CLAUDE_CODE_OAUTH_TOKEN)" in flat
+    assert "token that can push" in flat
+    assert "only an owner, member or collaborator can start it" in flat
+    assert "never given the repo secret" not in flat.lower()
