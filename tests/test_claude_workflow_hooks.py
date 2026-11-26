@@ -253,11 +253,15 @@ def block_feedback(reason, shape):
                 "blockingError": {"blockingError": reason, "command": "workflow_rules.py stop"},
             },
         }
+    if shape == "user-unprefixed":
+        return user(reason)
     entry = user(f"Stop hook feedback:\n{reason}")
     return {**entry, "isMeta": True} if shape == "user" else entry
 
 
-SHAPES = pytest.mark.parametrize("shape", ["attachment", "user", "user-plain"])
+# The gate must not depend on how Claude Code writes the reason back, so every
+# shape, including one that reads exactly like a typed prompt, is covered.
+SHAPES = pytest.mark.parametrize("shape", ["attachment", "user", "user-plain", "user-unprefixed"])
 
 
 @SHAPES
@@ -300,11 +304,8 @@ def test_stop_blocks_at_most_three_times_per_turn(tmp_path, shape):
     assert [o and o["decision"] for o in outs] == ["block", "block", "block", None]
 
 
-def test_prompt_opening_like_block_reason_fails_toward_blocking(tmp_path):
-    """Known ceiling: a typed prompt that opens like the block reason doesn't start a turn.
-
-    That can only add a block (the earlier work still needs the advisor), never hide work.
-    """
+def test_prompt_opening_like_block_reason_is_an_ordinary_prompt(tmp_path):
+    """A typed prompt that happens to open like the block reason starts a turn like any other."""
     path = write_transcript(
         tmp_path,
         [
@@ -315,7 +316,7 @@ def test_prompt_opening_like_block_reason_fails_toward_blocking(tmp_path):
             assistant({"type": "text", "text": "It means..."}),
         ],
     )
-    assert stop(path)["decision"] == "block"
+    assert stop(path) is None
 
 
 def test_stop_cap_resets_on_a_new_turn(tmp_path):

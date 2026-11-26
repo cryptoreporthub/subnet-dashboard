@@ -80,7 +80,12 @@ def env(tmp_path):
 
 
 def pinned_script(tmp, sha):
-    """A copy of session-start.sh whose bundle pin is the given sha."""
+    """A copy of session-start.sh whose bundle pin is the given sha.
+
+    ponytail: the tests run offline against a local bundle repo, so none runs
+    the shipped pin itself. Check it by hand with
+    git ls-remote origin pstack-skills-bundle when bumping it.
+    """
     text = SCRIPT.read_text()
     assert re.search(r'^bundle_sha="[0-9a-f]{40}"$', text, re.M), "pin line missing"
     copy = tmp / f"session-start-{sha[:7]}.sh"

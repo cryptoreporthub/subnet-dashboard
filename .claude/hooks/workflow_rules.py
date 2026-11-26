@@ -131,26 +131,23 @@ TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUI
 def _starts_turn(entry: dict) -> bool:
     """A user entry that opens a turn: a message the person typed.
 
-    System-written entries (isMeta: relayed messages, reminders) and the Stop
-    hook's own block reason never start a turn, so none of them can hide the work done
-    before it. A relayed message therefore extends the previous turn, which
-    can only add a block, never remove one.
+    System-written entries (isMeta: relayed messages, reminders) never start a
+    turn, so none of them can hide the work done before it. A relayed message
+    therefore extends the previous turn, which can only add a block, never
+    remove one. The Stop hook's own block reason needs no rule here: once a
+    Stop chain starts, on_stop reuses the window it stored and never looks for
+    a turn start again.
     """
     if entry.get("type") != "user" or entry.get("isMeta"):
         return False
     if any(entry.get(key) is not None for key in TOOL_DERIVED_KEYS):
         return False
     content = (entry.get("message") or {}).get("content")
-    if isinstance(content, str):
-        text = content
-    else:
+    if not isinstance(content, str):
         blocks = [b for b in content or [] if isinstance(b, dict)]
         if any(b.get("type") == "tool_result" for b in blocks):
             return False
-        text = "".join(b.get("text") or "" for b in blocks if b.get("type") == "text")
-    # The Stop hook's own reason, however it is written back, never starts a
-    # turn. A typed prompt with this exact opening only adds a block.
-    return not text.lstrip().startswith("Stop hook feedback")
+    return True
 
 
 def turn_start(entries: list[dict]) -> int:
@@ -159,11 +156,6 @@ def turn_start(entries: list[dict]) -> int:
         if _starts_turn(entries[i]):
             return i
     return -1
-
-
-def current_turn(entries: list[dict]) -> list[dict]:
-    """Entries after the message that started the current turn."""
-    return entries[turn_start(entries) + 1 :]
 
 
 def _messages(turn: list[dict]) -> list[list[dict]]:
@@ -252,30 +244,41 @@ def _state_path(event: dict) -> str:
     return os.path.join(_state_dir(), name)
 
 
-def _blocks_so_far(event: dict) -> int | None:
-    """Blocks already made in this Stop chain, or None if the count can't be read.
+def _chain_state(event: dict, entries: list[dict]) -> tuple[int, int] | None:
+    """(turn start index, blocks made so far) for this Stop, or None if unknown.
 
     A chain is the run of Stops that Claude Code marks stop_hook_active, so it
-    starts over with each new turn whatever the transcript holds.
+    starts over with each new turn whatever the transcript holds. The first
+    Stop finds the turn start; later Stops in the chain reuse the one it
+    stored, so however the block reason is written back, it can't move the
+    window.
     """
     if not event.get("stop_hook_active"):
-        return 0
+        return turn_start(entries), 0
     try:
         fd = os.open(_state_path(event), os.O_RDONLY | os.O_NOFOLLOW)
         with os.fdopen(fd, encoding="utf-8") as fh:
             state = json.load(fh)
     except (OSError, ValueError):
         return None
-    count = state.get("blocks") if isinstance(state, dict) else None
-    return count if isinstance(count, int) else None
+    if not isinstance(state, dict):
+        return None
+    start, count = state.get("start"), state.get("blocks")
+    if not isinstance(start, int) or not isinstance(count, int):
+        return None
+    # ponytail: a transcript rewritten mid-chain (compaction) can leave the
+    # stored index pointing at other entries; it is only bounds-checked here.
+    if not -1 <= start < len(entries):
+        return None
+    return start, count
 
 
-def _record_block(event: dict, count: int) -> bool:
+def _record_block(event: dict, start: int, count: int) -> bool:
     try:
         path = _state_path(event)
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
         with os.fdopen(os.open(path + ".tmp", flags, 0o600), "w", encoding="utf-8") as fh:
-            json.dump({"blocks": count}, fh)
+            json.dump({"start": start, "blocks": count}, fh)
         os.replace(path + ".tmp", path)
         return True
     except OSError:
@@ -286,17 +289,20 @@ def on_stop(event: dict) -> None:
     path = event.get("transcript_path")
     if not path:
         return
-    worked, consulted = turn_summary(current_turn(_read_transcript(path)))
+    entries = _read_transcript(path)
+    chain = _chain_state(event, entries)
+    # Without a working state file, fall back to Claude Code's own one-shot
+    # guard so a broken state file can never loop the session.
+    if chain is None:
+        return
+    start, count = chain
+    if count >= MAX_STOP_BLOCKS:
+        return
+    worked, consulted = turn_summary(entries[start + 1 :])
     if not worked or consulted:
         return
-    count = _blocks_so_far(event)
-    if count is not None and count >= MAX_STOP_BLOCKS:
+    if not _record_block(event, start, count + 1) and event.get("stop_hook_active"):
         return
-    # Without a working counter, fall back to Claude Code's own one-shot guard
-    # so a broken state file can never loop the session.
-    if count is None or not _record_block(event, count + 1):
-        if event.get("stop_hook_active"):
-            return
     _emit(
         {
             "decision": "block",
