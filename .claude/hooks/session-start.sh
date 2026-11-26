@@ -79,9 +79,15 @@ install_pstack_skills() {
       failed=1
     fi
   done
+  # No skill copied (only links, "synced" or platform copies): keep the
+  # manifest as it is, so the skills it lists stay ours for the next bundle.
+  if [ ! -s "$names" ]; then
+    log "pinned bundle ${commit:0:7} ships no installable skills; nothing changed"
+    rm -rf "$tmp"
+    return 0
+  fi
   # Remove skills an earlier bundle installed that this bundle no longer ships.
-  # With no names recorded (only links or "synced"), skip it rather than drop all.
-  if [ -f "$manifest" ] && [ -s "$names" ]; then
+  if [ -f "$manifest" ]; then
     tail -n +2 "$manifest" | while read -r name; do
       if [ -n "$name" ] && ! grep -Fqx "$name" "$names"; then
         rm -rf "${skills_dir:?}/$name"
@@ -89,12 +95,12 @@ install_pstack_skills() {
     done
   fi
   # On a failed copy, record the names but not the commit, so the next session retries.
+  # Only a fully written manifest replaces the old one (a full disk keeps it).
   if [ "$failed" = 0 ]; then
     { echo "$commit"; cat "$names"; } > "$manifest.tmp"
   else
     { echo "incomplete"; cat "$names"; } > "$manifest.tmp"
-  fi
-  mv "$manifest.tmp" "$manifest"
+  fi && mv "$manifest.tmp" "$manifest"
   rm -rf "$tmp"
   if [ "$failed" = 0 ]; then
     log "pstack skills installed from $bundle_branch@${commit:0:7}"

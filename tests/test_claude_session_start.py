@@ -187,6 +187,20 @@ def test_bundle_without_skills_leaves_installed_ones(env, bundle):
     assert manifest.read_text() == before
 
 
+def test_bundle_with_nothing_installable_keeps_ownership(env):
+    # A bundle that ships only "synced" copies nothing; the skills the
+    # manifest owns must still be updated and dropped by the next bundle.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "tdd": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"synced": "x"})
+    run(env["env"], pinned_script(env["tmp"], v2))
+    assert skill(env["home"], "poteto-mode") == "v1"
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "poteto-mode") == "v3"
+    assert skill(env["home"], "tdd") is None
+
+
 def test_bundle_links_are_never_installed(env):
     secret = env["tmp"] / "outside.txt"
     secret.write_text("outside the bundle")
