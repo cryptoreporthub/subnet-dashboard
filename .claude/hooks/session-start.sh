@@ -33,7 +33,7 @@ log() { echo "[session-start] $*" >&2; }
 install_pstack_skills() {
   local commit="$bundle_sha" tmp name ref="refs/remotes/origin/$bundle_branch"
   if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
-    git -C "$repo" fetch --quiet origin "+refs/heads/$bundle_branch:$ref" ||
+    git -C "$repo" -c gc.autoDetach=false fetch --quiet origin "+refs/heads/$bundle_branch:$ref" 9>&- ||
       log "could not fetch $bundle_branch"
   fi
   if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
@@ -44,7 +44,7 @@ install_pstack_skills() {
     return 0
   fi
   tmp="$(mktemp -d)"
-  if ! git -C "$repo" archive "$commit" pstack-skills | tar -x -C "$tmp"; then
+  if ! git -C "$repo" archive "$commit" pstack-skills 9>&- | tar -x -C "$tmp" 9>&-; then
     log "could not unpack pstack skills"
     rm -rf "$tmp"
     return 0
@@ -96,16 +96,6 @@ install_pstack_skills() {
 
 install_ditto_cli() {
   local lock="$ditto_src/package-lock.json" want tmp
-  # Two sessions sharing one HOME must not restore and swap at the same time.
-  # The lock is held until this script exits.
-  # ponytail: ceiling: a session that waits past 120s skips the Ditto install
-  # for that run; the next session installs it.
-  mkdir -p "$(dirname "$ditto_dir")"
-  local locked=0
-  if command -v flock >/dev/null 2>&1 && exec 9>"$ditto_dir.lock"; then
-    flock -w 120 9 || { log "another session is installing the Ditto CLI; skipping"; return 0; }
-    locked=1
-  fi
   # A session killed mid-swap can leave the old install under $ditto_dir.old.PID
   # with nothing at $ditto_dir: put it back, and clear any other leftover.
   local stale
@@ -118,13 +108,11 @@ install_ditto_cli() {
     fi
   done
   # A session killed during npm ci leaves its temp dir (mktemp's six-character
-  # suffix). Only with the lock held is any such dir known to be stale.
-  if [ "$locked" = 1 ]; then
-    for stale in "$ditto_dir".??????; do
-      case "$stale" in *.old.*) continue ;; esac
-      [ -d "$stale" ] && [ ! -L "$stale" ] && rm -rf "$stale"
-    done
-  fi
+  # suffix). This runs only with the setup lock held, so any such dir is stale.
+  for stale in "$ditto_dir".??????; do
+    case "$stale" in *.old.*) continue ;; esac
+    [ -d "$stale" ] && [ ! -L "$stale" ] && rm -rf "$stale"
+  done
   if [ ! -f "$lock" ] || [ ! -f "$ditto_src/package.json" ]; then
     log "Ditto CLI lockfile missing; continuing without it"
     return 0
@@ -157,8 +145,27 @@ install_ditto_cli() {
   fi
 }
 
-install_pstack_skills
-install_ditto_cli
+# Two sessions sharing one HOME must not install at the same time: both installs
+# replace directories in place. The lock is held until this script exits.
+# Without the lock nothing shared is touched (fail closed): no flock, or a lock
+# file that can't be opened, skips both installs.
+# ponytail: ceiling: a session that waits past 120s skips both installs for
+# that run; the next session does them.
+setup_lock="$HOME/.local/share/session-setup.lock"
+locked=0
+if ! command -v flock >/dev/null 2>&1; then
+  log "flock not found; skipping the installs so two sessions can't race"
+elif ! mkdir -p "$(dirname "$setup_lock")" || ! exec 9>"$setup_lock"; then
+  log "could not open $setup_lock; skipping the installs"
+elif flock -w 120 9; then
+  locked=1
+else
+  log "another session is setting up; skipping the installs this time"
+fi
+if [ "$locked" = 1 ]; then
+  install_pstack_skills
+  install_ditto_cli
+fi
 # Put the locked heyditto ahead of any other copy for this session's commands.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$CLAUDE_ENV_FILE"

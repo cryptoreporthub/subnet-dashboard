@@ -102,9 +102,36 @@ def test_sonnet_1m_variant_is_allowed(model):
     assert run_hook("subagent", agent_call(subagent_type="Explore", model=model)) is None
 
 
-def test_background_advisor_is_denied():
-    call = agent_call(subagent_type="opus-advisor", run_in_background=True)
+@pytest.mark.parametrize(
+    "tool_input",
+    [
+        {"subagent_type": "opus-advisor"},
+        {"subagent_type": "pstack-worker"},
+        {"subagent_type": "Explore", "model": "sonnet"},
+        {"subagent_type": "general-purpose", "model": "claude-sonnet-5-5"},
+    ],
+)
+@pytest.mark.parametrize("background", [False, True])
+def test_only_foreground_subagents_may_launch(tool_input, background):
+    call = agent_call(**tool_input, **({"run_in_background": True} if background else {}))
+    assert denied(run_hook("subagent", call)) == background
+
+
+def test_background_worker_cannot_slip_edits_past_the_review(tmp_path):
+    # Launched in the background, its edits would be sidechain entries after the
+    # review; the launch is denied, so the review can't be outrun.
+    call = agent_call(subagent_type="pstack-worker", run_in_background=True)
     assert denied(run_hook("subagent", call))
+
+
+def test_padded_advisor_name_counts_as_the_review(tmp_path):
+    call = tool_use("Agent", subagent_type=" opus-advisor ", prompt="check")
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result(),
+         assistant(call), tool_result()],
+    )
+    assert run_hook("stop", {"transcript_path": path, "stop_hook_active": False}) is None
 
 
 def test_background_advisor_call_does_not_count(tmp_path):

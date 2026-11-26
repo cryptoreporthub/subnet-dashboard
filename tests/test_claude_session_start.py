@@ -284,13 +284,13 @@ def test_interrupted_swap_is_recovered_even_without_a_lockfile(env):
 
 
 @pytest.mark.skipif(shutil.which("flock") is None, reason="needs flock")
-def test_ditto_install_waits_for_another_sessions_lock(env):
+def test_setup_waits_for_another_sessions_lock(env):
     script = pinned_script(env["tmp"], publish_bundle(env["work"], {"poteto-mode": "v1"}))
     share = env["home"] / ".local" / "share"
     share.mkdir(parents=True, exist_ok=True)
-    # Another session holds the Ditto lock for 2 seconds.
+    # Another session holds the setup lock for 2 seconds.
     holder = subprocess.Popen(
-        ["flock", str(share / "session-ditto-cli.lock"), "sh", "-c", "echo held; sleep 2"],
+        ["flock", str(share / "session-setup.lock"), "sh", "-c", "echo held; sleep 2"],
         stdout=subprocess.PIPE, text=True,
     )
     try:
@@ -305,6 +305,44 @@ def test_ditto_install_waits_for_another_sessions_lock(env):
             holder.kill()
         holder.stdout.close()
     assert os.access(env["home"] / ".local" / "bin" / "heyditto", os.X_OK)
+    assert skill(env["home"], "poteto-mode")
+
+
+def path_without_flock(tmp):
+    """A PATH dir that links every command on PATH except flock."""
+    bin_dir = tmp / "no-flock-bin"
+    bin_dir.mkdir()
+    for d in os.environ["PATH"].split(os.pathsep):
+        # Skip wrapper dirs (such as a sandbox's rm guard) that find the real
+        # command through their own location; link the system copies instead.
+        if not os.path.isdir(d) or "rm-guard" in d:
+            continue
+        for name in os.listdir(d):
+            target = bin_dir / name
+            if name != "flock" and not target.exists() and not target.is_symlink():
+                target.symlink_to(os.path.join(d, name))
+    return bin_dir
+
+
+def test_without_flock_nothing_shared_is_touched(env):
+    script = pinned_script(env["tmp"], publish_bundle(env["work"], {"poteto-mode": "v1"}))
+    share = env["home"] / ".local" / "share"
+    share.mkdir(parents=True, exist_ok=True)
+    # An interrupted swap: without the lock even its recovery must wait.
+    stale = share / "session-ditto-cli.old.1"
+    stale.mkdir()
+    stub_bin = env["env"]["PATH"].split(os.pathsep)[0]
+    no_flock = {**env["env"], "PATH": f"{stub_bin}:{path_without_flock(env['tmp'])}"}
+    assert subprocess.run(["bash", "-c", "command -v flock"], env=no_flock).returncode != 0
+    proc = subprocess.run(
+        ["bash", str(script)], env=no_flock, capture_output=True, text=True, timeout=60
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "flock not found" in proc.stderr
+    assert not env["npm_log"].exists()
+    assert not (env["home"] / ".local" / "bin" / "heyditto").exists()
+    assert skill(env["home"], "poteto-mode") is None
+    assert stale.is_dir()
 
 
 def test_ditto_lockfile_pins_every_package():

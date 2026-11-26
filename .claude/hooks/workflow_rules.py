@@ -79,8 +79,9 @@ RULES = (
     "1. Poteto mode is on: follow ~/.claude/skills/poteto-mode/SKILL.md and the "
     "pstack skills in ~/.claude/skills.\n"
     f"2. Use Sonnet pstack subagents for ALL tasks: delegate work to the "
-    f"`{WORKER_AGENT}` agent (or another agent with model sonnet). Other "
-    "subagents are denied.\n"
+    f"`{WORKER_AGENT}` agent (or another agent with model sonnet), in the "
+    "foreground. Other subagents, and background runs, are denied. This "
+    "overrides poteto mode's `run_in_background: true` default.\n"
     f"3. Before you end a turn that did work, consult the Opus advisor: the "
     f"`{ADVISOR_AGENT}` agent (give it the diff; it has no Bash), or the "
     "built-in `advisor` tool if it is on.\n"
@@ -118,14 +119,15 @@ def subagent_verdict(tool_input: dict) -> str | None:
     model = (tool_input.get("model") or "").strip().lower()
     # The 1M-context variant runs the same model, so check it as the base name.
     model = model.removesuffix("[1m]")
+    # A background run returns at once and its own steps are sidechain entries
+    # the Stop gate skips: a background advisor would count as a review not yet
+    # done, and a background worker's edits would land after the review.
+    if tool_input.get("run_in_background"):
+        return (
+            "Denied: run subagents in the foreground, so their work is back before "
+            "the turn ends. Several foreground calls in one message still run in parallel."
+        )
     if agent == ADVISOR_AGENT:
-        # A background run returns at once, so the Stop gate would count a
-        # review that hasn't happened yet.
-        if tool_input.get("run_in_background"):
-            return (
-                f"Denied: run `{ADVISOR_AGENT}` in the foreground, so its review is "
-                "back before the turn ends."
-            )
         # The call's model overrides the agent file, so a review on another
         # model would pass the Stop gate as the Opus one.
         if model in ("", "opus") or model.startswith("claude-opus"):
@@ -257,7 +259,7 @@ def _is_advisor(block: dict) -> bool:
     return (
         block.get("type") == "tool_use"
         and block.get("name") in AGENT_TOOLS
-        and tool_input.get("subagent_type") == ADVISOR_AGENT
+        and (tool_input.get("subagent_type") or "").strip() == ADVISOR_AGENT
         and subagent_verdict(tool_input) is None
     )
 

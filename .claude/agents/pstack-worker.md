@@ -14,6 +14,7 @@ You do one delegated task in the subnet-dashboard repo and report back to the ag
 
 ## While you work
 
+- Run any subagent you start in the foreground; the hooks deny background runs, whatever poteto mode's default says.
 - Stay inside the task you were given. Don't push, open PRs, or post to GitHub unless the task says to.
 - Verify against the real artifact (run the test, read the value) before you call anything done.
 - Don't commit runtime files under `data/`.
