@@ -18,7 +18,7 @@ Product rebuilds that are outside that campaign may still use Composer slow as t
 
 **Review (not a hard set):** first pass = whoever is better at *this* question. **Final pass = the other one.** If Grok did design or first review, Luna is final. If Luna did first review, Grok is final. Do not skip the complementary final on hydration, contract, grading, or honesty diffs. Skip both extras on a one-liner.
 
-Also do not use unless the human explicitly asks: `composer-2.5-fast`, Grok 4.5 (`cursor-grok-4.5-*`), Grok 4.6 high-fast, Opus, Gemini, Sol, Fable, Sonnet 5.
+Also do not use unless the human explicitly asks: `composer-2.5-fast`, Grok 4.5 (`cursor-grok-4.5-*`), Grok 4.6 high-fast, Opus, Gemini, Sol, Fable.
 
 If a Task catalog has no Grok 4.7 slug, inherit from a Grok 4.7 parent rather than substituting Grok 4.6 or Grok 4.5. Bump thinking effort only when the parent is stuck.
 

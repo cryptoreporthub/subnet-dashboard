@@ -51,7 +51,7 @@ Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](ht
 
 ### Epistemic campaign parent (2026-09-22)
 
-Parent brain for the architecture-epistemics campaign is **Grok 4.7**. Do not call this seat Grok 4.6. Claude is offline. Planning authority sits with Grok 4.7; Gemini is the blind raw-byte and SHA-256 witness.
+Parent brain for the architecture-epistemics campaign is **Grok 4.7**. Do not call this seat Grok 4.6. Planning authority sits with Grok 4.7; Gemini is the blind raw-byte and SHA-256 witness.
 
 - The parent does the reasoning: cross-file comparison, bug calls, falsifiers, and the next-layer plan.
 - Subagents are mechanical only. They may run an exact `sed -n` extract, `sha256sum`, or a git command, and they return raw terminal output. They do not analyze, summarize, or edit product code (Rule 8). One subagent at a time. No concurrent working-tree edits.
