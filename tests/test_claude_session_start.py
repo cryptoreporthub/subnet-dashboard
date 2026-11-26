@@ -345,6 +345,20 @@ def test_without_flock_nothing_shared_is_touched(env):
     assert stale.is_dir()
 
 
+def test_lock_that_cannot_be_opened_skips_the_installs(env):
+    script = pinned_script(env["tmp"], publish_bundle(env["work"], {"poteto-mode": "v1"}))
+    # A directory where the lock file should be: the open fails.
+    (env["home"] / ".local" / "share" / "session-setup.lock").mkdir(parents=True)
+    proc = subprocess.run(
+        ["bash", str(script)], env=env["env"], capture_output=True, text=True, timeout=60
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "could not open" in proc.stderr
+    assert not env["npm_log"].exists()
+    assert not (env["home"] / ".local" / "bin" / "heyditto").exists()
+    assert skill(env["home"], "poteto-mode") is None
+
+
 def test_ditto_lockfile_pins_every_package():
     manifest = json.loads((DITTO / "package.json").read_text())
     lock = json.loads((DITTO / "package-lock.json").read_text())

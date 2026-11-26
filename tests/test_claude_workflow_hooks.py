@@ -117,11 +117,26 @@ def test_only_foreground_subagents_may_launch(tool_input, background):
     assert denied(run_hook("subagent", call)) == background
 
 
-def test_background_worker_cannot_slip_edits_past_the_review(tmp_path):
-    # Launched in the background, its edits would be sidechain entries after the
-    # review; the launch is denied, so the review can't be outrun.
-    call = agent_call(subagent_type="pstack-worker", run_in_background=True)
-    assert denied(run_hook("subagent", call))
+@pytest.mark.parametrize("odd", [5, ["opus-advisor"], {}, "whole input"])
+def test_non_text_agent_name_is_no_review(tmp_path, odd):
+    # A malformed call must leave the turn blocked, not crash the gate open.
+    call = tool_use("Agent", subagent_type=odd, prompt="check")
+    if odd == "whole input":
+        call["input"] = "opus-advisor"
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result(),
+         assistant(call), tool_result()],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+@pytest.mark.parametrize("odd", [5, ["sonnet"], {}])
+def test_non_text_fields_are_denied_not_crashed(odd):
+    assert denied(run_hook("subagent", agent_call(subagent_type=odd)))
+    assert denied(run_hook("subagent", agent_call(subagent_type="Explore", model=odd)))
+    assert denied(run_hook("subagent", {"tool_name": "Agent", "tool_input": odd}))
 
 
 def test_padded_advisor_name_counts_as_the_review(tmp_path):

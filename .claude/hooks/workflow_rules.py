@@ -113,10 +113,18 @@ def on_prompt(_event: dict) -> None:
     )
 
 
+def _field(tool_input: dict, key: str) -> str:
+    """A tool input field as stripped text; anything but a string reads as unset."""
+    value = tool_input.get(key)
+    return value.strip() if isinstance(value, str) else ""
+
+
 def subagent_verdict(tool_input: dict) -> str | None:
     """Return a deny reason, or None when the subagent call is allowed."""
-    agent = (tool_input.get("subagent_type") or "").strip()
-    model = (tool_input.get("model") or "").strip().lower()
+    if not isinstance(tool_input, dict):
+        tool_input = {}
+    agent = _field(tool_input, "subagent_type")
+    model = _field(tool_input, "model").lower()
     # The 1M-context variant runs the same model, so check it as the base name.
     model = model.removesuffix("[1m]")
     # A background run returns at once and its own steps are sidechain entries
@@ -253,13 +261,15 @@ def _messages(turn: list[dict]) -> list[list[dict]]:
 def _is_advisor(block: dict) -> bool:
     if block.get("type") == "advisor_tool_result" or block.get("name") == "advisor":
         return True
-    tool_input = block.get("input") or {}
+    tool_input = block.get("input")
+    if not isinstance(tool_input, dict):
+        tool_input = {}
     # Same rule as the PreToolUse gate, so a non-Opus advisor call (which that
     # gate denies) never counts as the review, however its result is written.
     return (
         block.get("type") == "tool_use"
         and block.get("name") in AGENT_TOOLS
-        and (tool_input.get("subagent_type") or "").strip() == ADVISOR_AGENT
+        and _field(tool_input, "subagent_type") == ADVISOR_AGENT
         and subagent_verdict(tool_input) is None
     )
 
