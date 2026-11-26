@@ -1,6 +1,7 @@
 ---
 name: pr-review
 description: Review a GitHub PR or issue fix against its pinned head SHA. Use before posting any PASS/BLOCK verdict. Reads all comments, traces failure paths, runs focused tests plus the endpoint contract test, and returns a verdict with evidence and an explicit unverified list.
+model: sonnet
 tools: Read, Grep, Glob, Bash, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_check_run, mcp__github__get_commit, mcp__github__list_commits, Skill
 ---
 
