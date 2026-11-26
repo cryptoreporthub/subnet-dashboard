@@ -193,3 +193,12 @@ def test_which_jobs_run(payload, expected):
     else:
         assert set(runs) == {"claude-human"}, f"jobs that ran: {sorted(runs)}"
         assert _writes_contents(runs["claude-human"]), f"human run lacks contents: write: {runs['claude-human']}"
+
+
+def test_bot_job_uses_job_scoped_token():
+    wf = yaml.safe_load(WORKFLOW.read_text())
+    step = next(s for s in wf["jobs"]["claude-bot"]["steps"] if s.get("name") == "Run Claude")
+    assert step["with"].get("github_token") == "${{ github.token }}", (
+        "claude-bot must pass github_token: ${{ github.token }}. Without this input the action "
+        "mints a GitHub App token whose scope the job's permissions block does not bound."
+    )

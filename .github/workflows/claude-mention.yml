@@ -57,6 +57,8 @@ jobs:
       - name: Run Claude
         uses: anthropics/claude-code-action@v1
         with:
+          # Use the job-scoped workflow token, so contents: read limits this run.
+          github_token: ${{ github.token }}
           # Uses Joshua's Claude subscription (no per-token API billing).
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Joshua chose Haiku to save subscription quota (no Opus).
