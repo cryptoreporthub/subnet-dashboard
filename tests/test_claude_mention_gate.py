@@ -5,6 +5,7 @@ Bots may start a run only with the "@claude handoff-review" phrase, and that
 run must not have contents: write.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -54,7 +55,7 @@ _FUNCS = {
     "contains": _contains,
     "startsWith": lambda a, b: isinstance(a, str) and isinstance(b, str) and a.lower().startswith(b.lower()),
     "endsWith": lambda a, b: isinstance(a, str) and isinstance(b, str) and a.lower().endswith(b.lower()),
-    "fromJSON": lambda s: __import__("json").loads(s),
+    "fromJSON": lambda s: json.loads(s),
 }
 
 
@@ -182,6 +183,7 @@ CASES = [
     ("d_bot_plain_mention", _payload("simibot[bot]", "@claude review please"), "none"),
     ("e_claude_bot", _payload("claude[bot]", "@claude handoff-review"), "none"),
     ("f_owner_mention", _payload("octocat", "@claude review", association="OWNER"), "human-write"),
+    ("j_collaborator_mention", _payload("octocat", "@claude review", association="COLLABORATOR"), "human-write"),
     ("g_member_no_mention", _payload("octocat", "hello", association="MEMBER"), "none"),
     ("h_bot_member_assoc", _payload("cursor[bot]", "@claude review", association="MEMBER"), "none"),
     ("i_app_owner_assoc", _payload("some-app", "@claude review", association="OWNER", app={"slug": "x"}), "none"),
@@ -233,3 +235,11 @@ def test_bot_job_permissions_are_exactly_these():
         "issues": "write",
         "actions": "read",
     }
+
+
+def test_bot_job_allowed_bots_is_exactly_the_reviewed_list():
+    wf = yaml.safe_load(WORKFLOW.read_text())
+    step = next(s for s in wf["jobs"]["claude-bot"]["steps"] if s.get("name") == "Run Claude")
+    allowed = step["with"]["allowed_bots"]
+    assert allowed == "simi-revision,simibot,cursor"
+    assert "claude" not in allowed.split(","), "claude must not be an allowed bot"
