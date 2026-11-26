@@ -20,6 +20,8 @@ bundle_branch="pstack-skills-bundle"
 # Pinned bundle commit. Skills are instructions, so a new bundle only lands by
 # bumping this pin in a reviewed PR, never by moving the branch.
 bundle_sha="53f1161a6a549a5319d655943296ce875c12efda"
+# Pins the CLI itself only; its dependencies are caret ranges with no lockfile,
+# so they can drift per session. The package runs no install scripts.
 ditto_version="3.22.0"
 
 log() { echo "[session-start] $*" >&2; }
