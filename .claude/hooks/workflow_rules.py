@@ -220,15 +220,23 @@ def turn_summary(turn: list[dict]) -> tuple[bool, bool]:
     the advisor saw the final state, not that its advice was taken. Reading
     the verdict would need the agent's reply format to be a contract.
 
+    An advisor call whose result is an error does not count: no review ran.
     Work clears an earlier advisor call. An advisor call in the same message
     as work does not count, since the two run side by side and the advisor
     cannot see that work's result.
     """
+    failed = {
+        b.get("tool_use_id")
+        for entry in turn
+        if entry.get("type") == "user"
+        for b in _blocks(entry)
+        if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error")
+    }
     worked = consulted = False
     for blocks in _messages(turn):
         if any(_is_work(b) for b in blocks):
             worked, consulted = True, False
-        elif any(_is_advisor(b) for b in blocks):
+        elif any(_is_advisor(b) and b.get("id") not in failed for b in blocks):
             consulted = True
     return worked, consulted
 

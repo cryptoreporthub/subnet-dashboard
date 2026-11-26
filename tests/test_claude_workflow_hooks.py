@@ -146,6 +146,46 @@ def test_stop_allows_after_advisor_agent(tmp_path):
     assert run_hook("stop", {"transcript_path": path}) is None
 
 
+def test_stop_blocks_when_the_advisor_call_errored(tmp_path):
+    call = tool_use("Agent", subagent_type="opus-advisor", prompt="check")
+    call["id"] = "toolu_advisor"
+    failed = {"type": "tool_result", "tool_use_id": "toolu_advisor", "is_error": True,
+              "content": "agent failed"}
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Bash", command="ls")),
+            tool_result(),
+            assistant(call),
+            {"type": "user", "message": {"content": [failed]}},
+        ],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+def test_stop_allows_advisor_after_another_tool_failed(tmp_path):
+    bash = tool_use("Bash", command="false")
+    bash["id"] = "toolu_bash"
+    call = tool_use("Agent", subagent_type="opus-advisor", prompt="check")
+    call["id"] = "toolu_advisor"
+    bash_failed = {"type": "tool_result", "tool_use_id": "toolu_bash", "is_error": True,
+                   "content": "Exit code 1"}
+    advisor_ok = {"type": "tool_result", "tool_use_id": "toolu_advisor", "content": "READY"}
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(bash),
+            {"type": "user", "message": {"content": [bash_failed]}},
+            assistant(call),
+            {"type": "user", "message": {"content": [advisor_ok]}},
+        ],
+    )
+    assert run_hook("stop", {"transcript_path": path}) is None
+
+
 def test_stop_allows_after_advisor_tool(tmp_path):
     path = write_transcript(
         tmp_path,

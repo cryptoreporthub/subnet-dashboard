@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(
 
 def git(cwd, *args):
     subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
         cwd=cwd,
         check=True,
         capture_output=True,

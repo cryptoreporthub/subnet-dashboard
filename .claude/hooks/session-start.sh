@@ -56,7 +56,7 @@ install_pstack_skills() {
     name="$(basename "$dir")"
     [ "$name" = "synced" ] && continue
     # Keep a skill this hook did not install, such as one the platform synced.
-    if [ -e "$skills_dir/$name" ] && ! grep -qx "$name" "$manifest" 2>/dev/null; then
+    if [ -e "$skills_dir/$name" ] && ! grep -Fqx "$name" "$manifest" 2>/dev/null; then
       continue
     fi
     # Record the name first, so a half-copied skill still counts as ours.
@@ -69,7 +69,7 @@ install_pstack_skills() {
   # Remove skills an earlier bundle installed that this bundle no longer ships.
   if [ -f "$manifest" ]; then
     tail -n +2 "$manifest" | while read -r name; do
-      if [ -n "$name" ] && ! grep -qx "$name" "$names"; then
+      if [ -n "$name" ] && ! grep -Fqx "$name" "$names"; then
         rm -rf "${skills_dir:?}/$name"
       fi
     done
