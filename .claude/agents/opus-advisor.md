@@ -1,6 +1,6 @@
 ---
 name: opus-advisor
-description: Opus reviewer consulted at the end of every task, before the turn ends. Use it when the built-in advisor tool is not available. Give it the task, what was done, and the evidence; it returns what to fix or confirms the work is done.
+description: Opus reviewer consulted at the end of every task, before the turn ends. The Stop hook asks for it on every turn that did work. Give it the task, what was done, and the evidence; it returns what to fix or confirms the work is done.
 model: opus
 tools: Read, Grep, Glob, Bash
 ---

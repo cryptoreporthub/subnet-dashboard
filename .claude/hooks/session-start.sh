@@ -20,12 +20,12 @@ ditto_version="3.22.0"
 log() { echo "[session-start] $*" >&2; }
 
 install_pstack_skills() {
-  local commit tmp name
-  if ! git -C "$repo" fetch --quiet origin "$bundle_branch"; then
+  local commit tmp name ref="refs/remotes/origin/$bundle_branch"
+  if ! git -C "$repo" fetch --quiet origin "+refs/heads/$bundle_branch:$ref"; then
     log "could not fetch $bundle_branch; pstack skills not refreshed"
     return 0
   fi
-  commit="$(git -C "$repo" rev-parse FETCH_HEAD)"
+  commit="$(git -C "$repo" rev-parse "$ref")"
   if [ -f "$manifest" ] && [ "$(head -n1 "$manifest")" = "$commit" ]; then
     return 0
   fi

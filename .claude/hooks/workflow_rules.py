@@ -9,6 +9,8 @@ One script, three modes, picked by the first argument:
   stop      Stop: block the end of a turn that did tool work but never
             consulted the advisor. Blocks at most once per turn.
 
+Active only in Claude Code cloud sessions (CLAUDE_CODE_REMOTE=true), so the
+Claude review and mention GitHub Actions in this repo run without these rules.
 Stdlib only. Any error in this script allows the action, so a broken hook
 never wedges a session.
 """
@@ -16,6 +18,7 @@ never wedges a session.
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 ADVISOR_AGENT = "opus-advisor"
@@ -31,8 +34,8 @@ RULES = (
     f"2. Use Sonnet pstack subagents for ALL tasks: delegate work to the "
     f"`{WORKER_AGENT}` agent (or another agent with model sonnet). Other "
     "subagents are denied.\n"
-    f"3. Before you end a turn that did work, consult the advisor: the "
-    f"`advisor` tool if you have it, otherwise the `{ADVISOR_AGENT}` agent."
+    f"3. Before you end a turn that did work, consult the Opus advisor: the "
+    f"`{ADVISOR_AGENT}` agent, or the built-in `advisor` tool if it is on."
 )
 
 
@@ -59,7 +62,7 @@ def subagent_verdict(tool_input: dict) -> str | None:
         return None
     if agent in SONNET_AGENTS and model in ("", "sonnet"):
         return None
-    if agent != "fork" and model == "sonnet":
+    if agent != "fork" and (model == "sonnet" or model.startswith("claude-sonnet")):
         return None
     shown = agent or "the default agent"
     return (
@@ -92,8 +95,20 @@ def _blocks(entry: dict) -> list:
     return content if isinstance(content, list) else []
 
 
-def _is_human_prompt(entry: dict) -> bool:
-    if entry.get("type") != "user" or entry.get("isMeta"):
+# Fields Claude Code sets on user entries that a tool produced (tool results,
+# a loaded skill's text) rather than a new message that starts a turn.
+TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUID")
+
+
+def _starts_turn(entry: dict) -> bool:
+    """A user entry that opens a turn: a typed prompt or a relayed message.
+
+    Cloud sessions store relayed messages with isMeta set, so isMeta does not
+    rule an entry out.
+    """
+    if entry.get("type") != "user" or entry.get("turnCompanion"):
+        return False
+    if any(entry.get(key) is not None for key in TOOL_DERIVED_KEYS):
         return False
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, str):
@@ -104,9 +119,9 @@ def _is_human_prompt(entry: dict) -> bool:
 
 
 def current_turn(entries: list[dict]) -> list[dict]:
-    """Entries after the last prompt the person typed."""
+    """Entries after the message that started the current turn."""
     for i in range(len(entries) - 1, -1, -1):
-        if _is_human_prompt(entries[i]):
+        if _starts_turn(entries[i]):
             return entries[i + 1 :]
     return entries
 
@@ -157,9 +172,10 @@ def on_stop(event: dict) -> None:
             {
                 "decision": "block",
                 "reason": (
-                    "Before you finish, consult the advisor on this turn's work: "
-                    f"call the `advisor` tool, or the `{ADVISOR_AGENT}` agent if "
-                    "you don't have it. Then act on what it says and end the turn."
+                    "Before you finish, consult the Opus advisor on this turn's "
+                    f"work: start the `{ADVISOR_AGENT}` agent with the task, what "
+                    "you did and your evidence (or call the built-in `advisor` "
+                    "tool if it is on). Then act on what it says and end the turn."
                 ),
             }
         )
@@ -169,6 +185,8 @@ MODES = {"prompt": on_prompt, "subagent": on_subagent, "stop": on_stop}
 
 
 def main() -> int:
+    if os.environ.get("CLAUDE_CODE_REMOTE") != "true":
+        return 0
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     handler = MODES.get(mode)
     if handler is None:
