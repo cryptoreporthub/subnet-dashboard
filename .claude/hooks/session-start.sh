@@ -58,6 +58,13 @@ install_pstack_skills() {
       echo "$name"
     done
   } > "$manifest.tmp"
+  # Remove skills an earlier bundle installed that this bundle no longer ships.
+  if [ -f "$manifest" ]; then
+    tail -n +2 "$manifest" | while read -r name; do
+      [ -n "$name" ] && ! tail -n +2 "$manifest.tmp" | grep -qx "$name" &&
+        rm -rf "${skills_dir:?}/$name"
+    done
+  fi
   mv "$manifest.tmp" "$manifest"
   rm -rf "$tmp"
   log "pstack skills installed from $bundle_branch@${commit:0:7}"

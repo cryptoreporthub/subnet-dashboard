@@ -203,3 +203,19 @@ def test_bad_input_allows():
     )
     assert proc.returncode == 0
     assert proc.stdout == ""
+
+
+def test_agents_trusted_as_sonnet_pin_sonnet():
+    """Every agent the guard lets through without a model must pin Sonnet in its file."""
+    sys.path.insert(0, str(SCRIPT.parent))
+    try:
+        import workflow_rules
+    finally:
+        sys.path.pop(0)
+    agents_dir = SCRIPT.parent.parent / "agents"
+    for name in workflow_rules.SONNET_AGENTS:
+        text = (agents_dir / f"{name}.md").read_text()
+        front = text.split("---")[1]
+        assert "\nmodel: sonnet\n" in front, f"{name}.md does not pin model: sonnet"
+    advisor = (agents_dir / f"{workflow_rules.ADVISOR_AGENT}.md").read_text().split("---")[1]
+    assert "\nmodel: opus\n" in advisor

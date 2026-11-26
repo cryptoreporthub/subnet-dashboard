@@ -56,7 +56,11 @@ def env(tmp_path):
     stub_bin = tmp_path / "bin"
     stub_bin.mkdir()
     npm_log = tmp_path / "npm.log"
-    (stub_bin / "npm").write_text(f'#!/bin/bash\necho "$*" >> {npm_log}\n[ "$1" = ls ] && exit 1\nexit 0\n')
+    npm_installed = tmp_path / "npm-installed"
+    (stub_bin / "npm").write_text(
+        f'#!/bin/bash\necho "$*" >> {npm_log}\n'
+        f'[ "$1" = ls ] && {{ [ -e {npm_installed} ] && exit 0 || exit 1; }}\nexit 0\n'
+    )
     (stub_bin / "npm").chmod(0o755)
     run_env = {
         **{k: v for k, v in os.environ.items() if k != "GITHUB_ACTIONS"},
@@ -65,7 +69,14 @@ def env(tmp_path):
         "CLAUDE_PROJECT_DIR": str(repo),
         "CLAUDE_CODE_REMOTE": "true",
     }
-    return {"work": work, "home": home, "env": run_env, "npm_log": npm_log, "tmp": tmp_path}
+    return {
+        "work": work,
+        "home": home,
+        "env": run_env,
+        "npm_log": npm_log,
+        "npm_installed": npm_installed,
+        "tmp": tmp_path,
+    }
 
 
 def pinned_script(tmp, sha):
@@ -120,6 +131,24 @@ def test_refreshes_only_when_the_pin_changes(env):
     v2 = publish_bundle(env["work"], {"poteto-mode": "v2"})
     run(env["env"], pinned_script(env["tmp"], v2))
     assert skill(env["home"], "poteto-mode") == "v2"
+
+
+def test_drops_skills_a_new_bundle_no_longer_ships(env):
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    assert skill(env["home"], "old") == "v1"
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2"})
+    run(env["env"], pinned_script(env["tmp"], v2))
+    assert skill(env["home"], "old") is None
+    assert skill(env["home"], "kept") == "platform copy"
+
+
+def test_skips_ditto_install_when_the_pinned_version_is_present(env):
+    sha = publish_bundle(env["work"], {"poteto-mode": "v1"})
+    env["npm_installed"].touch()
+    run(env["env"], pinned_script(env["tmp"], sha))
+    log = env["npm_log"].read_text()
+    assert "ls -g" in log and "install" not in log
 
 
 def test_missing_pinned_commit_fails_safe(env):
