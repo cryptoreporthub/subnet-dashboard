@@ -132,6 +132,8 @@ class _Parser:
 
 
 def evaluate(expr, ctx):
+    """Evaluate the subset this workflow uses: && || ! == != contains startsWith endsWith fromJSON,
+    quoted strings and dotted lookups. Indexing and ternaries are not supported."""
     p = _Parser(_tokenize(expr), ctx)
     result = p.or_()
     assert p.i == len(p.t), "trailing tokens in expression"
@@ -155,11 +157,13 @@ def _payload(login, body, association="NONE", app=None):
 
 def _runs(payload):
     wf = yaml.safe_load(WORKFLOW.read_text())
-    top_perms = wf.get("permissions") or {}
     runs = {}
     for name, job in wf["jobs"].items():
         if evaluate(str(job["if"]), payload):
-            runs[name] = job.get("permissions", top_perms)
+            assert "permissions" in job, (
+                f"{name} has no permissions block, so GitHub gives it the repo default (write)"
+            )
+            runs[name] = job["permissions"]
     return runs
 
 
@@ -179,6 +183,8 @@ CASES = [
     ("e_claude_bot", _payload("claude[bot]", "@claude handoff-review"), "none"),
     ("f_owner_mention", _payload("octocat", "@claude review", association="OWNER"), "human-write"),
     ("g_member_no_mention", _payload("octocat", "hello", association="MEMBER"), "none"),
+    ("h_bot_member_assoc", _payload("cursor[bot]", "@claude review", association="MEMBER"), "none"),
+    ("i_app_owner_assoc", _payload("some-app", "@claude review", association="OWNER", app={"slug": "x"}), "none"),
 ]
 
 
@@ -193,6 +199,13 @@ def test_which_jobs_run(payload, expected):
     else:
         assert set(runs) == {"claude-human"}, f"jobs that ran: {sorted(runs)}"
         assert _writes_contents(runs["claude-human"]), f"human run lacks contents: write: {runs['claude-human']}"
+
+
+def test_bot_job_requests_no_oidc_token():
+    wf = yaml.safe_load(WORKFLOW.read_text())
+    assert "id-token" not in wf["jobs"]["claude-bot"]["permissions"], (
+        "claude-bot passes github_token, so the action never requests an OIDC token; id-token is unused"
+    )
 
 
 def test_bot_job_uses_job_scoped_token():

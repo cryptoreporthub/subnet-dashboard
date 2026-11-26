@@ -13,6 +13,10 @@ on:
   pull_request_review_comment:
     types: [created]
 
+# No permissions by default. A job without its own block gets none, instead of
+# the repo default (write).
+permissions: {}
+
 jobs:
   claude-human:
     if: >-
@@ -48,7 +52,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-      id-token: write # required by claude-code-action to get its GitHub token
       actions: read # lets Claude read CI results on PRs
     steps:
       - uses: actions/checkout@v4
