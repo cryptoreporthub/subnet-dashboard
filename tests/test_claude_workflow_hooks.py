@@ -180,21 +180,40 @@ def test_stop_only_counts_the_current_turn(tmp_path):
     assert run_hook("stop", {"transcript_path": path})["decision"] == "block"
 
 
-def test_stop_turn_starts_at_relayed_meta_message(tmp_path):
-    """Cloud sessions store relayed messages with isMeta; they still start a turn."""
+def test_stop_relayed_meta_message_does_not_hide_earlier_work(tmp_path):
+    """A system-written (isMeta) entry never starts a turn, so work before it still counts."""
     relayed = {**user("<relay>do the next thing</relay>"), "isMeta": True}
     path = write_transcript(
         tmp_path,
         [
             user("first"),
-            assistant(tool_use("Agent", subagent_type="opus-advisor", prompt="check")),
+            assistant(tool_use("Edit", file_path="a.py")),
             tool_result(),
             relayed,
-            assistant(tool_use("Bash", command="ls")),
-            tool_result(),
+            assistant({"type": "text", "text": "done"}),
         ],
     )
     assert run_hook("stop", {"transcript_path": path})["decision"] == "block"
+
+
+def test_stop_mid_turn_reminder_does_not_hide_work(tmp_path):
+    reminder = {**user("<system-reminder>note</system-reminder>"), "isMeta": True}
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), assistant(tool_use("Edit", file_path="a.py")), tool_result(), reminder,
+         assistant({"type": "text", "text": "done"})],
+    )
+    assert run_hook("stop", {"transcript_path": path})["decision"] == "block"
+
+
+def test_stop_read_only_turn_needs_no_advisor(tmp_path):
+    path = write_transcript(
+        tmp_path,
+        [user("what does main.py do?"), assistant(tool_use("Read", file_path="main.py")),
+         tool_result(), assistant(tool_use("Grep", pattern="def ")), tool_result(),
+         assistant({"type": "text", "text": "It starts the app."})],
+    )
+    assert run_hook("stop", {"transcript_path": path}) is None
 
 
 def test_stop_loaded_skill_text_does_not_split_the_turn(tmp_path):

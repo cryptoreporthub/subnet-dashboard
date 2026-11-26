@@ -32,8 +32,13 @@ WORKER_AGENT = "pstack-worker"
 # Agent files in .claude/agents that already pin model: sonnet.
 SONNET_AGENTS = {WORKER_AGENT, "architect", "pr-review"}
 AGENT_TOOLS = {"Agent", "Task"}
-# Bookkeeping tools that change nothing, so they don't count as work.
-NON_WORK_TOOLS = {"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill"}
+# Tools that change nothing, so they don't count as work: bookkeeping, and
+# read-only lookups, so a turn that only reads and answers needs no advisor.
+# Bash always counts, since a command can change anything.
+NON_WORK_TOOLS = {
+    "TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill",
+    "Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead",
+}
 
 # Blocks per Stop chain (one turn): the first plus two re-checks. The cap stops an endless
 # advisor loop; past it the turn may end without another review.
@@ -121,37 +126,23 @@ TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUI
 
 
 def _starts_turn(entry: dict) -> bool:
-    """A user entry that opens a turn: a typed prompt or a relayed message.
+    """A user entry that opens a turn: a message the person typed.
 
-    Cloud sessions store relayed messages with isMeta set, so isMeta does not
-    rule an entry out.
+    System-written entries (isMeta: relayed messages, reminders, a hook's own
+    block reason) never start a turn, so none of them can hide the work done
+    before it. A relayed message therefore extends the previous turn, which
+    can only add a block, never remove one.
     """
-    if entry.get("type") != "user" or entry.get("turnCompanion"):
+    if entry.get("type") != "user" or entry.get("isMeta") or entry.get("turnCompanion"):
         return False
     if any(entry.get(key) is not None for key in TOOL_DERIVED_KEYS):
         return False
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, str):
-        text = content
-    else:
-        blocks = [b for b in content or [] if isinstance(b, dict)]
-        if any(b.get("type") == "tool_result" for b in blocks):
-            return False
-        text = "".join(b.get("text") or "" for b in blocks if b.get("type") == "text")
-    # Only system-written (isMeta) entries can be hook feedback, so a typed
-    # prompt that happens to start with the same words still starts a turn.
-    return not (entry.get("isMeta") and _is_hook_feedback(text))
-
-
-def _is_hook_feedback(text: str) -> bool:
-    """A hook's own block reason fed back to the model, not a new message.
-
-    Claude Code normally records it as an attachment entry, which never starts
-    a turn; this also covers it arriving as a user entry, so the Stop gate's
-    own reason can't hide the work done before it.
-    """
-    text = text.lstrip()
-    return text.startswith("Stop hook feedback") or "hook blocking error from command" in text
+        return True
+    return not any(
+        isinstance(b, dict) and b.get("type") == "tool_result" for b in content or []
+    )
 
 
 def turn_start(entries: list[dict]) -> int:
