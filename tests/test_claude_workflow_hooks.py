@@ -186,10 +186,22 @@ def test_stop_allows_advisor_after_another_tool_failed(tmp_path):
     assert run_hook("stop", {"transcript_path": path}) is None
 
 
-def test_stop_blocks_when_the_builtin_advisor_errored(tmp_path):
+# Every result shape Claude Code's own classifier names for the built-in
+# advisor, with the verdict the gate must reach after work.
+BUILTIN_ADVISOR_RESULTS = [
+    ({"type": "advisor_result", "text": "Looks fine.", "stop_reason": "end_turn"}, "allow"),
+    ({"type": "advisor_redacted_result", "stop_reason": "end_turn"}, "allow"),
+    ({"type": "advisor_tool_result_error", "error_code": "overloaded"}, "block"),
+    ({"type": "advisor_result", "stop_reason": "refusal"}, "block"),
+    ({"type": "advisor_result", "text": "I can't help.", "stop_reason": "refusal"}, "block"),
+    ({"type": "advisor_redacted_result", "stop_reason": "refusal"}, "block"),
+]
+
+
+@pytest.mark.parametrize(("content", "verdict"), BUILTIN_ADVISOR_RESULTS)
+def test_stop_gate_on_each_builtin_advisor_result(tmp_path, content, verdict):
     call = {"type": "server_tool_use", "id": "srvtoolu_1", "name": "advisor", "input": {}}
-    result = {"type": "advisor_tool_result", "tool_use_id": "srvtoolu_1",
-              "content": {"type": "advisor_tool_result_error", "error_code": "overloaded"}}
+    result = {"type": "advisor_tool_result", "tool_use_id": "srvtoolu_1", "content": content}
     path = write_transcript(
         tmp_path,
         [
@@ -200,7 +212,7 @@ def test_stop_blocks_when_the_builtin_advisor_errored(tmp_path):
         ],
     )
     out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
-    assert out["decision"] == "block"
+    assert (out or {}).get("decision", "allow") == verdict
 
 
 def test_compaction_summary_does_not_hide_earlier_work(tmp_path):

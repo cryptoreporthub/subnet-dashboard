@@ -206,12 +206,20 @@ def _is_advisor(block: dict) -> bool:
 
 
 def _advisor_errored(block: dict) -> bool:
-    """A built-in advisor result whose content is the API's error object."""
+    """A built-in advisor result that holds no review.
+
+    Matches how Claude Code itself marks an advisor result as errored: the
+    API's error object, or a result (plain or redacted) whose stop reason is
+    a refusal, with or without text.
+    """
     content = block.get("content")
+    if block.get("type") != "advisor_tool_result" or not isinstance(content, dict):
+        return False
+    if content.get("type") == "advisor_tool_result_error":
+        return True
     return (
-        block.get("type") == "advisor_tool_result"
-        and isinstance(content, dict)
-        and content.get("type") == "advisor_tool_result_error"
+        content.get("type") in ("advisor_result", "advisor_redacted_result")
+        and content.get("stop_reason") == "refusal"
     )
 
 
@@ -242,7 +250,11 @@ def turn_summary(turn: list[dict]) -> tuple[bool, bool]:
         for b in _blocks(entry)
         if isinstance(b, dict)
         and (
-            (b.get("type") == "tool_result" and b.get("is_error"))
+            (
+                entry.get("type") == "user"
+                and b.get("type") == "tool_result"
+                and b.get("is_error")
+            )
             or _advisor_errored(b)
         )
     }
