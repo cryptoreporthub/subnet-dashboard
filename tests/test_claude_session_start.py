@@ -278,6 +278,67 @@ def test_crash_mid_copy_keeps_ownership(env):
     assert skill(env["home"], "kept") == "platform copy"
 
 
+def test_crash_leaves_skills_not_reached_unclaimed(env):
+    # The session dies after copying the first new skill. A platform copy that
+    # appears later under a name the run never reached is not ours: a bundle
+    # that doesn't ship it must leave it alone (Replit's sequence).
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"a-first": "v2", "poteto-mode": "v2", "z-platform": "v2"})
+    shim = env["tmp"] / "crash-cp.sh"
+    shim.write_text('cp() { command cp "$@"; case "$*" in *"/a-first"*) kill -9 $$ ;; esac; }\n')
+    proc = subprocess.run(
+        ["bash", str(pinned_script(env["tmp"], v2))],
+        env={**env["env"], "BASH_ENV": str(shim)}, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode != 0
+    platform = env["home"] / ".claude" / "skills" / "z-platform"
+    platform.mkdir()
+    (platform / "SKILL.md").write_text("platform copy")
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "z-platform") == "platform copy"
+    assert skill(env["home"], "a-first") is None
+    assert skill(env["home"], "old") is None
+    assert skill(env["home"], "poteto-mode") == "v3"
+
+
+def test_failed_claim_stops_before_the_skill(env):
+    # The manifest write that would claim the second new skill fails: that
+    # skill and the rest are not copied, the first stays owned, and a platform
+    # copy under a name never reached is left alone by a later bundle.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"a-first": "v2", "poteto-mode": "v2", "z-new": "v2"})
+    count = env["tmp"] / "incomplete-writes"
+    shim = env["tmp"] / "fail-third-claim.sh"
+    shim.write_text(
+        'echo() {\n'
+        '  if [ "${1-}" = incomplete ]; then\n'
+        '    local n=$(( $(cat %s 2>/dev/null || builtin echo 0) + 1 ))\n'
+        '    builtin echo "$n" > %s\n'
+        '    [ "$n" = 3 ] && return 1\n'
+        '  fi\n'
+        '  builtin echo "$@"\n'
+        '}\n' % (count, count)
+    )
+    run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    assert manifest.read_text().splitlines()[0] == "incomplete"
+    assert skill(env["home"], "a-first") == "v2"
+    assert skill(env["home"], "poteto-mode") == "v1"
+    assert skill(env["home"], "z-new") is None
+    platform = env["home"] / ".claude" / "skills" / "z-new"
+    platform.mkdir()
+    (platform / "SKILL.md").write_text("platform copy")
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "z-new") == "platform copy"
+    assert skill(env["home"], "a-first") is None
+    assert skill(env["home"], "old") is None
+    assert skill(env["home"], "poteto-mode") == "v3"
+
+
 def test_bundle_links_are_never_installed(env):
     secret = env["tmp"] / "outside.txt"
     secret.write_text("outside the bundle")
