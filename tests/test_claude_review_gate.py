@@ -4,6 +4,7 @@ The review job holds the repo secret, so it must run only for ready-for-review
 PRs whose head branch lives in this repository, and it must never write contents.
 """
 
+import fnmatch
 import shlex
 from pathlib import Path
 
@@ -40,6 +41,20 @@ def _disallowed_tools(wf):
     args = shlex.split(_step(wf, "anthropics/claude-code-action")["with"]["claude_args"])
     assert "--disallowedTools" in args
     return args[args.index("--disallowedTools") + 1].split(",")
+
+
+def _prompt(wf):
+    return _step(wf, "anthropics/claude-code-action")["with"]["prompt"]
+
+
+def _bash_comment_allowed(command, wf=None):
+    """Model of the CLI 2.1.332 Bash matcher for the comment rules: a command runs when an
+    allow glob matches it and no deny glob does. `*` crosses spaces. Cross-checked against
+    the real CLI in a local probe (see the PR body); it does not replace a live run."""
+    wf = wf or _load()
+    allow = [e[len("Bash("):-1] for e in _allowed_tools(wf) if e.startswith("Bash(gh pr comment")]
+    deny = [e[len("Bash("):-1] for e in _disallowed_tools(wf) if e.startswith("Bash(gh pr comment")]
+    return any(fnmatch.fnmatchcase(command, g) for g in allow) and not any(fnmatch.fnmatchcase(command, g) for g in deny)
 
 
 def _named_step(wf, name):
@@ -116,8 +131,10 @@ def test_allowed_tools_is_the_pinned_allowlist():
         "Grep",
         "Glob",
     }
+    # `gh pr comment` is allowed only with `--body`. A bare `gh pr comment:*` would also
+    # allow `--body-file`, which publishes any readable file as a public comment.
     assert {entry for entry in entries if entry.startswith("Bash")} == {
-        "Bash(gh pr comment:*)",
+        "Bash(gh pr comment * --body *)",
         "Bash(gh pr diff:*)",
         "Bash(gh pr view:*)",
     }
@@ -138,38 +155,84 @@ def test_file_tools_are_never_unscoped():
 def test_proc_is_denied_to_the_file_tools():
     # Belt and braces: `//proc/**` is an absolute path rule. A single-slash `/proc/**`
     # would mean "relative to the project root", and would not match /proc.
-    assert set(_disallowed_tools(_load())) == {
-        "Read(//proc/**)",
-        "Grep(//proc/**)",
-        "Glob(//proc/**)",
+    denied = set(_disallowed_tools(_load()))
+    assert {"Read(//proc/**)", "Grep(//proc/**)", "Glob(//proc/**)"} <= denied
+
+
+def test_comment_file_and_editor_flags_are_denied():
+    assert {d for d in _disallowed_tools(_load()) if d.startswith("Bash")} == {
+        "Bash(gh pr comment * --body-file*)",
+        "Bash(gh pr comment * -F*)",
+        "Bash(gh pr comment * --editor*)",
+        "Bash(gh pr comment * -e)",
+        "Bash(gh pr comment * -e *)",
     }
 
 
-def test_review_job_fails_when_nothing_was_posted():
+def test_gh_pr_comment_runs_only_with_body():
+    ok = [
+        'gh pr comment 1 --body "hello world"',
+        "gh pr comment 1 --body 'Review summary: all good'",
+        "gh pr comment 1 --body \"$(cat <<'EOF'\n## Summary\n<!-- claude-review-run:1-1 -->\nEOF\n)\"",
+    ]
+    blocked = [
+        "gh pr comment 1 --body-file /tmp/x",
+        "gh pr comment 1 -F /tmp/x",
+        "gh pr comment 1 -F -",
+        "gh pr comment 1 --body hi --body-file /tmp/x",
+        "gh pr comment 1 --body-file /tmp/x --body hi",
+        "gh pr comment 1 --body hi --body-file=/tmp/x",
+        "gh pr comment 1 --body hi -F/tmp/x",
+        "gh pr comment 1 --body hi -F /tmp/x",
+        "gh pr comment 1 --editor",
+        "gh pr comment 1 -e",
+        "gh pr comment 1 --body hi --editor",
+        "gh pr comment 1 --body hi -e",
+        "gh pr comment 1",
+        "gh pr comment --body-file /tmp/x 1",
+        "gh pr comment 1 -R o/r --body-file /tmp/x",
+    ]
+    for command in ok:
+        assert _bash_comment_allowed(command), command
+    for command in blocked:
+        assert not _bash_comment_allowed(command), command
+
+
+def test_review_job_fails_when_no_marked_summary_was_posted():
     wf = _load()
     steps = wf["jobs"]["review"]["steps"]
     review_index = steps.index(_step(wf, "anthropics/claude-code-action"))
     check = _named_step(wf, "Fail if no review or summary was posted")
-    # It runs after the review, on success only, so a green job means something was posted.
+    # It runs after the review, on success only, so a green job means a marked summary exists.
     assert steps.index(check) > review_index
     assert "if" not in check
     assert "continue-on-error" not in check
     script = check["run"]
-    for endpoint in ("issues/${PR}/comments", "pulls/${PR}/reviews", "pulls/${PR}/comments"):
+    # It looks in issue comments and review bodies for this run's marker, by the job token's bot.
+    for endpoint in ("issues/${PR}/comments", "pulls/${PR}/reviews"):
         assert endpoint in script
     assert 'select(.user.login == "github-actions[bot]"' in script
-    assert "$since" in script
+    assert "contains($marker)" in script
+    assert '--arg marker "$MARKER"' in script
     assert "exit 1" in script
-    # Start time is recorded by an earlier step and read through the step output.
-    started = _named_step(wf, "Record job start")
-    assert steps.index(started) < review_index
-    assert check["env"]["SINCE"] == "${{ steps." + started["id"] + ".outputs.at }}"
+
+
+def test_marker_is_unique_to_the_run_and_required_by_the_prompt():
+    wf = _load()
+    marker = "<!-- claude-review-run:${{ github.run_id }}-${{ github.run_attempt }} -->"
+    # A re-run keeps the run id, so the attempt number is part of the marker.
+    assert _named_step(wf, "Fail if no review or summary was posted")["env"]["MARKER"] == marker
+    prompt = _prompt(wf)
+    assert marker in prompt
+    assert "first line of the summary" in prompt
+    # The heredoc form is the one the CLI lets through when the text has newlines and `#`.
+    assert "--body \"$(cat <<'EOF'" in prompt
 
 
 def test_post_check_adds_no_permission_and_no_secret():
     wf = _load()
     check = _named_step(wf, "Fail if no review or summary was posted")
-    assert set(check["env"]) == {"GH_TOKEN", "REPO", "PR", "SINCE"}
+    assert set(check["env"]) == {"GH_TOKEN", "REPO", "PR", "MARKER"}
     assert check["env"]["GH_TOKEN"] == "${{ github.token }}"
     assert "secrets." not in str(check)
     assert wf["jobs"]["review"]["permissions"] == {"contents": "read", "pull-requests": "write"}
