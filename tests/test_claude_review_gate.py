@@ -112,6 +112,13 @@ def test_actions_run_the_reviewed_commit():
         assert _step(_load(), prefix)["uses"] == f"{prefix}@{sha}"
 
 
+def test_review_job_opts_into_subprocess_env_scrub():
+    # The action scrubs secrets from Bash children only when this is "1" (or when
+    # allowed_non_write_users is set, which this job does not use). Source-derived:
+    # the scrub itself runs in the Claude CLI, so a live run must confirm it.
+    assert _load()["jobs"]["review"]["env"]["CLAUDE_CODE_SUBPROCESS_ENV_SCRUB"] == "1"
+
+
 def test_checkout_does_not_persist_the_workflow_token():
     # Persisted, the token sits in .git/config where a prompt-injected run can read it.
     assert _step(_load(), "actions/checkout")["with"]["persist-credentials"] is False

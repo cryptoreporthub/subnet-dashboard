@@ -24,6 +24,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    env:
+      # Best-effort scrub of Anthropic and GitHub secrets from Bash child processes.
+      # Opt-in in the action; off unless set. Reduces, does not eliminate, exposure.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -46,7 +50,7 @@ jobs:
             Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`)
             for issues in specific lines, and `gh pr comment` for a summary.
             Only post GitHub comments. Do not edit files.
-          # Haiku keeps subscription quota, matching the mention workflow.
+          # Same model as the mention workflow, to keep subscription quota low.
           claude_args: >-
             --model haiku
             --permission-mode default
