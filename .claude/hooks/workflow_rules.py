@@ -132,12 +132,15 @@ def _starts_turn(entry: dict) -> bool:
         return False
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, str):
-        return not _is_hook_feedback(content)
-    blocks = [b for b in content or [] if isinstance(b, dict)]
-    if any(b.get("type") == "tool_result" for b in blocks):
-        return False
-    text = "".join(b.get("text") or "" for b in blocks if b.get("type") == "text")
-    return not _is_hook_feedback(text)
+        text = content
+    else:
+        blocks = [b for b in content or [] if isinstance(b, dict)]
+        if any(b.get("type") == "tool_result" for b in blocks):
+            return False
+        text = "".join(b.get("text") or "" for b in blocks if b.get("type") == "text")
+    # Only system-written (isMeta) entries can be hook feedback, so a typed
+    # prompt that happens to start with the same words still starts a turn.
+    return not (entry.get("isMeta") and _is_hook_feedback(text))
 
 
 def _is_hook_feedback(text: str) -> bool:
@@ -201,6 +204,11 @@ def _is_work(block: dict) -> bool:
 
 def turn_summary(turn: list[dict]) -> tuple[bool, bool]:
     """(did tool work, consulted the advisor after the last work) for one turn.
+
+    ponytail: any advisor call counts, whatever its verdict. A FIX FIRST that
+    is answered with text and no work lets the turn end; the gate makes sure
+    the advisor saw the final state, not that its advice was taken. Reading
+    the verdict would need the agent's reply format to be a contract.
 
     Work clears an earlier advisor call. An advisor call in the same message
     as work does not count, since the two run side by side and the advisor

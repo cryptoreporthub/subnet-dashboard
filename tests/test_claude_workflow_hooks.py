@@ -280,6 +280,21 @@ def test_stop_blocks_at_most_three_times_per_turn(tmp_path, shape):
     assert [o and o["decision"] for o in outs] == ["block", "block", "block", None]
 
 
+def test_typed_prompt_with_feedback_words_still_starts_a_turn(tmp_path):
+    """Only a system (isMeta) entry can be hook feedback; a typed prompt always starts a turn."""
+    path = write_transcript(
+        tmp_path,
+        [
+            user("first"),
+            assistant(tool_use("Bash", command="ls")),
+            tool_result(),
+            user("Stop hook feedback: what does this mean?"),
+            assistant({"type": "text", "text": "It means..."}),
+        ],
+    )
+    assert stop(path) is None
+
+
 def test_stop_cap_resets_on_a_new_turn(tmp_path):
     session = uuid.uuid4().hex
     turn = [user("first")]
