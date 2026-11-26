@@ -30,6 +30,19 @@ ditto_bin="$HOME/.local/bin/heyditto"
 
 log() { echo "[session-start] $*" >&2; }
 
+# Replace the skills manifest: a header line, then the names in the given
+# files. Only a fully written file replaces the old manifest; every write is
+# checked, so a full disk keeps the old one.
+write_manifest() {
+  local header="$1"
+  shift
+  if { echo "$header" && LC_ALL=C sort -u "$@"; } > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"; then
+    return 0
+  fi
+  rm -f "$manifest.tmp"
+  return 1
+}
+
 install_pstack_skills() {
   local commit="$bundle_sha" tmp name ref="refs/remotes/origin/$bundle_branch"
   if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
@@ -58,8 +71,9 @@ install_pstack_skills() {
     return 0
   fi
   mkdir -p "$skills_dir"
-  local names="$tmp/names" failed=0
+  local names="$tmp/names" owned="$tmp/owned" failed=0
   : > "$names"
+  # Pick the skills to install before touching the skills dir.
   for dir in "$tmp"/pstack-skills/*/; do
     dir="${dir%/}"
     # A link could point outside the bundle: skip a skill dir that is one, and
@@ -68,43 +82,54 @@ install_pstack_skills() {
     name="$(basename "$dir")"
     [ "$name" = "synced" ] && continue
     # Keep a skill this hook did not install, such as one the platform synced.
-    if [ -e "$skills_dir/$name" ] && ! grep -Fqx "$name" "$manifest" 2>/dev/null; then
+    if [ -e "$skills_dir/$name" ] && ! grep -Fqx -- "$name" "$manifest" 2>/dev/null; then
       continue
     fi
-    # Record the name first, so a half-copied skill still counts as ours.
     echo "$name" >> "$names"
-    if ! { rm -rf "${skills_dir:?}/$name" && cp -RP "$dir" "$skills_dir/$name" \
-      && find "$skills_dir/$name" -type l -delete; }; then
-      log "could not install skill $name"
-      failed=1
-    fi
   done
-  # No skill copied (only links, "synced" or platform copies): keep the
+  # No skill to copy (only links, "synced" or platform copies): keep the
   # manifest as it is, so the skills it lists stay ours for the next bundle.
   if [ ! -s "$names" ]; then
     log "pinned bundle ${commit:0:7} ships no installable skills; nothing changed"
     rm -rf "$tmp"
     return 0
   fi
-  # Remove skills an earlier bundle installed that this bundle no longer ships.
-  if [ -f "$manifest" ]; then
-    tail -n +2 "$manifest" | while read -r name; do
-      if [ -n "$name" ] && ! grep -Fqx "$name" "$names"; then
-        rm -rf "${skills_dir:?}/$name"
-      fi
-    done
-  fi
-  # On a failed copy, record the names but not the commit, so the next session retries.
-  # Only a fully written manifest replaces the old one: every write is checked,
-  # so a full disk keeps the old manifest and the names it owns.
-  local header="$commit"
-  [ "$failed" = 0 ] || header="incomplete"
-  if ! { echo "$header" && cat "$names"; } > "$manifest.tmp" ||
-    ! mv "$manifest.tmp" "$manifest"; then
-    log "could not write the skills manifest; keeping the old one, so the next session retries"
-    rm -f "$manifest.tmp"
+  : > "$owned"
+  if [ -f "$manifest" ] && ! tail -n +2 "$manifest" > "$owned"; then
+    log "could not read the skills manifest; nothing changed"
     rm -rf "$tmp"
     return 0
+  fi
+  # Record ownership before copying anything: every name the old manifest owns
+  # plus every skill about to be copied, marked incomplete. Whatever fails
+  # after this, every skill this hook put on disk stays listed, so a later
+  # bundle can still remove it, and the next session retries. If this write
+  # fails, nothing is copied.
+  if ! write_manifest incomplete "$owned" "$names"; then
+    log "could not write the skills manifest; nothing changed, the next session retries"
+    rm -rf "$tmp"
+    return 0
+  fi
+  while read -r name; do
+    if ! { rm -rf "${skills_dir:?}/$name" && cp -RP "$tmp/pstack-skills/$name" "$skills_dir/$name" \
+      && find "$skills_dir/$name" -type l -delete; }; then
+      log "could not install skill $name"
+      failed=1
+    fi
+  done < "$names"
+  # Remove skills an earlier bundle installed that this bundle no longer ships.
+  while read -r name; do
+    if [ -n "$name" ] && ! grep -Fqx -- "$name" "$names"; then
+      rm -rf "${skills_dir:?}/$name"
+    fi
+  done < "$owned"
+  # On a failed copy, record the names but not the commit, so the next session
+  # retries. If this write fails, the incomplete manifest above stays.
+  local header="$commit"
+  [ "$failed" = 0 ] || header="incomplete"
+  if ! write_manifest "$header" "$names"; then
+    log "could not finish the skills manifest; the next session retries"
+    failed=1
   fi
   rm -rf "$tmp"
   if [ "$failed" = 0 ]; then
