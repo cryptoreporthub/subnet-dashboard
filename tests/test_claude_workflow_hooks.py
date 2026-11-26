@@ -136,7 +136,47 @@ def test_non_text_agent_name_is_no_review(tmp_path, odd):
 def test_non_text_fields_are_denied_not_crashed(odd):
     assert denied(run_hook("subagent", agent_call(subagent_type=odd)))
     assert denied(run_hook("subagent", agent_call(subagent_type="Explore", model=odd)))
+    assert denied(run_hook("subagent", agent_call(subagent_type="pstack-worker", model=odd)))
+    assert denied(run_hook("subagent", agent_call(subagent_type="opus-advisor", model=odd)))
     assert denied(run_hook("subagent", {"tool_name": "Agent", "tool_input": odd}))
+
+
+@pytest.mark.parametrize("odd", [5, ["opus"], {}])
+def test_advisor_with_non_text_model_is_no_review(tmp_path, odd):
+    call = tool_use("Agent", subagent_type="opus-advisor", model=odd, prompt="check")
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result(),
+         assistant(call), tool_result()],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+def test_unreadable_turn_blocks_instead_of_ending_unchecked(tmp_path):
+    # A list as a message id can't key the message groups; the summary fails,
+    # and the gate must treat that as work without a review.
+    odd_id = {"type": "assistant", "message": {"id": ["x"], "content": []}}
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result(), odd_id],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+@pytest.mark.parametrize("odd", [["not", "an", "entry"], 7, "text"])
+def test_odd_transcript_lines_still_block(tmp_path, odd):
+    # Odd lines are skipped and an odd message reads as empty: the turn's
+    # work still needs the advisor, so the gate can't crash open.
+    odd_message = {"type": "assistant", "message": odd}
+    path = write_transcript(
+        tmp_path,
+        [user("fix it"), odd, assistant(tool_use("Bash", command="ls")), odd_message,
+         tool_result()],
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
 
 
 def test_padded_advisor_name_counts_as_the_review(tmp_path):

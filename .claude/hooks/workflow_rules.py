@@ -123,6 +123,11 @@ def subagent_verdict(tool_input: dict) -> str | None:
     """Return a deny reason, or None when the subagent call is allowed."""
     if not isinstance(tool_input, dict):
         tool_input = {}
+    if any(
+        tool_input.get(key) is not None and not isinstance(tool_input.get(key), str)
+        for key in ("subagent_type", "model")
+    ):
+        return "Denied: subagent_type and model must be text."
     agent = _field(tool_input, "subagent_type")
     model = _field(tool_input, "model").lower()
     # The 1M-context variant runs the same model, so check it as the base name.
@@ -181,8 +186,13 @@ def on_subagent(event: dict) -> None:
     )
 
 
+def _message(entry: dict) -> dict:
+    message = entry.get("message")
+    return message if isinstance(message, dict) else {}
+
+
 def _blocks(entry: dict) -> list:
-    content = (entry.get("message") or {}).get("content")
+    content = _message(entry).get("content")
     return content if isinstance(content, list) else []
 
 
@@ -223,11 +233,8 @@ def _starts_turn(entry: dict) -> bool:
         not isinstance(origin, dict) or origin.get("kind") not in HUMAN_ORIGINS
     ):
         return False
-    content = (entry.get("message") or {}).get("content")
-    if not isinstance(content, str):
-        blocks = [b for b in content or [] if isinstance(b, dict)]
-        if any(b.get("type") == "tool_result" for b in blocks):
-            return False
+    if any(b.get("type") == "tool_result" for b in _blocks(entry) if isinstance(b, dict)):
+        return False
     return True
 
 
@@ -251,7 +258,7 @@ def _messages(turn: list[dict]) -> list[list[dict]]:
     for n, entry in enumerate(turn):
         if entry.get("type") != "assistant" or entry.get("isSidechain"):
             continue
-        key = (entry.get("message") or {}).get("id") or ("entry", n)
+        key = _message(entry).get("id") or ("entry", n)
         groups.setdefault(key, []).extend(
             b for b in _blocks(entry) if isinstance(b, dict)
         )
@@ -351,9 +358,12 @@ def _read_transcript(path: str) -> list[dict]:
             if not line:
                 continue
             try:
-                entries.append(json.loads(line))
+                entry = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            # A line that isn't an object is skipped, like one that isn't JSON.
+            if isinstance(entry, dict):
+                entries.append(entry)
     return entries
 
 
@@ -429,7 +439,13 @@ def on_stop(event: dict) -> None:
     start, count = chain
     if count >= MAX_STOP_BLOCKS:
         return
-    worked, consulted = turn_summary(entries[start + 1 :])
+    try:
+        worked, consulted = turn_summary(entries[start + 1 :])
+    except Exception:
+        # A transcript the summary can't read is treated as work with no
+        # review, so the turn blocks (still capped at MAX_STOP_BLOCKS) rather
+        # than ending unchecked through main()'s fail-open.
+        worked, consulted = True, False
     if not worked or consulted:
         return
     if not _record_block(event, entries, start, count + 1) and event.get("stop_hook_active"):
