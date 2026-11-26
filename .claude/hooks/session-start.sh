@@ -34,6 +34,16 @@ ditto_bin="$HOME/.local/bin/heyditto"
 
 log() { echo "[session-start] $*" >&2; }
 
+# True when $1 is a skill dir this hook installed (a real dir with its marker).
+owned() { [ ! -L "$1" ] && [ -f "$1/$owner_mark" ]; }
+
+# Move $1, a platform copy of skill $2, to ~/.claude/.pstack-orphans under a
+# fresh name, so an earlier orphan never blocks the move.
+orphan() {
+  mkdir -p "$HOME/.claude/.pstack-orphans" \
+    && mv -T "$1" "$(mktemp -u "$HOME/.claude/.pstack-orphans/$2.XXXXXX")"
+}
+
 # Move the hook's copy of skill $1 out of the skills dir in one rename, so
 # it can be deleted where a crash leaves nothing behind at its name. If what
 # was moved turns out not to be the hook's (the platform replaced it after the
@@ -44,11 +54,10 @@ set_aside() {
     log "could not replace skill $name"
     return 1
   fi
-  if [ -L "$stage_dir/old/$name" ] || [ ! -f "$stage_dir/old/$name/$owner_mark" ]; then
+  if ! owned "$stage_dir/old/$name"; then
     if mv -T "$stage_dir/old/$name" "$skills_dir/$name"; then
       log "kept a platform copy of skill $name that appeared during the install"
-    elif mkdir -p "$HOME/.claude/.pstack-orphans" \
-      && mv -T "$stage_dir/old/$name" "$HOME/.claude/.pstack-orphans/$name.$$"; then
+    elif orphan "$stage_dir/old/$name" "$name"; then
       # Something else took the name meanwhile: keep the copy out of the stage.
       log "moved a platform copy of skill $name to ~/.claude/.pstack-orphans; check it"
     fi
@@ -66,12 +75,14 @@ recover_set_aside() {
   local dir name
   for dir in "$stage_dir"/old/*; do
     [ -e "$dir" ] || [ -L "$dir" ] || continue
-    [ ! -L "$dir" ] && [ -f "$dir/$owner_mark" ] && continue
+    # The hook's own copy: the stage clear deletes it.
+    if owned "$dir"; then
+      continue
+    fi
     name="$(basename "$dir")"
     if [ ! -e "$skills_dir/$name" ] && [ ! -L "$skills_dir/$name" ] && mv -T "$dir" "$skills_dir/$name"; then
       log "put back a platform copy of skill $name left by an interrupted install"
-    elif mkdir -p "$HOME/.claude/.pstack-orphans" \
-      && mv -T "$dir" "$HOME/.claude/.pstack-orphans/$name.$$"; then
+    elif orphan "$dir" "$name"; then
       log "moved a platform copy of skill $name to ~/.claude/.pstack-orphans; check it"
     else
       log "could not put back $dir (a platform copy of skill $name); move it into $skills_dir or delete it. pstack skills not installed"
@@ -146,7 +157,9 @@ install_pstack_skills() {
     dest="$skills_dir/$name"
     if [ -e "$dest" ] || [ -L "$dest" ]; then
       # Not ours, such as a skill the platform synced: leave it.
-      [ ! -L "$dest" ] && [ -f "$dest/$owner_mark" ] || continue
+      if ! owned "$dest"; then
+        continue
+      fi
     fi
     if ! { cp -RP "$dir" "$stage_dir/new/$name" && find "$stage_dir/new/$name" -type l -delete \
       && echo "$commit" > "$stage_dir/new/$name/$owner_mark"; }; then
@@ -183,8 +196,12 @@ install_pstack_skills() {
   for dir in "$skills_dir"/*/; do
     dir="${dir%/}"
     name="$(basename "$dir")"
-    [ -L "$dir" ] || [ ! -f "$dir/$owner_mark" ] && continue
-    grep -Fqx -- "$name" "$names" && continue
+    if ! owned "$dir"; then
+      continue
+    fi
+    # Remove only on a clean "not listed" (grep status 1); a grep error keeps it.
+    grep -Fqx -- "$name" "$names"
+    [ "$?" = 1 ] || continue
     set_aside "$name" && discard "$name"
   done
   rm -rf "$tmp"

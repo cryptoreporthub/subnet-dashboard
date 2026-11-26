@@ -461,6 +461,86 @@ def test_platform_copy_synced_mid_install_is_kept(env, when):
     assert skill(env["home"], "a-first") is None
 
 
+# Counts every file command the hook runs. At call SWEEP_INJECT it plays the
+# platform syncing skill "late" (if the name is free) and at call SWEEP_KILL
+# it kills the hook. Matching on call order, not on paths, keeps the sweep
+# about behavior: it holds whatever the stage looks like inside.
+SWEEP_SHIM = """
+__step() {
+  local n=$(( $(<"$SWEEP_COUNT") + 1 ))
+  builtin printf '%s' "$n" > "$SWEEP_COUNT"
+  if [ "$n" = "$SWEEP_INJECT" ] && [ ! -e "$SWEEP_LATE" ]; then
+    command mkdir "$SWEEP_LATE" && builtin printf 'platform copy' > "$SWEEP_LATE/SKILL.md"
+    builtin printf 'injected' > "$SWEEP_COUNT.injected"
+  fi
+  [ "$n" = "$SWEEP_KILL" ] && kill -9 $$
+}
+mv() { __step; command mv "$@"; }
+cp() { __step; command cp "$@"; }
+rm() { __step; command rm "$@"; }
+mkdir() { __step; command mkdir "$@"; }
+find() { __step; command find "$@"; }
+"""
+
+
+def test_crash_at_any_step_converges_and_loses_no_platform_copy(env):
+    # An upgrade from v1 to v2 is killed at every file command in turn, with
+    # the platform syncing a skill the bundle also ships one step earlier.
+    # Whichever step the crash lands on, the next session ends with the v2
+    # skills, the dropped skill gone, every platform copy kept at its name,
+    # and nothing orphaned or left in the stage.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1", "kept": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "kept": "v2", "late": "v2"})
+    script = pinned_script(env["tmp"], v2)
+    home, snapshot = env["home"], env["tmp"] / "home-v1"
+    shutil.copytree(home, snapshot, symlinks=True)
+    shim = env["tmp"] / "sweep.sh"
+    shim.write_text(SWEEP_SHIM)
+    count = env["tmp"] / "sweep-count"
+    late = home / ".claude" / "skills" / "late"
+    injected_runs = 0
+    for kill_at in range(1, 200):
+        shutil.rmtree(home)
+        shutil.copytree(snapshot, home, symlinks=True)
+        count.write_text("0")
+        Path(f"{count}.injected").unlink(missing_ok=True)
+        proc = subprocess.run(
+            ["bash", str(script)],
+            env={**env["env"], "BASH_ENV": str(shim), "SWEEP_COUNT": str(count),
+                 "SWEEP_INJECT": str(kill_at - 1), "SWEEP_KILL": str(kill_at),
+                 "SWEEP_LATE": str(late)},
+            capture_output=True, text=True, timeout=60,
+        )
+        finished = proc.returncode == 0
+        injected = Path(f"{count}.injected").exists()
+        injected_runs += injected
+        out = subprocess.run(["bash", str(script)], env=env["env"], capture_output=True,
+                             text=True, timeout=60)
+        where = f"killed at call {kill_at}: {out.stderr}"
+        assert out.returncode == 0, where
+        assert skill(home, "poteto-mode") == "v2", where
+        assert skill(home, "old") is None, where
+        assert skill(home, "kept") == "platform copy", where
+        if injected:
+            assert skill(home, "late") == "platform copy", where
+            assert not (late / ".pstack-bundle-skill").exists(), where
+        else:
+            assert skill(home, "late") == "v2", where
+        assert (home / ".claude" / "skills" / ".pstack-bundle").read_text().strip() == v2, where
+        orphans = home / ".claude" / ".pstack-orphans"
+        assert not orphans.exists() or not any(orphans.iterdir()), where
+        stage = home / ".claude" / ".pstack-stage"
+        for part in ("new", "old", "trash"):
+            assert not (stage / part).exists() or not any((stage / part).iterdir()), where
+        if finished:
+            break
+    else:
+        pytest.fail("the hook never ran to the end")
+    assert kill_at > 10  # the sweep really walked the install
+    assert injected_runs > 0  # and the platform really synced during it
+
+
 def test_bundle_links_are_never_installed(env):
     secret = env["tmp"] / "outside.txt"
     secret.write_text("outside the bundle")
