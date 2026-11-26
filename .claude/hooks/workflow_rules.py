@@ -122,6 +122,13 @@ def subagent_verdict(tool_input: dict) -> str | None:
         return None
     if agent != "fork" and (model == "sonnet" or model.startswith("claude-sonnet")):
         return None
+    if agent == "fork":
+        # A fork always runs on the parent's model and ignores a model override.
+        return (
+            "Denied: a fork runs on the main session's model, not Sonnet. This "
+            "repo uses Sonnet pstack subagents for ALL tasks. Retry with "
+            f"subagent_type `{WORKER_AGENT}`."
+        )
     shown = agent or "the default agent"
     return (
         f"Denied: {shown} would not run on Sonnet. This repo uses Sonnet pstack "
@@ -153,6 +160,11 @@ def on_subagent(event: dict) -> None:
 # reviews can't push, post, merge or write files. Test runs go to the worker
 # (the advisor asks under Fix first): a test file is code the diff can add,
 # and injected text could pick which one to run.
+# The gate keys on the `agent_type` that Claude Code puts on hook events from
+# inside a subagent, next to `agent_id` (all but its remote-served path). A
+# subagent's Bash with `agent_id` but no `agent_type` can't be told apart, so
+# it is denied too. The main session's events carry neither and pass. If the
+# hook itself errors it fails open, like every hook here.
 ADVISOR_GIT = {"diff", "log", "show", "status", "ls-files", "rev-parse", "blame"}
 ADVISOR_GIT_DENIED = ("--output", "--ext-diff", "--textconv", "--open-files-in-pager", "-O")
 # Includes brace, glob and tilde expansion, which bash applies before the
@@ -190,10 +202,18 @@ def _git_arg_denied(word: str) -> bool:
 
 
 def on_bash(event: dict) -> None:
-    if event.get("tool_name") != "Bash" or event.get("agent_type") != ADVISOR_AGENT:
+    if event.get("tool_name") != "Bash":
         return
-    command = (event.get("tool_input") or {}).get("command")
-    reason = advisor_bash_verdict(command if isinstance(command, str) else "")
+    if event.get("agent_id") and not event.get("agent_type"):
+        reason = (
+            "Denied: this subagent's type is unknown, so its Bash can't be "
+            "checked. Run it from the main session or a named subagent."
+        )
+    elif event.get("agent_type") != ADVISOR_AGENT:
+        return
+    else:
+        command = (event.get("tool_input") or {}).get("command")
+        reason = advisor_bash_verdict(command if isinstance(command, str) else "")
     if reason is None:
         return
     _emit(

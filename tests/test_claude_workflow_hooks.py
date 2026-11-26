@@ -108,6 +108,13 @@ def test_non_sonnet_subagents_are_denied():
     assert denied(run_hook("subagent", agent_call(subagent_type="pstack-worker", model="haiku")))
 
 
+def test_fork_deny_does_not_suggest_a_model_override():
+    # The Agent tool ignores a model override for a fork, so the hint must not offer one.
+    out = run_hook("subagent", agent_call(subagent_type="fork", model="sonnet"))
+    reason = out["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "pstack-worker" in reason and "model: sonnet" not in reason
+
+
 def test_other_tools_pass_through():
     assert run_hook("subagent", {"tool_name": "Bash", "tool_input": {"command": "ls"}}) is None
 
@@ -317,6 +324,39 @@ def test_advisor_may_read_git(command):
 )
 def test_advisor_cannot_write_push_or_post(command):
     assert denied(advisor_bash(command))
+
+
+def cli_pre_tool_use(command, agent_type):
+    """A PreToolUse event in the shape Claude Code 2.1.332 builds: its base hook
+    input (session, transcript, cwd, permission mode, agent id and type) plus
+    the PreToolUse fields. Copied from the CLI's code; a live session confirms it."""
+    return {
+        "session_id": "s1",
+        "transcript_path": "/tmp/t.jsonl",
+        "cwd": "/home/user/subnet-dashboard",
+        "permission_mode": "default",
+        "agent_id": "a1b2c3",
+        "agent_type": agent_type,
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": command, "description": "x"},
+        "tool_use_id": "toolu_1",
+    }
+
+
+def test_advisor_gate_on_the_real_payload_shape():
+    assert denied(run_hook("bash", cli_pre_tool_use("git push origin HEAD", "opus-advisor")))
+    assert not denied(run_hook("bash", cli_pre_tool_use("git diff --stat", "opus-advisor")))
+    assert run_hook("bash", cli_pre_tool_use("git push origin HEAD", "pstack-worker")) is None
+
+
+def test_subagent_bash_without_a_type_is_denied():
+    # A subagent event with no agent_type could be the advisor, so it isn't trusted.
+    event = cli_pre_tool_use("git push origin HEAD", None)
+    del event["agent_type"]
+    assert denied(run_hook("bash", event))
+    del event["agent_id"]
+    assert run_hook("bash", event) is None  # the main session's own Bash
 
 
 def test_bash_outside_the_advisor_is_untouched():
