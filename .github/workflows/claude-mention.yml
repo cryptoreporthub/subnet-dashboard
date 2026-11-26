@@ -70,4 +70,7 @@ jobs:
           # Uses Joshua's Claude subscription (no per-token API billing).
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Joshua chose Haiku to save subscription quota (no Opus).
-          claude_args: "--model haiku"
+          # --setting-sources user ignores .claude settings and hooks a PR adds.
+          # The action still writes its own settings to ~/.claude/settings.json (the
+          # user source), and allowed/disallowed tools are passed as SDK options.
+          claude_args: "--model haiku --setting-sources user"

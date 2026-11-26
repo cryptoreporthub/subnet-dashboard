@@ -257,3 +257,11 @@ def test_sandbox_dependencies_are_installed_before_claude():
     assert "apparmor_restrict_unprivileged_userns=0" in install["run"]
     assert "continue-on-error" not in install
     assert "bwrap --unshare-all" in install["run"]
+
+def test_human_job_uses_only_user_setting_sources():
+    import shlex
+    args = shlex.split(_step(uses_prefix="anthropics/claude-code-action")["with"]["claude_args"])
+    assert "--setting-sources" in args
+    assert args[args.index("--setting-sources") + 1] == "user"
+    # The only other arg is the model, as Joshua chose.
+    assert "--model" in args and args[args.index("--model") + 1] == "haiku"

@@ -145,6 +145,15 @@ def test_allowed_tools_is_the_pinned_allowlist():
     }
 
 
+def test_review_job_uses_only_user_setting_sources():
+    # Ignore .claude settings and hooks a PR can add. The action writes its own
+    # settings to ~/.claude/settings.json, which is the user source, so its MCP
+    # setup still applies. allowed/disallowed tools are SDK options, not settings.
+    args = shlex.split(_step(_load(), "anthropics/claude-code-action")["with"]["claude_args"])
+    assert "--setting-sources" in args
+    assert args[args.index("--setting-sources") + 1] == "user"
+
+
 def test_file_tools_are_never_unscoped():
     # A bare `Read`, `Grep` or `Glob` would allow any path on the runner.
     for entry in _allowed_tools(_load()):
