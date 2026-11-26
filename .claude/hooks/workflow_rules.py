@@ -133,7 +133,7 @@ def _starts_turn(entry: dict) -> bool:
     before it. A relayed message therefore extends the previous turn, which
     can only add a block, never remove one.
     """
-    if entry.get("type") != "user" or entry.get("isMeta") or entry.get("turnCompanion"):
+    if entry.get("type") != "user" or entry.get("isMeta"):
         return False
     if any(entry.get(key) is not None for key in TOOL_DERIVED_KEYS):
         return False
