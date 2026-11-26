@@ -190,8 +190,8 @@ def test_bundle_without_skills_leaves_installed_ones(env, bundle):
 
 
 def test_bundle_with_nothing_installable_keeps_ownership(env):
-    # A bundle that ships only "synced" copies nothing; the skills the
-    # manifest owns must still be updated and dropped by the next bundle.
+    # A bundle that ships only "synced" copies nothing; the skills the hook
+    # installed must still be updated and dropped by the next bundle.
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "tdd": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
     v2 = publish_bundle(env["work"], {"synced": "x"})
@@ -204,62 +204,35 @@ def test_bundle_with_nothing_installable_keeps_ownership(env):
 
 
 @pytest.mark.skipif(not os.path.exists("/dev/full"), reason="needs /dev/full")
-def test_failed_manifest_write_copies_nothing(env):
-    # A full disk while recording ownership must not copy anything: the old
-    # manifest and the skills it owns stay as they were, and a later bundle
-    # still removes a skill the first one installed.
+def test_failed_manifest_write_retries_next_session(env):
+    # A full disk when recording the installed bundle leaves the old record,
+    # so the next session redoes the install; the skills stay owned and a
+    # later bundle still removes the one it drops.
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
     manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
-    before = manifest.read_text()
     tmp_manifest = Path(str(manifest) + ".tmp")
     tmp_manifest.symlink_to("/dev/full")
     v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2", "added": "v2"})
     run(env["env"], pinned_script(env["tmp"], v2))
-    assert manifest.read_text() == before
+    assert manifest.read_text().strip() == v1
     assert not tmp_manifest.is_symlink()
-    assert skill(env["home"], "poteto-mode") == "v1"
-    assert skill(env["home"], "added") is None
-    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
-    run(env["env"], pinned_script(env["tmp"], v3))
-    assert skill(env["home"], "poteto-mode") == "v3"
-    assert skill(env["home"], "old") is None
-
-
-@pytest.mark.parametrize("failing_header", ["incomplete", "commit"])
-def test_failed_manifest_write_keeps_ownership(env, failing_header):
-    # One manifest write fails (echo and printf are shadowed through BASH_ENV
-    # to fail on that header): before the copy ("incomplete") or after it
-    # ("commit"). Either way every skill on disk stays owned, so a later
-    # bundle removes both the dropped old skill and one the failed session
-    # added.
-    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
-    run(env["env"], pinned_script(env["tmp"], v1))
-    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
-    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2", "added": "v2"})
-    header = v2 if failing_header == "commit" else "incomplete"
-    shim = env["tmp"] / "fail-header.sh"
-    shim.write_text(
-        '_names_header() { local a; for a in "$@"; do [ "$a" = "%s" ] && return 0; done; return 1; }\n'
-        'echo() { _names_header "$@" && return 1; builtin echo "$@"; }\n'
-        'printf() { _names_header "$@" && return 1; builtin printf "$@"; }\n' % header
-    )
-    run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
-    assert manifest.read_text().splitlines()[0] != v2
+    assert skill(env["home"], "added") == "v2"
+    run(env["env"], pinned_script(env["tmp"], v2))
+    assert manifest.read_text().strip() == v2
     v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
     run(env["env"], pinned_script(env["tmp"], v3))
     assert skill(env["home"], "poteto-mode") == "v3"
     assert skill(env["home"], "old") is None
     assert skill(env["home"], "added") is None
     assert skill(env["home"], "kept") == "platform copy"
-    assert manifest.read_text().splitlines() == [v3, "poteto-mode"]
 
 
 def test_crash_mid_copy_keeps_ownership(env):
-    # The session dies right after copying "added" (cp kills the script through
-    # BASH_ENV): the provisional manifest must already list the old skills and
-    # the new one, so a later bundle removes both the one this bundle dropped
-    # and the one copied before the crash.
+    # The session dies right after staging "added" (cp kills the script
+    # through BASH_ENV): the skills already in place stay the hook's, so a
+    # later bundle still updates and removes them, and the half-staged copy
+    # never lands.
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
     v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "added": "v2"})
@@ -303,64 +276,104 @@ def test_crash_leaves_skills_not_reached_unclaimed(env):
     assert skill(env["home"], "poteto-mode") == "v3"
 
 
-def test_failed_claim_stops_before_the_skill(env):
-    # The manifest that would claim the second new skill can't be saved: that
-    # skill and the rest are not copied, the first stays owned, and a platform
-    # copy under a name never reached is left alone by a later bundle.
-    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
-    run(env["env"], pinned_script(env["tmp"], v1))
-    v2 = publish_bundle(env["work"], {"a-first": "v2", "b-second": "v2", "poteto-mode": "v2"})
-    shim = env["tmp"] / "fail-claim.sh"
+def crash_on_move(env, name):
+    """A BASH_ENV shim that kills the hook just before it moves skill `name` into place."""
+    shim = env["tmp"] / f"crash-mv-{name}.sh"
     shim.write_text(
-        'mv() {\n'
-        '  case "$1" in *.pstack-bundle.tmp)\n'
-        '    grep -Fqx b-second "$1" && return 1 ;;\n'
-        '  esac\n'
-        '  command mv "$@"\n'
-        '}\n'
+        'mv() { case "${@: -2:1}" in */.pstack-stage/new/%s) kill -9 $$ ;; esac; command mv "$@"; }\n'
+        % name
     )
-    run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
-    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
-    assert manifest.read_text().splitlines()[0] == "incomplete"
+    return shim
+
+
+@pytest.mark.parametrize("owned_before", [False, True])
+def test_crash_before_a_skill_is_placed_never_claims_its_name(env, owned_before):
+    # Replit's sequence: the session dies after it removed or never had the
+    # skill, before the new copy is in place. A platform copy that lands under
+    # that name before the next session is not ours, and a bundle that drops
+    # the name must leave it alone.
+    old = {"z-platform": "v1"} if owned_before else {}
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", **old})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"a-first": "v2", "poteto-mode": "v2", "z-platform": "v2"})
+    proc = subprocess.run(
+        ["bash", str(pinned_script(env["tmp"], v2))],
+        env={**env["env"], "BASH_ENV": str(crash_on_move(env, "z-platform"))},
+        capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode != 0
     assert skill(env["home"], "a-first") == "v2"
-    assert skill(env["home"], "b-second") is None
-    assert skill(env["home"], "poteto-mode") == "v1"
-    platform = env["home"] / ".claude" / "skills" / "b-second"
+    platform = env["home"] / ".claude" / "skills" / "z-platform"
+    assert not platform.exists()
     platform.mkdir()
     (platform / "SKILL.md").write_text("platform copy")
     v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
     run(env["env"], pinned_script(env["tmp"], v3))
-    assert skill(env["home"], "b-second") == "platform copy"
+    assert skill(env["home"], "z-platform") == "platform copy"
     assert skill(env["home"], "a-first") is None
-    assert skill(env["home"], "old") is None
     assert skill(env["home"], "poteto-mode") == "v3"
+    assert not (env["home"] / ".claude" / ".pstack-stage" / "new" / "z-platform").exists()
 
 
-def test_platform_copy_synced_mid_install_is_kept(env):
-    # The platform syncs a skill after the hook picked it to install but
-    # before its turn comes (here, while the first skill is being claimed):
-    # the hook keeps that copy and never lists it as its own (Cursor's race).
+@pytest.mark.parametrize("deleted", ["poteto-mode", "old"])
+def test_crash_while_deleting_an_old_copy_leaves_no_stuck_skill(env, deleted):
+    # The session dies part way through deleting the hook's old copy of a
+    # skill, either one being replaced (poteto-mode) or one the bundle dropped
+    # (old). rm walks a dir in no set order, so the marker can go first; the
+    # shim removes just the marker, then kills the script. The half-deleted
+    # copy must never be left at the skill's name looking like a platform
+    # copy: the next bundle still installs and removes as usual.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2"})
+    shim = env["tmp"] / "crash-rm.sh"
+    shim.write_text(
+        'rm() {\n'
+        '  local a\n'
+        '  for a in "$@"; do case "$a" in */%s)\n'
+        '    command rm -f "$a/.pstack-bundle-skill"; kill -9 $$ ;;\n'
+        '  esac; done\n'
+        '  command rm "$@"\n'
+        '}\n' % deleted
+    )
+    proc = subprocess.run(
+        ["bash", str(pinned_script(env["tmp"], v2))],
+        env={**env["env"], "BASH_ENV": str(shim)}, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode != 0
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "poteto-mode") == "v3"
+    assert skill(env["home"], "old") is None
+    assert skill(env["home"], "kept") == "platform copy"
+
+
+@pytest.mark.parametrize("when", ["before its turn", "while it is staged", "as it is placed"])
+def test_platform_copy_synced_mid_install_is_kept(env, when):
+    # The platform syncs a skill while the hook runs: before the hook reaches
+    # that name (while it places the first skill), after the hook checked the
+    # name was free (while it stages its copy), or right as the hook moves its
+    # copy into place. Each time the platform copy stays and is never treated
+    # as the hook's (Cursor's race).
     v1 = publish_bundle(env["work"], {"poteto-mode": "v1"})
     run(env["env"], pinned_script(env["tmp"], v1))
     v2 = publish_bundle(env["work"], {"a-first": "v2", "poteto-mode": "v2", "z-platform": "v2"})
     platform = env["home"] / ".claude" / "skills" / "z-platform"
+    trigger = "a-first" if when == "before its turn" else "z-platform"
+    tool = "cp" if when == "while it is staged" else "mv"
     shim = env["tmp"] / "sync-mid-install.sh"
     shim.write_text(
-        'mv() {\n'
-        '  case "$1" in *.pstack-bundle.tmp)\n'
-        '    if grep -Fqx a-first "$1" && [ ! -e %(p)s ]; then\n'
-        '      mkdir %(p)s && builtin printf "platform copy" > %(p)s/SKILL.md\n'
-        '    fi ;;\n'
+        '%(tool)s() {\n'
+        '  case "${@: -2:1} ${@: -1}" in *"/.pstack-stage/new/%(t)s"*)\n'
+        '    [ -e %(p)s ] || { mkdir %(p)s && builtin printf "platform copy" > %(p)s/SKILL.md; } ;;\n'
         '  esac\n'
-        '  command mv "$@"\n'
-        '}\n' % {"p": platform}
+        '  command %(tool)s "$@"\n'
+        '}\n' % {"t": trigger, "p": platform, "tool": tool}
     )
     run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
-    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
     assert skill(env["home"], "z-platform") == "platform copy"
     assert skill(env["home"], "a-first") == "v2"
     assert skill(env["home"], "poteto-mode") == "v2"
-    assert manifest.read_text().splitlines() == [v2, "a-first", "poteto-mode"]
     v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
     run(env["env"], pinned_script(env["tmp"], v3))
     assert skill(env["home"], "z-platform") == "platform copy"
@@ -586,7 +599,7 @@ def test_failed_copy_retries_next_session(env):
     stub_cp.write_text('#!/bin/bash\ncase "$*" in *tdd*) exit 1;; esac\nexec /bin/cp "$@"\n')
     stub_cp.chmod(0o755)
     run(env["env"], script)
-    assert skill(env["home"], "tdd") is None
+    assert skill(env["home"], "tdd") == "v1"  # the old copy stays until a new one is staged
     stub_cp.unlink()
     run(env["env"], script)
     assert skill(env["home"], "tdd") == "v2"

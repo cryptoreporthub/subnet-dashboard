@@ -17,6 +17,10 @@ fi
 repo="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 skills_dir="$HOME/.claude/skills"
 manifest="$skills_dir/.pstack-bundle"
+# Marks a skill dir as installed by this hook; staging sits on the same
+# filesystem as the skills dir so the final rename is atomic.
+owner_mark=".pstack-bundle-skill"
+stage_dir="$HOME/.claude/.pstack-stage"
 bundle_branch="pstack-skills-bundle"
 # Pinned bundle commit. Skills are instructions, so a new bundle only lands by
 # bumping this pin in a reviewed PR, never by moving the branch.
@@ -30,21 +34,33 @@ ditto_bin="$HOME/.local/bin/heyditto"
 
 log() { echo "[session-start] $*" >&2; }
 
-# Replace the skills manifest: a header line, then the names in the given
-# files. Only a fully written file replaces the old manifest; every write is
-# checked, so a full disk keeps the old one.
-write_manifest() {
-  local header="$1"
-  shift
-  if { echo "$header" && LC_ALL=C sort -u "$@"; } > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"; then
-    return 0
+# Move the hook's copy of skill $1 out of the skills dir in one rename, so
+# it can be deleted where a crash leaves nothing behind at its name. If what
+# was moved turns out not to be the hook's (the platform replaced it after the
+# check), it goes straight back.
+set_aside() {
+  local name="$1"
+  if ! mv -T "$skills_dir/$name" "$stage_dir/old/$name"; then
+    log "could not replace skill $name"
+    return 1
   fi
-  rm -f "$manifest.tmp"
-  return 1
+  if [ -L "$stage_dir/old/$name" ] || [ ! -f "$stage_dir/old/$name/$owner_mark" ]; then
+    if mv -T "$stage_dir/old/$name" "$skills_dir/$name"; then
+      log "kept a platform copy of skill $name that appeared during the install"
+    elif mkdir -p "$HOME/.claude/.pstack-orphans" \
+      && mv -T "$stage_dir/old/$name" "$HOME/.claude/.pstack-orphans/$name.$$"; then
+      # Something else took the name meanwhile: keep the copy out of the stage.
+      log "moved a platform copy of skill $name to ~/.claude/.pstack-orphans; check it"
+    fi
+    # ponytail: ceiling: a crash between the two moves leaves that platform
+    # copy in the stage, which the next install run deletes.
+    return 1
+  fi
+  return 0
 }
 
 install_pstack_skills() {
-  local commit="$bundle_sha" tmp name ref="refs/remotes/origin/$bundle_branch"
+  local commit="$bundle_sha" tmp name dest ref="refs/remotes/origin/$bundle_branch"
   if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
     git -C "$repo" -c gc.autoDetach=false fetch --quiet origin "+refs/heads/$bundle_branch:$ref" 9>&- ||
       log "could not fetch $bundle_branch"
@@ -53,7 +69,7 @@ install_pstack_skills() {
     log "pinned bundle ${commit:0:7} not found; pstack skills not installed"
     return 0
   fi
-  if [ -f "$manifest" ] && [ "$(head -n1 "$manifest")" = "$commit" ]; then
+  if [ "$(cat "$manifest" 2>/dev/null)" = "$commit" ]; then
     return 0
   fi
   tmp="$(mktemp -d)"
@@ -70,10 +86,24 @@ install_pstack_skills() {
     rm -rf "$tmp"
     return 0
   fi
-  mkdir -p "$skills_dir"
-  local names="$tmp/names" owned="$tmp/owned" failed=0
+  # Each installed skill carries its own ownership marker, so whose a skill
+  # is never depends on a list that a crash can leave out of step with the
+  # disk: a dir without the marker (a platform copy) is never replaced or
+  # removed. Every change at a skill's name is one rename on the same
+  # filesystem: a new copy is staged with its marker and renamed in, and an
+  # old one is renamed aside before it is deleted, so a crash never leaves a
+  # half-deleted, unmarked dir at the name. rename never replaces a non-empty
+  # dir, so a platform copy that lands at a free name mid-install wins.
+  # ponytail: ceiling: a platform sync that has only made an empty dir when
+  # the rename runs is replaced; its later writes land in our dir.
+  # A stage left by a killed session is never ours to finish: start clean.
+  rm -rf "${stage_dir:?}" && mkdir -p "$skills_dir" "$stage_dir/new" "$stage_dir/old" || {
+    log "could not prepare $stage_dir; pstack skills not installed"
+    rm -rf "$tmp"
+    return 0
+  }
+  local names="$tmp/names" failed=0
   : > "$names"
-  # Pick the skills to install before touching the skills dir.
   for dir in "$tmp"/pstack-skills/*/; do
     dir="${dir%/}"
     # A link could point outside the bundle: skip a skill dir that is one, and
@@ -81,90 +111,59 @@ install_pstack_skills() {
     [ -L "$dir" ] && continue
     name="$(basename "$dir")"
     [ "$name" = "synced" ] && continue
-    # Keep a skill this hook did not install, such as one the platform synced.
-    if [ -e "$skills_dir/$name" ] && ! grep -Fqx -- "$name" "$manifest" 2>/dev/null; then
+    echo "$name" >> "$names"
+    dest="$skills_dir/$name"
+    if [ -e "$dest" ] || [ -L "$dest" ]; then
+      # Not ours, such as a skill the platform synced: leave it.
+      [ ! -L "$dest" ] && [ -f "$dest/$owner_mark" ] || continue
+    fi
+    if ! { cp -RP "$dir" "$stage_dir/new/$name" && find "$stage_dir/new/$name" -type l -delete \
+      && echo "$commit" > "$stage_dir/new/$name/$owner_mark"; }; then
+      log "could not install skill $name"
+      rm -rf "${stage_dir:?}/new/$name"
+      failed=1
       continue
     fi
-    echo "$name" >> "$names"
+    if [ -e "$dest" ] && ! set_aside "$name"; then
+      rm -rf "${stage_dir:?}/new/$name"
+      [ -e "$dest" ] || failed=1
+      continue
+    fi
+    if ! mv -T "$stage_dir/new/$name" "$dest"; then
+      rm -rf "${stage_dir:?}/new/$name"
+      if [ -e "$dest" ]; then
+        log "kept a platform copy of skill $name that appeared during the install"
+      else
+        log "could not install skill $name"
+        # Put the old copy back, so the skill keeps working until the retry.
+        [ -d "$stage_dir/old/$name" ] && mv -T "$stage_dir/old/$name" "$dest"
+        failed=1
+      fi
+    fi
+    rm -rf "${stage_dir:?}/old/$name"
   done
-  # No skill to copy (only links, "synced" or platform copies): keep the
-  # manifest as it is, so the skills it lists stay ours for the next bundle.
+  # Only links or "synced": keep what is installed, as for an empty bundle.
   if [ ! -s "$names" ]; then
     log "pinned bundle ${commit:0:7} ships no installable skills; nothing changed"
     rm -rf "$tmp"
     return 0
   fi
-  : > "$owned"
-  if [ -f "$manifest" ] && ! tail -n +2 "$manifest" > "$owned"; then
-    log "could not read the skills manifest; nothing changed"
-    rm -rf "$tmp"
-    return 0
-  fi
-  # Ownership is recorded one skill ahead of the copy: the manifest, marked
-  # incomplete, lists every name the old manifest owns plus each skill this
-  # run has started to copy, and nothing it has not touched yet. A crash or a
-  # failed write at any point leaves every skill this hook put on disk listed,
-  # so a later bundle can still remove it, and a platform copy under a name
-  # not reached yet stays unclaimed. The next session retries.
-  local claimed="$tmp/claimed"
-  : > "$claimed"
-  if ! write_manifest incomplete "$owned" "$claimed"; then
-    log "could not write the skills manifest; nothing changed, the next session retries"
-    rm -rf "$tmp"
-    return 0
-  fi
-  while read -r name; do
-    # The platform can sync a skill after the selection above: check again
-    # just before claiming it, and keep a copy this hook doesn't own.
-    if [ -e "$skills_dir/$name" ] && ! grep -Fqx -- "$name" "$manifest" 2>/dev/null; then
-      continue
-    fi
-    # $claimed only grows once the manifest listing this skill is written.
-    if ! { cat "$claimed" && echo "$name"; } > "$claimed.next" ||
-      ! write_manifest incomplete "$owned" "$claimed.next" ||
-      ! mv "$claimed.next" "$claimed"; then
-      # Can't record this skill as ours, so it and the rest are not copied.
-      log "could not write the skills manifest; stopped before skill $name"
-      failed=1
-      break
-    fi
-    if ! { rm -rf "${skills_dir:?}/$name" && cp -RP "$tmp/pstack-skills/$name" "$skills_dir/$name" \
-      && find "$skills_dir/$name" -type l -delete; }; then
-      log "could not install skill $name"
-      failed=1
-    fi
-  done < "$names"
   # Remove skills an earlier bundle installed that this bundle no longer ships.
-  while read -r name; do
-    if [ -n "$name" ] && ! grep -Fqx -- "$name" "$names"; then
-      rm -rf "${skills_dir:?}/$name"
-    fi
-  done < "$owned"
-  # The final manifest lists the skills this run touched plus the old ones
-  # this bundle still ships (on a stopped run, some of those were not
-  # reached). On a failed copy or write it keeps the incomplete header, so
-  # the next session retries. If this write fails, the incomplete manifest
-  # above stays.
-  local kept="$tmp/kept"
-  grep -Fx -f "$names" -- "$owned" > "$kept"
-  if [ "$?" -gt 1 ]; then
-    log "could not finish the skills manifest; the next session retries"
-    rm -rf "$tmp"
-    return 0
-  fi
-  # ponytail: ceiling: that manifest can still list an old skill the loop
-  # above already removed; a platform copy synced under exactly that name
-  # before the next successful run is treated as ours.
-  local header="$commit"
-  [ "$failed" = 0 ] || header="incomplete"
-  if ! write_manifest "$header" "$claimed" "$kept"; then
-    log "could not finish the skills manifest; the next session retries"
-    failed=1
-  fi
+  for dir in "$skills_dir"/*/; do
+    dir="${dir%/}"
+    name="$(basename "$dir")"
+    [ -L "$dir" ] || [ ! -f "$dir/$owner_mark" ] && continue
+    grep -Fqx -- "$name" "$names" && continue
+    set_aside "$name" && rm -rf "${stage_dir:?}/old/$name"
+  done
   rm -rf "$tmp"
-  if [ "$failed" = 0 ]; then
+  # The manifest only records which bundle is fully installed, so the next
+  # session skips the work. A failure leaves it as it was, and the next
+  # session retries.
+  if [ "$failed" = 0 ] && echo "$commit" > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"; then
     log "pstack skills installed from $bundle_branch@${commit:0:7}"
   else
+    rm -f "$manifest.tmp"
     log "pstack skills partly installed from $bundle_branch@${commit:0:7}; the next session retries"
   fi
 }
