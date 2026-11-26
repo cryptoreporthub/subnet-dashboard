@@ -22,6 +22,10 @@ bundle_branch="pstack-skills-bundle"
 bundle_sha="53f1161a6a549a5319d655943296ce875c12efda"
 # Pins the CLI itself only; its dependencies are caret ranges with no lockfile,
 # so they can drift per session. The package runs no install scripts.
+# ponytail: --ignore-scripts stops any dependency's lifecycle script from
+# running at install; the ceiling is that unlocked dependency code still runs
+# when heyditto runs. Upgrade path: vendor a package-lock.json and install
+# with npm ci into a fixed prefix.
 ditto_version="3.22.0"
 
 log() { echo "[session-start] $*" >&2; }
@@ -89,7 +93,7 @@ install_ditto_cli() {
   if npm ls -g --depth=0 "@heyditto/cli@$ditto_version" >/dev/null 2>&1; then
     return 0
   fi
-  if npm install -g --no-fund --no-audit "@heyditto/cli@$ditto_version" >&2; then
+  if npm install -g --ignore-scripts --no-fund --no-audit "@heyditto/cli@$ditto_version" >&2; then
     log "Ditto CLI $ditto_version installed (command: heyditto)"
   else
     log "Ditto CLI install failed; continuing without it"

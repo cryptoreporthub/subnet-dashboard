@@ -112,7 +112,9 @@ def test_installs_bundle_and_turns_on_poteto_mode(env):
     assert skill(home, "tdd") == "v1"
     assert skill(home, "kept") == "platform copy"
     assert skill(home, "synced") is None
-    assert "install -g --no-fund --no-audit @heyditto/cli@" in env["npm_log"].read_text()
+    install = [l for l in env["npm_log"].read_text().splitlines() if l.startswith("install")]
+    assert install and "@heyditto/cli@" in install[0]
+    assert "--ignore-scripts" in install[0].split()  # no dependency lifecycle scripts
 
 
 def test_installs_the_pinned_commit_not_the_branch_tip(env):

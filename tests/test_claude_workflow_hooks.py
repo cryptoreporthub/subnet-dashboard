@@ -4,15 +4,19 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
+import uuid
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "workflow_rules.py"
 BASE = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_REMOTE", "GITHUB_ACTIONS")}
 CLOUD = {**BASE, "CLAUDE_CODE_REMOTE": "true"}
 NOT_CLOUD = BASE
+STATE_DIR = tempfile.mkdtemp(prefix="workflow-hooks-test-")
 
 
 def run_hook(mode, event, env=CLOUD):
+    env = {**env, "TMPDIR": STATE_DIR}  # keep the Stop counter out of the real tmp
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), mode],
         input=json.dumps(event),
@@ -207,9 +211,97 @@ def test_stop_loaded_skill_text_does_not_split_the_turn(tmp_path):
     assert run_hook("stop", {"transcript_path": path}) is None
 
 
-def test_stop_never_blocks_twice(tmp_path):
+def stop(path, active=False, session=None):
+    event = {"transcript_path": path, "stop_hook_active": active}
+    event["session_id"] = session or uuid.uuid4().hex
+    return run_hook("stop", event)
+
+
+def advisor():
+    return assistant(tool_use("Agent", subagent_type="opus-advisor", prompt="check"))
+
+
+def test_stop_rechecks_work_done_after_a_fix_first(tmp_path):
+    """Work on the advisor's FIX FIRST is reviewed again, even on Claude Code's second Stop."""
+    session = uuid.uuid4().hex
+    turn = [user("go"), assistant(tool_use("Bash", command="ls")), tool_result()]
+    assert stop(write_transcript(tmp_path, turn), session=session)["decision"] == "block"
+    turn += [advisor(), tool_result(), assistant(tool_use("Edit", file_path="a.py")), tool_result()]
+    out = stop(write_transcript(tmp_path, turn), active=True, session=session)
+    assert out["decision"] == "block"
+    turn += [advisor(), tool_result()]
+    assert stop(write_transcript(tmp_path, turn), active=True, session=session) is None
+
+
+def test_stop_blocks_at_most_three_times_per_turn(tmp_path):
+    session = uuid.uuid4().hex
+    turn = [user("go")]
+    outs = []
+    for _ in range(4):
+        turn += [assistant(tool_use("Bash", command="ls")), tool_result()]
+        outs.append(stop(write_transcript(tmp_path, turn), active=bool(outs), session=session))
+        turn += [advisor(), tool_result()]
+    assert [o and o["decision"] for o in outs] == ["block", "block", "block", None]
+
+
+def test_stop_cap_resets_on_a_new_turn(tmp_path):
+    session = uuid.uuid4().hex
+    turn = [user("first")]
+    for _ in range(3):
+        turn += [assistant(tool_use("Bash", command="ls")), tool_result()]
+        stop(write_transcript(tmp_path, turn), session=session)
+    turn += [user("second"), assistant(tool_use("Bash", command="ls")), tool_result()]
+    assert stop(write_transcript(tmp_path, turn), session=session)["decision"] == "block"
+
+
+def test_stop_advisor_beside_work_in_one_message_does_not_count(tmp_path):
+    path = write_transcript(
+        tmp_path,
+        [
+            user("go"),
+            assistant(
+                tool_use("Bash", command="make"),
+                tool_use("Agent", subagent_type="opus-advisor", prompt="check"),
+            ),
+            tool_result(),
+            tool_result(),
+        ],
+    )
+    assert stop(path)["decision"] == "block"
+
+
+def test_stop_reads_one_message_split_across_entries(tmp_path):
+    """Claude Code writes each parallel tool call of one message as its own entry."""
+    msg = {"id": "msg_1"}
+    work = {"type": "assistant", "message": {**msg, "content": [tool_use("Bash", command="make")]}}
+    adv = {
+        "type": "assistant",
+        "message": {
+            **msg,
+            "content": [tool_use("Agent", subagent_type="opus-advisor", prompt="check")],
+        },
+    }
+    path = write_transcript(tmp_path, [user("go"), work, adv, tool_result(), tool_result()])
+    assert stop(path)["decision"] == "block"
+
+
+def test_stop_without_counter_falls_back_to_one_block(tmp_path):
+    """If the counter can't be stored, Claude Code's own one-shot guard still prevents a loop."""
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    (tmp / "claude-workflow-hooks").write_text("a file where the counter dir should be")
     path = write_transcript(tmp_path, [user("go"), assistant(tool_use("Bash", command="ls"))])
-    assert run_hook("stop", {"transcript_path": path, "stop_hook_active": True}) is None
+    env = {**CLOUD, "TMPDIR": str(tmp)}
+    for active, expect in ((False, "block"), (True, None)):
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "stop"],
+            input=json.dumps({"transcript_path": path, "stop_hook_active": active, "session_id": "s"}),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        out = json.loads(proc.stdout) if proc.stdout.strip() else None
+        assert (out and out["decision"]) == expect
 
 
 def test_hooks_do_nothing_outside_cloud_sessions(tmp_path):
