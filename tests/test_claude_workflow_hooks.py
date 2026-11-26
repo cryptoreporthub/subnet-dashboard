@@ -7,8 +7,9 @@ import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "workflow_rules.py"
-CLOUD = {**os.environ, "CLAUDE_CODE_REMOTE": "true"}
-NOT_CLOUD = {k: v for k, v in os.environ.items() if k != "CLAUDE_CODE_REMOTE"}
+BASE = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_REMOTE", "GITHUB_ACTIONS")}
+CLOUD = {**BASE, "CLAUDE_CODE_REMOTE": "true"}
+NOT_CLOUD = BASE
 
 
 def run_hook(mode, event, env=CLOUD):
@@ -187,6 +188,9 @@ def test_hooks_do_nothing_outside_cloud_sessions(tmp_path):
     assert run_hook("prompt", {"prompt": "hi"}, env=NOT_CLOUD) is None
     assert run_hook("subagent", agent_call(subagent_type="Explore"), env=NOT_CLOUD) is None
     assert run_hook("stop", {"transcript_path": path}, env=NOT_CLOUD) is None
+    in_actions = {**CLOUD, "GITHUB_ACTIONS": "true"}
+    assert run_hook("prompt", {"prompt": "hi"}, env=in_actions) is None
+    assert run_hook("stop", {"transcript_path": path}, env=in_actions) is None
 
 
 def test_bad_input_allows():

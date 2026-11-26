@@ -9,8 +9,9 @@ One script, three modes, picked by the first argument:
   stop      Stop: block the end of a turn that did tool work but never
             consulted the advisor. Blocks at most once per turn.
 
-Active only in Claude Code cloud sessions (CLAUDE_CODE_REMOTE=true), so the
-Claude review and mention GitHub Actions in this repo run without these rules.
+Active only in Claude Code cloud sessions (CLAUDE_CODE_REMOTE=true) and never
+under GitHub Actions (GITHUB_ACTIONS=true), so the Claude review and mention
+workflows in this repo run without these rules.
 Stdlib only. Any error in this script allows the action, so a broken hook
 never wedges a session.
 """
@@ -186,6 +187,8 @@ MODES = {"prompt": on_prompt, "subagent": on_subagent, "stop": on_stop}
 
 def main() -> int:
     if os.environ.get("CLAUDE_CODE_REMOTE") != "true":
+        return 0
+    if os.environ.get("GITHUB_ACTIONS") == "true":  # Actions always sets this
         return 0
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     handler = MODES.get(mode)

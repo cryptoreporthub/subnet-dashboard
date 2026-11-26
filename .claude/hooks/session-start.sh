@@ -7,7 +7,9 @@
 # Each step is idempotent and skips work that is already done.
 set -uo pipefail
 
-if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
+# Cloud sessions only. GitHub Actions jobs (the Claude review and mention
+# workflows) read the same settings and must stay untouched.
+if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] || [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   exit 0
 fi
 
@@ -15,17 +17,23 @@ repo="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 skills_dir="$HOME/.claude/skills"
 manifest="$skills_dir/.pstack-bundle"
 bundle_branch="pstack-skills-bundle"
+# Pinned bundle commit. Skills are instructions, so a new bundle only lands by
+# bumping this pin in a reviewed PR, never by moving the branch.
+bundle_sha="53f1161a6a549a5319d655943296ce875c12efda"
 ditto_version="3.22.0"
 
 log() { echo "[session-start] $*" >&2; }
 
 install_pstack_skills() {
-  local commit tmp name ref="refs/remotes/origin/$bundle_branch"
-  if ! git -C "$repo" fetch --quiet origin "+refs/heads/$bundle_branch:$ref"; then
-    log "could not fetch $bundle_branch; pstack skills not refreshed"
+  local commit="$bundle_sha" tmp name ref="refs/remotes/origin/$bundle_branch"
+  if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
+    git -C "$repo" fetch --quiet origin "+refs/heads/$bundle_branch:$ref" ||
+      log "could not fetch $bundle_branch"
+  fi
+  if ! git -C "$repo" cat-file -e "$commit^{commit}" 2>/dev/null; then
+    log "pinned bundle ${commit:0:7} not found; pstack skills not installed"
     return 0
   fi
-  commit="$(git -C "$repo" rev-parse "$ref")"
   if [ -f "$manifest" ] && [ "$(head -n1 "$manifest")" = "$commit" ]; then
     return 0
   fi
