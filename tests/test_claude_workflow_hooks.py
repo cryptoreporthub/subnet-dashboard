@@ -153,13 +153,48 @@ def test_advisor_with_non_text_model_is_no_review(tmp_path, odd):
     assert out["decision"] == "block"
 
 
+@pytest.mark.parametrize("kind", [["human"], {"k": "human"}])
+def test_odd_origin_kind_cannot_end_the_turn_unchecked(tmp_path, kind):
+    typed = {**user("fix it"), "origin": {"kind": kind}}
+    path = write_transcript(
+        tmp_path, [user("start"), typed, assistant(tool_use("Bash", command="ls")), tool_result()]
+    )
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
+def test_odd_message_id_does_not_block_a_read_only_turn(tmp_path):
+    read = {"type": "assistant", "message": {"id": ["odd"], "content": [tool_use("Read", file_path="x")]}}
+    path = write_transcript(tmp_path, [user("what's in x?"), read, tool_result()])
+    assert run_hook("stop", {"transcript_path": path, "stop_hook_active": False}) is None
+
+
+@pytest.mark.parametrize(
+    "bad_line",
+    [b"\xff\xfe{\"type\": \"user\"}", b"[" * 100_000 + b"]" * 100_000],
+    ids=["invalid-utf8", "deeply-nested"],
+)
+def test_unparseable_line_after_work_still_blocks(tmp_path, bad_line):
+    # A line cut mid-character or nested too deep is skipped like any non-JSON
+    # line; the work before it still needs the advisor.
+    path = write_transcript(
+        tmp_path, [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result()]
+    )
+    with open(path, "ab") as fh:
+        fh.write(bad_line + b"\n")
+    out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
+    assert out["decision"] == "block"
+
+
 def test_unreadable_turn_blocks_instead_of_ending_unchecked(tmp_path):
-    # A list as a message id can't key the message groups; the summary fails,
-    # and the gate must treat that as work without a review.
-    odd_id = {"type": "assistant", "message": {"id": ["x"], "content": []}}
+    # A list as an errored result's tool_use_id can't go in the failed set; the
+    # summary raises, and the gate must treat that as work without a review.
+    odd = {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": ["x"], "is_error": True, "content": "no"}]}}
     path = write_transcript(
         tmp_path,
-        [user("fix it"), assistant(tool_use("Bash", command="ls")), tool_result(), odd_id],
+        [user("fix it"), assistant(tool_use("Agent", subagent_type="opus-advisor", prompt="c")),
+         odd],
     )
     out = run_hook("stop", {"transcript_path": path, "stop_hook_active": False})
     assert out["decision"] == "block"

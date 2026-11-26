@@ -201,7 +201,8 @@ def _blocks(entry: dict) -> list:
 # notification, a channel, a peer, an auto-continuation, a kind added later)
 # never starts a turn; that only widens the window, which can add a block but
 # never remove one.
-HUMAN_ORIGINS = {"human"}
+# A tuple, so a malformed kind (a list, say) is compared, never hashed.
+HUMAN_ORIGINS = ("human",)
 # Fields Claude Code sets on user entries that a tool produced (tool results,
 # a loaded skill's text) rather than a new message that starts a turn.
 TOOL_DERIVED_KEYS = ("toolUseResult", "sourceToolUseID", "sourceToolAssistantUUID")
@@ -258,7 +259,8 @@ def _messages(turn: list[dict]) -> list[list[dict]]:
     for n, entry in enumerate(turn):
         if entry.get("type") != "assistant" or entry.get("isSidechain"):
             continue
-        key = _message(entry).get("id") or ("entry", n)
+        msg_id = _message(entry).get("id")
+        key = msg_id if isinstance(msg_id, str) and msg_id else ("entry", n)
         groups.setdefault(key, []).extend(
             b for b in _blocks(entry) if isinstance(b, dict)
         )
@@ -351,15 +353,21 @@ def _read_transcript(path: str) -> list[dict]:
     # ponytail: parses the whole JSONL on every Stop. Fine for a session's
     # transcript (a few MB); if Stop gets slow on very long sessions, read
     # backwards from the end to the turn start instead.
+    # The transcript boundary: no line may raise here, since a crash outside
+    # turn_summary's try ends the turn unchecked. A bad line is skipped; an odd
+    # value inside a good one is turn_summary's to fail closed on.
+    # errors="replace": a line cut mid-character (the CLI still appending)
+    # can't raise while iterating, outside the per-line try.
     entries = []
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             line = line.strip()
             if not line:
                 continue
             try:
                 entry = json.loads(line)
-            except json.JSONDecodeError:
+            except (ValueError, RecursionError):
+                # Not JSON, or nested too deep to parse: skipped either way.
                 continue
             # A line that isn't an object is skipped, like one that isn't JSON.
             if isinstance(entry, dict):
