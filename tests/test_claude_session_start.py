@@ -151,6 +151,22 @@ def test_skips_ditto_install_when_the_pinned_version_is_present(env):
     assert "ls -g" in log and "install" not in log
 
 
+def test_failed_copy_retries_next_session(env):
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "tdd": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "tdd": "v2"})
+    script = pinned_script(env["tmp"], v2)
+    stub_cp = env["tmp"] / "bin" / "cp"
+    stub_cp.write_text('#!/bin/bash\ncase "$*" in *tdd*) exit 1;; esac\nexec /bin/cp "$@"\n')
+    stub_cp.chmod(0o755)
+    run(env["env"], script)
+    assert skill(env["home"], "tdd") is None
+    stub_cp.unlink()
+    run(env["env"], script)
+    assert skill(env["home"], "tdd") == "v2"
+    assert skill(env["home"], "poteto-mode") == "v2"
+
+
 def test_missing_pinned_commit_fails_safe(env):
     publish_bundle(env["work"], {"poteto-mode": "v1"})
     out = run(env["env"], pinned_script(env["tmp"], "0" * 40))

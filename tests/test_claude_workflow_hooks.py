@@ -124,6 +124,36 @@ def test_stop_allows_after_advisor_tool(tmp_path):
     assert run_hook("stop", {"transcript_path": path}) is None
 
 
+def test_stop_blocks_work_done_after_the_advisor(tmp_path):
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Agent", subagent_type="opus-advisor", prompt="check")),
+            tool_result(),
+            assistant(tool_use("Bash", command="rm -rf build")),
+            tool_result(),
+        ],
+    )
+    assert run_hook("stop", {"transcript_path": path})["decision"] == "block"
+
+
+def test_stop_allows_bookkeeping_after_the_advisor(tmp_path):
+    path = write_transcript(
+        tmp_path,
+        [
+            user("fix it"),
+            assistant(tool_use("Edit", file_path="a.py")),
+            tool_result(),
+            assistant(tool_use("Agent", subagent_type="opus-advisor", prompt="check")),
+            tool_result(),
+            assistant(tool_use("TodoWrite", todos=[])),
+            tool_result(),
+        ],
+    )
+    assert run_hook("stop", {"transcript_path": path}) is None
+
+
 def test_stop_ignores_turns_without_tool_work(tmp_path):
     path = write_transcript(tmp_path, [user("thanks"), assistant({"type": "text", "text": "np"})])
     assert run_hook("stop", {"transcript_path": path}) is None

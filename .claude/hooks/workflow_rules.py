@@ -27,6 +27,8 @@ WORKER_AGENT = "pstack-worker"
 # Agent files in .claude/agents that already pin model: sonnet.
 SONNET_AGENTS = {WORKER_AGENT, "architect", "pr-review"}
 AGENT_TOOLS = {"Agent", "Task"}
+# Bookkeeping tools that change nothing, so they don't count as work.
+NON_WORK_TOOLS = {"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill"}
 
 RULES = (
     "Workflow rules for this repo (hooks enforce them):\n"
@@ -128,7 +130,11 @@ def current_turn(entries: list[dict]) -> list[dict]:
 
 
 def turn_summary(turn: list[dict]) -> tuple[bool, bool]:
-    """(did tool work, consulted the advisor) for one turn."""
+    """(did tool work, consulted the advisor after the last work) for one turn.
+
+    Work done after an advisor call clears it, so the advisor always sees the
+    turn's final state.
+    """
     worked = consulted = False
     for entry in turn:
         if entry.get("type") != "assistant":
@@ -137,13 +143,13 @@ def turn_summary(turn: list[dict]) -> tuple[bool, bool]:
             if not isinstance(block, dict):
                 continue
             kind, name = block.get("type"), block.get("name")
+            agent = (block.get("input") or {}).get("subagent_type")
             if kind == "advisor_tool_result" or name == "advisor":
                 consulted = True
-            elif kind == "tool_use":
-                worked = True
-                agent = (block.get("input") or {}).get("subagent_type")
-                if name in AGENT_TOOLS and agent == ADVISOR_AGENT:
-                    consulted = True
+            elif kind == "tool_use" and name in AGENT_TOOLS and agent == ADVISOR_AGENT:
+                consulted = True
+            elif kind == "tool_use" and name not in NON_WORK_TOOLS:
+                worked, consulted = True, False
     return worked, consulted
 
 

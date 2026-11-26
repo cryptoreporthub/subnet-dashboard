@@ -44,30 +44,43 @@ install_pstack_skills() {
     return 0
   fi
   mkdir -p "$skills_dir"
-  {
-    echo "$commit"
-    for dir in "$tmp"/pstack-skills/*/; do
-      name="$(basename "$dir")"
-      [ "$name" = "synced" ] && continue
-      # Keep a skill this hook did not install, such as one the platform synced.
-      if [ -e "$skills_dir/$name" ] && ! grep -qx "$name" "$manifest" 2>/dev/null; then
-        continue
-      fi
-      rm -rf "${skills_dir:?}/$name"
-      cp -R "$dir" "$skills_dir/$name"
-      echo "$name"
-    done
-  } > "$manifest.tmp"
+  local names="$tmp/names" failed=0
+  : > "$names"
+  for dir in "$tmp"/pstack-skills/*/; do
+    name="$(basename "$dir")"
+    [ "$name" = "synced" ] && continue
+    # Keep a skill this hook did not install, such as one the platform synced.
+    if [ -e "$skills_dir/$name" ] && ! grep -qx "$name" "$manifest" 2>/dev/null; then
+      continue
+    fi
+    # Record the name first, so a half-copied skill still counts as ours.
+    echo "$name" >> "$names"
+    if ! { rm -rf "${skills_dir:?}/$name" && cp -R "$dir" "$skills_dir/$name"; }; then
+      log "could not install skill $name"
+      failed=1
+    fi
+  done
   # Remove skills an earlier bundle installed that this bundle no longer ships.
   if [ -f "$manifest" ]; then
     tail -n +2 "$manifest" | while read -r name; do
-      [ -n "$name" ] && ! tail -n +2 "$manifest.tmp" | grep -qx "$name" &&
+      if [ -n "$name" ] && ! grep -qx "$name" "$names"; then
         rm -rf "${skills_dir:?}/$name"
+      fi
     done
+  fi
+  # On a failed copy, record the names but not the commit, so the next session retries.
+  if [ "$failed" = 0 ]; then
+    { echo "$commit"; cat "$names"; } > "$manifest.tmp"
+  else
+    { echo "incomplete"; cat "$names"; } > "$manifest.tmp"
   fi
   mv "$manifest.tmp" "$manifest"
   rm -rf "$tmp"
-  log "pstack skills installed from $bundle_branch@${commit:0:7}"
+  if [ "$failed" = 0 ]; then
+    log "pstack skills installed from $bundle_branch@${commit:0:7}"
+  else
+    log "pstack skills partly installed from $bundle_branch@${commit:0:7}; the next session retries"
+  fi
 }
 
 install_ditto_cli() {
