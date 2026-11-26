@@ -34,9 +34,17 @@ AGENT_TOOLS = {"Agent", "Task"}
 # Bookkeeping tools that change nothing, so they don't count as work.
 NON_WORK_TOOLS = {"TodoWrite", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "ToolSearch", "Skill"}
 
-# Blocks per turn: the first plus two re-checks. The cap stops an endless
+# Blocks per Stop chain (one turn): the first plus two re-checks. The cap stops an endless
 # advisor loop; past it the turn may end without another review.
 MAX_STOP_BLOCKS = 3
+
+STOP_REASON = (
+    "Before you finish, consult the Opus advisor on this turn's work since its "
+    f"last check: start the `{ADVISOR_AGENT}` agent with the task, what you did "
+    "and your evidence (or call the built-in `advisor` tool if it is on). Then "
+    "act on what it says and end the turn. If you change anything after it "
+    "answers, it checks again."
+)
 
 RULES = (
     "Workflow rules for this repo (hooks enforce them):\n"
@@ -123,10 +131,23 @@ def _starts_turn(entry: dict) -> bool:
         return False
     content = (entry.get("message") or {}).get("content")
     if isinstance(content, str):
-        return True
-    return not any(
-        isinstance(b, dict) and b.get("type") == "tool_result" for b in content or []
-    )
+        return not _is_hook_feedback(content)
+    blocks = [b for b in content or [] if isinstance(b, dict)]
+    if any(b.get("type") == "tool_result" for b in blocks):
+        return False
+    text = "".join(b.get("text") or "" for b in blocks if b.get("type") == "text")
+    return not _is_hook_feedback(text)
+
+
+def _is_hook_feedback(text: str) -> bool:
+    """A hook's own block reason fed back to the model, not a new message.
+
+    Claude Code normally records it as an attachment entry, which never starts
+    a turn; this also covers it arriving as a user entry, so the Stop gate's
+    own reason can't hide the work done before it.
+    """
+    text = text.lstrip()
+    return text.startswith("Stop hook feedback") or "hook blocking error from command" in text
 
 
 def turn_start(entries: list[dict]) -> int:
@@ -213,27 +234,29 @@ def _state_path(event: dict) -> str:
     return os.path.join(tempfile.gettempdir(), "claude-workflow-hooks", name)
 
 
-def _blocks_so_far(event: dict, turn_key: str) -> int | None:
-    """Stop blocks already made this turn, or None if the state can't be read."""
+def _blocks_so_far(event: dict) -> int | None:
+    """Blocks already made in this Stop chain, or None if the count can't be read.
+
+    A chain is the run of Stops that Claude Code marks stop_hook_active, so it
+    starts over with each new turn whatever the transcript holds.
+    """
+    if not event.get("stop_hook_active"):
+        return 0
     try:
         with open(_state_path(event), encoding="utf-8") as fh:
             state = json.load(fh)
-    except FileNotFoundError:
-        return 0
     except (OSError, ValueError):
         return None
-    if not isinstance(state, dict) or state.get("turn") != turn_key:
-        return 0
-    count = state.get("blocks")
-    return count if isinstance(count, int) else 0
+    count = state.get("blocks") if isinstance(state, dict) else None
+    return count if isinstance(count, int) else None
 
 
-def _record_block(event: dict, turn_key: str, count: int) -> bool:
+def _record_block(event: dict, count: int) -> bool:
     path = _state_path(event)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path + ".tmp", "w", encoding="utf-8") as fh:
-            json.dump({"turn": turn_key, "blocks": count}, fh)
+            json.dump({"blocks": count}, fh)
         os.replace(path + ".tmp", path)
         return True
     except OSError:
@@ -244,32 +267,21 @@ def on_stop(event: dict) -> None:
     path = event.get("transcript_path")
     if not path:
         return
-    entries = _read_transcript(path)
-    start = turn_start(entries)
-    worked, consulted = turn_summary(entries[start + 1 :])
+    worked, consulted = turn_summary(current_turn(_read_transcript(path)))
     if not worked or consulted:
         return
-    first = entries[start] if start >= 0 else {}
-    turn_key = f"{start}:{first.get('uuid', '')}"
-    count = _blocks_so_far(event, turn_key)
+    count = _blocks_so_far(event)
     if count is not None and count >= MAX_STOP_BLOCKS:
         return
     # Without a working counter, fall back to Claude Code's own one-shot guard
     # so a broken state file can never loop the session.
-    if count is None or not _record_block(event, turn_key, count + 1):
+    if count is None or not _record_block(event, count + 1):
         if event.get("stop_hook_active"):
             return
     _emit(
         {
             "decision": "block",
-            "reason": (
-                "Before you finish, consult the Opus advisor on this turn's "
-                f"work since its last check: start the `{ADVISOR_AGENT}` agent "
-                "with the task, what you did and your evidence (or call the "
-                "built-in `advisor` tool if it is on). Then act on what it says "
-                "and end the turn. If you change anything after it answers, "
-                "it checks again."
-            ),
+            "reason": STOP_REASON,
         }
     )
 

@@ -8,6 +8,8 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "workflow_rules.py"
 BASE = {k: v for k, v in os.environ.items() if k not in ("CLAUDE_CODE_REMOTE", "GITHUB_ACTIONS")}
 CLOUD = {**BASE, "CLAUDE_CODE_REMOTE": "true"}
@@ -221,25 +223,59 @@ def advisor():
     return assistant(tool_use("Agent", subagent_type="opus-advisor", prompt="check"))
 
 
-def test_stop_rechecks_work_done_after_a_fix_first(tmp_path):
+def block_feedback(reason, shape):
+    """The Stop hook's block reason as Claude Code writes it back to the transcript."""
+    if shape == "attachment":
+        return {
+            "type": "attachment",
+            "attachment": {
+                "type": "hook_blocking_error",
+                "hookName": "Stop",
+                "blockingError": {"blockingError": reason, "command": "workflow_rules.py stop"},
+            },
+        }
+    return {**user(f"Stop hook feedback:\n{reason}"), "isMeta": True}
+
+
+SHAPES = pytest.mark.parametrize("shape", ["attachment", "user"])
+
+
+@SHAPES
+def test_stop_rechecks_work_done_after_a_fix_first(tmp_path, shape):
     """Work on the advisor's FIX FIRST is reviewed again, even on Claude Code's second Stop."""
     session = uuid.uuid4().hex
     turn = [user("go"), assistant(tool_use("Bash", command="ls")), tool_result()]
-    assert stop(write_transcript(tmp_path, turn), session=session)["decision"] == "block"
-    turn += [advisor(), tool_result(), assistant(tool_use("Edit", file_path="a.py")), tool_result()]
+    out = stop(write_transcript(tmp_path, turn), session=session)
+    assert out["decision"] == "block"
+    turn += [block_feedback(out["reason"], shape), advisor(), tool_result()]
+    turn += [assistant(tool_use("Edit", file_path="a.py")), tool_result()]
     out = stop(write_transcript(tmp_path, turn), active=True, session=session)
     assert out["decision"] == "block"
-    turn += [advisor(), tool_result()]
+    turn += [block_feedback(out["reason"], shape), advisor(), tool_result()]
     assert stop(write_transcript(tmp_path, turn), active=True, session=session) is None
 
 
-def test_stop_blocks_at_most_three_times_per_turn(tmp_path):
+@SHAPES
+def test_stop_ignoring_the_block_does_not_end_the_turn(tmp_path, shape):
+    """Answering the block with no advisor call is still blocked: the reason doesn't start a turn."""
+    session = uuid.uuid4().hex
+    turn = [user("go"), assistant(tool_use("Bash", command="ls")), tool_result()]
+    out = stop(write_transcript(tmp_path, turn), session=session)
+    turn += [block_feedback(out["reason"], shape), assistant({"type": "text", "text": "done"})]
+    assert stop(write_transcript(tmp_path, turn), active=True, session=session)["decision"] == "block"
+
+
+@SHAPES
+def test_stop_blocks_at_most_three_times_per_turn(tmp_path, shape):
     session = uuid.uuid4().hex
     turn = [user("go")]
     outs = []
     for _ in range(4):
         turn += [assistant(tool_use("Bash", command="ls")), tool_result()]
-        outs.append(stop(write_transcript(tmp_path, turn), active=bool(outs), session=session))
+        out = stop(write_transcript(tmp_path, turn), active=bool(outs), session=session)
+        outs.append(out)
+        if out:
+            turn.append(block_feedback(out["reason"], shape))
         turn += [advisor(), tool_result()]
     assert [o and o["decision"] for o in outs] == ["block", "block", "block", None]
 
@@ -247,9 +283,9 @@ def test_stop_blocks_at_most_three_times_per_turn(tmp_path):
 def test_stop_cap_resets_on_a_new_turn(tmp_path):
     session = uuid.uuid4().hex
     turn = [user("first")]
-    for _ in range(3):
+    for n in range(3):
         turn += [assistant(tool_use("Bash", command="ls")), tool_result()]
-        stop(write_transcript(tmp_path, turn), session=session)
+        stop(write_transcript(tmp_path, turn), active=n > 0, session=session)
     turn += [user("second"), assistant(tool_use("Bash", command="ls")), tool_result()]
     assert stop(write_transcript(tmp_path, turn), session=session)["decision"] == "block"
 
