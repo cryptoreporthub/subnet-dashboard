@@ -201,6 +201,46 @@ def test_bundle_with_nothing_installable_keeps_ownership(env):
     assert skill(env["home"], "tdd") is None
 
 
+@pytest.mark.skipif(not os.path.exists("/dev/full"), reason="needs /dev/full")
+def test_failed_manifest_write_keeps_the_old_manifest(env):
+    # A full disk while writing the manifest must not lose the names it owns:
+    # a later bundle still removes a skill the first one installed.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    before = manifest.read_text()
+    tmp_manifest = Path(str(manifest) + ".tmp")
+    tmp_manifest.symlink_to("/dev/full")
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2"})
+    run(env["env"], pinned_script(env["tmp"], v2))
+    assert manifest.read_text() == before
+    assert not tmp_manifest.is_symlink()
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "poteto-mode") == "v3"
+    assert skill(env["home"], "old") is None
+
+
+def test_failed_manifest_header_write_keeps_the_old_manifest(env):
+    # Only the header line fails (echo is shadowed through BASH_ENV): the
+    # names after it must not be promoted as a manifest without its header.
+    v1 = publish_bundle(env["work"], {"poteto-mode": "v1", "old": "v1"})
+    run(env["env"], pinned_script(env["tmp"], v1))
+    manifest = env["home"] / ".claude" / "skills" / ".pstack-bundle"
+    before = manifest.read_text()
+    v2 = publish_bundle(env["work"], {"poteto-mode": "v2", "old": "v2"})
+    shim = env["tmp"] / "fail-header.sh"
+    shim.write_text(
+        'echo() { [ "${1-}" = "%s" ] && return 1; builtin echo "$@"; }\n' % v2
+    )
+    run({**env["env"], "BASH_ENV": str(shim)}, pinned_script(env["tmp"], v2))
+    assert manifest.read_text() == before
+    v3 = publish_bundle(env["work"], {"poteto-mode": "v3"})
+    run(env["env"], pinned_script(env["tmp"], v3))
+    assert skill(env["home"], "poteto-mode") == "v3"
+    assert skill(env["home"], "old") is None
+
+
 def test_bundle_links_are_never_installed(env):
     secret = env["tmp"] / "outside.txt"
     secret.write_text("outside the bundle")

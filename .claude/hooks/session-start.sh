@@ -95,12 +95,17 @@ install_pstack_skills() {
     done
   fi
   # On a failed copy, record the names but not the commit, so the next session retries.
-  # Only a fully written manifest replaces the old one (a full disk keeps it).
-  if [ "$failed" = 0 ]; then
-    { echo "$commit"; cat "$names"; } > "$manifest.tmp"
-  else
-    { echo "incomplete"; cat "$names"; } > "$manifest.tmp"
-  fi && mv "$manifest.tmp" "$manifest"
+  # Only a fully written manifest replaces the old one: every write is checked,
+  # so a full disk keeps the old manifest and the names it owns.
+  local header="$commit"
+  [ "$failed" = 0 ] || header="incomplete"
+  if ! { echo "$header" && cat "$names"; } > "$manifest.tmp" ||
+    ! mv "$manifest.tmp" "$manifest"; then
+    log "could not write the skills manifest; keeping the old one, so the next session retries"
+    rm -f "$manifest.tmp"
+    rm -rf "$tmp"
+    return 0
+  fi
   rm -rf "$tmp"
   if [ "$failed" = 0 ]; then
     log "pstack skills installed from $bundle_branch@${commit:0:7}"
