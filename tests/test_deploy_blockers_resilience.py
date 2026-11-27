@@ -316,6 +316,29 @@ def test_postmortem_lock_timeout_records_on_replay_without_duplicate(
         assert len(postmortems.list_for_judge(name)) == 1, name
 
 
+def test_missing_prediction_id_replay_records_one_postmortem(
+    pm_dir, portfolio_path, monkeypatch
+):
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    prediction = dict(PREDICTION)
+    prediction.pop("id", None)
+    for judge in tracker.all_judges():
+        judge.open_position(prediction, size=1.0)
+
+    first = tracker.on_prediction_resolved(prediction)
+    for name in ("oracle", "echo", "pulse"):
+        assert first["judges"][name]["closed"] is not None, name
+        assert len(postmortems.list_for_judge(name)) == 1, name
+
+    monkeypatch.setattr(
+        "internal.judges.portfolios.close_position", lambda *_a, **_k: None
+    )
+    tracker.on_prediction_resolved(prediction)
+    tracker.on_prediction_resolved(prediction)
+    for name in ("oracle", "echo", "pulse"):
+        assert len(postmortems.list_for_judge(name)) == 1, name
+
+
 @pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe"], ids=["empty", "utf16"])
 @pytest.mark.parametrize(
     "route",

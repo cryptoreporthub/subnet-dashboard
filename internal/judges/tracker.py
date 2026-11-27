@@ -28,7 +28,8 @@ class _SkipJudgeNudge(Exception):
 def _postmortem_already_recorded(judge_name: str, prediction_id: Any) -> bool:
     """True when this judge already has a postmortem row for the prediction."""
     if prediction_id is None:
-        return False
+        # Replay cannot match a missing id; skip so record() does not append again.
+        return True
     try:
         rows = list_for_judge(judge_name)
     except PostmortemFileCorrupt:
