@@ -10,15 +10,15 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+import internal.council.resolver as resolver
+import internal.council.weights as weights
+from internal.council.weights import load_weights
+from internal.learning import predictions_store
 from server import app
 
 
 def _isolate_learning_writes(tmp_path, monkeypatch):
     """Keep resolver/feedback tests off repo ``data/soul_map.json`` and predictions."""
-    import internal.council.resolver as resolver
-    import internal.council.weights as weights
-    from internal.learning import predictions_store
-
     soul_path = str(tmp_path / "soul_map.json")
     pred_path = str(tmp_path / "predictions.json")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", soul_path)
@@ -45,21 +45,6 @@ def _isolate_learning_writes(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    from datastore import learning_engine
-    from internal.council import mindmap_bridge
-
-    _orig_engine_init = learning_engine.LearningEngine.__init__
-
-    def _engine_init(self, soul_map_path=soul_path):
-        _orig_engine_init(self, soul_map_path)
-
-    _orig_bridge_init = mindmap_bridge.MindmapBridge.__init__
-
-    def _bridge_init(self, persistence_path=soul_path, registry_path="config/registry.json"):
-        _orig_bridge_init(self, persistence_path, registry_path)
-
-    monkeypatch.setattr(learning_engine.LearningEngine, "__init__", _engine_init)
-    monkeypatch.setattr(mindmap_bridge.MindmapBridge, "__init__", _bridge_init)
     return soul_path
 
 
@@ -236,6 +221,18 @@ def test_write_auth_default_deny_admin_posts(monkeypatch):
             assert ok.status_code != 401, path
 
 
+def test_write_auth_browser_ux_posts_open_with_token_set(monkeypatch):
+    """SimiVision chat and investigate stay public when WRITE_API_TOKEN is set."""
+    monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
+    with TestClient(app) as client:
+        for path, body in (
+            ("/api/simivision/chat", {"message": "public-ux"}),
+            ("/api/investigate/ask", {"question": "public-ux"}),
+        ):
+            r = client.post(path, json=body)
+            assert r.status_code != 401, path
+
+
 def test_feedback_routes_require_token_when_enabled(monkeypatch, tmp_path):
     """Expert weight feedback POSTs require bearer when WRITE_API_TOKEN is set."""
     monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
@@ -296,14 +293,13 @@ def test_resolve_predictions_requires_token_when_enabled(monkeypatch, tmp_path):
 
 def test_anonymous_feedback_post_does_not_change_weights(monkeypatch, tmp_path):
     """Decision 16: tokenless feedback must not nudge expert weights."""
-    from internal.council.weights import load_weights
-
     soul_path = _isolate_learning_writes(tmp_path, monkeypatch)
     monkeypatch.setenv("WRITE_API_TOKEN", "weight-guard-token")
     before = dict(load_weights(soul_path))
     with TestClient(app) as client:
-        client.post("/api/mindmap/feedback", json={"note": "anonymous-probe"})
-        client.post(
+        mindmap = client.post("/api/mindmap/feedback", json={"note": "anonymous-probe"})
+        assert mindmap.status_code == 401
+        feedback = client.post(
             "/api/feedback",
             json={
                 "subnet_id": 1,
@@ -311,6 +307,7 @@ def test_anonymous_feedback_post_does_not_change_weights(monkeypatch, tmp_path):
                 "actual_performance": {"outcome": "neutral"},
             },
         )
+        assert feedback.status_code == 401
     after = dict(load_weights(soul_path))
     assert before == after
 
