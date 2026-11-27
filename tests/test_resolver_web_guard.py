@@ -69,6 +69,7 @@ def _resolver_allowed_env(monkeypatch) -> None:
 
 def _ensure_strict_limiter_active(monkeypatch) -> None:
     """Enable limiter with a clean singleton (safe after ``test_rate_limit`` reload)."""
+    # Inline imports: reload targets must be the module objects, not a stale import cache.
     import internal.learning.routes as learning_routes
     import internal.rate_limit as rl
     import server
@@ -121,6 +122,19 @@ def test_resolve_predictions_get_503_when_background_on_web_off(monkeypatch):
     res = _test_client().get("/api/resolve-predictions", headers=_AUTH_HEADERS)
     assert res.status_code == 503
     assert "worker" in res.json()["detail"].lower()
+    assert calls["resolve_due"] == 0
+    assert calls["load_pick"] == 0
+
+
+def test_predictions_resolved_resolve_true_35x503_before_rate_limit(monkeypatch):
+    """503 guard must run before strict limit counts resolve=true on web-off."""
+    _web_background_off(monkeypatch)
+    _ensure_strict_limiter_active(monkeypatch)
+    calls = _count_resolve_calls(monkeypatch)
+    client = _test_client()
+    for i in range(35):
+        res = client.get("/api/predictions/resolved?resolve=true", headers=_AUTH_HEADERS)
+        assert res.status_code == 503, f"request {i + 1}: {res.text}"
     assert calls["resolve_due"] == 0
     assert calls["load_pick"] == 0
 

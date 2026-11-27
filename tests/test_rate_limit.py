@@ -16,6 +16,8 @@ def rate_limited_client(monkeypatch):
 
     monkeypatch.setenv("ENABLE_RATE_LIMIT", "1")
     prev_default = os.environ.get("RATE_LIMIT_DEFAULT")
+    # ponytail: os.environ not monkeypatch.setenv — pytest undo restores 2/minute and later
+    # tests see [200,200,429,429,429,429] on registry (rate_limit leak).
     os.environ["RATE_LIMIT_DEFAULT"] = "2/minute"
     monkeypatch.setattr(rl, "_limiter", None)
     importlib.reload(server)
