@@ -333,6 +333,17 @@ Confirm no such override before deploy (tracked in [#1633](https://github.com/cr
 fall back to the last ``X-Forwarded-For`` hop (issue body suggestion). That hop is
 client-spoofable on 6PN; we use ``get_remote_address`` instead (fail-closed bucket).
 
+**Fly private network (6PN / `.internal`):** traffic between Fly apps can skip the public
+edge proxy; callers may supply their own ``Fly-Client-IP``. Acceptable while no other app
+in the org calls this web service on the private network — revisit before opening 6PN
+callers.
+
+**Shield / limits off Fly:** when ``FLY_APP_NAME`` is unset, Shield and the rate limiter key
+on the logged socket IP (`event["ip"]` / `get_remote_address`) and **ignore**
+``X-Forwarded-For``. A non-Fly reverse proxy in front of the process therefore collapses
+per-client Shield subjects to the proxy's single peer address unless you set ``FLY_APP_NAME``
+and terminate at Fly.
+
 **Pre-enable probe (Fly-Client-IP overwrite):** After deploy, from **one** client host
 send ~150 ``GET`` requests to a rate-limited read-only route (e.g. ``/api/registry``;
 **not** exempt paths like ``/health`` or ``/version``) in a short window, each with a

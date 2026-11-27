@@ -73,7 +73,7 @@ def _restore_limiter_env(
         os.environ["RATE_LIMIT_DEFAULT"] = prev_default
     if prev_fly is None:
         os.environ.pop("FLY_APP_NAME", None)
-    elif prev_fly:
+    else:
         os.environ["FLY_APP_NAME"] = prev_fly
     monkeypatch.setattr(rl, "_limiter", None)
     if getattr(server.app.state, "_rate_limit_fixture_mounted", False):
