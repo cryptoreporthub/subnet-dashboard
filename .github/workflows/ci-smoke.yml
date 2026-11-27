@@ -90,7 +90,8 @@ jobs:
             tests/test_universe_stale_stamp.py \
             tests/test_owner_guard.py \
             tests/test_deploy_blockers_resilience.py \
-            tests/test_issue_1637_panel_postmortem.py -q 2>&1 | tee ci-test-output.txt
+            tests/test_issue_1637_panel_postmortem.py \
+            tests/test_mindmap_state_cache.py -q 2>&1 | tee ci-test-output.txt
       - name: Upload test output artifact
         if: failure()
         continue-on-error: true
