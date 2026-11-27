@@ -14,6 +14,7 @@ from urllib.parse import parse_qs
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.routing import get_route_path
 
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -37,7 +38,14 @@ def write_auth_enabled() -> bool:
     return bool(write_token())
 
 
+def _normalize_path(path: str) -> str:
+    if path != "/" and path.endswith("/"):
+        return path.rstrip("/")
+    return path
+
+
 def _is_public_write(path: str) -> bool:
+    path = _normalize_path(path)
     return path in _PUBLIC_WRITE_EXACT or any(path.startswith(p) for p in _PUBLIC_WRITE_PREFIXES)
 
 
@@ -57,11 +65,13 @@ def _resolve_query_protected(query: str) -> bool:
 
 def _path_protected(method: str, path: str, query: str) -> bool:
     """True when this request must present a valid write token."""
+    path = _normalize_path(path)
     if method in _WRITE_METHODS:
         return not _is_public_write(path)
-    if method == "GET" and path == "/api/resolve-predictions":
+    read_method = method if method != "HEAD" else "GET"
+    if read_method == "GET" and path == "/api/resolve-predictions":
         return True
-    if method == "GET" and path == "/api/predictions/resolved":
+    if read_method == "GET" and path == "/api/predictions/resolved":
         return _resolve_query_protected(query)
     return False
 
@@ -77,7 +87,7 @@ def check_write_auth(request: Request) -> Optional[JSONResponse]:
     """Return 401 JSON when token required and missing/wrong."""
     if not write_auth_enabled():
         return None
-    path = request.url.path
+    path = get_route_path(request.scope)
     if not _path_protected(request.method, path, str(request.url.query)):
         return None
     token = _extract_bearer(request) or ""

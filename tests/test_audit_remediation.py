@@ -13,9 +13,13 @@ from fastapi.testclient import TestClient
 
 import internal.council.mindmap_bridge as mindmap_bridge
 import internal.council.resolver as resolver
+import internal.council.resolver_scheduler as resolver_scheduler
 import internal.council.weights as weights
 import internal.investigation.routes as investigation_routes
+import internal.signals.alerts as alerts_mod
+import internal.signals.routes as signals_routes
 import internal.simivision.chat_service as chat_service
+import server as server_mod
 from datastore import learning_engine
 from internal.council.weights import load_weights
 from internal.learning import predictions_store
@@ -69,6 +73,37 @@ def _isolate_learning_writes(tmp_path, monkeypatch):
     monkeypatch.setattr(learning_engine.LearningEngine, "__init__", _engine_init)
     monkeypatch.setattr(mindmap_bridge.MindmapBridge, "__init__", _bridge_init)
     return soul_path
+
+
+def _isolate_alerts_store(tmp_path, monkeypatch) -> str:
+    alerts_path = str(tmp_path / "alerts.json")
+    Path(alerts_path).write_text(
+        json.dumps({"updated_at": None, "alerts": []}),
+        encoding="utf-8",
+    )
+    subs_path = str(tmp_path / "alert_subscriptions.json")
+    Path(subs_path).write_text('{"webhooks": []}', encoding="utf-8")
+    monkeypatch.setenv("ALERTS_PATH", alerts_path)
+    monkeypatch.setenv("ALERT_SUBSCRIPTIONS_PATH", subs_path)
+    monkeypatch.setattr(alerts_mod, "ALERTS_PATH", alerts_path)
+    signals_routes._alerts = None
+    return alerts_path
+
+
+def _block_weight_mutations(monkeypatch) -> dict[str, int]:
+    calls = {"resolve": 0, "nudge": 0}
+
+    def _resolve_blocked(*_a, **_k):
+        calls["resolve"] += 1
+        return {"resolved": [], "stats": {}}
+
+    def _nudge_blocked(*_a, **_k):
+        calls["nudge"] += 1
+        return 1.0
+
+    monkeypatch.setattr(resolver, "resolve_due_predictions", _resolve_blocked)
+    monkeypatch.setattr(weights, "nudge_expert", _nudge_blocked)
+    return calls
 
 
 def test_ops_live_is_fast_and_minimal():
@@ -218,9 +253,12 @@ def test_write_auth_open_when_token_unset(monkeypatch):
 def test_resolve_true_requires_token_when_enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("WRITE_API_TOKEN", "resolve-token")
     _isolate_learning_writes(tmp_path, monkeypatch)
+    calls = _block_weight_mutations(monkeypatch)
     with TestClient(app) as client:
         denied = client.get("/api/predictions/resolved?resolve=true")
         assert denied.status_code == 401
+        assert calls["resolve"] == 0
+        assert calls["nudge"] == 0
         ok = client.get(
             "/api/predictions/resolved?resolve=true",
             headers={"Authorization": "Bearer resolve-token"},
@@ -228,20 +266,30 @@ def test_resolve_true_requires_token_when_enabled(monkeypatch, tmp_path):
     assert ok.status_code == 200
 
 
-def test_write_auth_default_deny_admin_posts(monkeypatch):
+def test_write_auth_default_deny_admin_posts(monkeypatch, tmp_path):
     """Admin/state mutations require bearer when token is set."""
+    _isolate_alerts_store(tmp_path, monkeypatch)
+    monkeypatch.setenv("DISABLE_BACKGROUND_SCANS", "1")
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("BACKGROUND_ON_WEB", "off")
+    monkeypatch.delenv("INLINE_WORKER", raising=False)
+    resolver_scheduler.stop_prediction_resolver_scheduler()
     monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
     headers = {"Authorization": "Bearer admin-token"}
-    with TestClient(app) as client:
-        for path, body in (
-            ("/api/learning/trigger", {}),
-            ("/api/predictions/resolver/run", {}),
-            ("/api/alerts", {"alert_type": "manual", "message": "t", "severity": "info"}),
-        ):
-            denied = client.post(path, json=body)
-            assert denied.status_code == 401, path
-            ok = client.post(path, json=body, headers=headers)
-            assert ok.status_code != 401, path
+    alert_body = {"alert_type": "manual", "message": "t", "severity": "info"}
+    client = TestClient(app)
+    try:
+        assert client.post("/api/learning/trigger", json={}).status_code == 401
+        assert client.post("/api/predictions/resolver/run", json={}).status_code == 401
+        assert client.post("/api/alerts", json=alert_body).status_code == 401
+        assert client.post("/api/learning/trigger", json={}, headers=headers).status_code != 401
+        assert (
+            client.post("/api/predictions/resolver/run", json={}, headers=headers).status_code
+            != 401
+        )
+        assert client.post("/api/alerts", json=alert_body, headers=headers).status_code != 401
+    finally:
+        client.close()
 
 
 def test_write_auth_browser_ux_posts_open_with_token_set(monkeypatch):
@@ -270,6 +318,7 @@ def test_feedback_routes_require_token_when_enabled(monkeypatch, tmp_path):
     """Expert weight feedback POSTs require bearer when WRITE_API_TOKEN is set."""
     monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
     _isolate_learning_writes(tmp_path, monkeypatch)
+    calls = _block_weight_mutations(monkeypatch)
     headers = {"Authorization": "Bearer admin-token"}
     with TestClient(app) as client:
         for path, body in (
@@ -278,6 +327,12 @@ def test_feedback_routes_require_token_when_enabled(monkeypatch, tmp_path):
         ):
             denied = client.post(path, json=body)
             assert denied.status_code == 401, path
+    assert calls["nudge"] == 0
+    with TestClient(app) as client:
+        for path, body in (
+            ("/api/mindmap/feedback", {"note": "public-ux"}),
+            ("/api/feedback", {"feedback": "public-ux"}),
+        ):
             ok = client.post(path, json=body, headers=headers)
             assert ok.status_code != 401, path
 
@@ -291,11 +346,15 @@ def test_feedback_routes_require_token_when_enabled(monkeypatch, tmp_path):
         "resolve=TRUE",
     ],
 )
-def test_resolve_truthy_spellings_require_token_when_enabled(monkeypatch, query):
+def test_resolve_truthy_spellings_require_token_when_enabled(monkeypatch, query, tmp_path):
     monkeypatch.setenv("WRITE_API_TOKEN", "resolve-token")
+    _isolate_learning_writes(tmp_path, monkeypatch)
+    calls = _block_weight_mutations(monkeypatch)
     with TestClient(app) as client:
         denied = client.get(f"/api/predictions/resolved?{query}")
     assert denied.status_code == 401
+    assert calls["resolve"] == 0
+    assert calls["nudge"] == 0
 
 
 @pytest.mark.parametrize("query", ["resolve=false", "resolve=FALSE", "resolve=False"])
@@ -316,10 +375,13 @@ def test_predictions_resolved_no_param_public_when_token_enabled(monkeypatch):
 def test_resolve_predictions_requires_token_when_enabled(monkeypatch, tmp_path):
     monkeypatch.setenv("WRITE_API_TOKEN", "resolve-token")
     _isolate_learning_writes(tmp_path, monkeypatch)
+    calls = _block_weight_mutations(monkeypatch)
     headers = {"Authorization": "Bearer resolve-token"}
     with TestClient(app) as client:
         denied = client.get("/api/resolve-predictions")
         assert denied.status_code == 401
+        assert calls["resolve"] == 0
+        assert calls["nudge"] == 0
         ok = client.get("/api/resolve-predictions", headers=headers)
     assert ok.status_code != 401
 
@@ -327,22 +389,89 @@ def test_resolve_predictions_requires_token_when_enabled(monkeypatch, tmp_path):
 def test_anonymous_feedback_post_does_not_change_weights(monkeypatch, tmp_path):
     """Decision 16: tokenless feedback must not nudge expert weights."""
     soul_path = _isolate_learning_writes(tmp_path, monkeypatch)
+    calls = _block_weight_mutations(monkeypatch)
     monkeypatch.setenv("WRITE_API_TOKEN", "weight-guard-token")
+    weight_payload = {
+        "subnet_id": 1,
+        "recommendation": "quant",
+        "actual_performance": {"outcome": "neutral", "correct_prediction": True},
+    }
     before = dict(load_weights(soul_path))
     with TestClient(app) as client:
         mindmap = client.post("/api/mindmap/feedback", json={"note": "anonymous-probe"})
         assert mindmap.status_code == 401
-        feedback = client.post(
+        feedback = client.post("/api/feedback", json=weight_payload)
+        assert feedback.status_code == 401
+    assert calls["nudge"] == 0
+    after = dict(load_weights(soul_path))
+    assert before == after
+
+
+def test_feedback_routes_denied_never_nudge(monkeypatch, tmp_path):
+    monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
+    _isolate_learning_writes(tmp_path, monkeypatch)
+    calls = _block_weight_mutations(monkeypatch)
+    with TestClient(app) as client:
+        client.post(
             "/api/feedback",
             json={
                 "subnet_id": 1,
                 "recommendation": "quant",
-                "actual_performance": {"outcome": "neutral"},
+                "actual_performance": {"correct_prediction": True},
             },
         )
-        assert feedback.status_code == 401
-    after = dict(load_weights(soul_path))
-    assert before == after
+        client.post("/api/mindmap/feedback", json={"note": "x"})
+    assert calls["nudge"] == 0
+    assert calls["resolve"] == 0
+
+
+def test_write_auth_accepts_x_write_api_token_header(monkeypatch, tmp_path):
+    monkeypatch.setenv("WRITE_API_TOKEN", "header-token")
+    _isolate_learning_writes(tmp_path, monkeypatch)
+    with TestClient(app) as client:
+        r = client.get(
+            "/api/resolve-predictions",
+            headers={"X-Write-Api-Token": "header-token"},
+        )
+    assert r.status_code != 401
+
+
+def test_write_auth_resolve_predictions_trailing_slash_requires_token(monkeypatch):
+    monkeypatch.setenv("WRITE_API_TOKEN", "slash-token")
+    calls = _block_weight_mutations(monkeypatch)
+    with TestClient(app) as client:
+        r = client.get("/api/resolve-predictions/")
+    assert r.status_code == 401
+    assert calls["resolve"] == 0
+
+
+def test_write_auth_resolve_predictions_head_requires_token(monkeypatch):
+    monkeypatch.setenv("WRITE_API_TOKEN", "head-token")
+    calls = _block_weight_mutations(monkeypatch)
+    with TestClient(app) as client:
+        r = client.head("/api/resolve-predictions")
+    assert r.status_code == 401
+    assert calls["resolve"] == 0
+
+
+def test_write_auth_protected_under_root_path_prefix(monkeypatch):
+    monkeypatch.setenv("WRITE_API_TOKEN", "root-token")
+    calls = _block_weight_mutations(monkeypatch)
+    with TestClient(app, root_path="/mcp") as client:
+        r = client.get("/api/resolve-predictions")
+    assert r.status_code == 401
+    assert calls["resolve"] == 0
+
+
+def test_write_auth_import_guard_raises_when_token_set(monkeypatch):
+    monkeypatch.setenv("WRITE_API_TOKEN", "configured")
+    with pytest.raises(RuntimeError, match="boom"):
+        server_mod._write_auth_import_guard(RuntimeError("boom"))
+
+
+def test_write_auth_import_guard_no_raise_when_token_unset(monkeypatch):
+    monkeypatch.delenv("WRITE_API_TOKEN", raising=False)
+    server_mod._write_auth_import_guard(RuntimeError("boom"))
 
 
 def test_write_auth_wrong_token_rejected(monkeypatch):

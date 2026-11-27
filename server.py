@@ -471,6 +471,13 @@ if _ENABLE_METRICS:
 
 mount_rate_limit(app)
 
+
+def _write_auth_import_guard(exc: Exception) -> None:
+    """Fail closed at startup when write auth cannot load but a token is configured."""
+    if os.environ.get("WRITE_API_TOKEN", "").strip():
+        raise exc
+
+
 try:
     from internal.write_auth import check_write_auth
 
@@ -481,7 +488,8 @@ try:
             return denied
         return await call_next(request)
 except Exception as _write_auth_exc:  # pragma: no cover
-    logger.warning("Write auth middleware unavailable: %s", _write_auth_exc)
+    logger.error("Write auth middleware unavailable: %s", _write_auth_exc)
+    _write_auth_import_guard(_write_auth_exc)
 
 app.include_router(whales_router)
 app.include_router(watchlist_router)
