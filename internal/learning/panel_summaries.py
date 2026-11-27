@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def _sentences(parts: List[str]) -> Dict[str, Any]:
@@ -11,9 +14,20 @@ def _sentences(parts: List[str]) -> Dict[str, Any]:
 
 
 def summarize_council() -> Dict[str, Any]:
-    from internal.council.weights import _load_raw, load_impact_strength, load_weights
+    from internal.council.weights import (
+        ConcurrentWeightUpdate,
+        _load_raw,
+        load_impact_strength,
+        load_weights,
+    )
 
-    weights = load_weights()
+    try:
+        weights = load_weights()
+    except ConcurrentWeightUpdate:
+        logger.warning("council panel could not load expert weights", exc_info=True)
+        return _sentences(
+            ["Council expert weights could not load right now; expert influence is not shown."]
+        )
     if not weights:
         return _sentences(["Council expert weights are not loaded yet; all experts sit at default influence."])
 
@@ -105,10 +119,16 @@ def summarize_judges() -> Dict[str, Any]:
 
 def summarize_learning() -> Dict[str, Any]:
     from internal.council import resolver
-    from internal.council.weights import load_impact_strength, load_weights
+    from internal.council.weights import ConcurrentWeightUpdate, load_impact_strength, load_weights
     from internal.learning.predictions_store import load_predictions, update_stats
 
-    weights = load_weights()
+    weights: Optional[Dict[str, Any]] = None
+    weights_failed = False
+    try:
+        weights = load_weights()
+    except ConcurrentWeightUpdate:
+        weights_failed = True
+        logger.warning("learning panel could not load expert weights", exc_info=True)
     impact_strength = load_impact_strength()
     resolved = resolver.get_resolved_predictions()
     stats = resolved.get("stats") or {}
@@ -121,17 +141,33 @@ def summarize_learning() -> Dict[str, Any]:
     update_stats(pred_data)
     pending = int(pred_data.get("stats", {}).get("pending", pending))
 
-    top_expert = max(weights.items(), key=lambda kv: float(kv[1] or 0))[0] if weights else "quant"
-
     parts = [
         f"The learning loop shows {correct} correct and {wrong} wrong resolved predictions "
         f"({accuracy * 100:.1f}% accuracy) with {pending} still pending.",
-        f"Correct calls nudge expert weights +0.02 and misses nudge −0.03; {top_expert.replace('_', ' ').title()} "
-        f"currently carries the strongest learned weight at {float(weights.get(top_expert, 1.0)):.2f}.",
-        f"Market-impact dial (impact_strength) sits at {impact_strength:.2f} "
-        f"(0=flat, 1=default, 2=aggressive small-cap tilt) and nudges ±0.02 when picks resolve.",
-        "The resolver scheduler grades due picks against live prices so outcomes feed back into the next Council score.",
     ]
+    if weights_failed:
+        parts.append(
+            "Council expert weights could not load; learned-weight details are omitted from "
+            "this learning summary."
+        )
+    elif weights:
+        top_expert = max(weights.items(), key=lambda kv: float(kv[1] or 0))[0]
+        parts.append(
+            f"Correct calls nudge expert weights +0.02 and misses nudge −0.03; "
+            f"{top_expert.replace('_', ' ').title()} "
+            f"currently carries the strongest learned weight at {float(weights.get(top_expert, 1.0)):.2f}."
+        )
+    else:
+        parts.append(
+            "Council expert weights are not loaded yet; all experts sit at default influence."
+        )
+    parts.extend(
+        [
+            f"Market-impact dial (impact_strength) sits at {impact_strength:.2f} "
+            f"(0=flat, 1=default, 2=aggressive small-cap tilt) and nudges ±0.02 when picks resolve.",
+            "The resolver scheduler grades due picks against live prices so outcomes feed back into the next Council score.",
+        ]
+    )
     if pending == 0:
         parts.append("No pending predictions are queued — hour/day pick endpoints will enqueue new rows on the next call.")
     return _sentences(parts)

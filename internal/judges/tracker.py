@@ -45,7 +45,13 @@ def _postmortem_already_recorded(judge_name: str, prediction_id: Any) -> bool:
         return True
     try:
         rows = list_for_judge(judge_name)
-    except PostmortemFileCorrupt:
+    except PostmortemFileCorrupt as exc:
+        logger.error(
+            "postmortem file corrupt judge=%s prediction=%s: %s",
+            judge_name,
+            pred_id,
+            exc,
+        )
         return False
     except ValueError:
         return True
