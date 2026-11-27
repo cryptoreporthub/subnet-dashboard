@@ -193,6 +193,24 @@ def test_indicator_scheduler_reschedules_when_cycle_raises(
     assert scheduled == [30 * 60]
 
 
+def test_indicator_scheduler_reschedules_when_refresh_cycle_raises(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _StubEngine())
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("refresh exploded")
+
+    monkeypatch.setattr(sched, "_run_refresh_cycle", _boom)
+    result = sched._tick()
+    assert result.get("ok") is False
+    assert result.get("error") == "refresh exploded"
+    assert sched._consecutive_failures == 1
+    assert scheduled == [30 * 60]
+
+
 @pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe", b'{"a": 1}'], ids=["empty", "utf16", "object"])
 def test_postmortem_corrupt_files_do_not_abort_resolution(
     pm_dir, portfolio_path, corrupt, monkeypatch, caplog
@@ -493,20 +511,29 @@ def _stub_fire_rollback(
     rollback_raises: Any = None,
     rollback_ok: bool = True,
 ):
-    calls = {"n": 0}
     real_save = council_weights.save_weights
 
-    state = {"inject_mismatch": False, "in_fire": False}
+    state = {"fired_payload": None, "inject_mismatch": False, "in_fire": False}
 
-    def _save(weights, path, **kwargs):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            saved = real_save(weights, path, **kwargs)
-            state["inject_mismatch"] = True
-            return saved
-        if rollback_raises is not None:
-            raise rollback_raises
-        return rollback_ok
+    def _same(left, right) -> bool:
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            return False
+        keys = set(left) | set(right)
+        return all(
+            abs(float(left.get(k, 0) or 0) - float(right.get(k, 0) or 0)) < 1e-4
+            for k in keys
+        )
+
+    def _save(weights, path, expected_weights=None, **kwargs):
+        fired = state["fired_payload"]
+        if fired is not None and _same(expected_weights, fired):
+            if rollback_raises is not None:
+                raise rollback_raises
+            return rollback_ok
+        saved = real_save(weights, path, expected_weights=expected_weights, **kwargs)
+        state["fired_payload"] = dict(weights)
+        state["inject_mismatch"] = True
+        return saved
 
     real_load = council_weights.load_weights
 
@@ -593,6 +620,17 @@ def test_fire_weights_rollback_conflict_and_refused_record_live_weights(
     )
     assert status["calibration"].get("last_error") == expected_msg
     assert status["calibration"].get("rollback_status") == expected_status
+
+
+def test_calibration_status_returns_200_when_load_weights_conflicts(monkeypatch):
+    def _boom(*_a, **_k):
+        raise council_weights.ConcurrentWeightUpdate("stale")
+
+    monkeypatch.setattr("internal.council.weights.load_weights", _boom)
+    client = TestClient(app)
+    resp = client.get("/api/calibration/status")
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("weights") is None
 
 
 def test_simivision_persist_lock_timeout_still_returns_signals(
