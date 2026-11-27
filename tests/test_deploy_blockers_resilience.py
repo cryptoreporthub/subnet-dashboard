@@ -277,6 +277,45 @@ def test_postmortem_lock_timeout_does_not_abort_resolution(
         assert len(rows) == 1, name
 
 
+def test_postmortem_lock_timeout_records_on_replay_without_duplicate(
+    pm_dir, portfolio_path, monkeypatch
+):
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    monkeypatch.setattr(postmortems, "POSTMORTEM_LOCK_TIMEOUT_SECONDS", 0.05)
+    prediction = dict(PREDICTION)
+    prediction["id"] = "pred-lock-replay-1"
+    for judge in tracker.all_judges():
+        judge.open_position(prediction, size=1.0)
+
+    lock_path = pm_dir / "oracle.json.lock"
+    holder = open(lock_path, "a+", encoding="utf-8")
+    fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+    try:
+        first = tracker.on_prediction_resolved(prediction)
+        assert first["judges"]["oracle"].get("postmortem_error") == "PostmortemLockTimeout"
+        assert first["judges"]["oracle"]["closed"] is not None
+        assert postmortems.list_for_judge("oracle") == []
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
+
+    second = tracker.on_prediction_resolved(prediction)
+    assert second["judges"]["oracle"]["closed"] is None
+    oracle_rows = postmortems.list_for_judge("oracle")
+    assert len(oracle_rows) == 1
+    assert oracle_rows[0]["prediction_id"] == prediction["id"]
+    for name in ("echo", "pulse"):
+        assert second["judges"][name]["closed"] is None, name
+        assert len(postmortems.list_for_judge(name)) == 1, name
+
+    third = tracker.on_prediction_resolved(prediction)
+    assert third["judges"]["oracle"]["closed"] is None
+    assert len(postmortems.list_for_judge("oracle")) == 1
+    for name in ("echo", "pulse"):
+        assert third["judges"][name]["closed"] is None, name
+        assert len(postmortems.list_for_judge(name)) == 1, name
+
+
 @pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe"], ids=["empty", "utf16"])
 @pytest.mark.parametrize(
     "route",
