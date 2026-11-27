@@ -657,7 +657,7 @@ def test_simivision_persist_lock_timeout_still_returns_signals(
         assert kwargs.get("raise_on_lock_timeout") is False
         return WriteResult(WriteOutcome.LOCK_WAIT_FAILED, None, detail="held")
 
-    monkeypatch.setattr(simi_engine, "write_soul_map", _lock_timeout)
+    monkeypatch.setattr(soul_map_io, "write_soul_map", _lock_timeout)
     with caplog.at_level("WARNING"):
         signals = simi_engine.generate_signals(
             registry=reg, top_n=5, soul_map_path=str(soul)

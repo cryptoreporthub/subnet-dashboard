@@ -625,9 +625,13 @@ def get_calibration_status(
 
     cal = _load_calibration_state(soul_map_path)
     rows = load_training_rows(predictions_path)
+    try:
+        weights = load_weights(soul_map_path)
+    except ConcurrentWeightUpdate:
+        weights = None
     return {
         "status": "ok",
-        "weights": load_weights(soul_map_path),
+        "weights": weights,
         "impact_strength": load_impact_strength(soul_map_path),
         "hybrid_score": hybrid_score_status(),
         "conviction_band": conviction_bands_status(),

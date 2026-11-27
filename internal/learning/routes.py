@@ -22,7 +22,12 @@ from internal.request_executor import to_thread_timeout as _to_thread_timeout
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
 from internal.council.watchdog import check_resolver_watchdog
-from internal.council.weights import load_impact_strength, load_weights, load_weights_for_ui
+from internal.council.weights import (
+    ConcurrentWeightUpdate,
+    load_impact_strength,
+    load_weights,
+    load_weights_for_ui,
+)
 from internal.council.resolver_scheduler import (
     get_prediction_resolver_scheduler,
     get_prediction_resolver_scheduler_state,
@@ -321,7 +326,10 @@ def _learning_snapshot() -> Dict[str, Any]:
         resolved = data.get("resolved") or []
         pending_rows = data.get("predictions") or []
         resolver_stats = resolver._compute_stats(data)
-        weights = load_weights()
+        try:
+            weights = load_weights()
+        except ConcurrentWeightUpdate:
+            weights = None
         engine_stats = {
             "expert_weights": weights,
             "accuracy": resolver_stats.get("accuracy", 0.0),

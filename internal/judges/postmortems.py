@@ -247,9 +247,3 @@ def all_postmortems_with_status() -> tuple[Dict[str, List[Dict[str, Any]]], List
         except ValueError:
             out[name] = []
     return out, unavailable
-
-
-def all_postmortems() -> Dict[str, List[Dict[str, Any]]]:
-    """Return postmortems for all three judges."""
-    postmortems, _unavailable = all_postmortems_with_status()
-    return postmortems

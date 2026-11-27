@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, Optional
 from internal.indicators.indicator_engine import IndicatorEngine
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
-from internal.store.soul_map_io import WriteOutcome, write_soul_map
+from internal.store.soul_map_io import write_soul_map_best_effort
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -218,6 +218,7 @@ class IndicatorScheduler:
                 next_interval = self._backoff_minutes
         except Exception as exc:
             logger.warning("indicator scheduler tick failed: %s", exc, exc_info=True)
+            result = {"ok": False, "error": str(exc)}
             with self._lock:
                 self._consecutive_failures += 1
                 self._backoff_minutes = min(
@@ -268,22 +269,12 @@ class IndicatorScheduler:
             "signals_emitted": result.get("signals_emitted", 0),
             "error": result.get("error"),
         }
-        try:
-            outcome = write_soul_map(
-                lambda blob: blob.setdefault("indicator_scheduler", {}).__setitem__(
-                    "last_cycle", summary
-                ),
-                self.soul_map_path,
-                raise_on_lock_timeout=False,
-            )
-            if outcome.outcome not in (WriteOutcome.APPLIED, WriteOutcome.DECLINED):
-                logger.warning(
-                    "indicator cycle summary not persisted outcome=%s detail=%s",
-                    outcome.outcome,
-                    outcome.detail,
-                )
-        except Exception as exc:
-            logger.warning("indicator cycle summary persist failed: %s", exc, exc_info=True)
+        write_soul_map_best_effort(
+            lambda blob: blob.setdefault("indicator_scheduler", {}).__setitem__(
+                "last_cycle", summary
+            ),
+            self.soul_map_path,
+        )
 
 
 # ------------------------------------------------------------------------------

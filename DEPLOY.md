@@ -153,9 +153,11 @@ build pass; seed the Fly volume or configure the external feed/secret instead.
 | `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
-| `GET /api/calibration/status` | 200, weights + thresholds |
+| `GET /api/calibration/status` | 200, weights + thresholds (`weights` may be `null` on a concurrent load conflict) |
 | `GET /api/conviction-alerts/status` | 200, `enabled: true` (after Phase P) |
 | `GET /api/signal-hub/status` | 200 |
+
+**Skipped postmortems:** a corrupt judge file is never overwritten, renamed, quarantined, or repaired in-process. Spot it via `ERROR ... postmortem skipped`, a `postmortem_skipped` learning-trail event, or the top-level `unavailable` key on `/api/postmortems*`. Repair `data/postmortems/<judge>.json` by hand on the volume. A `PostmortemLockTimeout` on first resolve is recovered on a later resolve of the same prediction if that judge still has no postmortem row for it.
 
 ### Persistent data
 
