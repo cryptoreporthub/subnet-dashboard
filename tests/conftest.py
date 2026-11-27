@@ -15,6 +15,16 @@ from __future__ import annotations
 
 import pytest
 
+import internal.simivision.caution_cells as caution_cells
+
+
+@pytest.fixture(autouse=True)
+def _isolate_caution_cells_seen(tmp_path, monkeypatch):
+    """Warm homepage thread writes caution_cells_seen — keep it off repo data/."""
+    caution_path = str(tmp_path / "caution_cells_seen.json")
+    monkeypatch.setenv("CAUTION_CELLS_SEEN_PATH", caution_path)
+    monkeypatch.setattr(caution_cells, "SEEN_PATH", caution_path)
+
 
 @pytest.fixture(autouse=True)
 def _isolate_message_intel_db(tmp_path, monkeypatch):
