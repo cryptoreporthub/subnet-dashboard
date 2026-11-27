@@ -44,15 +44,25 @@ from internal.council.price_reference import (
 )
 from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import load_weights, nudge_impact_strength, nudge_signal_weight, save_weights
-from internal.judges.portfolios import all_portfolios
-from internal.judges.postmortems import normalize_prediction_id
 from internal.indicators.price_fetcher import gecko_cache_entry_usable
 
 try:
+    from internal.judges.portfolios import all_portfolios
+    from internal.judges.postmortems import normalize_prediction_id
     from internal.judges.tracker import on_prediction_resolved
 except Exception:  # pragma: no cover
+    logger.exception("judges unavailable: resolver continues without judge close or postmortems")
+
     def on_prediction_resolved(*_args, **_kwargs):
         return {}
+
+    def all_portfolios():
+        return {}
+
+    def normalize_prediction_id(raw):
+        if raw is None or isinstance(raw, bool):
+            return None
+        return str(raw).strip() or None
 
 try:
     from internal.council import scenario_memory

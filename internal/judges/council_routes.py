@@ -22,6 +22,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 
+from internal.judges.postmortems import (
+    PostmortemFileCorrupt,
+    all_postmortems_with_status,
+    list_for_judge,
+)
 from internal.static_version import STATIC_V
 
 logger = logging.getLogger(__name__)
@@ -405,8 +410,6 @@ _POSTMORTEM_VALUE_ERRORS = frozenset({"Unknown judge", "path outside postmortems
 
 
 def _safe_list_postmortems(judge_name: str) -> tuple[List[Dict[str, Any]], List[str]]:
-    from internal.judges.postmortems import PostmortemFileCorrupt, list_for_judge
-
     try:
         return list_for_judge(judge_name), []
     except PostmortemFileCorrupt as exc:
@@ -514,8 +517,6 @@ async def api_postmortems(judge: Optional[str] = None):
             "postmortems": rows,
             "unavailable": unavailable,
         }
-    from internal.judges.postmortems import all_postmortems_with_status
-
     grouped, unavailable = all_postmortems_with_status()
     return {"postmortems": grouped, "unavailable": unavailable}
 

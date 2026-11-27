@@ -181,10 +181,8 @@ class IndicatorScheduler:
         """Run one indicator refresh cycle and reschedule."""
         with self._lock:
             next_interval = self._backoff_minutes
-        result: Dict[str, Any] = {"ok": False, "error": "tick_aborted"}
-
         try:
-            result = self._run_refresh_cycle()
+            result: Dict[str, Any] = self._run_refresh_cycle()
 
             try:
                 if result.get("ok"):

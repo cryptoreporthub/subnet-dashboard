@@ -20,6 +20,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.file_utils import _fsync_dir
+
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
 logger = logging.getLogger(__name__)
 _RECORD_LOCK = threading.Lock()
@@ -106,8 +108,6 @@ def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     tmp = path + ".tmp"
     _write_tmp_json(tmp, entries)
     os.replace(tmp, path)
-    from internal.file_utils import _fsync_dir
-
     _fsync_dir(os.path.dirname(path) or ".")
 
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:

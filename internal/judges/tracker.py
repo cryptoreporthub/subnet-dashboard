@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.judges import all_judges
+from internal.learning.trail_events import emit_trail_event
 from internal.judges.postmortems import (
     PostmortemFileCorrupt,
     PostmortemLockTimeout,
@@ -101,8 +102,6 @@ def on_prediction_resolved(
             prediction.get("id"),
         )
         try:
-            from internal.learning.trail_events import emit_trail_event
-
             emit_trail_event(
                 "judge_resolution_skipped",
                 evidence={"prediction_id": prediction.get("id")},
@@ -203,8 +202,6 @@ def on_prediction_resolved(
                 postmortem = None
                 postmortem_error = type(exc).__name__
                 try:
-                    from internal.learning.trail_events import emit_trail_event
-
                     emit_trail_event(
                         "postmortem_skipped",
                         judge=judge.name,

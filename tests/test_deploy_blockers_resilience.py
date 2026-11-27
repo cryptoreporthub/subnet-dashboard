@@ -7,6 +7,8 @@ import json
 import logging
 import os
 import stat
+import subprocess
+import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -320,7 +322,7 @@ def test_postmortem_corrupt_files_do_not_abort_resolution(
     def _boom(*_a, **_k):
         raise RuntimeError("trail down")
 
-    monkeypatch.setattr("internal.learning.trail_events.emit_trail_event", _boom)
+    monkeypatch.setattr(tracker, "emit_trail_event", _boom)
     with caplog.at_level(logging.ERROR):
         summary = tracker.on_prediction_resolved(prediction)
     assert set(summary["judges"]) == {"oracle", "echo", "pulse"}
@@ -601,7 +603,7 @@ def test_postmortem_save_fsyncs(pm_dir, monkeypatch):
 
     monkeypatch.setattr(os, "fsync", _tracking_fsync)
     monkeypatch.setattr(postmortems.os, "replace", _tracking_replace)
-    monkeypatch.setattr(file_utils, "_fsync_dir", _track_dir)
+    monkeypatch.setattr(postmortems, "_fsync_dir", _track_dir)
 
     postmortems.record("oracle", PREDICTION, actual_pct=-1.0)
     kinds = [e[0] for e in events]
@@ -1007,3 +1009,76 @@ def test_panel_summary_unavailable_when_all_postmortems_corrupt(
     text = out["text"]
     assert "unavailable" in text.lower()
     assert "No judge post-mortems recorded yet" not in text
+
+
+def test_resolver_imports_when_judges_portfolios_module_broken(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    code = (
+        "import sys; "
+        "sys.modules['internal.judges.portfolios']=None; "
+        "import internal.council.resolver"
+    )
+    env = {**os.environ, "PYTHONPATH": str(root)}
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_T1_merge_keeps_zero_id_and_int_str_match(resolve_harness):
+    fresh = [{"id": 0, "outcome": "miss", "tag": "fresh0"}, {"id": 42, "outcome": "miss", "tag": "fresh42"}]
+    resolve_harness["predictions"].write_text(json.dumps({"resolved": fresh}), encoding="utf-8")
+    out = resolver._merge_regraded_resolved(
+        [{"id": 0, "outcome": "expired"}, {"id": "42", "outcome": "expired"}]
+    )
+    assert [r["tag"] for r in out] == ["fresh0", "fresh42"]
+
+
+@pytest.mark.parametrize("bad", [None, "", "   ", True])
+def test_T2_create_opens_no_position_for_invalid_id(resolve_harness, bad):
+    row = _miss_row(bad)
+    tracker.on_prediction_created(row)
+    for name in ("oracle", "echo", "pulse"):
+        assert _open_ids(resolve_harness["portfolios"], name) == [], name
+
+
+def test_T3_idless_resolve_leaves_legacy_idless_open_position(resolve_harness):
+    legacy = _miss_row(None)
+    for judge in tracker.all_judges():
+        judge.open_position(legacy, size=1.0)
+    _write_pending(resolve_harness, [legacy])
+    _cycle()
+    for name in ("oracle", "echo", "pulse"):
+        assert _open_ids(resolve_harness["portfolios"], name) == [None], name
+        assert _closed_count(resolve_harness["portfolios"], name) == 0, name
+
+
+def test_T4_legacy_raw_int_id_on_disk_dedupes_with_str(resolve_harness):
+    pm = resolve_harness["pm_dir"] / "oracle.json"
+    pm.write_text(
+        json.dumps([{"judge": "oracle", "prediction_id": 42, "actual_pct": -5.0}]),
+        encoding="utf-8",
+    )
+    postmortems.record("oracle", {**PREDICTION, "id": "42"}, actual_pct=-5.0)
+    assert len(postmortems.list_for_judge("oracle")) == 1
+
+
+def test_T4b_replay_check_sees_legacy_raw_int_id(resolve_harness):
+    pm = resolve_harness["pm_dir"] / "oracle.json"
+    pm.write_text(
+        json.dumps([{"judge": "oracle", "prediction_id": 42, "actual_pct": -5.0}]),
+        encoding="utf-8",
+    )
+    assert tracker._postmortem_already_recorded("oracle", "42") is True
+
+
+def test_T6_invalid_id_returns_skipped_and_emits_event(resolve_harness, monkeypatch):
+    events = []
+    monkeypatch.setattr(tracker, "emit_trail_event", lambda name, **kw: events.append(name))
+    out = tracker.on_prediction_resolved(_miss_row(None))
+    assert out == {"judges": {}, "skipped": True}
+    assert events == ["judge_resolution_skipped"]
