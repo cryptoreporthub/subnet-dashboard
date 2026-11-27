@@ -1249,6 +1249,11 @@ async def api_predictions():
 @learning_router.get("/api/predictions/resolved")
 async def api_predictions_resolved(resolve: bool = Query(default=False)):
     """Return resolved predictions. Read-only unless ``resolve=true``."""
+    if resolve and not _resolver_allowed_on_this_process():
+        raise HTTPException(
+            status_code=503,
+            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
+        )
     try:
         if resolve:
             from internal.subnets.feed import load_pick_subnets
@@ -1824,6 +1829,11 @@ async def api_weights():
 @learning_router.get("/api/resolve-predictions")
 async def api_resolve_predictions():
     """Trigger prediction resolution for any due predictions."""
+    if not _resolver_allowed_on_this_process():
+        raise HTTPException(
+            status_code=503,
+            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
+        )
     try:
         weights_before = load_weights()
         subnets = _subnets_for_tracker()
