@@ -90,7 +90,8 @@ jobs:
             tests/test_universe_stale_stamp.py \
             tests/test_owner_guard.py \
             tests/test_rate_limit.py \
-            tests/test_shield_bot.py -q 2>&1 | tee ci-test-output.txt
+            tests/test_shield_bot.py \
+            tests/test_web_uvicorn_config.py -q 2>&1 | tee ci-test-output.txt
       - name: Upload test output artifact
         if: failure()
         continue-on-error: true

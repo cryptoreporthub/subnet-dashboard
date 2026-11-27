@@ -348,9 +348,12 @@ and terminate at Fly.
 send ~150 ``GET`` requests to a rate-limited read-only route (e.g. ``/api/registry``;
 **not** exempt paths like ``/health`` or ``/version``) in a short window, each with a
 **distinct forged** ``Fly-Client-IP`` header
-and a fixed real identity otherwise. If rate limiting keys only on the real client,
-**any** response must be **429**. If all responses stay **200**, treat Fly header overwrite
-as **not** verified — roll back or gate per [#1633](https://github.com/cryptoreporthub/subnet-dashboard/issues/1633).
+and a fixed real identity otherwise. With default ``120/minute``, responses on the real
+client key may stay **200** until the quota is exhausted; **at least one** response **after**
+the configured limit (e.g. request 121+) **must** be **429** if the edge overwrites forged
+``Fly-Client-IP`` to the real client. If **all** ~150 responses stay **200**, forged headers
+are splitting the bucket — treat Fly header overwrite as **not** verified — roll back or
+gate per [#1633](https://github.com/cryptoreporthub/subnet-dashboard/issues/1633).
 Forged headers are out of scope in unit tests; this probe is production-only evidence.
 
 Put **Cloudflare** (or similar) in front of the custom domain:
