@@ -159,8 +159,7 @@ def summarize_learning() -> Dict[str, Any]:
         )
     else:
         parts.append(
-            "Council expert weights could not load; learned-weight details are omitted from "
-            "this learning summary."
+            "Council expert weights are not loaded yet; all experts sit at default influence."
         )
     parts.extend(
         [

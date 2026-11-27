@@ -33,7 +33,12 @@ def pm_dir(tmp_path, monkeypatch):
     return directory
 
 
-@pytest.fixture
+def test_mindmap_state_cache_not_warmed_by_prior_test():
+    """Module-order isolation: prior tests must not leave a warm mindmap payload."""
+    assert mindmap_agg._STATE_CACHE.get("payload") is None
+
+
+@pytest.fixture(autouse=True)
 def reset_mindmap_state_cache():
     prior = dict(mindmap_agg._STATE_CACHE)
     mindmap_agg._STATE_CACHE.clear()
@@ -71,7 +76,13 @@ def test_summarize_council_survives_concurrent_weight_update(monkeypatch, caplog
     assert _COUNCIL_LOAD_ERROR in text
     assert _COUNCIL_EMPTY not in text
     assert "default influence" not in text.lower()
-    assert any(r.name == panel_summaries.logger.name for r in caplog.records)
+    warns = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name == panel_summaries.logger.name
+    ]
+    assert len(warns) == 1
+    assert warns[0].exc_info is not None
 
 
 def test_summarize_council_typeerror_from_load_weights_propagates(monkeypatch):
@@ -95,7 +106,22 @@ def test_summarize_learning_survives_concurrent_weight_update(monkeypatch, caplo
     assert _LEARNING_WEIGHTS_UNAVAILABLE in text
     assert "strongest learned weight" not in text.lower()
     assert "correct" in text.lower() and "wrong" in text.lower()
-    assert any(r.name == panel_summaries.logger.name for r in caplog.records)
+    warns = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name == panel_summaries.logger.name
+    ]
+    assert len(warns) == 1
+    assert warns[0].exc_info is not None
+
+
+def test_summarize_learning_empty_weights_uses_not_loaded_copy(monkeypatch):
+    monkeypatch.setattr(council_weights, "load_weights", lambda: {})
+    out = panel_summaries.summarize_learning()
+    text = out.get("text", "")
+    assert _COUNCIL_EMPTY in text
+    assert _LEARNING_WEIGHTS_UNAVAILABLE not in text
+    assert "strongest learned weight" not in text.lower()
 
 
 def test_summarize_learning_typeerror_from_load_weights_propagates(monkeypatch):
@@ -123,9 +149,7 @@ def test_mindmap_cache_masks_load_failure_without_reset(monkeypatch):
     assert _COUNCIL_LOAD_ERROR not in cached_council
 
 
-def test_build_mindmap_state_survives_concurrent_weight_update(
-    monkeypatch, reset_mindmap_state_cache
-):
+def test_build_mindmap_state_survives_concurrent_weight_update(monkeypatch):
     def _boom():
         raise council_weights.ConcurrentWeightUpdate("stale weight map")
 
