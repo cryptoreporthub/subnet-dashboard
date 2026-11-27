@@ -16,7 +16,12 @@ from internal.council.grading import (
     hybrid_score_status,
 )
 from internal.council.resolver import PREDICTIONS_PATH, _normalize_expert
-from internal.council.weights import DEFAULT_WEIGHTS, load_weights, save_weights
+from internal.council.weights import (
+    ConcurrentWeightUpdate,
+    DEFAULT_WEIGHTS,
+    load_weights,
+    save_weights,
+)
 
 MIN_RESOLVED_SAMPLE = 30
 CERT_BACKTEST_N = 50
@@ -34,6 +39,10 @@ _EXCLUDED_STATUSES = frozenset({"duplicate", "expired", "ungradeable"})
 
 class FireError(Exception):
     """Weight swap failed verification or IO."""
+
+    def __init__(self, message: str, *, rollback_status: str = "not_needed") -> None:
+        super().__init__(message)
+        self.rollback_status = rollback_status
 
 
 def _utcnow_z() -> str:
@@ -357,15 +366,25 @@ def fire_weights(
 ) -> Dict[str, float]:
     """Atomic swap with verify; rollback to backup on failure."""
     backup = load_weights(soul_map_path)
-    save_weights(proposed, soul_map_path, expected_weights=backup)
+    try:
+        saved = save_weights(proposed, soul_map_path, expected_weights=backup)
+    except ConcurrentWeightUpdate as exc:
+        raise FireError("save_conflict", rollback_status="not_needed") from exc
+    if not saved:
+        raise FireError("save_refused", rollback_status="not_needed")
     verify = load_weights(soul_map_path)
     mismatch = any(
         abs(float(verify.get(k, 0) or 0) - float(proposed.get(k, 0) or 0)) > 1e-4
         for k in DEFAULT_WEIGHTS
     )
     if mismatch:
-        save_weights(backup, soul_map_path, expected_weights=proposed)
-        raise FireError("verify_failed_after_save")
+        try:
+            rolled_back = save_weights(backup, soul_map_path, expected_weights=proposed)
+        except ConcurrentWeightUpdate as exc:
+            raise FireError("rollback_conflict", rollback_status="conflict") from exc
+        if not rolled_back:
+            raise FireError("rollback_refused", rollback_status="refused")
+        raise FireError("verify_failed_after_save", rollback_status="ok")
     return verify
 
 
@@ -510,11 +529,15 @@ def run_calibration_pipeline(
             result["formula_version"] = version_entry
         return result
     except FireError as exc:
+        weights_after_failure = load_weights(soul_map_path)
         state_persisted = _save_calibration_state(
             {
                 "last_retrain_at": started_at,
                 "last_cert_status": "fire_failed",
                 "last_error": str(exc),
+                "rollback_status": exc.rollback_status,
+                "weights_after_failure": weights_after_failure,
+                "proposed_weights": locals().get("proposed"),
                 "retrain_in_progress": False,
             },
             soul_map_path=soul_map_path,
@@ -522,7 +545,9 @@ def run_calibration_pipeline(
         return {
             "status": "fire_failed",
             "error": str(exc),
-            "weights": load_weights(soul_map_path),
+            "rollback_status": exc.rollback_status,
+            "weights_after_failure": weights_after_failure,
+            "weights": weights_after_failure,
             "state_persisted": state_persisted,
         }
     finally:
@@ -550,6 +575,8 @@ def get_calibration_status(
             "last_retrain_at": cal.get("last_retrain_at"),
             "last_cert_status": cal.get("last_cert_status"),
             "last_cert": cal.get("last_cert"),
+            "last_error": cal.get("last_error"),
+            "rollback_status": cal.get("rollback_status"),
             "resolved_sample": len(rows),
             "retrain_in_progress": _retrain_in_progress,
             "auto_retrain_enabled": os.environ.get(

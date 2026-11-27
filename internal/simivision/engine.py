@@ -17,6 +17,7 @@ conviction per subnet so deltas are meaningful across runs.
 """
 
 import json
+import logging
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -28,6 +29,7 @@ from internal.store.soul_map_io import write_soul_map
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 STAKE_THRESHOLD_TAO = float(os.environ.get("STAKE_THRESHOLD_TAO", "400000"))
+logger = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -94,16 +96,28 @@ def _load_last_convictions(soul_map_path=SOUL_MAP_PATH):
     return soul_map.get("simivision_convictions", {})
 
 def _persist_convictions(convictions, soul_map_path=SOUL_MAP_PATH):
-    write_soul_map(
-        lambda blob: (
-            blob.__setitem__(
-                "simivision_convictions",
-                {str(k): v for k, v in convictions.items()},
+    try:
+        from internal.store.soul_map_io import WriteOutcome, write_soul_map
+
+        outcome = write_soul_map(
+            lambda blob: (
+                blob.__setitem__(
+                    "simivision_convictions",
+                    {str(k): v for k, v in convictions.items()},
+                ),
+                blob.__setitem__("simivision_convictions_updated_at", _now_iso()),
             ),
-            blob.__setitem__("simivision_convictions_updated_at", _now_iso()),
-        ),
-        soul_map_path,
-    )
+            soul_map_path,
+            raise_on_lock_timeout=False,
+        )
+        if outcome.outcome not in (WriteOutcome.APPLIED, WriteOutcome.DECLINED):
+            logger.warning(
+                "simivision convictions not persisted outcome=%s detail=%s",
+                outcome.outcome,
+                outcome.detail,
+            )
+    except Exception as exc:
+        logger.warning("simivision convictions persist failed: %s", exc, exc_info=True)
 
 def _load_council_decisions(soul_map_path=SOUL_MAP_PATH):
     soul_map = _load_json(soul_map_path)

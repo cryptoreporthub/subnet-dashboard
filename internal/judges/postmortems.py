@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import logging
 import os
 import threading
 import time
@@ -20,6 +21,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
+logger = logging.getLogger(__name__)
 _RECORD_LOCK = threading.Lock()
 POSTMORTEM_LOCK_TIMEOUT_SECONDS = 5.0
 
@@ -58,11 +60,11 @@ def _load(judge_name: str) -> List[Any]:
     so the writer in _record_locked never replaces it with a fresh list."""
     path = _path(judge_name)
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         return []
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
         raise PostmortemFileCorrupt(f"{path} is unreadable: {exc}") from exc
     if not isinstance(data, list):
         raise PostmortemFileCorrupt(f"{path} root is not a list")
@@ -78,6 +80,8 @@ def _write_tmp_json(tmp: str, entries: List[Dict[str, Any]]) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(entries, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
     except BaseException:
         try:
             os.unlink(tmp)
@@ -92,6 +96,9 @@ def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     tmp = path + ".tmp"
     _write_tmp_json(tmp, entries)
     os.replace(tmp, path)
+    from internal.file_utils import _fsync_dir
+
+    _fsync_dir(os.path.dirname(path) or ".")
 
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:
     """Generate the four scientific-method questions for a wrong pick."""
@@ -234,10 +241,23 @@ def _list_for_judge_fail_empty(judge_name: str) -> List[Dict[str, Any]]:
         return []
 
 
+def all_postmortems_with_status() -> tuple[Dict[str, List[Dict[str, Any]]], List[str]]:
+    """Return postmortems per judge and judges whose files could not be read."""
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    unavailable: List[str] = []
+    for name in ("oracle", "echo", "pulse"):
+        try:
+            out[name] = list_for_judge(name)
+        except PostmortemFileCorrupt as exc:
+            logger.warning("postmortems unavailable for %s: %s", name, exc)
+            out[name] = []
+            unavailable.append(name)
+        except ValueError:
+            out[name] = []
+    return out, unavailable
+
+
 def all_postmortems() -> Dict[str, List[Dict[str, Any]]]:
     """Return postmortems for all three judges."""
-    return {
-        "oracle": _list_for_judge_fail_empty("oracle"),
-        "echo": _list_for_judge_fail_empty("echo"),
-        "pulse": _list_for_judge_fail_empty("pulse"),
-    }
+    postmortems, _unavailable = all_postmortems_with_status()
+    return postmortems

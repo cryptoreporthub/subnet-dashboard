@@ -3,6 +3,7 @@ Background scheduler for the technical indicator layer.
 """
 
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -29,6 +30,7 @@ MAX_BACKOFF_MINUTES = int(os.environ.get("INDICATOR_MAX_BACKOFF_MINUTES", "240")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 JOB_ID = "indicator-scheduler"
+logger = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -111,9 +113,7 @@ class IndicatorScheduler:
         self.liveness.start()
 
         if immediate:
-            # Run the first tick in a background thread so callers are not
-            # blocked while prices are fetched.
-            threading.Thread(target=self._tick, daemon=True).start()
+            schedule_in_seconds(JOB_ID, self._tick, 0)
         else:
             # First tick happens soon after deploy so the dashboard isn't empty
             # for a full refresh interval; normal cadence resumes afterwards.
@@ -179,34 +179,57 @@ class IndicatorScheduler:
 
     def _tick(self) -> Dict[str, Any]:
         """Run one indicator refresh cycle and reschedule."""
-        result = self._run_refresh_cycle()
-
-        if result.get("ok"):
-            self.liveness.record_success(
-                evidence={
-                    "subnets_processed": result.get("subnets_processed", 0),
-                    "signals_emitted": result.get("signals_emitted", 0),
-                    "op": "indicator_cycle",
-                }
-            )
-        else:
-            self.liveness.record_failure(error=str(result.get("error") or "indicator_cycle_failed"))
-
         with self._lock:
-            self._last_run_error = result.get("error")
-            if result["ok"]:
-                self._consecutive_failures = 0
-                self._backoff_minutes = self.refresh_minutes
+            next_interval = self._backoff_minutes
+        result: Dict[str, Any] = {"ok": False, "error": "tick_aborted"}
+
+        try:
+            result = self._run_refresh_cycle()
+
+            if result.get("ok"):
+                self.liveness.record_success(
+                    evidence={
+                        "subnets_processed": result.get("subnets_processed", 0),
+                        "signals_emitted": result.get("signals_emitted", 0),
+                        "op": "indicator_cycle",
+                    }
+                )
             else:
+                self.liveness.record_failure(
+                    error=str(result.get("error") or "indicator_cycle_failed")
+                )
+
+            with self._lock:
+                self._last_run_error = result.get("error")
+                if result["ok"]:
+                    self._consecutive_failures = 0
+                    self._backoff_minutes = self.refresh_minutes
+                else:
+                    self._consecutive_failures += 1
+                    self._backoff_minutes = min(
+                        self.refresh_minutes * (2 ** self._consecutive_failures),
+                        self.max_backoff_minutes,
+                    )
+                next_interval = self._backoff_minutes
+        except Exception as exc:
+            logger.warning("indicator scheduler tick failed: %s", exc, exc_info=True)
+            with self._lock:
                 self._consecutive_failures += 1
                 self._backoff_minutes = min(
                     self.refresh_minutes * (2 ** self._consecutive_failures),
                     self.max_backoff_minutes,
                 )
-            next_interval = self._backoff_minutes
-
-        if self._is_registered():
-            self._schedule_next(next_interval)
+                self._last_run_error = str(exc)
+                next_interval = self._backoff_minutes
+        finally:
+            try:
+                if self._is_registered():
+                    self._schedule_next(next_interval)
+            except Exception as exc:
+                if self._is_registered():
+                    logger.error(
+                        "indicator scheduler failed to reschedule: %s", exc, exc_info=True
+                    )
         return result
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:
@@ -241,12 +264,24 @@ class IndicatorScheduler:
             "signals_emitted": result.get("signals_emitted", 0),
             "error": result.get("error"),
         }
-        write_soul_map(
-            lambda blob: blob.setdefault("indicator_scheduler", {}).__setitem__(
-                "last_cycle", summary
-            ),
-            self.soul_map_path,
-        )
+        try:
+            from internal.store.soul_map_io import WriteOutcome, write_soul_map
+
+            outcome = write_soul_map(
+                lambda blob: blob.setdefault("indicator_scheduler", {}).__setitem__(
+                    "last_cycle", summary
+                ),
+                self.soul_map_path,
+                raise_on_lock_timeout=False,
+            )
+            if outcome.outcome not in (WriteOutcome.APPLIED, WriteOutcome.DECLINED):
+                logger.warning(
+                    "indicator cycle summary not persisted outcome=%s detail=%s",
+                    outcome.outcome,
+                    outcome.detail,
+                )
+        except Exception as exc:
+            logger.warning("indicator cycle summary persist failed: %s", exc, exc_info=True)
 
 
 # ------------------------------------------------------------------------------

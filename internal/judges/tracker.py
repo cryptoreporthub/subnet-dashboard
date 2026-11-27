@@ -11,7 +11,10 @@ expert-weight nudges.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.judges import all_judges
@@ -134,12 +137,46 @@ def on_prediction_resolved(
                 pass
         postmortem = None
         # close_position returns None only on replay, so a replay must not append a second postmortem.
+        postmortem_error = None
         if wrong and closed:
-            postmortem = judge.record_postmortem(prediction, actual_pct)
-        summary["judges"][judge.name] = {
+            try:
+                postmortem = judge.record_postmortem(prediction, actual_pct)
+            except Exception as exc:
+                from internal.judges.postmortems import (
+                    PostmortemFileCorrupt,
+                    PostmortemLockTimeout,
+                )
+
+                if not isinstance(exc, (PostmortemFileCorrupt, PostmortemLockTimeout)):
+                    raise
+                logger.warning(
+                    "postmortem skipped judge=%s prediction=%s: %s",
+                    judge.name,
+                    prediction.get("id"),
+                    exc,
+                )
+                postmortem = None
+                postmortem_error = type(exc).__name__
+                try:
+                    from internal.learning.trail_events import emit_trail_event
+
+                    emit_trail_event(
+                        "postmortem_skipped",
+                        judge=judge.name,
+                        evidence={
+                            "prediction_id": prediction.get("id"),
+                            "error_type": postmortem_error,
+                        },
+                    )
+                except Exception:
+                    pass
+        judge_summary: Dict[str, Any] = {
             "closed": closed,
             "postmortem": postmortem,
         }
+        if postmortem_error:
+            judge_summary["postmortem_error"] = postmortem_error
+        summary["judges"][judge.name] = judge_summary
         try:
             from internal.learning.trail_bus import emit_judge_pnl, emit_judge_postmortem
 

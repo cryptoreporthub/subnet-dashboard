@@ -404,11 +404,14 @@ def _canonical_postmortem_judge(raw: str) -> str:
 _POSTMORTEM_VALUE_ERRORS = frozenset({"Unknown judge", "path outside postmortems directory"})
 
 
-def _safe_list_postmortems(judge_name: str) -> List[Dict[str, Any]]:
-    from internal.judges.postmortems import list_for_judge
+def _safe_list_postmortems(judge_name: str) -> tuple[List[Dict[str, Any]], List[str]]:
+    from internal.judges.postmortems import PostmortemFileCorrupt, list_for_judge
 
     try:
-        return list_for_judge(judge_name)
+        return list_for_judge(judge_name), []
+    except PostmortemFileCorrupt as exc:
+        logger.warning("postmortems unavailable for %s: %s", judge_name, exc)
+        return [], [judge_name]
     except ValueError as exc:
         if str(exc) not in _POSTMORTEM_VALUE_ERRORS:
             raise
@@ -419,7 +422,13 @@ def _safe_list_postmortems(judge_name: str) -> List[Dict[str, Any]]:
 async def api_judge_postmortems(judge: str):
     """Return scientific-method postmortems for a single judge."""
     name = _canonical_postmortem_judge(judge)
-    return {"status": "success", "judge": name, "postmortems": _safe_list_postmortems(name)}
+    rows, unavailable = _safe_list_postmortems(name)
+    return {
+        "status": "success",
+        "judge": name,
+        "postmortems": rows,
+        "unavailable": unavailable,
+    }
 
 
 @council_router.get("/api/council-ab")
@@ -496,23 +505,32 @@ async def api_portfolios():
 @council_router.get("/api/postmortems")
 async def api_postmortems(judge: Optional[str] = None):
     """Return all postmortems, optionally filtered by judge name."""
-    from internal.judges.postmortems import all_postmortems
-
     if judge is not None:
         name = _canonical_postmortem_judge(judge)
+        rows, unavailable = _safe_list_postmortems(name)
         return {
             "status": "success",
             "judge": name,
-            "postmortems": _safe_list_postmortems(name),
+            "postmortems": rows,
+            "unavailable": unavailable,
         }
-    return {"postmortems": all_postmortems()}
+    from internal.judges.postmortems import all_postmortems_with_status
+
+    grouped, unavailable = all_postmortems_with_status()
+    return {"postmortems": grouped, "unavailable": unavailable}
 
 
 @council_router.get("/api/postmortems/{judge_name}")
 async def api_postmortems_by_judge(judge_name: str):
     """Return postmortems for a specific judge."""
     name = _canonical_postmortem_judge(judge_name)
-    return {"status": "success", "judge": name, "postmortems": _safe_list_postmortems(name)}
+    rows, unavailable = _safe_list_postmortems(name)
+    return {
+        "status": "success",
+        "judge": name,
+        "postmortems": rows,
+        "unavailable": unavailable,
+    }
 
 
 @council_router.get("/judge-council", response_class=HTMLResponse)
