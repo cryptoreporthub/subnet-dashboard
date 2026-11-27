@@ -25,7 +25,6 @@ _PUBLIC_WRITE_EXACT = frozenset(
         "/api/investigate/ask",
     }
 )
-_PUBLIC_WRITE_PREFIXES: tuple[str, ...] = ()
 
 _RESOLVE_FALSE = frozenset({"false", "0", "no", "off", "f", "n", ""})
 
@@ -45,8 +44,8 @@ def _normalize_path(path: str) -> str:
 
 
 def _is_public_write(path: str) -> bool:
-    path = _normalize_path(path)
-    return path in _PUBLIC_WRITE_EXACT or any(path.startswith(p) for p in _PUBLIC_WRITE_PREFIXES)
+    """``path`` must already be normalized."""
+    return path in _PUBLIC_WRITE_EXACT
 
 
 def _resolve_query_protected(query: str) -> bool:
@@ -57,7 +56,7 @@ def _resolve_query_protected(query: str) -> bool:
     if "resolve" not in parsed:
         return False
     for raw in parsed["resolve"]:
-        if (raw or "").strip().lower() in _RESOLVE_FALSE:
+        if str(raw).strip().lower() in _RESOLVE_FALSE:
             continue
         return True
     return False
@@ -92,7 +91,11 @@ def check_write_auth(request: Request) -> Optional[JSONResponse]:
         return None
     token = _extract_bearer(request) or ""
     expected = write_token()
-    if not token or not hmac.compare_digest(token, expected):
+    try:
+        token_ok = hmac.compare_digest(token.encode("utf-8"), expected.encode("utf-8"))
+    except (AttributeError, UnicodeError):
+        token_ok = False
+    if not token_ok:
         return JSONResponse(
             status_code=401,
             content={"status": "error", "error": "write_api_token_required"},

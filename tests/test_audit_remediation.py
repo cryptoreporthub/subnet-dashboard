@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import functools
 import json
+import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.routing import Mount
 
 import internal.council.mindmap_bridge as mindmap_bridge
 import internal.council.resolver as resolver
@@ -23,7 +27,10 @@ import server as server_mod
 from datastore import learning_engine
 from internal.council.weights import load_weights
 from internal.learning import predictions_store
+from internal.write_auth import _PUBLIC_WRITE_EXACT
 from server import app
+
+_WRITE_HTTP_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 def _isolate_learning_writes(tmp_path, monkeypatch):
@@ -264,6 +271,7 @@ def test_resolve_true_requires_token_when_enabled(monkeypatch, tmp_path):
             headers={"Authorization": "Bearer resolve-token"},
         )
     assert ok.status_code == 200
+    assert calls["resolve"] == 1
 
 
 def test_write_auth_default_deny_admin_posts(monkeypatch, tmp_path):
@@ -282,12 +290,14 @@ def test_write_auth_default_deny_admin_posts(monkeypatch, tmp_path):
         assert client.post("/api/learning/trigger", json={}).status_code == 401
         assert client.post("/api/predictions/resolver/run", json={}).status_code == 401
         assert client.post("/api/alerts", json=alert_body).status_code == 401
-        assert client.post("/api/learning/trigger", json={}, headers=headers).status_code != 401
+        assert (
+            client.post("/api/learning/trigger", json={}, headers=headers).status_code == 503
+        )
         assert (
             client.post("/api/predictions/resolver/run", json={}, headers=headers).status_code
-            != 401
+            == 503
         )
-        assert client.post("/api/alerts", json=alert_body, headers=headers).status_code != 401
+        assert client.post("/api/alerts", json=alert_body, headers=headers).status_code == 201
     finally:
         client.close()
 
@@ -328,13 +338,24 @@ def test_feedback_routes_require_token_when_enabled(monkeypatch, tmp_path):
             denied = client.post(path, json=body)
             assert denied.status_code == 401, path
     assert calls["nudge"] == 0
+    weight_payload = {
+        "subnet_id": 1,
+        "recommendation": "quant",
+        "actual_performance": {"outcome": "neutral", "correct_prediction": True},
+    }
     with TestClient(app) as client:
-        for path, body in (
-            ("/api/mindmap/feedback", {"note": "public-ux"}),
-            ("/api/feedback", {"feedback": "public-ux"}),
-        ):
-            ok = client.post(path, json=body, headers=headers)
-            assert ok.status_code != 401, path
+        ok_mindmap = client.post(
+            "/api/mindmap/feedback",
+            json={"note": "public-ux"},
+            headers=headers,
+        )
+        ok_feedback = client.post(
+            "/api/feedback",
+            json=weight_payload,
+            headers=headers,
+        )
+    assert ok_mindmap.status_code == 200
+    assert ok_feedback.status_code == 200
 
 
 @pytest.mark.parametrize(
@@ -383,7 +404,8 @@ def test_resolve_predictions_requires_token_when_enabled(monkeypatch, tmp_path):
         assert calls["resolve"] == 0
         assert calls["nudge"] == 0
         ok = client.get("/api/resolve-predictions", headers=headers)
-    assert ok.status_code != 401
+    assert ok.status_code == 200
+    assert calls["resolve"] == 1
 
 
 def test_anonymous_feedback_post_does_not_change_weights(monkeypatch, tmp_path):
@@ -428,19 +450,21 @@ def test_feedback_routes_denied_never_nudge(monkeypatch, tmp_path):
 def test_write_auth_accepts_x_write_api_token_header(monkeypatch, tmp_path):
     monkeypatch.setenv("WRITE_API_TOKEN", "header-token")
     _isolate_learning_writes(tmp_path, monkeypatch)
+    calls = _block_weight_mutations(monkeypatch)
     with TestClient(app) as client:
         r = client.get(
             "/api/resolve-predictions",
             headers={"X-Write-Api-Token": "header-token"},
         )
-    assert r.status_code != 401
+    assert r.status_code == 200
+    assert calls["resolve"] == 1
 
 
 def test_write_auth_resolve_predictions_trailing_slash_requires_token(monkeypatch):
     monkeypatch.setenv("WRITE_API_TOKEN", "slash-token")
     calls = _block_weight_mutations(monkeypatch)
     with TestClient(app) as client:
-        r = client.get("/api/resolve-predictions/")
+        r = client.get("/api/resolve-predictions/", follow_redirects=False)
     assert r.status_code == 401
     assert calls["resolve"] == 0
 
@@ -474,6 +498,126 @@ def test_write_auth_import_guard_raises_when_token_set(monkeypatch):
 def test_write_auth_import_guard_no_raise_when_token_unset(monkeypatch):
     monkeypatch.delenv("WRITE_API_TOKEN", raising=False)
     server_mod._write_auth_import_guard(RuntimeError("boom"))
+
+
+def test_write_auth_non_ascii_bearer_returns_401_not_500(monkeypatch):
+    """Non-ASCII bearer must not bubble up as compare_digest UnicodeEncodeError (500)."""
+    from starlette.requests import Request
+
+    from internal.write_auth import check_write_auth
+
+    monkeypatch.setenv("WRITE_API_TOKEN", "ascii-token")
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "GET",
+        "path": "/api/resolve-predictions",
+        "raw_path": b"/api/resolve-predictions",
+        "query_string": b"",
+        "headers": [(b"authorization", "Bearer café".encode("utf-8"))],
+        "scheme": "http",
+        "server": ("testserver", 80),
+        "client": ("testclient", 50000),
+        "root_path": "",
+    }
+    denied = check_write_auth(Request(scope))
+    assert denied is not None
+    assert denied.status_code == 401
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def test_write_auth_middleware_import_fail_closed_subprocess():
+    """Mutant I: missing write_auth module must abort server import when token is set."""
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(_repo_root()),
+        "DISABLE_BACKGROUND_SCANS": "1",
+        "WRITE_API_TOKEN": "probe-token",
+    }
+    fail_code = (
+        "import sys\n"
+        "sys.modules['internal.write_auth'] = None\n"
+        "try:\n"
+        "    import server\n"
+        "except Exception:\n"
+        "    raise SystemExit(0)\n"
+        "raise SystemExit(42)\n"
+    )
+    fail = subprocess.run(
+        [sys.executable, "-c", fail_code],
+        cwd=_repo_root(),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert fail.returncode == 0, fail.stderr[-500:] if fail.stderr else fail.stdout[-500:]
+
+    ok_env = {**os.environ, "PYTHONPATH": str(_repo_root()), "DISABLE_BACKGROUND_SCANS": "1"}
+    ok_env.pop("WRITE_API_TOKEN", None)
+    ok_code = (
+        "import sys\n"
+        "sys.modules['internal.write_auth'] = None\n"
+        "import server\n"
+    )
+    ok = subprocess.run(
+        [sys.executable, "-c", ok_code],
+        cwd=_repo_root(),
+        env=ok_env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert ok.returncode == 0, ok.stderr[-800:] if ok.stderr else ok.stdout[-800:]
+
+
+def _collect_nonpublic_write_routes(routes, prefix: str = "") -> list[tuple[str, str]]:
+    collected: list[tuple[str, str]] = []
+    for route in routes:
+        if isinstance(route, Mount):
+            mount = route.path.rstrip("/")
+            collected.extend(_collect_nonpublic_write_routes(route.routes, prefix + mount))
+            continue
+        path = getattr(route, "path", None)
+        methods = getattr(route, "methods", None)
+        if not path or not methods:
+            continue
+        full_path = f"{prefix}{path}"
+        if "{" in full_path:
+            continue
+        for method in methods:
+            if method in _WRITE_HTTP_METHODS and full_path not in _PUBLIC_WRITE_EXACT:
+                collected.append((method, full_path))
+    return collected
+
+
+def test_write_auth_invariant_nonpublic_writes_require_token(monkeypatch):
+    """Every non-allowlisted write route returns 401 without bearer when token is set."""
+    monkeypatch.setenv("WRITE_API_TOKEN", "invariant-token")
+    failures: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    with TestClient(app) as client:
+        for method, path in _collect_nonpublic_write_routes(app.routes):
+            key = (method, path)
+            if key in seen:
+                continue
+            seen.add(key)
+            if method == "POST":
+                r = client.post(path, json={})
+            elif method == "PUT":
+                r = client.put(path, json={})
+            elif method == "PATCH":
+                r = client.patch(path, json={})
+            else:
+                r = client.delete(path)
+            if r.status_code != 401:
+                failures.append(f"{method} {path} -> {r.status_code}")
+    assert not failures, "write_auth gaps (fix in write_auth.py or list):\n" + "\n".join(
+        failures[:40]
+    )
 
 
 def test_write_auth_wrong_token_rejected(monkeypatch):
