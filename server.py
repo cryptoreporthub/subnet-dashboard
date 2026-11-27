@@ -3492,6 +3492,8 @@ if _restless_sdk is not None:
 if __name__ == "__main__":
     import uvicorn
 
+    from internal.web_uvicorn import UVICORN_WEB_KWARGS
+
     port = int(os.environ.get("PORT", 50745))
-    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True, **UVICORN_WEB_KWARGS)
 
