@@ -312,23 +312,35 @@ Human steps — the agent cannot access your registrar or Fly account without cr
 ### CDN for static assets (recommended)
 
 **Rate limits (before enabling Cloudflare proxy):** `ENABLE_RATE_LIMIT` keys on
-`Fly-Client-IP` (`internal/rate_limit.client_ip`). Fly Proxy sets this header on
-direct traffic ([Fly request-headers](https://fly.io/docs/networking/request-headers/)).
+`Fly-Client-IP` (`internal/rate_limit.client_ip`). Fly docs say Fly Proxy **adds** this
+header on traffic through Fly
+([request-headers](https://fly.io/docs/networking/request-headers/)) — treat client
+forgery of ``Fly-Client-IP`` as an **assumption** until the pre-enable probe below passes.
 With **Cloudflare orange-cloud (proxy) ON**, Fly still sets `Fly-Client-IP`, but to the
 **proxy's** edge address — not the browser — so per-user buckets collapse unless you add
-a trusted client-IP source (e.g. `CF-Connecting-IP`) or keep an orange-cloud-off path to
-Fly. The app does **not** parse `X-Forwarded-For` for rate limits (client-spoofable).
+a trusted client-IP source (e.g. `CF-Connecting-IP`; follow-up only, not in #1633) or keep
+an orange-cloud-off path to Fly. The app does **not** parse `X-Forwarded-For` for rate
+limits (client-spoofable).
 
-**Uvicorn forwarded headers:** production web uses `scripts/run_web_with_guard.py`, which
-pins ``forwarded_allow_ips=127.0.0.1`` (`internal/web_uvicorn.py`) so only the local hop
-may influence ``get_remote_address``. Do **not** set a Fly secret/env
-``FORWARDED_ALLOW_IPS`` (e.g. ``*``) — it would let clients rotate ``X-Forwarded-For``
-past the fail-closed fallback when ``Fly-Client-IP`` is missing. Joshua must confirm no
-such override before deploy.
+**Uvicorn forwarded headers:** production web boots via `scripts/fly_web_entrypoint.sh` →
+`scripts/run_web_with_guard.py` → ``uvicorn.run(...)`` (line ~35) with
+``forwarded_allow_ips=127.0.0.1`` from `internal/web_uvicorn.py`. Do **not** set a Fly
+secret/env ``FORWARDED_ALLOW_IPS`` (e.g. ``*``) — it would let clients rotate
+``X-Forwarded-For`` past the fail-closed fallback when ``Fly-Client-IP`` is missing.
+Confirm no such override before deploy (tracked in [#1633](https://github.com/cryptoreporthub/subnet-dashboard/issues/1633)).
 
 **#1633 deliberate departure:** when ``Fly-Client-IP`` is missing on Fly, we do **not**
 fall back to the last ``X-Forwarded-For`` hop (issue body suggestion). That hop is
 client-spoofable on 6PN; we use ``get_remote_address`` instead (fail-closed bucket).
+
+**Pre-enable probe (Fly-Client-IP overwrite):** After deploy, from **one** client host
+send ~150 ``GET`` requests to a rate-limited read-only route (e.g. ``/api/registry``;
+**not** exempt paths like ``/health`` or ``/version``) in a short window, each with a
+**distinct forged** ``Fly-Client-IP`` header
+and a fixed real identity otherwise. If rate limiting keys only on the real client,
+**any** response must be **429**. If all responses stay **200**, treat Fly header overwrite
+as **not** verified — roll back or gate per [#1633](https://github.com/cryptoreporthub/subnet-dashboard/issues/1633).
+Forged headers are out of scope in unit tests; this probe is production-only evidence.
 
 Put **Cloudflare** (or similar) in front of the custom domain:
 

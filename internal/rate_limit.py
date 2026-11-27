@@ -39,8 +39,13 @@ def client_ip(request) -> str:
 
     On Fly, missing ``Fly-Client-IP`` means the request did not arrive through Fly's edge
     proxy as expected (e.g. another CDN in front). We deliberately do **not** parse
-    ``X-Forwarded-For`` (client-spoofable; see #1633 /tl). Assumes traffic hits Fly
-    directly so Fly overwrites ``Fly-Client-IP`` (Fly request-headers docs).
+    ``X-Forwarded-For`` (client-spoofable; see #1633 /tl).
+
+    **Assumption (not verified in this repo):** direct traffic to Fly's proxy yields a
+    ``Fly-Client-IP`` header added by Fly Proxy and not spoofable by the client. Fly docs
+    describe the header as added by Fly Proxy
+    (https://fly.io/docs/networking/request-headers/). Run the DEPLOY.md pre-enable probe
+    before relying on client-supplied ``Fly-Client-IP`` being ignored.
     """
     return client_ip_from_headers(request.headers, get_remote_address(request))
 
