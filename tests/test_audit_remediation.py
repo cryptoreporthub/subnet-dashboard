@@ -458,8 +458,10 @@ def test_write_auth_protected_under_root_path_prefix(monkeypatch):
     monkeypatch.setenv("WRITE_API_TOKEN", "root-token")
     calls = _block_weight_mutations(monkeypatch)
     with TestClient(app, root_path="/mcp") as client:
-        r = client.get("/api/resolve-predictions")
+        r = client.get("/mcp/api/resolve-predictions")
+        r2 = client.get("/mcp/api/predictions/resolved?resolve=true")
     assert r.status_code == 401
+    assert r2.status_code == 401
     assert calls["resolve"] == 0
 
 
