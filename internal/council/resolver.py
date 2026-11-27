@@ -1448,7 +1448,7 @@ def _warn_idless_open_positions() -> None:
                 if normalize_prediction_id(pos.get("id")) is None:
                     count += 1
     except Exception:
-        return
+        logger.exception("failed counting open positions with no prediction id")
     if count:
         logger.warning("open positions with no prediction id: %s", count)
 
