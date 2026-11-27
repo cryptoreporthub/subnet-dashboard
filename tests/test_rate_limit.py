@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,16 +11,28 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def rate_limited_client(monkeypatch):
-    monkeypatch.setenv("ENABLE_RATE_LIMIT", "1")
-    monkeypatch.setenv("RATE_LIMIT_DEFAULT", "2/minute")
     import internal.rate_limit as rl
-
-    rl._limiter = None
     import server
 
+    monkeypatch.setenv("ENABLE_RATE_LIMIT", "1")
+    prev_default = os.environ.get("RATE_LIMIT_DEFAULT")
+    os.environ["RATE_LIMIT_DEFAULT"] = "2/minute"
+    monkeypatch.setattr(rl, "_limiter", None)
     importlib.reload(server)
     yield TestClient(server.app)
-    rl._limiter = None
+    if prev_default is None:
+        os.environ.pop("RATE_LIMIT_DEFAULT", None)
+    else:
+        os.environ["RATE_LIMIT_DEFAULT"] = prev_default
+    monkeypatch.setattr(rl, "_limiter", None)
+    import internal.learning.routes as learning_routes
+
+    importlib.reload(learning_routes)
+    importlib.reload(server)
+    lim = rl.get_limiter()
+    if lim is not None:
+        server.app.state.limiter = lim
+        lim.reset()
 
 
 def test_under_limit_returns_200(rate_limited_client):

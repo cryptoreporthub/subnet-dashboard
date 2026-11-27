@@ -1246,11 +1246,16 @@ async def api_predictions():
         return {"predictions": [], "resolved": [], "stats": {}, "error": str(exc)}
 
 
-@learning_router.get("/api/predictions/resolved")
 @limit_or_noop(strict_limit(), override_defaults=True)
+async def _enforce_predictions_resolved_resolve_limit(request: Request) -> None:
+    """Rate-limit anchor for ``GET /api/predictions/resolved?resolve=true`` only."""
+
+
+@learning_router.get("/api/predictions/resolved")
 async def api_predictions_resolved(request: Request, resolve: bool = Query(default=False)):
     """Return resolved predictions. Read-only unless ``resolve=true``."""
     if resolve:
+        await _enforce_predictions_resolved_resolve_limit(request)
         _require_resolver_on_this_process()
     try:
         if resolve:
