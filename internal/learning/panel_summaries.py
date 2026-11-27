@@ -13,7 +13,12 @@ def _sentences(parts: List[str]) -> Dict[str, Any]:
 def summarize_council() -> Dict[str, Any]:
     from internal.council.weights import _load_raw, load_impact_strength, load_weights
 
-    weights = load_weights()
+    try:
+        weights = load_weights()
+    except Exception:
+        return _sentences(
+            ["Council expert weights are not loaded yet; all experts sit at default influence."]
+        )
     if not weights:
         return _sentences(["Council expert weights are not loaded yet; all experts sit at default influence."])
 
@@ -108,7 +113,15 @@ def summarize_learning() -> Dict[str, Any]:
     from internal.council.weights import load_impact_strength, load_weights
     from internal.learning.predictions_store import load_predictions, update_stats
 
-    weights = load_weights()
+    try:
+        weights = load_weights()
+    except Exception:
+        return _sentences(
+            [
+                "Council expert weights could not load; learned-weight details are omitted from "
+                "this learning summary."
+            ]
+        )
     impact_strength = load_impact_strength()
     resolved = resolver.get_resolved_predictions()
     stats = resolved.get("stats") or {}
