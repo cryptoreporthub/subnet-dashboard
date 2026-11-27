@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import importlib
 import os
 
 import pytest
 from fastapi.testclient import TestClient
 
-import internal.learning.routes as learning_routes
 import internal.rate_limit as rl
 import server
 from internal.rate_limit import client_ip, default_limit
@@ -24,7 +22,6 @@ def _restore_limiter_env(monkeypatch, prev_default, prev_fly):
     elif prev_fly:
         os.environ["FLY_APP_NAME"] = prev_fly
     monkeypatch.setattr(rl, "_limiter", None)
-    importlib.reload(learning_routes)
     lim = rl.get_limiter()
     assert lim is not None
     assert default_limit() == os.environ.get("RATE_LIMIT_DEFAULT", "120/minute")
@@ -45,7 +42,6 @@ def rate_limited_client(monkeypatch, request):
     else:
         os.environ.pop("FLY_APP_NAME", None)
     monkeypatch.setattr(rl, "_limiter", None)
-    importlib.reload(learning_routes)
     lim = rl.get_limiter()
     server.app.state.limiter = lim
     yield TestClient(server.app)
@@ -115,9 +111,10 @@ def test_fly_missing_header_ignores_xff_for_key(monkeypatch):
 
 def test_fly_client_ip_header_strips_whitespace(monkeypatch):
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    from starlette.datastructures import Headers
 
     class _Req:
-        headers = {"Fly-Client-IP": "  203.0.113.77  "}
+        headers = Headers({"Fly-Client-IP": "  203.0.113.77  "})
 
         client = type("C", (), {"host": "127.0.0.1"})()
 

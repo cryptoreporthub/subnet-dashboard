@@ -318,7 +318,17 @@ With **Cloudflare orange-cloud (proxy) ON**, Fly still sets `Fly-Client-IP`, but
 **proxy's** edge address — not the browser — so per-user buckets collapse unless you add
 a trusted client-IP source (e.g. `CF-Connecting-IP`) or keep an orange-cloud-off path to
 Fly. The app does **not** parse `X-Forwarded-For` for rate limits (client-spoofable).
-Confirm approach with Joshua before deploy when proxy mode is on.
+
+**Uvicorn forwarded headers:** production web uses `scripts/run_web_with_guard.py`, which
+pins ``forwarded_allow_ips=127.0.0.1`` (`internal/web_uvicorn.py`) so only the local hop
+may influence ``get_remote_address``. Do **not** set a Fly secret/env
+``FORWARDED_ALLOW_IPS`` (e.g. ``*``) — it would let clients rotate ``X-Forwarded-For``
+past the fail-closed fallback when ``Fly-Client-IP`` is missing. Joshua must confirm no
+such override before deploy.
+
+**#1633 deliberate departure:** when ``Fly-Client-IP`` is missing on Fly, we do **not**
+fall back to the last ``X-Forwarded-For`` hop (issue body suggestion). That hop is
+client-spoofable on 6PN; we use ``get_remote_address`` instead (fail-closed bucket).
 
 Put **Cloudflare** (or similar) in front of the custom domain:
 

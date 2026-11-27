@@ -28,8 +28,13 @@ if __name__ == "__main__":
 
     import uvicorn
 
+    from internal.web_uvicorn import UVICORN_WEB_KWARGS
+
+    # Do not read FORWARDED_ALLOW_IPS from env here — pinned in UVICORN_WEB_KWARGS.
+    os.environ.pop("FORWARDED_ALLOW_IPS", None)
     uvicorn.run(
         "asgi_entry:app",
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8080")),
+        **UVICORN_WEB_KWARGS,
     )

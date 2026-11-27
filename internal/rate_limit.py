@@ -21,14 +21,13 @@ def on_fly() -> bool:
     return bool(os.environ.get("FLY_APP_NAME", "").strip())
 
 
-def _lower_headers(headers: Mapping[str, str]) -> dict[str, str]:
-    return {str(k).lower(): "" if v is None else str(v) for k, v in headers.items()}
-
-
 def client_ip_from_headers(headers: Mapping[str, str], fallback: str) -> str:
     """Shared key for shield telemetry: Fly-Client-IP on Fly; never X-Forwarded-For."""
     if on_fly():
-        fly_ip = _lower_headers(headers).get("fly-client-ip", "").strip()
+        raw = headers.get("Fly-Client-IP")
+        if raw is None:
+            raw = headers.get("fly-client-ip")
+        fly_ip = (raw or "").strip()
         if fly_ip:
             return fly_ip
         return fallback or "unknown"
