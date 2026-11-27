@@ -25,6 +25,14 @@ from internal.judges.postmortems import (
 
 logger = logging.getLogger(__name__)
 
+try:
+    from internal.learning.trail_events import emit_trail_event
+except ImportError:
+    logger.exception("trail_events unavailable; judge trail emits are no-ops")
+
+    def emit_trail_event(*_args, **_kwargs) -> None:
+        pass
+
 
 class _SkipJudgeNudge(Exception):
     """Internal: skip this judge nudge without treating it as an error."""
@@ -101,8 +109,6 @@ def on_prediction_resolved(
             prediction.get("id"),
         )
         try:
-            from internal.learning.trail_events import emit_trail_event
-
             emit_trail_event(
                 "judge_resolution_skipped",
                 evidence={"prediction_id": prediction.get("id")},
@@ -203,8 +209,6 @@ def on_prediction_resolved(
                 postmortem = None
                 postmortem_error = type(exc).__name__
                 try:
-                    from internal.learning.trail_events import emit_trail_event
-
                     emit_trail_event(
                         "postmortem_skipped",
                         judge=judge.name,

@@ -22,6 +22,14 @@ from typing import Any, Dict, List, Optional
 
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
 logger = logging.getLogger(__name__)
+
+try:
+    from internal.file_utils import _fsync_dir
+except ImportError:
+    logger.exception("file_utils._fsync_dir unavailable; postmortem dir fsync disabled")
+
+    def _fsync_dir(_path: str) -> None:
+        pass
 _RECORD_LOCK = threading.Lock()
 POSTMORTEM_LOCK_TIMEOUT_SECONDS = 5.0
 
@@ -106,8 +114,6 @@ def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     tmp = path + ".tmp"
     _write_tmp_json(tmp, entries)
     os.replace(tmp, path)
-    from internal.file_utils import _fsync_dir
-
     _fsync_dir(os.path.dirname(path) or ".")
 
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:
