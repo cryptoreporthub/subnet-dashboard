@@ -16,7 +16,6 @@ from typing import Any, Dict, Optional
 
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.judges import all_judges
-from internal.learning.trail_events import emit_trail_event
 from internal.judges.postmortems import (
     PostmortemFileCorrupt,
     PostmortemLockTimeout,
@@ -25,6 +24,14 @@ from internal.judges.postmortems import (
 )
 
 logger = logging.getLogger(__name__)
+
+try:
+    from internal.learning.trail_events import emit_trail_event
+except ImportError:
+    logger.exception("trail_events unavailable; judge trail emits are no-ops")
+
+    def emit_trail_event(*_args, **_kwargs) -> None:
+        pass
 
 
 class _SkipJudgeNudge(Exception):

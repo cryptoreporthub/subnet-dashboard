@@ -1011,14 +1011,45 @@ def test_panel_summary_unavailable_when_all_postmortems_corrupt(
     assert "No judge post-mortems recorded yet" not in text
 
 
+_R1_NORMALIZE_CASES = (None, True, False, "", "   ", 0, 42, "42", 3.14, -1)
+
+
 def test_resolver_imports_when_judges_portfolios_module_broken(tmp_path):
     root = Path(__file__).resolve().parents[1]
+    expected = [
+        (raw, postmortems.normalize_prediction_id(raw)) for raw in _R1_NORMALIZE_CASES
+    ]
     code = (
         "import sys; "
         "sys.modules['internal.judges.portfolios']=None; "
-        "import internal.council.resolver"
+        "import internal.council.resolver as r; "
+        f"expected = {expected!r}; "
+        "assert all(r.normalize_prediction_id(c) == want for c, want in expected)"
     )
     env = {**os.environ, "PYTHONPATH": str(root)}
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_council_routes_register_when_trail_events_unimportable():
+    root = Path(__file__).resolve().parents[1]
+    code = (
+        "import os, sys; "
+        "os.environ.setdefault('DISABLE_BACKGROUND_SCANS', '1'); "
+        "sys.modules['internal.learning.trail_events'] = None; "
+        "import server; "
+        "assert server._COUNCIL_ROUTES is True; "
+        "from internal.judges.council_routes import council_router; "
+        "paths = [getattr(r, 'path', '') for r in council_router.routes]; "
+        "assert len(paths) == 11"
+    )
+    env = {**os.environ, "PYTHONPATH": str(root), "DISABLE_BACKGROUND_SCANS": "1"}
     proc = subprocess.run(
         [sys.executable, "-c", code],
         cwd=str(root),

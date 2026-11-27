@@ -62,6 +62,9 @@ except Exception:  # pragma: no cover
     def normalize_prediction_id(raw):
         if raw is None or isinstance(raw, bool):
             return None
+        if isinstance(raw, str):
+            stripped = raw.strip()
+            return stripped or None
         return str(raw).strip() or None
 
 try:
