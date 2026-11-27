@@ -1177,6 +1177,38 @@ def test_indicator_scheduler_start_after_persisted_started_without_job(
     assert scheduled == [60, 60]
 
 
+def test_indicator_scheduler_enqueue_error_allows_retry(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    calls = {"n": 0}
+
+    def _schedule(_job, _fn, seconds):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("enqueue failed")
+        scheduled.append(seconds)
+
+    monkeypatch.setattr(indicator_scheduler, "schedule_in_seconds", _schedule)
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    with pytest.raises(OSError, match="enqueue failed"):
+        indicator_scheduler.start_indicator_scheduler(
+            refresh_minutes=15,
+            soul_map_path=str(soul),
+            engine_factory=lambda: _StubEngine(),
+        )
+    retry = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert retry.get("started") is True, retry
+    assert scheduled == [60]
+    assert calls["n"] == 2
+
+
 def test_indicator_scheduler_start_is_idempotent_while_job_armed(
     tmp_path, monkeypatch, scheduler_cleanup
 ):
