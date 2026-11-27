@@ -186,17 +186,22 @@ class IndicatorScheduler:
         try:
             result = self._run_refresh_cycle()
 
-            if result.get("ok"):
-                self.liveness.record_success(
-                    evidence={
-                        "subnets_processed": result.get("subnets_processed", 0),
-                        "signals_emitted": result.get("signals_emitted", 0),
-                        "op": "indicator_cycle",
-                    }
-                )
-            else:
-                self.liveness.record_failure(
-                    error=str(result.get("error") or "indicator_cycle_failed")
+            try:
+                if result.get("ok"):
+                    self.liveness.record_success(
+                        evidence={
+                            "subnets_processed": result.get("subnets_processed", 0),
+                            "signals_emitted": result.get("signals_emitted", 0),
+                            "op": "indicator_cycle",
+                        }
+                    )
+                else:
+                    self.liveness.record_failure(
+                        error=str(result.get("error") or "indicator_cycle_failed")
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "indicator liveness persist failed: %s", exc, exc_info=True
                 )
 
             with self._lock:
@@ -226,10 +231,9 @@ class IndicatorScheduler:
                 if self._is_registered():
                     self._schedule_next(next_interval)
             except Exception as exc:
-                if self._is_registered():
-                    logger.error(
-                        "indicator scheduler failed to reschedule: %s", exc, exc_info=True
-                    )
+                logger.error(
+                    "indicator scheduler failed to reschedule: %s", exc, exc_info=True
+                )
         return result
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:

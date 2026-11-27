@@ -69,9 +69,9 @@ def summarize_judges() -> Dict[str, Any]:
         parts.append("Oracle, Echo, and Pulse have not recorded paper positions yet.")
 
     try:
-        from internal.judges.postmortems import all_postmortems
+        from internal.judges.postmortems import all_postmortems_with_status
 
-        pms = all_postmortems()
+        pms, unavailable = all_postmortems_with_status()
         total_pm = sum(len(v) for v in pms.values() if isinstance(v, list))
         if total_pm:
             by_judge = ", ".join(
@@ -81,8 +81,12 @@ def summarize_judges() -> Dict[str, Any]:
                 f"{total_pm} structured post-mortems on record ({by_judge}) — "
                 "wrong resolutions feed the scientific-method correction loop."
             )
-        else:
+        elif not unavailable:
             parts.append("No judge post-mortems recorded yet; they fire on wrong paper resolutions.")
+        if unavailable:
+            parts.append(
+                "Post-mortem store unavailable for: " + ", ".join(unavailable) + "."
+            )
     except Exception:
         parts.append("Post-mortem store unavailable.")
 

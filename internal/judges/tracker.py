@@ -14,10 +14,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
-
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.judges import all_judges
+
+logger = logging.getLogger(__name__)
 
 
 class _SkipJudgeNudge(Exception):
@@ -149,7 +149,7 @@ def on_prediction_resolved(
 
                 if not isinstance(exc, (PostmortemFileCorrupt, PostmortemLockTimeout)):
                     raise
-                logger.warning(
+                logger.error(
                     "postmortem skipped judge=%s prediction=%s: %s",
                     judge.name,
                     prediction.get("id"),
@@ -169,7 +169,11 @@ def on_prediction_resolved(
                         },
                     )
                 except Exception:
-                    pass
+                    logger.exception(
+                        "postmortem_skipped trail emit failed judge=%s prediction=%s",
+                        judge.name,
+                        prediction.get("id"),
+                    )
         judge_summary: Dict[str, Any] = {
             "closed": closed,
             "postmortem": postmortem,

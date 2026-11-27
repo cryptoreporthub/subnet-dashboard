@@ -52,7 +52,11 @@ def main() -> int:
     from internal.learning.trail_bus import emit_weight_change
     from internal.learning.weight_deltas import count_rogue_replay_rows
 
-    before = load_weights(SOUL_MAP_PATH) or {}
+    try:
+        before = load_weights(SOUL_MAP_PATH) or {}
+    except ConcurrentWeightUpdate:
+        print("rebalance: load conflict", file=sys.stderr)
+        return 2
     after = mean_revert(before)
 
     rogue = count_rogue_replay_rows()

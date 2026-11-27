@@ -233,14 +233,6 @@ def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
     return [row for row in reversed(_load(judge_name)) if isinstance(row, dict)]
 
 
-def _list_for_judge_fail_empty(judge_name: str) -> List[Dict[str, Any]]:
-    """Like list_for_judge but returns [] when path validation fails (aggregate reads)."""
-    try:
-        return list_for_judge(judge_name)
-    except ValueError:
-        return []
-
-
 def all_postmortems_with_status() -> tuple[Dict[str, List[Dict[str, Any]]], List[str]]:
     """Return postmortems per judge and judges whose files could not be read."""
     out: Dict[str, List[Dict[str, Any]]] = {}

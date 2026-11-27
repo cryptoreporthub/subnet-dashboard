@@ -111,7 +111,10 @@ def test_mindmap_state_cache_reuses_payload(monkeypatch):
 def test_summarize_judges_mentions_postmortems_and_weights():
     from internal.learning.panel_summaries import summarize_judges
 
-    with patch("internal.judges.postmortems.all_postmortems", return_value={"oracle": [{"id": 1}], "echo": [], "pulse": []}):
+    with patch(
+        "internal.judges.postmortems.all_postmortems_with_status",
+        return_value=({"oracle": [{"id": 1}], "echo": [], "pulse": []}, []),
+    ):
         with patch(
             "internal.judges.weights.normalized_judge_weights",
             return_value={"oracle": 0.4, "echo": 0.3, "pulse": 0.3},
