@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import time
 from pathlib import Path
@@ -10,8 +11,12 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+import internal.council.mindmap_bridge as mindmap_bridge
 import internal.council.resolver as resolver
 import internal.council.weights as weights
+import internal.investigation.routes as investigation_routes
+import internal.simivision.chat_service as chat_service
+from datastore import learning_engine
 from internal.council.weights import load_weights
 from internal.learning import predictions_store
 from server import app
@@ -45,6 +50,24 @@ def _isolate_learning_writes(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
+    _orig_engine_init = learning_engine.LearningEngine.__init__
+
+    @functools.wraps(_orig_engine_init)
+    def _engine_init(self, soul_map_path="data/soul_map.json"):
+        if soul_map_path == "data/soul_map.json":
+            soul_map_path = soul_path
+        _orig_engine_init(self, soul_map_path)
+
+    _orig_bridge_init = mindmap_bridge.MindmapBridge.__init__
+
+    @functools.wraps(_orig_bridge_init)
+    def _bridge_init(self, persistence_path="data/soul_map.json", registry_path="config/registry.json"):
+        if persistence_path == "data/soul_map.json":
+            persistence_path = soul_path
+        _orig_bridge_init(self, persistence_path, registry_path)
+
+    monkeypatch.setattr(learning_engine.LearningEngine, "__init__", _engine_init)
+    monkeypatch.setattr(mindmap_bridge.MindmapBridge, "__init__", _bridge_init)
     return soul_path
 
 
@@ -224,13 +247,23 @@ def test_write_auth_default_deny_admin_posts(monkeypatch):
 def test_write_auth_browser_ux_posts_open_with_token_set(monkeypatch):
     """SimiVision chat and investigate stay public when WRITE_API_TOKEN is set."""
     monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
+    monkeypatch.setattr(chat_service, "build_chat_context", lambda: {"source": "registry-fallback"})
+    monkeypatch.setattr(chat_service, "_maybe_investigation_context", lambda _m: None)
+    monkeypatch.setattr(
+        chat_service,
+        "call_llm",
+        lambda *_a, **_k: ("Public UX ack.", True, "test-stub"),
+    )
+    monkeypatch.setattr(
+        investigation_routes,
+        "build_investigation_report",
+        lambda *_a, **_k: {"status": "ok", "answer": "stub"},
+    )
     with TestClient(app) as client:
-        for path, body in (
-            ("/api/simivision/chat", {"message": "public-ux"}),
-            ("/api/investigate/ask", {"question": "public-ux"}),
-        ):
-            r = client.post(path, json=body)
-            assert r.status_code != 401, path
+        chat = client.post("/api/simivision/chat", json={"message": "public-ux"})
+        assert chat.status_code == 200
+        ask = client.post("/api/investigate/ask", json={"question": "public-ux"})
+        assert ask.status_code == 200
 
 
 def test_feedback_routes_require_token_when_enabled(monkeypatch, tmp_path):

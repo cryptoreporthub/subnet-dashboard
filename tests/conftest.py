@@ -17,6 +17,19 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _isolate_caution_cells_seen(tmp_path, monkeypatch):
+    """Warm homepage thread writes caution_cells_seen — keep it off repo data/."""
+    caution_path = str(tmp_path / "caution_cells_seen.json")
+    monkeypatch.setenv("CAUTION_CELLS_SEEN_PATH", caution_path)
+    try:
+        import internal.simivision.caution_cells as caution_cells
+
+        monkeypatch.setattr(caution_cells, "SEEN_PATH", caution_path)
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
 def _isolate_message_intel_db(tmp_path, monkeypatch):
     """Redirect message-intel DB to a per-test temp file (prevents live-DB pollution)."""
     db_path = str(tmp_path / "test_message_intel.db")
