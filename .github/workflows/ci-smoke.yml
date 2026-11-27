@@ -15,7 +15,12 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
 
 concurrency:
   group: ci-smoke-${{ github.ref }}
@@ -36,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest httpx bandit
+          pip install pytest httpx bandit pyyaml
       - name: Static foundation guards
         run: |
           set -e
@@ -58,7 +63,7 @@ jobs:
           DISABLE_BACKGROUND_SCANS: "1"
         run: |
           set -o pipefail
-          python -m pytest tests/test_endpoint_contract.py tests/test_f04_persistence.py tests/test_server.py \
+          python -m pytest tests/test_ci_smoke_workflow.py tests/test_endpoint_contract.py tests/test_f04_persistence.py tests/test_server.py \
             tests/test_learning_loop_health.py \
             tests/test_prediction_loop_closure.py \
             tests/test_learning_loop_impact.py \
