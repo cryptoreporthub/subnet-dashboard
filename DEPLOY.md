@@ -153,9 +153,15 @@ build pass; seed the Fly volume or configure the external feed/secret instead.
 | `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
-| `GET /api/calibration/status` | 200, weights + thresholds |
+| `GET /api/calibration/status` | 200, weights + thresholds (`weights` may be `null` on a concurrent load conflict) |
 | `GET /api/conviction-alerts/status` | 200, `enabled: true` (after Phase P) |
 | `GET /api/signal-hub/status` | 200 |
+
+**Skipped postmortems:** a corrupt judge file is never overwritten, renamed, quarantined, or repaired in-process. Spot it via `ERROR ... postmortem skipped`, a `postmortem_skipped` learning-trail event, or the top-level `unavailable` key on `/api/postmortems*`. Repair `data/postmortems/<judge>.json` by hand on the volume. A `PostmortemLockTimeout` drops that judge's postmortem, logs ERROR, and emits `postmortem_skipped`. It is not retried once `predictions.json` is saved (`resolve_due_predictions` only processes pending rows). Only a crash before that save is recovered.
+
+Id-less open judge positions are warned about at resolver start (`resolver._warn_idless_open_positions`) and deliberately left open under the Option I design; cleanup of those positions is a tracked follow-up.
+
+**Indicator scheduler is not started in production.** `start_indicator_scheduler` is not called from `server.py` lifespan or `internal.background_boot.start_background_workers` (listed in `tests/test_scheduler_contract.py` `FOLLOW_UPS_NO_BOOT`). `/api/indicators/scheduler` reports persisted liveness if any. Wiring it into boot would start a new background job — Joshua/TL decision, not silent.
 
 ### Persistent data
 

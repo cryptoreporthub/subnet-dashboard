@@ -43,11 +43,20 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    from internal.council.weights import SOUL_MAP_PATH, load_weights, save_weights
+    from internal.council.weights import (
+        ConcurrentWeightUpdate,
+        SOUL_MAP_PATH,
+        load_weights,
+        save_weights,
+    )
     from internal.learning.trail_bus import emit_weight_change
     from internal.learning.weight_deltas import count_rogue_replay_rows
 
-    before = load_weights(SOUL_MAP_PATH) or {}
+    try:
+        before = load_weights(SOUL_MAP_PATH) or {}
+    except ConcurrentWeightUpdate:
+        print("rebalance: load conflict", file=sys.stderr)
+        return 2
     after = mean_revert(before)
 
     rogue = count_rogue_replay_rows()
@@ -61,7 +70,14 @@ def main() -> int:
         print("[dry-run] no changes persisted.")
         return 0
 
-    save_weights(after, SOUL_MAP_PATH, expected_weights=before)
+    try:
+        saved = save_weights(after, SOUL_MAP_PATH, expected_weights=before)
+    except ConcurrentWeightUpdate:
+        print("rebalance: save conflict", file=sys.stderr)
+        return 2
+    if not saved:
+        print("rebalance: save refused", file=sys.stderr)
+        return 3
     for name in ("quant", "hype", "dark_horse", "technical"):
         b = float(before.get(name, 1.0))
         if abs(after[name] - b) > 0.001:

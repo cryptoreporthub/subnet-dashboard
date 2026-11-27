@@ -19,6 +19,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.judges.postmortems import normalize_prediction_id
+
 PORTFOLIOS_PATH = os.path.join("data", "judge_portfolios.json")
 
 # Per-judge risk multipliers — each judge trades with different conviction sizing
@@ -131,7 +133,7 @@ def open_position(
 
     horizon = prediction.get("horizon_hours")
     position = {
-        "id": prediction.get("id"),
+        "id": normalize_prediction_id(prediction.get("id")),
         "netuid": prediction.get("netuid"),
         "name": prediction.get("name"),
         "direction": prediction.get("direction", "up"),
@@ -158,26 +160,33 @@ def close_position(
     data = _load()
     judge = _get_judge(data, judge_name)
     open_positions = judge.get("open_positions", [])
-    pred_id = prediction.get("id")
+    pred_id = normalize_prediction_id(prediction.get("id"))
     netuid = prediction.get("netuid")
 
     # A replayed resolution must not append a second closed entry or nudge the judge again.
     if pred_id is not None and any(
-        c.get("id") == pred_id for c in judge.get("closed_positions", [])
+        normalize_prediction_id(c.get("id")) == pred_id
+        for c in judge.get("closed_positions", [])
     ):
-        remaining = [pos for pos in open_positions if pos.get("id") != pred_id]
+        remaining = [
+            pos
+            for pos in open_positions
+            if normalize_prediction_id(pos.get("id")) != pred_id
+        ]
         if len(remaining) != len(open_positions):
             judge["open_positions"] = remaining
             _recompute_summary(judge)
             _save(data)
         return None
 
+    def _open_matches(pos: Dict[str, Any]) -> bool:
+        pos_id = normalize_prediction_id(pos.get("id"))
+        if pred_id is not None:
+            return pos_id == pred_id
+        return pos_id is None and pos.get("netuid") == netuid
+
     idx = next(
-        (
-            i
-            for i, pos in enumerate(open_positions)
-            if pos.get("id") == pred_id or (pos.get("netuid") == netuid and pred_id is None)
-        ),
+        (i for i, pos in enumerate(open_positions) if _open_matches(pos)),
         None,
     )
 
@@ -193,6 +202,8 @@ def close_position(
             actual_pct = 0.0
     actual_pct = float(actual_pct or 0)
 
+    if idx is None and pred_id is None:
+        return None
     if idx is not None:
         position = open_positions.pop(idx)
         direction = position.get("direction", direction)

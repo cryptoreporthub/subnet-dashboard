@@ -1,0 +1,1263 @@
+"""Deploy blocker regressions (#1629): scheduler, postmortems, retrain fire, SimiVision."""
+
+from __future__ import annotations
+
+import fcntl
+import json
+import logging
+import os
+import stat
+import subprocess
+import sys
+import threading
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, List, Optional
+
+import pytest
+from fastapi.testclient import TestClient
+
+import internal.indicators.indicator_scheduler as indicator_scheduler
+import internal.judges.postmortems as postmortems
+import internal.judges.tracker as tracker
+from internal.calibration import pipeline as cal
+from internal.calibration.pipeline import FireError
+from internal.council import resolver
+from internal.council import weights as council_weights
+from internal.store import soul_map_io
+from server import app
+
+PREDICTION = {
+    "id": "pred-blocker-1",
+    "netuid": 3,
+    "name": "Blocker Test",
+    "direction": "up",
+    "predicted_pct": 2.0,
+    "reference_price": 100.0,
+    "resolved_price": 95.0,
+    "horizon_hours": 1,
+    "outcome": "miss",
+    "correct": False,
+    "created_at": "2026-07-01T00:00:00Z",
+}
+
+PROPOSED = {"quant": 1.5, "hype": 0.8, "dark_horse": 0.9, "technical": 1.0}
+NETUID = 3
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _closed_count(portfolio_path: Path, judge: str) -> int:
+    if not portfolio_path.exists():
+        return 0
+    data = json.loads(portfolio_path.read_text(encoding="utf-8"))
+    rows = (data.get(judge) or {}).get("closed_positions") or []
+    return len(rows)
+
+
+def _open_ids(portfolio_path: Path, judge: str) -> list:
+    if not portfolio_path.exists():
+        return []
+    data = json.loads(portfolio_path.read_text(encoding="utf-8"))
+    return [p.get("id") for p in (data.get(judge) or {}).get("open_positions") or []]
+
+
+@pytest.fixture
+def pm_dir(tmp_path, monkeypatch):
+    directory = tmp_path / "postmortems"
+    directory.mkdir()
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(directory))
+    return directory
+
+
+@pytest.fixture
+def portfolio_path(tmp_path, monkeypatch):
+    path = tmp_path / "judge_portfolios.json"
+    monkeypatch.setattr(
+        "internal.judges.portfolios.PORTFOLIOS_PATH",
+        str(path),
+    )
+    return path
+
+
+@pytest.fixture
+def soul_path(tmp_path, monkeypatch):
+    path = tmp_path / "soul_map.json"
+    path.write_text(
+        json.dumps(
+            {
+                "adversarial_state": {
+                    "council_weights": {
+                        "quant": 1.4,
+                        "hype": 1.0,
+                        "dark_horse": 1.0,
+                        "technical": 1.0,
+                    }
+                },
+                "expert_weights": {
+                    "quant": 1.4,
+                    "hype": 1.0,
+                    "dark_horse": 1.0,
+                    "technical": 1.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(council_weights, "SOUL_MAP_PATH", str(path))
+    monkeypatch.setenv("SOUL_MAP_PATH", str(path))
+    return path
+
+
+@pytest.fixture
+def resolve_harness(tmp_path, monkeypatch, pm_dir, portfolio_path, soul_path):
+    predictions = tmp_path / "predictions.json"
+    price_cache = tmp_path / "price_cache.json"
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(predictions))
+    monkeypatch.setattr(resolver, "PRICE_CACHE_PATH", str(price_cache))
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    monkeypatch.setattr(resolver, "hydrate_candles_for_netuid", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        resolver, "hydrate_candles_for_netuid_historical", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(postmortems, "POSTMORTEM_LOCK_TIMEOUT_SECONDS", 0.05)
+    return {
+        "predictions": predictions,
+        "price_cache": price_cache,
+        "pm_dir": pm_dir,
+        "portfolios": portfolio_path,
+        "soul": soul_path,
+    }
+
+
+def _miss_row(pred_id: Any, *, netuid: int = NETUID, hours_ago: float = 2.0) -> dict:
+    now = datetime.now(timezone.utc)
+    resolve_at = now - timedelta(hours=hours_ago)
+    row = {
+        "netuid": netuid,
+        "name": "Blocker Test",
+        "direction": "up",
+        "predicted_pct": 2.0,
+        "reference_price": 100.0,
+        "horizon_hours": 1,
+        "horizon_type": "hour",
+        "status": "pending",
+        "created_at": _iso(resolve_at - timedelta(hours=1)),
+        "resolve_at": _iso(resolve_at),
+    }
+    if pred_id is not None:
+        row["id"] = pred_id
+    return row
+
+
+def _write_pending(harness, rows: list, *, close: float = 95.0) -> None:
+    harness["predictions"].write_text(
+        json.dumps({"predictions": rows, "resolved": [], "stats": {}}),
+        encoding="utf-8",
+    )
+    candles = []
+    for row in rows:
+        stamp = row["resolve_at"]
+        candles.append(
+            {
+                "timestamp": stamp,
+                "open": close,
+                "high": close,
+                "low": close,
+                "close": close,
+                "volume": 1000.0,
+            }
+        )
+        netuid = row["netuid"]
+        harness["price_cache"].write_text(
+            json.dumps({str(netuid): {"candles": candles}}),
+            encoding="utf-8",
+        )
+
+
+def _cycle(rows_netuids: Optional[list] = None, *, prices: Optional[dict] = None):
+    netuids = rows_netuids or [NETUID]
+    live = prices if prices is not None else {n: 95.0 for n in netuids}
+    subnets = [{"netuid": n, "price": live[n]} for n in netuids if n in live]
+    return resolver.resolve_due_predictions(subnets=subnets)
+
+
+@pytest.fixture
+def scheduler_cleanup():
+    yield
+    indicator_scheduler.stop_indicator_scheduler()
+    with indicator_scheduler._scheduler_lock:
+        indicator_scheduler._scheduler = None
+
+
+class _StubEngine:
+    def run_cycle(self):
+        return {"subnets_processed": 1, "signals_emitted": 0}
+
+
+class _BoomEngine:
+    def run_cycle(self):
+        raise RuntimeError("cycle failed")
+
+
+def _hold_writers(path: str, stop: threading.Event) -> None:
+    lock = soul_map_io._lock_for(path + ".writers")
+    lock.acquire()
+    try:
+        stop.wait(30)
+    finally:
+        lock.release()
+
+
+def _register_scheduler(soul, monkeypatch, engine_factory):
+    scheduled: List[float] = []
+    monkeypatch.setattr(
+        indicator_scheduler,
+        "schedule_in_seconds",
+        lambda _job, _fn, seconds: scheduled.append(seconds),
+    )
+    indicator_scheduler.stop_indicator_scheduler()
+    with indicator_scheduler._scheduler_lock:
+        sched = indicator_scheduler.IndicatorScheduler(
+            refresh_minutes=15,
+            soul_map_path=str(soul),
+            engine_factory=engine_factory,
+        )
+        indicator_scheduler._scheduler = sched
+        sched.liveness.start()
+    return sched, scheduled
+
+
+def test_indicator_scheduler_reschedules_after_lock_timeout(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.05)
+
+    stop = threading.Event()
+    holder = threading.Thread(
+        target=_hold_writers,
+        args=(str(soul), stop),
+        daemon=True,
+    )
+    holder.start()
+    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _StubEngine())
+    try:
+        result = sched._tick()
+    finally:
+        stop.set()
+        holder.join(timeout=5)
+
+    assert result["ok"] is True
+    assert sched._consecutive_failures == 0
+    assert scheduled == [15 * 60]
+
+
+def test_indicator_scheduler_reschedules_when_liveness_raises(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _StubEngine())
+
+    def _boom(**_kwargs):
+        raise RuntimeError("liveness write failed")
+
+    monkeypatch.setattr(sched.liveness, "record_success", _boom)
+
+    result = sched._tick()
+    assert result.get("ok") is True
+    assert sched._consecutive_failures == 0
+    assert sched._backoff_minutes == 15
+    assert scheduled == [15 * 60]
+
+
+def test_indicator_scheduler_reschedules_when_cycle_raises(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _BoomEngine())
+
+    result = sched._tick()
+    assert result.get("ok") is False
+    assert sched._consecutive_failures == 1
+    assert sched._backoff_minutes == 30
+    assert scheduled == [30 * 60]
+
+
+def test_indicator_scheduler_reschedules_when_refresh_cycle_raises(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _StubEngine())
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("refresh exploded")
+
+    monkeypatch.setattr(sched, "_run_refresh_cycle", _boom)
+    result = sched._tick()
+    assert result.get("ok") is False
+    assert result.get("error") == "refresh exploded"
+    assert sched._consecutive_failures == 1
+    assert scheduled == [30 * 60]
+
+
+@pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe", b'{"a": 1}'], ids=["empty", "utf16", "object"])
+def test_postmortem_corrupt_files_do_not_abort_resolution(
+    pm_dir, portfolio_path, corrupt, monkeypatch, caplog
+):
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    oracle_path = pm_dir / "oracle.json"
+    oracle_path.write_bytes(corrupt)
+
+    prediction = dict(PREDICTION)
+    for judge in tracker.all_judges():
+        judge.open_position(prediction, size=1.0)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("trail down")
+
+    monkeypatch.setattr(tracker, "emit_trail_event", _boom)
+    with caplog.at_level(logging.ERROR):
+        summary = tracker.on_prediction_resolved(prediction)
+    assert set(summary["judges"]) == {"oracle", "echo", "pulse"}
+    for name in ("oracle", "echo", "pulse"):
+        assert summary["judges"][name]["closed"] is not None, name
+
+    assert oracle_path.read_bytes() == corrupt
+    for name in ("echo", "pulse"):
+        rows = postmortems.list_for_judge(name)
+        assert len(rows) == 1, name
+        assert rows[0]["prediction_id"] == prediction["id"]
+
+    oracle_block = summary["judges"]["oracle"]
+    assert oracle_block.get("postmortem") is None
+    assert oracle_block.get("postmortem_error")
+    assert any("postmortem skipped" in r.getMessage() for r in caplog.records)
+    assert any("postmortem_skipped trail emit failed" in r.getMessage() for r in caplog.records)
+    assert any(
+        r.levelno >= logging.ERROR and "postmortem_skipped trail emit failed" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_postmortem_lock_timeout_does_not_abort_resolution(
+    pm_dir, portfolio_path, monkeypatch
+):
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    monkeypatch.setattr(postmortems, "POSTMORTEM_LOCK_TIMEOUT_SECONDS", 0.05)
+    lock_path = pm_dir / "oracle.json.lock"
+    holder = open(lock_path, "a+", encoding="utf-8")
+    fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+    try:
+        prediction = dict(PREDICTION)
+        for judge in tracker.all_judges():
+            judge.open_position(prediction, size=1.0)
+        summary = tracker.on_prediction_resolved(prediction)
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
+
+    assert set(summary["judges"]) == {"oracle", "echo", "pulse"}
+    for name in ("oracle", "echo", "pulse"):
+        assert summary["judges"][name]["closed"] is not None, name
+    assert summary["judges"]["oracle"].get("postmortem") is None
+    assert summary["judges"]["oracle"].get("postmortem_error") == "PostmortemLockTimeout"
+    for name in ("echo", "pulse"):
+        rows = postmortems.list_for_judge(name)
+        assert len(rows) == 1, name
+
+
+def test_postmortem_lock_timeout_drops_after_predictions_save(resolve_harness):
+    row = _miss_row("pred-lock-drop-1")
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    lock_path = resolve_harness["pm_dir"] / "oracle.json.lock"
+    holder = open(lock_path, "a+", encoding="utf-8")
+    fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+    try:
+        _cycle()
+        assert postmortems.list_for_judge("oracle") == []
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
+    _cycle()
+    assert postmortems.list_for_judge("oracle") == []
+    for name in ("echo", "pulse"):
+        assert len(postmortems.list_for_judge(name)) == 1, name
+
+
+def test_postmortem_lock_timeout_recovers_only_if_save_crashed(
+    resolve_harness, monkeypatch
+):
+    row = _miss_row("pred-lock-crash-1")
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    real_save = resolver._save_json
+    state = {"n": 0}
+
+    def _crash_first_predictions(path, data, **kwargs):
+        if path == str(resolve_harness["predictions"]):
+            state["n"] += 1
+            if state["n"] == 1:
+                raise OSError("crash before save")
+        return real_save(path, data, **kwargs)
+
+    monkeypatch.setattr(resolver, "_save_json", _crash_first_predictions)
+    lock_path = resolve_harness["pm_dir"] / "oracle.json.lock"
+    holder = open(lock_path, "a+", encoding="utf-8")
+    fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+    try:
+        with pytest.raises(OSError, match="crash before save"):
+            _cycle()
+        assert postmortems.list_for_judge("oracle") == []
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
+    monkeypatch.setattr(resolver, "_save_json", real_save)
+    _cycle()
+    assert len(postmortems.list_for_judge("oracle")) == 1
+    _cycle()
+    assert len(postmortems.list_for_judge("oracle")) == 1
+    for name in ("echo", "pulse"):
+        assert len(postmortems.list_for_judge(name)) == 1, name
+
+
+@pytest.mark.parametrize("kind", ["pending", "expired"])
+def test_idless_wrong_row_is_not_closed_across_cycles(resolve_harness, kind):
+    if kind == "pending":
+        row = _miss_row(None)
+        _write_pending(resolve_harness, [row])
+        prices = {NETUID: 95.0}
+    else:
+        row = _miss_row(None, hours_ago=10)
+        row["resolve_attempts"] = resolver._PRICE_RETRY_CAP
+        resolve_harness["predictions"].write_text(
+            json.dumps({"predictions": [row], "resolved": [], "stats": {}}),
+            encoding="utf-8",
+        )
+        resolve_harness["price_cache"].write_text("{}", encoding="utf-8")
+        prices = {}
+    for _ in range(3):
+        _cycle(prices=prices)
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 0, name
+        assert postmortems.list_for_judge(name) == [], name
+
+
+@pytest.mark.parametrize("bad_id", ["", "   ", True])
+def test_blank_and_bool_ids_are_rejected(resolve_harness, bad_id):
+    row = _miss_row(bad_id)
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    _cycle()
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 0, name
+        assert postmortems.list_for_judge(name) == [], name
+
+
+def test_zero_id_is_accepted_once(resolve_harness):
+    row = _miss_row(0)
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    _cycle()
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 1, name
+        rows = postmortems.list_for_judge(name)
+        assert len(rows) == 1, name
+        assert rows[0]["prediction_id"] == "0"
+
+
+def test_int_and_str_ids_dedupe_as_one_close(resolve_harness):
+    first = _miss_row(42)
+    _write_pending(resolve_harness, [first])
+    tracker.on_prediction_created(first)
+    _cycle()
+    second = _miss_row("42")
+    _write_pending(resolve_harness, [second])
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 1, name
+        rows = postmortems.list_for_judge(name)
+        assert len(rows) == 1, name
+        assert rows[0]["prediction_id"] == "42"
+
+
+def test_idless_close_does_not_match_wrong_netuid(resolve_harness, caplog):
+    owned = _miss_row(None, netuid=1)
+    for judge in tracker.all_judges():
+        judge.open_position(owned, size=1.0)
+    attacker = _miss_row(None, netuid=2)
+    for judge in tracker.all_judges():
+        assert judge.close_position(attacker, actual_pct=-5.0, outcome="miss") is None
+    _write_pending(resolve_harness, [attacker])
+    with caplog.at_level(logging.WARNING):
+        _cycle(rows_netuids=[2], prices={2: 95.0})
+    assert any(
+        "open positions with no prediction id" in r.getMessage() for r in caplog.records
+    )
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _open_ids(port, name) == [None], name
+        assert _closed_count(port, name) == 0, name
+
+
+def test_idless_close_does_not_steal_real_id_position(resolve_harness):
+    owned = _miss_row("keep-me")
+    tracker.on_prediction_created(owned)
+    attacker = _miss_row(None)
+    for judge in tracker.all_judges():
+        assert judge.close_position(attacker, actual_pct=-5.0, outcome="miss") is None
+    _write_pending(resolve_harness, [attacker])
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert "keep-me" in _open_ids(port, name), name
+        assert _closed_count(port, name) == 0, name
+
+
+@pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe"], ids=["empty", "utf16"])
+@pytest.mark.parametrize(
+    "route",
+    [
+        "/api/postmortems/oracle",
+        "/api/postmortems?judge=oracle",
+        "/api/judges/oracle/postmortems",
+        "/api/postmortems",
+    ],
+)
+def test_postmortem_routes_return_200_with_unavailable_on_corrupt_file(
+    pm_dir, corrupt, route, monkeypatch
+):
+    client = TestClient(app)
+    oracle_path = pm_dir / "oracle.json"
+    oracle_path.write_bytes(corrupt)
+    valid = {
+        "prediction_id": "keep-echo",
+        "judge": "echo",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+    (pm_dir / "echo.json").write_text(json.dumps([valid]), encoding="utf-8")
+
+    response = client.get(route)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body.get("unavailable") == ["oracle"]
+    if route == "/api/postmortems":
+        assert body["postmortems"]["echo"] == [valid]
+    else:
+        assert body.get("postmortems") == []
+    assert oracle_path.read_bytes() == corrupt
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+def test_postmortem_routes_symlink_escape_still_404(tmp_path, monkeypatch, client):
+    data_dir = tmp_path / "data"
+    postmortems_dir = data_dir / "postmortems"
+    postmortems_dir.mkdir(parents=True)
+    outside = data_dir / "outside.json"
+    outside.write_text(json.dumps([{"secret": "symlink-leak"}]), encoding="utf-8")
+    (postmortems_dir / "oracle.json").symlink_to(outside)
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(postmortems_dir))
+
+    response = client.get("/api/postmortems/oracle")
+    assert response.status_code == 404
+
+
+def test_postmortem_save_fsyncs(pm_dir, monkeypatch):
+    events: List[tuple] = []
+    real_fsync = os.fsync
+    real_replace = os.replace
+    import internal.file_utils as file_utils
+
+    real_dir_fsync = file_utils._fsync_dir
+
+    def _tracking_fsync(fd: int) -> None:
+        mode = os.fstat(fd).st_mode
+        if stat.S_ISREG(mode):
+            events.append(("tmp_fsync", fd, True))
+        real_fsync(fd)
+
+    def _tracking_replace(src, dst):
+        events.append(("replace", src, dst))
+        real_replace(src, dst)
+
+    def _track_dir(path: str) -> None:
+        events.append(("dir_fsync", path))
+        real_dir_fsync(path)
+
+    monkeypatch.setattr(os, "fsync", _tracking_fsync)
+    monkeypatch.setattr(postmortems.os, "replace", _tracking_replace)
+    monkeypatch.setattr(postmortems, "_fsync_dir", _track_dir)
+
+    postmortems.record("oracle", PREDICTION, actual_pct=-1.0)
+    kinds = [e[0] for e in events]
+    assert kinds == ["tmp_fsync", "replace", "dir_fsync"]
+    assert events[0][2] is True
+
+
+def test_fire_weights_refused_save_is_fire_error(soul_path, monkeypatch):
+    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.05)
+    stop = threading.Event()
+    holder = threading.Thread(
+        target=_hold_writers,
+        args=(str(soul_path), stop),
+        daemon=True,
+    )
+    holder.start()
+    try:
+        with pytest.raises(FireError) as exc:
+            cal.fire_weights(PROPOSED, soul_map_path=str(soul_path))
+        assert str(exc.value) == "save_refused"
+        assert exc.value.rollback_status == "not_needed"
+    finally:
+        stop.set()
+        holder.join(timeout=5)
+
+
+def test_fire_weights_initial_save_conflict_is_fire_error(soul_path, monkeypatch):
+    stale_backup = dict(council_weights.load_weights(str(soul_path)))
+    real_load = council_weights.load_weights
+
+    def _race_load(path=council_weights.SOUL_MAP_PATH):
+        if not getattr(_race_load, "primed", False):
+            _race_load.primed = True
+            council_weights.nudge_expert("quant", True, str(soul_path))
+            return stale_backup
+        return real_load(path)
+
+    monkeypatch.setattr(cal, "load_weights", _race_load)
+    with pytest.raises(FireError) as exc:
+        cal.fire_weights(PROPOSED, soul_map_path=str(soul_path))
+    assert str(exc.value) == "save_conflict"
+    assert exc.value.rollback_status == "not_needed"
+
+
+def test_fire_weights_backup_read_conflict_is_fire_error(soul_path, monkeypatch):
+    saves: List[Any] = []
+
+    def _load(_path=None):
+        raise council_weights.ConcurrentWeightUpdate("stale")
+
+    monkeypatch.setattr(cal, "load_weights", _load)
+    monkeypatch.setattr(cal, "save_weights", lambda *_a, **_k: saves.append(1) or True)
+    with pytest.raises(FireError) as exc:
+        cal.fire_weights(PROPOSED, soul_map_path=str(soul_path))
+    assert str(exc.value) == "load_conflict"
+    assert exc.value.rollback_status == "not_needed"
+    assert saves == []
+
+
+def test_fire_weights_verify_read_conflict_is_fire_error(soul_path, monkeypatch):
+    calls = {"n": 0}
+    real_load = council_weights.load_weights
+
+    def _load(path=council_weights.SOUL_MAP_PATH):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise council_weights.ConcurrentWeightUpdate("stale")
+        return real_load(path)
+
+    monkeypatch.setattr(cal, "load_weights", _load)
+    with pytest.raises(FireError) as exc:
+        cal.fire_weights(PROPOSED, soul_map_path=str(soul_path))
+    assert str(exc.value) == "verify_read_conflict"
+    assert exc.value.rollback_status == "unknown"
+
+
+def test_fire_failed_state_persisted_when_post_failure_read_conflicts(
+    soul_path, monkeypatch
+):
+    saved: List[dict] = []
+    real_save = cal._save_calibration_state
+
+    def _save(state, soul_map_path=None):
+        saved.append(dict(state))
+        return real_save(state, soul_map_path=soul_map_path)
+
+    load_calls = {"n": 0}
+
+    def _load(_path=None):
+        load_calls["n"] += 1
+        if load_calls["n"] >= 2:
+            raise council_weights.ConcurrentWeightUpdate("stale")
+        return {
+            "quant": 1.0,
+            "hype": 1.0,
+            "dark_horse": 1.0,
+            "technical": 1.0,
+        }
+
+    def _fire(*_a, **_k):
+        raise FireError("rollback_conflict", rollback_status="conflict")
+
+    monkeypatch.setattr(cal, "_save_calibration_state", _save)
+    monkeypatch.setattr(cal, "load_weights", _load)
+    monkeypatch.setattr(cal, "fire_weights", _fire)
+    monkeypatch.setattr(cal, "load_training_rows", lambda *_a, **_k: [{"status": "resolved"}] * 40)
+    monkeypatch.setattr(cal, "compute_proposed_weights", lambda *_a, **_k: PROPOSED)
+    monkeypatch.setattr(
+        cal,
+        "certify_weights",
+        lambda *_a, **_k: {
+            "passed": True,
+            "proposed_accuracy": 1.0,
+            "current_accuracy": 0.5,
+        },
+    )
+
+    result = cal.run_calibration_pipeline(soul_map_path=str(soul_path), force=True)
+    assert result["status"] == "fire_failed"
+    assert saved
+    assert saved[0]["last_cert_status"] == "fire_failed"
+    assert saved[0]["rollback_status"] == "conflict"
+    assert saved[0]["proposed_weights"] == PROPOSED
+
+
+def test_retrain_backup_read_conflict_releases_lock_and_records_failure(
+    soul_path, monkeypatch
+):
+    monkeypatch.setattr(
+        cal,
+        "load_weights",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            council_weights.ConcurrentWeightUpdate("stale")
+        ),
+    )
+    try:
+        result = cal.run_calibration_pipeline(
+            dry_run=True, soul_map_path=str(soul_path)
+        )
+        assert not cal._retrain_lock.locked()
+        assert result["status"] == "fire_failed"
+        second = cal.run_calibration_pipeline(
+            dry_run=True, soul_map_path=str(soul_path)
+        )
+        assert second.get("status") != "in_progress"
+    finally:
+        if cal._retrain_lock.locked():
+            cal._retrain_in_progress = False
+            cal._retrain_lock.release()
+
+
+def _stub_fire_rollback(
+    monkeypatch,
+    *,
+    rollback_raises: Any = None,
+    rollback_ok: bool = True,
+):
+    real_save = council_weights.save_weights
+
+    state = {"fired_payload": None, "inject_mismatch": False, "in_fire": False}
+
+    def _same(left, right) -> bool:
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            return False
+        keys = set(left) | set(right)
+        return all(
+            abs(float(left.get(k, 0) or 0) - float(right.get(k, 0) or 0)) < 1e-4
+            for k in keys
+        )
+
+    def _save(weights, path, expected_weights=None, **kwargs):
+        fired = state["fired_payload"]
+        if fired is not None and _same(expected_weights, fired):
+            if rollback_raises is not None:
+                raise rollback_raises
+            return rollback_ok
+        saved = real_save(weights, path, expected_weights=expected_weights, **kwargs)
+        state["fired_payload"] = dict(weights)
+        state["inject_mismatch"] = True
+        return saved
+
+    real_load = council_weights.load_weights
+
+    def _load(path=council_weights.SOUL_MAP_PATH):
+        data = real_load(path)
+        if state["in_fire"] and state["inject_mismatch"]:
+            data = dict(data)
+            data["quant"] = 9.9
+        return data
+
+    real_fire = cal.fire_weights
+
+    def _fire_wrapper(*args, **kwargs):
+        state["in_fire"] = True
+        try:
+            return real_fire(*args, **kwargs)
+        finally:
+            state["in_fire"] = False
+
+    monkeypatch.setattr(cal, "load_weights", _load)
+    monkeypatch.setattr(cal, "save_weights", _save)
+    monkeypatch.setattr(cal, "fire_weights", _fire_wrapper)
+    return PROPOSED
+
+
+def _write_predictions(path: Path, n: int = 35) -> None:
+    rows = [
+        {
+            "id": f"p-{i}",
+            "expert": "quant",
+            "status": "resolved",
+            "outcome": "hit",
+            "correct": True,
+            "actual_pct": 2.0,
+            "predicted_pct": 1.0,
+            "direction": "up",
+            "reference_price": 100.0,
+            "resolved_price": 102.0,
+            "created_at": f"2026-07-01T12:{i:02d}:00Z",
+            "resolved_at": f"2026-07-01T13:{i:02d}:00Z",
+        }
+        for i in range(n)
+    ]
+    path.write_text(
+        json.dumps({"predictions": [], "resolved": rows, "stats": {}}),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize(
+    "mode,expected_msg,expected_status",
+    [
+        ("conflict", "rollback_conflict", "conflict"),
+        ("refused", "rollback_refused", "refused"),
+    ],
+)
+def test_fire_weights_rollback_conflict_and_refused_record_live_weights(
+    soul_path, monkeypatch, mode, expected_msg, expected_status
+):
+    if mode == "conflict":
+        _stub_fire_rollback(
+            monkeypatch,
+            rollback_raises=council_weights.ConcurrentWeightUpdate("stale"),
+        )
+    else:
+        _stub_fire_rollback(monkeypatch, rollback_ok=False)
+
+    pred_path = Path(soul_path).parent / "predictions.json"
+    _write_predictions(pred_path)
+
+    result = cal.run_calibration_pipeline(
+        force=True,
+        soul_map_path=str(soul_path),
+        predictions_path=str(pred_path),
+    )
+    assert result["status"] == "fire_failed"
+    assert result.get("rollback_status") == expected_status
+    disk = council_weights.load_weights(str(soul_path))
+    assert result.get("weights_after_failure") == disk
+    assert disk["quant"] != 9.9
+    status = cal.get_calibration_status(
+        soul_map_path=str(soul_path),
+        predictions_path=str(pred_path),
+    )
+    assert status["calibration"].get("last_error") == expected_msg
+    assert status["calibration"].get("rollback_status") == expected_status
+
+
+def test_calibration_status_returns_200_when_load_weights_conflicts(monkeypatch):
+    def _boom(*_a, **_k):
+        raise council_weights.ConcurrentWeightUpdate("stale")
+
+    monkeypatch.setattr("internal.council.weights.load_weights", _boom)
+    client = TestClient(app)
+    resp = client.get("/api/calibration/status")
+    assert resp.status_code == 200, resp.text
+    assert resp.json().get("weights") is None
+
+
+def test_simivision_persist_lock_timeout_still_returns_signals(
+    tmp_path, monkeypatch, caplog
+):
+    from internal.simivision import engine as simi_engine
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    reg = {
+        "7": {
+            "emission": 0.5,
+            "social_mentions": 50,
+            "is_overvalued": False,
+            "emission_rank": 20,
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+    }
+    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.05)
+    stop = threading.Event()
+    holder = threading.Thread(
+        target=_hold_writers,
+        args=(str(soul), stop),
+        daemon=True,
+    )
+    holder.start()
+    try:
+        with caplog.at_level("WARNING"):
+            signals = simi_engine.generate_signals(
+                registry=reg, top_n=5, soul_map_path=str(soul)
+            )
+    finally:
+        stop.set()
+        holder.join(timeout=5)
+    assert signals
+    assert signals[0]["netuid"] == 7
+    assert "lock_wait_failed" in caplog.text.lower() or "LOCK_WAIT_FAILED" in caplog.text
+
+
+def test_rebalance_script_exits_nonzero_on_refused_save(soul_path, monkeypatch):
+    import importlib.util
+
+    repo = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "rebalance_expert_weights",
+        repo / "scripts" / "rebalance_expert_weights.py",
+    )
+    rebalance = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(rebalance)
+
+    monkeypatch.setattr(council_weights, "SOUL_MAP_PATH", str(soul_path))
+    real_save_weights = council_weights.save_weights
+    trail_rows: List[str] = []
+    monkeypatch.setattr(
+        "internal.learning.trail_bus.emit_weight_change",
+        lambda name, **_: trail_rows.append(name),
+    )
+
+    argv = ["rebalance_expert_weights.py", "--save"]
+    monkeypatch.setattr(rebalance.sys, "argv", argv)
+    monkeypatch.setattr(council_weights, "save_weights", lambda *_a, **_k: False)
+    assert rebalance.main() == 3
+    assert trail_rows == []
+
+    def _conflict(*_a, **_k):
+        raise council_weights.ConcurrentWeightUpdate("stale")
+
+    monkeypatch.setattr(council_weights, "save_weights", _conflict)
+    assert rebalance.main() == 2
+    assert trail_rows == []
+
+    monkeypatch.setattr(council_weights, "save_weights", real_save_weights)
+    assert rebalance.main() == 0
+    assert "quant" in trail_rows
+
+
+def test_rebalance_script_exits_nonzero_on_load_conflict(soul_path, monkeypatch):
+    import importlib.util
+
+    repo = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "rebalance_expert_weights",
+        repo / "scripts" / "rebalance_expert_weights.py",
+    )
+    rebalance = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(rebalance)
+
+    monkeypatch.setattr(council_weights, "SOUL_MAP_PATH", str(soul_path))
+    saves: List[int] = []
+    trail_rows: List[str] = []
+    monkeypatch.setattr(
+        "internal.learning.trail_bus.emit_weight_change",
+        lambda name, **_: trail_rows.append(name),
+    )
+    monkeypatch.setattr(
+        council_weights,
+        "load_weights",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            council_weights.ConcurrentWeightUpdate("stale")
+        ),
+    )
+    monkeypatch.setattr(
+        council_weights, "save_weights", lambda *_a, **_k: saves.append(1) or True
+    )
+    monkeypatch.setattr(rebalance.sys, "argv", ["rebalance_expert_weights.py", "--save"])
+    assert rebalance.main() == 2
+    assert saves == []
+    assert trail_rows == []
+
+
+def test_panel_summary_unavailable_when_all_postmortems_corrupt(
+    pm_dir, tmp_path, monkeypatch
+):
+    from internal.learning import panel_summaries
+
+    for name in ("oracle", "echo", "pulse"):
+        (pm_dir / f"{name}.json").write_bytes(b"")
+    monkeypatch.setattr(
+        "internal.judges.portfolios.PORTFOLIOS_PATH",
+        str(tmp_path / "portfolios.json"),
+    )
+    (tmp_path / "portfolios.json").write_text("{}", encoding="utf-8")
+    out = panel_summaries.summarize_judges()
+    text = out["text"]
+    assert "unavailable" in text.lower()
+    assert "No judge post-mortems recorded yet" not in text
+
+
+_R1_NORMALIZE_CASES = (None, True, False, "", "   ", 0, 42, "42", 3.14, -1)
+
+
+def test_resolver_imports_when_judges_portfolios_module_broken(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    expected = [
+        (raw, postmortems.normalize_prediction_id(raw)) for raw in _R1_NORMALIZE_CASES
+    ]
+    code = (
+        "import sys; "
+        "sys.modules['internal.judges.portfolios']=None; "
+        "import internal.council.resolver as r; "
+        f"expected = {expected!r}; "
+        "assert all(r.normalize_prediction_id(c) == want for c, want in expected)"
+    )
+    env = {**os.environ, "PYTHONPATH": str(root)}
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_council_routes_register_when_trail_events_unimportable():
+    root = Path(__file__).resolve().parents[1]
+    code = (
+        "import os, sys; "
+        "os.environ.setdefault('DISABLE_BACKGROUND_SCANS', '1'); "
+        "sys.modules['internal.learning.trail_events'] = None; "
+        "import server; "
+        "assert server._COUNCIL_ROUTES is True; "
+        "from internal.judges.council_routes import council_router; "
+        "paths = [getattr(r, 'path', '') for r in council_router.routes]; "
+        "assert len(paths) == 11"
+    )
+    env = {**os.environ, "PYTHONPATH": str(root), "DISABLE_BACKGROUND_SCANS": "1"}
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(root),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_T1_merge_keeps_zero_id_and_int_str_match(resolve_harness):
+    fresh = [{"id": 0, "outcome": "miss", "tag": "fresh0"}, {"id": 42, "outcome": "miss", "tag": "fresh42"}]
+    resolve_harness["predictions"].write_text(json.dumps({"resolved": fresh}), encoding="utf-8")
+    out = resolver._merge_regraded_resolved(
+        [{"id": 0, "outcome": "expired"}, {"id": "42", "outcome": "expired"}]
+    )
+    assert [r["tag"] for r in out] == ["fresh0", "fresh42"]
+
+
+@pytest.mark.parametrize("bad", [None, "", "   ", True])
+def test_T2_create_opens_no_position_for_invalid_id(resolve_harness, bad):
+    row = _miss_row(bad)
+    tracker.on_prediction_created(row)
+    for name in ("oracle", "echo", "pulse"):
+        assert _open_ids(resolve_harness["portfolios"], name) == [], name
+
+
+def test_T3_idless_resolve_leaves_legacy_idless_open_position(resolve_harness):
+    legacy = _miss_row(None)
+    for judge in tracker.all_judges():
+        judge.open_position(legacy, size=1.0)
+    _write_pending(resolve_harness, [legacy])
+    _cycle()
+    for name in ("oracle", "echo", "pulse"):
+        assert _open_ids(resolve_harness["portfolios"], name) == [None], name
+        assert _closed_count(resolve_harness["portfolios"], name) == 0, name
+
+
+def test_T4_legacy_raw_int_id_on_disk_dedupes_with_str(resolve_harness):
+    pm = resolve_harness["pm_dir"] / "oracle.json"
+    pm.write_text(
+        json.dumps([{"judge": "oracle", "prediction_id": 42, "actual_pct": -5.0}]),
+        encoding="utf-8",
+    )
+    postmortems.record("oracle", {**PREDICTION, "id": "42"}, actual_pct=-5.0)
+    assert len(postmortems.list_for_judge("oracle")) == 1
+
+
+def test_T4b_replay_check_sees_legacy_raw_int_id(resolve_harness):
+    pm = resolve_harness["pm_dir"] / "oracle.json"
+    pm.write_text(
+        json.dumps([{"judge": "oracle", "prediction_id": 42, "actual_pct": -5.0}]),
+        encoding="utf-8",
+    )
+    assert tracker._postmortem_already_recorded("oracle", "42") is True
+
+
+def test_T6_invalid_id_returns_skipped_and_emits_event(resolve_harness, monkeypatch):
+    events = []
+    monkeypatch.setattr(tracker, "emit_trail_event", lambda name, **kw: events.append(name))
+    out = tracker.on_prediction_resolved(_miss_row(None))
+    assert out == {"judges": {}, "skipped": True}
+    assert events == ["judge_resolution_skipped"]
+
+
+def test_indicator_scheduler_stop_start_reschedules_job(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    monkeypatch.setattr(
+        indicator_scheduler,
+        "schedule_in_seconds",
+        lambda _job, _fn, seconds: scheduled.append(seconds),
+    )
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    first = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert first.get("started") is True
+    assert scheduled == [60]
+    stop = indicator_scheduler.stop_indicator_scheduler()
+    assert stop.get("stopped") is True
+    second = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert second.get("started") is True, second
+    assert scheduled == [60, 60]
+
+
+def test_indicator_scheduler_start_after_persisted_started_without_job(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    monkeypatch.setattr(
+        indicator_scheduler,
+        "schedule_in_seconds",
+        lambda _job, _fn, seconds: scheduled.append(seconds),
+    )
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    first = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert first.get("started") is True
+    with indicator_scheduler._scheduler_lock:
+        sched = indicator_scheduler._scheduler
+        assert sched is not None
+        sched._job_armed = False
+        sched.liveness.start()
+    second = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert second.get("started") is True, second
+    assert scheduled == [60, 60]
+
+
+def test_indicator_scheduler_enqueue_error_allows_retry(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    calls = {"n": 0}
+
+    def _schedule(_job, _fn, seconds):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("enqueue failed")
+        scheduled.append(seconds)
+
+    monkeypatch.setattr(indicator_scheduler, "schedule_in_seconds", _schedule)
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    with pytest.raises(OSError, match="enqueue failed"):
+        indicator_scheduler.start_indicator_scheduler(
+            refresh_minutes=15,
+            soul_map_path=str(soul),
+            engine_factory=lambda: _StubEngine(),
+        )
+    retry = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert retry.get("started") is True, retry
+    assert scheduled == [60]
+    assert calls["n"] == 2
+
+
+def test_indicator_scheduler_start_is_idempotent_while_job_armed(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    monkeypatch.setattr(
+        indicator_scheduler,
+        "schedule_in_seconds",
+        lambda _job, _fn, seconds: scheduled.append(seconds),
+    )
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    first = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert first.get("started") is True
+    second = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert second.get("started") is False
+    assert second.get("reason") == "already running"
+    assert scheduled == [60]
+
+
+def test_corrupt_replay_emits_postmortem_skipped(
+    pm_dir, portfolio_path, monkeypatch, caplog
+):
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    prediction = dict(PREDICTION)
+    for judge in tracker.all_judges():
+        judge.open_position(prediction, size=1.0)
+    first = tracker.on_prediction_resolved(prediction)
+    assert first["judges"]["oracle"]["closed"] is not None
+    (pm_dir / "oracle.json").write_bytes(b"")
+    events: List[str] = []
+    monkeypatch.setattr(
+        tracker,
+        "emit_trail_event",
+        lambda name, **kw: events.append(name),
+    )
+    with caplog.at_level(logging.ERROR):
+        replay = tracker.on_prediction_resolved(prediction)
+    oracle = replay["judges"]["oracle"]
+    assert oracle.get("closed") is None
+    assert oracle.get("postmortem") is None
+    assert oracle.get("postmortem_error") == "PostmortemFileCorrupt"
+    assert "postmortem_skipped" in events
+    assert any("postmortem skipped" in r.getMessage() for r in caplog.records)

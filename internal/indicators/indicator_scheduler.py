@@ -1,8 +1,15 @@
 """
 Background scheduler for the technical indicator layer.
+
+Not started by production boot. ``start_indicator_scheduler`` is exported for
+manual/API use and tests; ``internal.background_boot.start_background_workers``
+does not call it (see ``tests/test_scheduler_contract.py`` FOLLOW_UPS_NO_BOOT).
+Wiring it into lifespan/worker would change runtime behavior — that is a
+Joshua/TL decision, not silent boot.
 """
 
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -13,7 +20,7 @@ from typing import Any, Callable, Dict, Optional
 from internal.indicators.indicator_engine import IndicatorEngine
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import write_soul_map_best_effort
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -29,6 +36,7 @@ MAX_BACKOFF_MINUTES = int(os.environ.get("INDICATOR_MAX_BACKOFF_MINUTES", "240")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 JOB_ID = "indicator-scheduler"
+logger = logging.getLogger(__name__)
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -87,6 +95,7 @@ class IndicatorScheduler:
         self._consecutive_failures = 0
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[str] = None
+        self._job_armed = False
         self.liveness = LivenessTracker(
             name="indicator_scheduler",
             interval_seconds=max(60, int(refresh_minutes) * 60),
@@ -99,26 +108,27 @@ class IndicatorScheduler:
             return _scheduler is self
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
-        """Start the scheduler. Idempotent."""
+        """Start the scheduler. Idempotent for this process's scheduled job."""
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        snap = self.liveness.snapshot()
-        if snap.get("lifecycle") == "started":
-            return {"started": False, "reason": "already running"}
         with self._lock:
+            if self._job_armed:
+                return {"started": False, "reason": "already running"}
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
+        try:
+            if immediate:
+                self._enqueue_tick(0)
+            else:
+                # First tick happens soon after deploy so the dashboard isn't empty
+                # for a full refresh interval; normal cadence resumes afterwards.
+                self._schedule_next(1)
+        except Exception:
+            with self._lock:
+                self._job_armed = False
+                self._next_run_at = None
+            raise
         self.liveness.start()
-
-        if immediate:
-            # Run the first tick in a background thread so callers are not
-            # blocked while prices are fetched.
-            threading.Thread(target=self._tick, daemon=True).start()
-        else:
-            # First tick happens soon after deploy so the dashboard isn't empty
-            # for a full refresh interval; normal cadence resumes afterwards.
-            self._schedule_next(1)
-
         return {
             "started": True,
             "refresh_minutes": self.refresh_minutes,
@@ -129,7 +139,9 @@ class IndicatorScheduler:
         """Stop the scheduler and cancel any pending tick."""
         with self._lock:
             self._next_run_at = None
+            self._job_armed = False
         cancel_job(JOB_ID)
+        self.liveness.stop()
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -168,45 +180,79 @@ class IndicatorScheduler:
             "last_refresh_at": snap.get("last_event_at"),
         }
 
+    def _enqueue_tick(self, seconds: float) -> None:
+        schedule_in_seconds(JOB_ID, self._tick, seconds)
+        with self._lock:
+            self._job_armed = True
+            self._next_run_at = datetime.now(timezone.utc).timestamp() + seconds
+
     def _schedule_next(self, minutes: int) -> None:
         if not self._is_registered():
             return
-        with self._lock:
-            self._next_run_at = (
-                datetime.now(timezone.utc).timestamp() + minutes * 60
-            )
-        schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
+        try:
+            self._enqueue_tick(minutes * 60)
+        except Exception:
+            with self._lock:
+                self._job_armed = False
+                self._next_run_at = None
+            raise
 
     def _tick(self) -> Dict[str, Any]:
         """Run one indicator refresh cycle and reschedule."""
-        result = self._run_refresh_cycle()
-
-        if result.get("ok"):
-            self.liveness.record_success(
-                evidence={
-                    "subnets_processed": result.get("subnets_processed", 0),
-                    "signals_emitted": result.get("signals_emitted", 0),
-                    "op": "indicator_cycle",
-                }
-            )
-        else:
-            self.liveness.record_failure(error=str(result.get("error") or "indicator_cycle_failed"))
-
         with self._lock:
-            self._last_run_error = result.get("error")
-            if result["ok"]:
-                self._consecutive_failures = 0
-                self._backoff_minutes = self.refresh_minutes
-            else:
+            next_interval = self._backoff_minutes
+        try:
+            result: Dict[str, Any] = self._run_refresh_cycle()
+
+            try:
+                if result.get("ok"):
+                    self.liveness.record_success(
+                        evidence={
+                            "subnets_processed": result.get("subnets_processed", 0),
+                            "signals_emitted": result.get("signals_emitted", 0),
+                            "op": "indicator_cycle",
+                        }
+                    )
+                else:
+                    self.liveness.record_failure(
+                        error=str(result.get("error") or "indicator_cycle_failed")
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "indicator liveness persist failed: %s", exc, exc_info=True
+                )
+
+            with self._lock:
+                self._last_run_error = result.get("error")
+                if result["ok"]:
+                    self._consecutive_failures = 0
+                    self._backoff_minutes = self.refresh_minutes
+                else:
+                    self._consecutive_failures += 1
+                    self._backoff_minutes = min(
+                        self.refresh_minutes * (2 ** self._consecutive_failures),
+                        self.max_backoff_minutes,
+                    )
+                next_interval = self._backoff_minutes
+        except Exception as exc:
+            logger.warning("indicator scheduler tick failed: %s", exc, exc_info=True)
+            result = {"ok": False, "error": str(exc)}
+            with self._lock:
                 self._consecutive_failures += 1
                 self._backoff_minutes = min(
                     self.refresh_minutes * (2 ** self._consecutive_failures),
                     self.max_backoff_minutes,
                 )
-            next_interval = self._backoff_minutes
-
-        if self._is_registered():
-            self._schedule_next(next_interval)
+                self._last_run_error = str(exc)
+                next_interval = self._backoff_minutes
+        finally:
+            try:
+                if self._is_registered():
+                    self._schedule_next(next_interval)
+            except Exception as exc:
+                logger.error(
+                    "indicator scheduler failed to reschedule: %s", exc, exc_info=True
+                )
         return result
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:
@@ -241,7 +287,7 @@ class IndicatorScheduler:
             "signals_emitted": result.get("signals_emitted", 0),
             "error": result.get("error"),
         }
-        write_soul_map(
+        write_soul_map_best_effort(
             lambda blob: blob.setdefault("indicator_scheduler", {}).__setitem__(
                 "last_cycle", summary
             ),
@@ -265,8 +311,7 @@ def start_indicator_scheduler(
     global _scheduler
     with _scheduler_lock:
         if _scheduler is not None:
-            snap = _scheduler.liveness.snapshot()
-            if snap.get("lifecycle") == "started":
+            if _scheduler._job_armed:
                 return {"started": False, "reason": "already running"}
         else:
             _scheduler = IndicatorScheduler(

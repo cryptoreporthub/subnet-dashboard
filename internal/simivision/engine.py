@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.freshness import registry_freshness, soul_map_freshness
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import write_soul_map_best_effort
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
@@ -94,7 +94,7 @@ def _load_last_convictions(soul_map_path=SOUL_MAP_PATH):
     return soul_map.get("simivision_convictions", {})
 
 def _persist_convictions(convictions, soul_map_path=SOUL_MAP_PATH):
-    write_soul_map(
+    write_soul_map_best_effort(
         lambda blob: (
             blob.__setitem__(
                 "simivision_convictions",
