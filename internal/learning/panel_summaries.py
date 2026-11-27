@@ -8,9 +8,15 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-def _sentences(parts: List[str]) -> Dict[str, Any]:
+def _sentences(parts: List[str], *, degraded: bool = False) -> Dict[str, Any]:
     text = " ".join(p.strip() for p in parts if p and p.strip())
-    return {"text": text, "sentences": [p.strip() for p in parts if p and p.strip()]}
+    payload: Dict[str, Any] = {
+        "text": text,
+        "sentences": [p.strip() for p in parts if p and p.strip()],
+    }
+    if degraded:
+        payload["degraded"] = True
+    return payload
 
 
 def summarize_council() -> Dict[str, Any]:
@@ -26,7 +32,8 @@ def summarize_council() -> Dict[str, Any]:
     except ConcurrentWeightUpdate:
         logger.warning("council panel could not load expert weights", exc_info=True)
         return _sentences(
-            ["Council expert weights could not load right now; expert influence is not shown."]
+            ["Council expert weights could not load right now; expert influence is not shown."],
+            degraded=True,
         )
     if not weights:
         return _sentences(["Council expert weights are not loaded yet; all experts sit at default influence."])
@@ -170,7 +177,7 @@ def summarize_learning() -> Dict[str, Any]:
     )
     if pending == 0:
         parts.append("No pending predictions are queued — hour/day pick endpoints will enqueue new rows on the next call.")
-    return _sentences(parts)
+    return _sentences(parts, degraded=weights_failed)
 
 
 def summarize_picks() -> Dict[str, Any]:
