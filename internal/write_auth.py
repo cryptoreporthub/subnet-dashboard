@@ -10,6 +10,7 @@ from __future__ import annotations
 import hmac
 import os
 from typing import Optional
+from urllib.parse import parse_qs
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -21,11 +22,11 @@ _PUBLIC_WRITE_EXACT = frozenset(
     {
         "/api/simivision/chat",
         "/api/investigate/ask",
-        "/api/feedback",
-        "/api/mindmap/feedback",
     }
 )
 _PUBLIC_WRITE_PREFIXES: tuple[str, ...] = ()
+
+_RESOLVE_FALSE = frozenset({"false", "0", "no", "off", "f", "n", ""})
 
 
 def write_token() -> str:
@@ -40,13 +41,28 @@ def _is_public_write(path: str) -> bool:
     return path in _PUBLIC_WRITE_EXACT or any(path.startswith(p) for p in _PUBLIC_WRITE_PREFIXES)
 
 
+def _resolve_query_protected(query: str) -> bool:
+    """True when ``resolve`` is present and not a clear false value (case-insensitive)."""
+    if not query:
+        return False
+    parsed = parse_qs(query, keep_blank_values=True)
+    if "resolve" not in parsed:
+        return False
+    for raw in parsed["resolve"]:
+        if (raw or "").strip().lower() in _RESOLVE_FALSE:
+            continue
+        return True
+    return False
+
+
 def _path_protected(method: str, path: str, query: str) -> bool:
     """True when this request must present a valid write token."""
     if method in _WRITE_METHODS:
         return not _is_public_write(path)
+    if method == "GET" and path == "/api/resolve-predictions":
+        return True
     if method == "GET" and path == "/api/predictions/resolved":
-        q = (query or "").lower()
-        return "resolve=true" in q or "resolve=1" in q or "resolve=yes" in q
+        return _resolve_query_protected(query)
     return False
 
 
