@@ -145,10 +145,16 @@ def _freeze_shown_prediction(shown: Dict[str, Any], angles: Dict[str, Any]) -> O
         ),
     }
     try:
-        from internal.learning.predictions_store import append_prediction
+        from internal.learning.predictions_store import PersistOutcome, append_prediction_result
 
-        if append_prediction(prediction):
-            return pred_id
+        persisted = append_prediction_result(prediction)
+        if persisted.outcome is PersistOutcome.APPLIED:
+            # A locked duplicate is APPLIED with no keys: nothing was written, so no id.
+            return pred_id if persisted.committed_keys else None
+        logger.warning(
+            "combined exp prediction refused SN%s (%s): %s",
+            nid, persisted.outcome.value, persisted.reason,
+        )
     except Exception as exc:
         logger.debug("combined exp prediction skip: %s", exc)
     return None

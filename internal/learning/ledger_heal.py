@@ -186,7 +186,7 @@ def archive_predictions_epoch(
     preserve_pending = os.environ.get("PREDICTIONS_ARCHIVE_PRESERVE_PENDING", "1") != "0"
     pending_kept: List[Dict[str, Any]] = []
     try:
-        old = load_predictions()
+        old = load_predictions(path=src)
         pending_kept = [
             p for p in (old.get("predictions") or [])
             if isinstance(p, dict) and p.get("status", "pending") in (None, "pending")
@@ -204,13 +204,13 @@ def archive_predictions_epoch(
         },
         "epoch_reset_at": _utcnow().isoformat().replace("+00:00", "Z"),
     }
-    save_predictions(empty)
+    save_predictions(empty, path=src)
 
     heal_summary: Dict[str, Any] = {"skipped": not re_heal_daily}
     if re_heal_daily:
-        heal_summary = heal_daily_pick_ledger(dry_run=False)
+        heal_summary = heal_daily_pick_ledger(dry_run=False, predictions_path=src)
 
-    if re_heal_daily and not heal_summary.get("healed"):
+    if re_heal_daily and not heal_succeeded(heal_summary):
         # ponytail: never leave LONG without ledger — downgrade to honest HOLD.
         downgraded = _downgrade_today_to_hold(
             reason="Epoch reset — ledger backfill failed; no gradeable row",
@@ -222,6 +222,18 @@ def archive_predictions_epoch(
         "archive_path": archive_path,
         "heal": heal_summary,
     }
+
+
+def heal_succeeded(summary: Dict[str, Any]) -> bool:
+    """True when today's LONG has a gradeable day row already, or was just written.
+
+    Only the epoch-reset downgrade asks this. A LONG with no usable pick
+    reports no_published_long and must still downgrade, so it is not here.
+    """
+    return bool(summary.get("healed")) or summary.get("reason") in (
+        "ledger_present",
+        "duplicate_skipped",
+    )
 
 
 def _downgrade_today_to_hold(*, reason: str, daily_picks_path: Optional[str] = None) -> bool:

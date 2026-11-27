@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any, Dict
 
 from internal.council.expert_attribution import CANONICAL_EXPERTS, resolve_expert_attribution
-from internal.learning.predictions_store import load_predictions, save_predictions
+from internal.learning.predictions_store import (
+    PersistOutcome,
+    load_predictions,
+    merge_ledger_changes,
+)
 
 
 def backfill_expert_attribution(*, dry_run: bool = True) -> Dict[str, Any]:
     """Re-derive expert labels from signal_impact / pick metadata (expert fields only)."""
-    data = load_predictions()
+    data = load_predictions(fail_closed=True)
+    before = deepcopy(data)
     would_update = 0
     updated = 0
     still_unknown = 0
@@ -37,7 +43,15 @@ def backfill_expert_attribution(*, dry_run: bool = True) -> Dict[str, Any]:
             updated += 1
 
     if not dry_run and updated > 0:
-        save_predictions(data)
+        # Only expert labels change here, so keep the stored stats block as it was.
+        result = merge_ledger_changes(
+            before, data, caller="expert_backfill", trigger="expert_backfill",
+            stats_fn=lambda fresh: fresh.get("stats") or {},
+        )
+        if result.outcome is not PersistOutcome.APPLIED:
+            reason = result.reason.value if result.reason is not None else "persist_refused"
+            return {"ok": False, "reason": reason, "updated": 0}
+        updated = len(result.committed_keys)
 
     return {
         "dry_run": bool(dry_run),

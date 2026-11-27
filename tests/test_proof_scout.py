@@ -217,7 +217,7 @@ def test_policy_section_2_past_aging_is_expired(monkeypatch):
 def test_read_path_does_not_persist_prediction_migrations(monkeypatch):
     calls = []
 
-    def _load(*, persist=True):
+    def _load(*, persist=True, **_kwargs):
         calls.append(persist)
         return {"predictions": [], "resolved": []}
 

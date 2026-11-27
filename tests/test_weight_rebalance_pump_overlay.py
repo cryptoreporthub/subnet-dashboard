@@ -81,7 +81,7 @@ def test_maybe_rebalance_on_boot_uses_archive_when_near_flat(tmp_path, monkeypat
     preds = tmp_path / "predictions.json"
     archive_dir = tmp_path / "archive"
     archive_dir.mkdir()
-    (archive_dir / "pre-epoch-2026-07-29").write_text(
+    (archive_dir / "pre-epoch-2026-07-29T120000Z").write_text(
         Path("tests/fixtures/acc1_archive_sample.json").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
@@ -187,7 +187,7 @@ def test_replay_includes_archive_when_current_epoch_thin(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     archive_dir = tmp_path / "archive"
     archive_dir.mkdir()
-    (archive_dir / "pre-epoch-2026-07-29").write_text(
+    (archive_dir / "pre-epoch-2026-07-29T120000Z").write_text(
         Path("tests/fixtures/acc1_archive_sample.json").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
@@ -265,7 +265,7 @@ def test_rebalance_reports_archive_usage(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     archive_dir = tmp_path / "archive"
     archive_dir.mkdir()
-    (archive_dir / "pre-epoch-2026-07-29").write_text(
+    (archive_dir / "pre-epoch-2026-07-29T120000Z").write_text(
         Path("tests/fixtures/acc1_archive_sample.json").read_text(encoding="utf-8"),
         encoding="utf-8",
     )

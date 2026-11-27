@@ -1207,6 +1207,8 @@ async def api_backfill_expert_attribution(
 
     try:
         result = await run_in_threadpool(backfill_expert_attribution, dry_run=bool(dry_run))
+        if result.get("ok") is False:
+            raise RuntimeError(result.get("reason") or "persist_refused")
         if not dry_run:
             _learning_snapshot_cache["at"] = 0.0
         return {"status": "success", "data": result}
