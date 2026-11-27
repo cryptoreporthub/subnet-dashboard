@@ -157,7 +157,7 @@ build pass; seed the Fly volume or configure the external feed/secret instead.
 | `GET /api/conviction-alerts/status` | 200, `enabled: true` (after Phase P) |
 | `GET /api/signal-hub/status` | 200 |
 
-**Skipped postmortems:** a corrupt judge file is never overwritten, renamed, quarantined, or repaired in-process. Spot it via `ERROR ... postmortem skipped`, a `postmortem_skipped` learning-trail event, or the top-level `unavailable` key on `/api/postmortems*`. Repair `data/postmortems/<judge>.json` by hand on the volume. A `PostmortemLockTimeout` on first resolve is recovered on a later resolve of the same prediction if that judge still has no postmortem row for it.
+**Skipped postmortems:** a corrupt judge file is never overwritten, renamed, quarantined, or repaired in-process. Spot it via `ERROR ... postmortem skipped`, a `postmortem_skipped` learning-trail event, or the top-level `unavailable` key on `/api/postmortems*`. Repair `data/postmortems/<judge>.json` by hand on the volume. A `PostmortemLockTimeout` drops that judge's postmortem, logs ERROR, and emits `postmortem_skipped`. It is not retried once `predictions.json` is saved (`resolve_due_predictions` only processes pending rows). Only a crash before that save is recovered.
 
 ### Persistent data
 

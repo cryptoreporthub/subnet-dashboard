@@ -37,6 +37,16 @@ class PostmortemFileCorrupt(Exception):
     """
 
 
+def normalize_prediction_id(raw: Any) -> Optional[str]:
+    """Return a stripped id string, or None when the value cannot identify a row."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        return stripped or None
+    return str(raw).strip() or None
+
+
 def _path(judge_name: str) -> str:
     """Resolve the on-disk path for a judge's postmortem file (registry + containment)."""
     name = judge_name.lower()
@@ -198,11 +208,13 @@ def _record_locked(
             raise PostmortemLockTimeout("timed out waiting for postmortem flock")
         try:
             entries = _load(judge_name)
-            pred_id = prediction.get("id")
+            pred_id = normalize_prediction_id(prediction.get("id"))
             actual = round(float(actual_pct or 0), 4)
             if pred_id is not None:
                 for existing in entries:
-                    if isinstance(existing, dict) and existing.get("prediction_id") == pred_id:
+                    if not isinstance(existing, dict):
+                        continue
+                    if normalize_prediction_id(existing.get("prediction_id")) == pred_id:
                         if existing.get("actual_pct") == actual:
                             return existing
                         existing["actual_pct"] = actual
@@ -212,7 +224,7 @@ def _record_locked(
             diagnosis = _diagnosis(prediction, actual_pct)
             entry = {
                 "judge": judge_name.lower(),
-                "prediction_id": prediction.get("id"),
+                "prediction_id": pred_id,
                 "netuid": prediction.get("netuid"),
                 "name": prediction.get("name"),
                 "direction": prediction.get("direction"),

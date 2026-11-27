@@ -16,7 +16,12 @@ from typing import Any, Dict, Optional
 
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.judges import all_judges
-from internal.judges.postmortems import PostmortemFileCorrupt, list_for_judge
+from internal.judges.postmortems import (
+    PostmortemFileCorrupt,
+    PostmortemLockTimeout,
+    list_for_judge,
+    normalize_prediction_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +32,8 @@ class _SkipJudgeNudge(Exception):
 
 def _postmortem_already_recorded(judge_name: str, prediction_id: Any) -> bool:
     """True when this judge already has a postmortem row for the prediction."""
-    if prediction_id is None:
-        # Replay cannot match a missing id; skip so record() does not append again.
+    pred_id = normalize_prediction_id(prediction_id)
+    if pred_id is None:
         return True
     try:
         rows = list_for_judge(judge_name)
@@ -37,7 +42,8 @@ def _postmortem_already_recorded(judge_name: str, prediction_id: Any) -> bool:
     except ValueError:
         return True
     return any(
-        isinstance(row, dict) and row.get("prediction_id") == prediction_id
+        isinstance(row, dict)
+        and normalize_prediction_id(row.get("prediction_id")) == pred_id
         for row in rows
     )
 
@@ -67,6 +73,8 @@ def on_prediction_created(
         "echo": echo_judge.evaluate(prediction, signal_impact=signal_impact, expert_weights=expert_weights),
         "pulse": pulse_judge.evaluate(prediction, signal_impact=signal_impact, subnet=subnet),
     }
+    if normalize_prediction_id(prediction.get("id")) is None:
+        return scores
     for judge in all_judges():
         block = scores.get(judge.name) or {}
         conf = float(block.get("confidence", 0.5) or 0.5)
@@ -86,9 +94,25 @@ def on_prediction_resolved(
     actual_pct = _actual_pct(prediction)
     outcome = prediction.get("outcome", "unknown")
     wrong = not prediction.get("correct", outcome == "hit")
+    pred_id = normalize_prediction_id(prediction.get("id"))
+    if pred_id is None:
+        logger.error(
+            "judge resolution skipped invalid prediction id=%r",
+            prediction.get("id"),
+        )
+        try:
+            from internal.learning.trail_events import emit_trail_event
+
+            emit_trail_event(
+                "judge_resolution_skipped",
+                evidence={"prediction_id": prediction.get("id")},
+            )
+        except Exception:
+            logger.exception("judge_resolution_skipped trail emit failed")
+        return {"judges": {}, "skipped": True}
 
     summary: Dict[str, Any] = {
-        "prediction_id": prediction.get("id"),
+        "prediction_id": pred_id,
         "actual_pct": round(actual_pct, 4),
         "outcome": outcome,
         "wrong": wrong,
@@ -154,25 +178,20 @@ def on_prediction_resolved(
             except Exception:
                 pass
         postmortem = None
-        # close_position returns None on replay. First-pass lock timeout still
-        # needs a later record; skip only when this prediction already has a row.
+        # PostmortemLockTimeout drops this judge's row (ERROR + postmortem_skipped).
+        # Replay only if predictions.json never saved, so the row is still pending.
         postmortem_error = None
         should_record = bool(wrong) and (
             bool(closed)
             or (
                 closed is None
-                and not _postmortem_already_recorded(judge.name, prediction.get("id"))
+                and not _postmortem_already_recorded(judge.name, pred_id)
             )
         )
         if should_record:
             try:
                 postmortem = judge.record_postmortem(prediction, actual_pct)
             except Exception as exc:
-                from internal.judges.postmortems import (
-                    PostmortemFileCorrupt,
-                    PostmortemLockTimeout,
-                )
-
                 if not isinstance(exc, (PostmortemFileCorrupt, PostmortemLockTimeout)):
                     raise
                 logger.error(
