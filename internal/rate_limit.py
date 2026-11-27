@@ -21,10 +21,14 @@ def on_fly() -> bool:
     return bool(os.environ.get("FLY_APP_NAME", "").strip())
 
 
+def _lower_headers(headers: Mapping[str, str]) -> dict[str, str]:
+    return {str(k).lower(): "" if v is None else str(v) for k, v in headers.items()}
+
+
 def client_ip_from_headers(headers: Mapping[str, str], fallback: str) -> str:
     """Shared key for shield telemetry: Fly-Client-IP on Fly; never X-Forwarded-For."""
     if on_fly():
-        fly_ip = (headers.get("fly-client-ip") or headers.get("Fly-Client-IP") or "").strip()
+        fly_ip = _lower_headers(headers).get("fly-client-ip", "").strip()
         if fly_ip:
             return fly_ip
         return fallback or "unknown"
@@ -34,15 +38,12 @@ def client_ip_from_headers(headers: Mapping[str, str], fallback: str) -> str:
 def client_ip(request) -> str:
     """slowapi key_func: Fly-Client-IP on Fly, else request.client; never X-Forwarded-For.
 
-    Assumes traffic hits Fly directly. With Cloudflare proxy (see DEPLOY.md), add trusted
-    CF-Connecting-IP support before enabling orange-cloud mode.
+    On Fly, missing ``Fly-Client-IP`` means the request did not arrive through Fly's edge
+    proxy as expected (e.g. another CDN in front). We deliberately do **not** parse
+    ``X-Forwarded-For`` (client-spoofable; see #1633 /tl). Assumes traffic hits Fly
+    directly so Fly overwrites ``Fly-Client-IP`` (Fly request-headers docs).
     """
-    if on_fly():
-        fly_ip = (request.headers.get("Fly-Client-IP") or "").strip()
-        if fly_ip:
-            return fly_ip
-        return get_remote_address(request)
-    return get_remote_address(request)
+    return client_ip_from_headers(request.headers, get_remote_address(request))
 
 
 def rate_limit_enabled() -> bool:
