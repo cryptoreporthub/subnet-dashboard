@@ -8,8 +8,9 @@ import logging
 import os
 import stat
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,9 +20,9 @@ import internal.judges.postmortems as postmortems
 import internal.judges.tracker as tracker
 from internal.calibration import pipeline as cal
 from internal.calibration.pipeline import FireError
+from internal.council import resolver
 from internal.council import weights as council_weights
 from internal.store import soul_map_io
-from internal.store.soul_map_io import WriteOutcome, WriteResult
 from server import app
 
 PREDICTION = {
@@ -39,6 +40,26 @@ PREDICTION = {
 }
 
 PROPOSED = {"quant": 1.5, "hype": 0.8, "dark_horse": 0.9, "technical": 1.0}
+NETUID = 3
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _closed_count(portfolio_path: Path, judge: str) -> int:
+    if not portfolio_path.exists():
+        return 0
+    data = json.loads(portfolio_path.read_text(encoding="utf-8"))
+    rows = (data.get(judge) or {}).get("closed_positions") or []
+    return len(rows)
+
+
+def _open_ids(portfolio_path: Path, judge: str) -> list:
+    if not portfolio_path.exists():
+        return []
+    data = json.loads(portfolio_path.read_text(encoding="utf-8"))
+    return [p.get("id") for p in (data.get(judge) or {}).get("open_positions") or []]
 
 
 @pytest.fixture
@@ -86,6 +107,79 @@ def soul_path(tmp_path, monkeypatch):
     monkeypatch.setattr(council_weights, "SOUL_MAP_PATH", str(path))
     monkeypatch.setenv("SOUL_MAP_PATH", str(path))
     return path
+
+
+@pytest.fixture
+def resolve_harness(tmp_path, monkeypatch, pm_dir, portfolio_path, soul_path):
+    predictions = tmp_path / "predictions.json"
+    price_cache = tmp_path / "price_cache.json"
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(predictions))
+    monkeypatch.setattr(resolver, "PRICE_CACHE_PATH", str(price_cache))
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    monkeypatch.setattr(resolver, "hydrate_candles_for_netuid", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        resolver, "hydrate_candles_for_netuid_historical", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(postmortems, "POSTMORTEM_LOCK_TIMEOUT_SECONDS", 0.05)
+    return {
+        "predictions": predictions,
+        "price_cache": price_cache,
+        "pm_dir": pm_dir,
+        "portfolios": portfolio_path,
+        "soul": soul_path,
+    }
+
+
+def _miss_row(pred_id: Any, *, netuid: int = NETUID, hours_ago: float = 2.0) -> dict:
+    now = datetime.now(timezone.utc)
+    resolve_at = now - timedelta(hours=hours_ago)
+    row = {
+        "netuid": netuid,
+        "name": "Blocker Test",
+        "direction": "up",
+        "predicted_pct": 2.0,
+        "reference_price": 100.0,
+        "horizon_hours": 1,
+        "horizon_type": "hour",
+        "status": "pending",
+        "created_at": _iso(resolve_at - timedelta(hours=1)),
+        "resolve_at": _iso(resolve_at),
+    }
+    if pred_id is not None:
+        row["id"] = pred_id
+    return row
+
+
+def _write_pending(harness, rows: list, *, close: float = 95.0) -> None:
+    harness["predictions"].write_text(
+        json.dumps({"predictions": rows, "resolved": [], "stats": {}}),
+        encoding="utf-8",
+    )
+    candles = []
+    for row in rows:
+        stamp = row["resolve_at"]
+        candles.append(
+            {
+                "timestamp": stamp,
+                "open": close,
+                "high": close,
+                "low": close,
+                "close": close,
+                "volume": 1000.0,
+            }
+        )
+        netuid = row["netuid"]
+        harness["price_cache"].write_text(
+            json.dumps({str(netuid): {"candles": candles}}),
+            encoding="utf-8",
+        )
+
+
+def _cycle(rows_netuids: Optional[list] = None, *, prices: Optional[dict] = None):
+    netuids = rows_netuids or [NETUID]
+    live = prices if prices is not None else {n: 95.0 for n in netuids}
+    subnets = [{"netuid": n, "price": live[n]} for n in netuids if n in live]
+    return resolver.resolve_due_predictions(subnets=subnets)
 
 
 @pytest.fixture
@@ -277,66 +371,158 @@ def test_postmortem_lock_timeout_does_not_abort_resolution(
         assert len(rows) == 1, name
 
 
-def test_postmortem_lock_timeout_records_on_replay_without_duplicate(
-    pm_dir, portfolio_path, monkeypatch
-):
-    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
-    monkeypatch.setattr(postmortems, "POSTMORTEM_LOCK_TIMEOUT_SECONDS", 0.05)
-    prediction = dict(PREDICTION)
-    prediction["id"] = "pred-lock-replay-1"
-    for judge in tracker.all_judges():
-        judge.open_position(prediction, size=1.0)
-
-    lock_path = pm_dir / "oracle.json.lock"
+def test_postmortem_lock_timeout_drops_after_predictions_save(resolve_harness):
+    row = _miss_row("pred-lock-drop-1")
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    lock_path = resolve_harness["pm_dir"] / "oracle.json.lock"
     holder = open(lock_path, "a+", encoding="utf-8")
     fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
     try:
-        first = tracker.on_prediction_resolved(prediction)
-        assert first["judges"]["oracle"].get("postmortem_error") == "PostmortemLockTimeout"
-        assert first["judges"]["oracle"]["closed"] is not None
+        _cycle()
         assert postmortems.list_for_judge("oracle") == []
     finally:
         fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
         holder.close()
-
-    second = tracker.on_prediction_resolved(prediction)
-    assert second["judges"]["oracle"]["closed"] is None
-    oracle_rows = postmortems.list_for_judge("oracle")
-    assert len(oracle_rows) == 1
-    assert oracle_rows[0]["prediction_id"] == prediction["id"]
+    _cycle()
+    assert postmortems.list_for_judge("oracle") == []
     for name in ("echo", "pulse"):
-        assert second["judges"][name]["closed"] is None, name
         assert len(postmortems.list_for_judge(name)) == 1, name
 
-    third = tracker.on_prediction_resolved(prediction)
-    assert third["judges"]["oracle"]["closed"] is None
+
+def test_postmortem_lock_timeout_recovers_only_if_save_crashed(
+    resolve_harness, monkeypatch
+):
+    row = _miss_row("pred-lock-crash-1")
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    real_save = resolver._save_json
+    state = {"n": 0}
+
+    def _crash_first_predictions(path, data, **kwargs):
+        if path == str(resolve_harness["predictions"]):
+            state["n"] += 1
+            if state["n"] == 1:
+                raise OSError("crash before save")
+        return real_save(path, data, **kwargs)
+
+    monkeypatch.setattr(resolver, "_save_json", _crash_first_predictions)
+    lock_path = resolve_harness["pm_dir"] / "oracle.json.lock"
+    holder = open(lock_path, "a+", encoding="utf-8")
+    fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+    try:
+        with pytest.raises(OSError, match="crash before save"):
+            _cycle()
+        assert postmortems.list_for_judge("oracle") == []
+    finally:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        holder.close()
+    monkeypatch.setattr(resolver, "_save_json", real_save)
+    _cycle()
+    assert len(postmortems.list_for_judge("oracle")) == 1
+    _cycle()
     assert len(postmortems.list_for_judge("oracle")) == 1
     for name in ("echo", "pulse"):
-        assert third["judges"][name]["closed"] is None, name
         assert len(postmortems.list_for_judge(name)) == 1, name
 
 
-def test_missing_prediction_id_replay_records_one_postmortem(
-    pm_dir, portfolio_path, monkeypatch
-):
-    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
-    prediction = dict(PREDICTION)
-    prediction.pop("id", None)
+@pytest.mark.parametrize("kind", ["pending", "expired"])
+def test_idless_wrong_row_is_not_closed_across_cycles(resolve_harness, kind):
+    if kind == "pending":
+        row = _miss_row(None)
+        _write_pending(resolve_harness, [row])
+        prices = {NETUID: 95.0}
+    else:
+        row = _miss_row(None, hours_ago=10)
+        row["resolve_attempts"] = resolver._PRICE_RETRY_CAP
+        resolve_harness["predictions"].write_text(
+            json.dumps({"predictions": [row], "resolved": [], "stats": {}}),
+            encoding="utf-8",
+        )
+        resolve_harness["price_cache"].write_text("{}", encoding="utf-8")
+        prices = {}
+    for _ in range(3):
+        _cycle(prices=prices)
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 0, name
+        assert postmortems.list_for_judge(name) == [], name
+
+
+@pytest.mark.parametrize("bad_id", ["", "   ", True])
+def test_blank_and_bool_ids_are_rejected(resolve_harness, bad_id):
+    row = _miss_row(bad_id)
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    _cycle()
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 0, name
+        assert postmortems.list_for_judge(name) == [], name
+
+
+def test_zero_id_is_accepted_once(resolve_harness):
+    row = _miss_row(0)
+    _write_pending(resolve_harness, [row])
+    tracker.on_prediction_created(row)
+    _cycle()
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 1, name
+        rows = postmortems.list_for_judge(name)
+        assert len(rows) == 1, name
+        assert rows[0]["prediction_id"] == "0"
+
+
+def test_int_and_str_ids_dedupe_as_one_close(resolve_harness):
+    first = _miss_row(42)
+    _write_pending(resolve_harness, [first])
+    tracker.on_prediction_created(first)
+    _cycle()
+    second = _miss_row("42")
+    _write_pending(resolve_harness, [second])
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert _closed_count(port, name) == 1, name
+        rows = postmortems.list_for_judge(name)
+        assert len(rows) == 1, name
+        assert rows[0]["prediction_id"] == "42"
+
+
+def test_idless_close_does_not_match_wrong_netuid(resolve_harness, caplog):
+    owned = _miss_row(None, netuid=1)
     for judge in tracker.all_judges():
-        judge.open_position(prediction, size=1.0)
-
-    first = tracker.on_prediction_resolved(prediction)
-    for name in ("oracle", "echo", "pulse"):
-        assert first["judges"][name]["closed"] is not None, name
-        assert len(postmortems.list_for_judge(name)) == 1, name
-
-    monkeypatch.setattr(
-        "internal.judges.portfolios.close_position", lambda *_a, **_k: None
+        judge.open_position(owned, size=1.0)
+    attacker = _miss_row(None, netuid=2)
+    for judge in tracker.all_judges():
+        assert judge.close_position(attacker, actual_pct=-5.0, outcome="miss") is None
+    _write_pending(resolve_harness, [attacker])
+    with caplog.at_level(logging.WARNING):
+        _cycle(rows_netuids=[2], prices={2: 95.0})
+    assert any(
+        "open positions with no prediction id" in r.getMessage() for r in caplog.records
     )
-    tracker.on_prediction_resolved(prediction)
-    tracker.on_prediction_resolved(prediction)
+    port = resolve_harness["portfolios"]
     for name in ("oracle", "echo", "pulse"):
-        assert len(postmortems.list_for_judge(name)) == 1, name
+        assert _open_ids(port, name) == [None], name
+        assert _closed_count(port, name) == 0, name
+
+
+def test_idless_close_does_not_steal_real_id_position(resolve_harness):
+    owned = _miss_row("keep-me")
+    tracker.on_prediction_created(owned)
+    attacker = _miss_row(None)
+    for judge in tracker.all_judges():
+        assert judge.close_position(attacker, actual_pct=-5.0, outcome="miss") is None
+    _write_pending(resolve_harness, [attacker])
+    _cycle()
+    port = resolve_harness["portfolios"]
+    for name in ("oracle", "echo", "pulse"):
+        assert "keep-me" in _open_ids(port, name), name
+        assert _closed_count(port, name) == 0, name
 
 
 @pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe"], ids=["empty", "utf16"])
@@ -711,21 +897,22 @@ def test_simivision_persist_lock_timeout_still_returns_signals(
             "updated_at": "2026-01-01T00:00:00Z",
         }
     }
-
-    calls: List[dict] = []
-
-    def _lock_timeout(*_a, **kwargs):
-        calls.append(kwargs)
-        assert kwargs.get("raise_on_lock_timeout") is False
-        return WriteResult(WriteOutcome.LOCK_WAIT_FAILED, None, detail="held")
-
-    monkeypatch.setattr(soul_map_io, "write_soul_map", _lock_timeout)
-    with caplog.at_level("WARNING"):
-        signals = simi_engine.generate_signals(
-            registry=reg, top_n=5, soul_map_path=str(soul)
-        )
-    assert calls, "persist path must invoke write_soul_map"
-    assert calls[0].get("raise_on_lock_timeout") is False
+    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.05)
+    stop = threading.Event()
+    holder = threading.Thread(
+        target=_hold_writers,
+        args=(str(soul), stop),
+        daemon=True,
+    )
+    holder.start()
+    try:
+        with caplog.at_level("WARNING"):
+            signals = simi_engine.generate_signals(
+                registry=reg, top_n=5, soul_map_path=str(soul)
+            )
+    finally:
+        stop.set()
+        holder.join(timeout=5)
     assert signals
     assert signals[0]["netuid"] == 7
     assert "lock_wait_failed" in caplog.text.lower() or "LOCK_WAIT_FAILED" in caplog.text
