@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, Optional
 from internal.indicators.indicator_engine import IndicatorEngine
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -265,8 +265,6 @@ class IndicatorScheduler:
             "error": result.get("error"),
         }
         try:
-            from internal.store.soul_map_io import WriteOutcome, write_soul_map
-
             outcome = write_soul_map(
                 lambda blob: blob.setdefault("indicator_scheduler", {}).__setitem__(
                     "last_cycle", summary

@@ -69,8 +69,10 @@ def main() -> int:
     try:
         saved = save_weights(after, SOUL_MAP_PATH, expected_weights=before)
     except ConcurrentWeightUpdate:
+        print("rebalance: save conflict", file=sys.stderr)
         return 2
     if not saved:
+        print("rebalance: save refused", file=sys.stderr)
         return 3
     for name in ("quant", "hype", "dark_horse", "technical"):
         b = float(before.get(name, 1.0))

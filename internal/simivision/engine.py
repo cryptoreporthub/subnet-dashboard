@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.freshness import registry_freshness, soul_map_freshness
-from internal.store.soul_map_io import write_soul_map
+from internal.store.soul_map_io import WriteOutcome, write_soul_map
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
@@ -97,8 +97,6 @@ def _load_last_convictions(soul_map_path=SOUL_MAP_PATH):
 
 def _persist_convictions(convictions, soul_map_path=SOUL_MAP_PATH):
     try:
-        from internal.store.soul_map_io import WriteOutcome, write_soul_map
-
         outcome = write_soul_map(
             lambda blob: (
                 blob.__setitem__(

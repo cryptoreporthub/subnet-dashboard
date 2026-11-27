@@ -5,8 +5,6 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import subprocess
-import sys
 import threading
 from pathlib import Path
 from typing import Any, List
@@ -65,14 +63,14 @@ def soul_path(tmp_path, monkeypatch):
             {
                 "adversarial_state": {
                     "council_weights": {
-                        "quant": 1.0,
+                        "quant": 1.4,
                         "hype": 1.0,
                         "dark_horse": 1.0,
                         "technical": 1.0,
                     }
                 },
                 "expert_weights": {
-                    "quant": 1.0,
+                    "quant": 1.4,
                     "hype": 1.0,
                     "dark_horse": 1.0,
                     "technical": 1.0,
@@ -455,35 +453,52 @@ def test_simivision_persist_lock_timeout_still_returns_signals(tmp_path, monkeyp
         }
     }
 
+    calls: List[int] = []
+
     def _lock_timeout(*_a, **_k):
+        calls.append(1)
         raise SoulMapLockWaitTimeout("held")
 
     monkeypatch.setattr(simi_engine, "write_soul_map", _lock_timeout)
     signals = simi_engine.generate_signals(registry=reg, top_n=5, soul_map_path=str(soul))
+    assert calls, "persist path must invoke write_soul_map"
     assert signals
     assert signals[0]["netuid"] == 7
 
 
 def test_rebalance_script_exits_nonzero_on_refused_save(soul_path, monkeypatch):
+    import importlib.util
+
     repo = Path(__file__).resolve().parents[1]
-    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.05)
-    stop = threading.Event()
-    holder = threading.Thread(
-        target=_hold_writers,
-        args=(str(soul_path), stop),
-        daemon=True,
+    spec = importlib.util.spec_from_file_location(
+        "rebalance_expert_weights",
+        repo / "scripts" / "rebalance_expert_weights.py",
     )
-    holder.start()
-    try:
-        proc = subprocess.run(
-            [sys.executable, "scripts/rebalance_expert_weights.py", "--save"],
-            cwd=str(repo),
-            env={**os.environ, "SOUL_MAP_PATH": str(soul_path)},
-            capture_output=True,
-            text=True,
-        )
-        assert proc.returncode != 0
-        assert "[saved]" not in proc.stdout
-    finally:
-        stop.set()
-        holder.join(timeout=5)
+    rebalance = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(rebalance)
+
+    monkeypatch.setattr(council_weights, "SOUL_MAP_PATH", str(soul_path))
+    real_save_weights = council_weights.save_weights
+    trail_rows: List[str] = []
+    monkeypatch.setattr(
+        "internal.learning.trail_bus.emit_weight_change",
+        lambda name, **_: trail_rows.append(name),
+    )
+
+    argv = ["rebalance_expert_weights.py", "--save"]
+    monkeypatch.setattr(rebalance.sys, "argv", argv)
+    monkeypatch.setattr(council_weights, "save_weights", lambda *_a, **_k: False)
+    assert rebalance.main() == 3
+    assert trail_rows == []
+
+    def _conflict(*_a, **_k):
+        raise council_weights.ConcurrentWeightUpdate("stale")
+
+    monkeypatch.setattr(council_weights, "save_weights", _conflict)
+    assert rebalance.main() == 2
+    assert trail_rows == []
+
+    monkeypatch.setattr(council_weights, "save_weights", real_save_weights)
+    assert rebalance.main() == 0
+    assert "quant" in trail_rows
