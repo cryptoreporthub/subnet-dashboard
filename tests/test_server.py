@@ -9,7 +9,17 @@ from server import app
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
+    monkeypatch.setattr(
+        "internal.subnets.feed._load_subnets_inner",
+        lambda: [{"id": 1, "netuid": 1, "name": "SN1"}],
+    )
+    monkeypatch.setattr(server, "_schedule_homepage_warm", lambda request=None: None)
+    monkeypatch.setattr(server, "_prime_emergency_home_html", lambda: None)
     with TestClient(app) as c:
         yield c
 
@@ -19,14 +29,40 @@ def test_index_route(client):
     assert response.status_code == 200
 
 
-def test_registry_route(client):
+def test_registry_route(client, monkeypatch):
+    monkeypatch.setattr(server, "load_data", lambda path: {})
+    monkeypatch.setattr(
+        server,
+        "load_subnets_source",
+        lambda timeout=None: [{"netuid": 42, "name": "Live fallback"}],
+    )
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
     response = client.get('/api/registry')
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, dict)
-    if data:
-        first = next(iter(data.values()))
-        assert first.get('id') == first.get('netuid')
+    assert data["42"]["id"] == 42
+    assert data["42"]["name"] == "Live fallback"
+
+
+def test_registry_route_prefers_tmc_name_over_live_feed_row(monkeypatch):
+    """TMC name must win over a live-feed row name (precedence regression)."""
+    monkeypatch.setattr(server, "load_data", lambda path: {})
+    monkeypatch.setattr(
+        server,
+        "load_subnets_source",
+        lambda timeout=None: [{"netuid": 42, "name": "Live fallback"}],
+    )
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {42: "CADmind"})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
+
+    data = server.get_registry()
+
+    assert data["42"]["name"] == "CADmind"
 
 
 def test_registry_route_uses_live_feed_when_local_registry_is_absent(
@@ -44,6 +80,11 @@ def test_registry_route_uses_live_feed_when_local_registry_is_absent(
     )
     # Test must not depend on live TaoMarketCap names; SN42 was renamed to CADmind.
     monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    # ...nor on the curator overrides file.
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    # ...nor on the registry readers resolve_subnet_name reaches on its own.
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
 
     response = client.get("/api/registry")
 
@@ -54,6 +95,9 @@ def test_registry_route_uses_live_feed_when_local_registry_is_absent(
 
 def test_homepage_shell_uses_live_feed_when_registry_is_absent(monkeypatch):
     calls = []
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
     monkeypatch.setattr(
         server,
         "load_data",
@@ -79,6 +123,9 @@ def test_registry_shell_subnets_drops_root(monkeypatch):
         "43": {"netuid": 43, "name": "Shell fallback"},
     }
     monkeypatch.setattr(server, "load_data", lambda path: registry)
+    monkeypatch.setattr("internal.subnet_names._load_local_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
 
     assert [r["netuid"] for r in server._registry_shell_subnets()] == [43]
 
