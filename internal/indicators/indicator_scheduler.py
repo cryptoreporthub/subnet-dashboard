@@ -1,5 +1,11 @@
 """
 Background scheduler for the technical indicator layer.
+
+Not started by production boot. ``start_indicator_scheduler`` is exported for
+manual/API use and tests; ``internal.background_boot.start_background_workers``
+does not call it (see ``tests/test_scheduler_contract.py`` FOLLOW_UPS_NO_BOOT).
+Wiring it into lifespan/worker would change runtime behavior — that is a
+Joshua/TL decision, not silent boot.
 """
 
 import json
@@ -110,16 +116,19 @@ class IndicatorScheduler:
                 return {"started": False, "reason": "already running"}
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
-            self._job_armed = True
+        try:
+            if immediate:
+                self._enqueue_tick(0)
+            else:
+                # First tick happens soon after deploy so the dashboard isn't empty
+                # for a full refresh interval; normal cadence resumes afterwards.
+                self._schedule_next(1)
+        except Exception:
+            with self._lock:
+                self._job_armed = False
+                self._next_run_at = None
+            raise
         self.liveness.start()
-
-        if immediate:
-            schedule_in_seconds(JOB_ID, self._tick, 0)
-        else:
-            # First tick happens soon after deploy so the dashboard isn't empty
-            # for a full refresh interval; normal cadence resumes afterwards.
-            self._schedule_next(1)
-
         return {
             "started": True,
             "refresh_minutes": self.refresh_minutes,
@@ -171,15 +180,22 @@ class IndicatorScheduler:
             "last_refresh_at": snap.get("last_event_at"),
         }
 
+    def _enqueue_tick(self, seconds: float) -> None:
+        schedule_in_seconds(JOB_ID, self._tick, seconds)
+        with self._lock:
+            self._job_armed = True
+            self._next_run_at = datetime.now(timezone.utc).timestamp() + seconds
+
     def _schedule_next(self, minutes: int) -> None:
         if not self._is_registered():
             return
-        with self._lock:
-            self._next_run_at = (
-                datetime.now(timezone.utc).timestamp() + minutes * 60
-            )
-            self._job_armed = True
-        schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
+        try:
+            self._enqueue_tick(minutes * 60)
+        except Exception:
+            with self._lock:
+                self._job_armed = False
+                self._next_run_at = None
+            raise
 
     def _tick(self) -> Dict[str, Any]:
         """Run one indicator refresh cycle and reschedule."""

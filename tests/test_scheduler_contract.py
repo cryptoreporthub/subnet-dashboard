@@ -188,11 +188,15 @@ def test_pump_desk_boot_logs_start_result():
 
 def test_follow_up_schedulers_exist_but_lack_boot():
     """Orphan start helpers — list as follow-ups, do not silently wire."""
+    server = (REPO / "server.py").read_text(encoding="utf-8")
+    worker = (REPO / "internal" / "worker.py").read_text(encoding="utf-8")
     for item in FOLLOW_UPS_NO_BOOT:
         mod = (REPO / item["module"]).read_text(encoding="utf-8")
         assert item["start_symbol"] in mod
         # Must NOT be invoked from background_boot today
         assert item["start_symbol"] not in BOOT
+        assert item["start_symbol"] not in server
+        assert item["start_symbol"] not in worker
 
 
 def test_log_scheduler_start_warns_on_false(monkeypatch, caplog):
