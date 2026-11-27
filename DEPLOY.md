@@ -311,13 +311,14 @@ Human steps — the agent cannot access your registrar or Fly account without cr
 
 ### CDN for static assets (recommended)
 
-**Rate limits (before enabling Cloudflare proxy):** `ENABLE_RATE_LIMIT` keys on the
-`Fly-Client-IP` header Fly sets at the edge (`internal/rate_limit.client_ip`).
-With Cloudflare orange-cloud (proxy) ON, browser traffic typically arrives at Fly
-without that header and `Fly-Client-IP` reflects Cloudflare's edge IP — per-user
-limits can collapse into one shared bucket. Confirm Joshua's preferred approach
-(trusted `CF-Connecting-IP` or a direct-to-Fly path) before deploy when proxy mode
-is on.
+**Rate limits (before enabling Cloudflare proxy):** `ENABLE_RATE_LIMIT` keys on
+`Fly-Client-IP` (`internal/rate_limit.client_ip`). Fly Proxy sets this header on
+direct traffic ([Fly request-headers](https://fly.io/docs/networking/request-headers/)).
+With **Cloudflare orange-cloud (proxy) ON**, Fly still sets `Fly-Client-IP`, but to the
+**proxy's** edge address — not the browser — so per-user buckets collapse unless you add
+a trusted client-IP source (e.g. `CF-Connecting-IP`) or keep an orange-cloud-off path to
+Fly. The app does **not** parse `X-Forwarded-For` for rate limits (client-spoofable).
+Confirm approach with Joshua before deploy when proxy mode is on.
 
 Put **Cloudflare** (or similar) in front of the custom domain:
 
