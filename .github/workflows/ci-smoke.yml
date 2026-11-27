@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   checks: write
 
 concurrency:
@@ -40,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest httpx bandit
+          pip install pytest httpx bandit pyyaml
       - name: Static foundation guards
         run: |
           set -e
