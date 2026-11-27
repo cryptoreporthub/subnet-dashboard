@@ -126,15 +126,30 @@ def test_resolve_predictions_get_503_when_background_on_web_off(monkeypatch):
     assert calls["load_pick"] == 0
 
 
-def test_predictions_resolved_resolve_true_35x503_before_rate_limit(monkeypatch):
-    """503 guard must run before strict limit counts resolve=true on web-off."""
+def test_predictions_resolved_web_off_guard_blocks_resolver_read_still_200(monkeypatch):
+    """Web-off: resolve=true is 503 without resolver side effects; read polls stay 200.
+
+    Does not assert limiter-vs-guard ordering (SlowAPI may count default limit before
+    the handler runs). This case does not call ``_ensure_strict_limiter_active`` (which
+    ``delenv``'s ``RATE_LIMIT_DEFAULT`` so ``get_limiter()`` falls back to 120/min).
+    """
     _web_background_off(monkeypatch)
-    _ensure_strict_limiter_active(monkeypatch)
     calls = _count_resolve_calls(monkeypatch)
+    monkeypatch.setattr(
+        resolver,
+        "get_resolved_predictions",
+        lambda: {"resolved": [], "stats": {}},
+    )
     client = _test_client()
-    for i in range(35):
-        res = client.get("/api/predictions/resolved?resolve=true", headers=_AUTH_HEADERS)
-        assert res.status_code == 503, f"request {i + 1}: {res.text}"
+    res = client.get("/api/predictions/resolved?resolve=true", headers=_AUTH_HEADERS)
+    assert res.status_code == 503, res.text
+    assert "worker" in res.json()["detail"].lower()
+    assert calls["resolve_due"] == 0
+    assert calls["load_pick"] == 0
+
+    res_read = client.get("/api/predictions/resolved")
+    assert res_read.status_code == 200
+    assert res_read.json().get("status") == "ok"
     assert calls["resolve_due"] == 0
     assert calls["load_pick"] == 0
 
