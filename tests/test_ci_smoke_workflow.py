@@ -22,9 +22,9 @@ def test_ci_smoke_pull_request_has_no_branches_filter():
     assert "branches" not in pr
 
 
-def test_ci_smoke_pull_request_types_include_edited():
+def test_ci_smoke_pull_request_types():
     types = _triggers(_load())["pull_request"]["types"]
-    assert "edited" in types
+    assert set(types) == {"opened", "synchronize", "reopened", "edited"}
 
 
 def test_ci_smoke_workflow_permissions():
