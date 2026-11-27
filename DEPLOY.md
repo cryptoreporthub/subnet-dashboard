@@ -311,6 +311,14 @@ Human steps — the agent cannot access your registrar or Fly account without cr
 
 ### CDN for static assets (recommended)
 
+**Rate limits (before enabling Cloudflare proxy):** `ENABLE_RATE_LIMIT` keys on the
+`Fly-Client-IP` header Fly sets at the edge (`internal/rate_limit.client_ip`).
+With Cloudflare orange-cloud (proxy) ON, browser traffic typically arrives at Fly
+without that header and `Fly-Client-IP` reflects Cloudflare's edge IP — per-user
+limits can collapse into one shared bucket. Confirm Joshua's preferred approach
+(trusted `CF-Connecting-IP` or a direct-to-Fly path) before deploy when proxy mode
+is on.
+
 Put **Cloudflare** (or similar) in front of the custom domain:
 
 1. Add site → proxy orange-cloud ON.

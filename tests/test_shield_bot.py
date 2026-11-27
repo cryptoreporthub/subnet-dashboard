@@ -384,22 +384,25 @@ def test_redacts_authorization_from_report_and_audit():
         assert "header-secret" not in str(row)
 
 
-def test_fly_xff_first_hop_is_the_client_key(monkeypatch):
+def test_fly_client_ip_ignores_rotating_xff(monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
     monkeypatch.setenv("RATE_LIMIT_DEFAULT", "5/minute")
     events = [
         _event(
-            ip="0.0.0.0",
-            xff="203.0.113.77, 10.0.0.1",
+            ip="10.0.0.5",
+            xff="198.51.100.1, 10.0.0.1",
             path="/api/registry",
             status=429,
             seconds_ago=1,
+            extra_headers={"Fly-Client-IP": "203.0.113.77"},
         ),
         _event(
-            ip="0.0.0.0",
-            xff="203.0.113.77, 10.0.0.1",
+            ip="10.0.0.5",
+            xff="198.51.100.2, 10.0.0.1",
             path="/api/registry",
             status=429,
             seconds_ago=0,
+            extra_headers={"Fly-Client-IP": "203.0.113.77"},
         ),
     ]
     report = run_shield(events, now=NOW)
