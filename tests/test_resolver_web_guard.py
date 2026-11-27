@@ -86,6 +86,26 @@ def _ensure_strict_limiter_active(monkeypatch) -> None:
     lim.reset()
 
 
+def _ensure_strict_limiter_with_explicit_default(
+    monkeypatch, *, default_limit: str = "120/minute"
+) -> None:
+    """Strict 30/min decorators + explicit default bucket (no ``delenv`` fallback)."""
+    import internal.learning.routes as learning_routes
+    import internal.rate_limit as rl
+    import server
+
+    monkeypatch.setenv("ENABLE_RATE_LIMIT", "1")
+    monkeypatch.setenv("RATE_LIMIT_DEFAULT", default_limit)
+    monkeypatch.setattr(rl, "_limiter", None)
+    importlib.reload(learning_routes)
+    importlib.reload(server)
+    lim = get_limiter()
+    if lim is None:
+        pytest.fail("ENABLE_RATE_LIMIT=1 but limiter is unset")
+    server.app.state.limiter = lim
+    lim.reset()
+
+
 def _restore_app_after_limit_reload(monkeypatch) -> None:
     """Undo server reload from strict-limit setup (keeps later tests on consistent app)."""
     import internal.learning.routes as learning_routes
@@ -124,6 +144,27 @@ def test_resolve_predictions_get_503_when_background_on_web_off(monkeypatch):
     assert "worker" in res.json()["detail"].lower()
     assert calls["resolve_due"] == 0
     assert calls["load_pick"] == 0
+
+
+def test_predictions_resolved_web_off_guard_before_strict_limit(monkeypatch):
+    """Web-off resolve=true: guard runs before strict anchor (30/min bucket not burned).
+
+    Uses explicit ``RATE_LIMIT_DEFAULT=120/minute`` so the assertion is handler ordering,
+    not implicit default from ``delenv``. Would fail at request 31 with 429 if the strict
+    anchor ran before ``_require_resolver_on_this_process()`` (mutant kill).
+    """
+    _web_background_off(monkeypatch)
+    _ensure_strict_limiter_with_explicit_default(monkeypatch, default_limit="120/minute")
+    calls = _count_resolve_calls(monkeypatch)
+    try:
+        client = _test_client()
+        for i in range(35):
+            res = client.get("/api/predictions/resolved?resolve=true", headers=_AUTH_HEADERS)
+            assert res.status_code == 503, f"request {i + 1}: {res.text}"
+        assert calls["resolve_due"] == 0
+        assert calls["load_pick"] == 0
+    finally:
+        _restore_app_after_limit_reload(monkeypatch)
 
 
 def test_predictions_resolved_web_off_guard_blocks_resolver_read_still_200(monkeypatch):
