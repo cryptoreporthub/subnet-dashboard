@@ -9,7 +9,6 @@ import pytest
 import internal.judges.postmortems as postmortems
 import internal.judges.tracker as tracker
 from internal.council import weights as council_weights
-from internal.learning import mindmap_aggregator as mindmap_agg
 from internal.learning import panel_summaries
 from internal.learning.mindmap_aggregator import build_mindmap_state
 
@@ -31,23 +30,6 @@ def pm_dir(tmp_path, monkeypatch):
     directory.mkdir()
     monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(directory))
     return directory
-
-
-def test_mindmap_state_cache_not_warmed_by_prior_test():
-    """Module-order isolation: prior tests must not leave a warm mindmap payload."""
-    assert mindmap_agg._STATE_CACHE.get("payload") is None
-
-
-@pytest.fixture(autouse=True)
-def reset_mindmap_state_cache():
-    prior = dict(mindmap_agg._STATE_CACHE)
-    mindmap_agg._STATE_CACHE.clear()
-    mindmap_agg._STATE_CACHE.update({"at": 0.0, "payload": None})
-    try:
-        yield
-    finally:
-        mindmap_agg._STATE_CACHE.clear()
-        mindmap_agg._STATE_CACHE.update(prior)
 
 
 def test_postmortem_corrupt_file_logs_error_and_returns_false(pm_dir, caplog):

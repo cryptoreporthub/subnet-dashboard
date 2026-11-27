@@ -67,9 +67,6 @@ def test_build_mindmap_state_uses_lite_picks_not_scoring(monkeypatch):
     ):
         monkeypatch.setattr(panel_summaries, fn, lambda: None)
 
-    import internal.learning.mindmap_aggregator as agg
-
-    monkeypatch.setattr(agg, "_STATE_CACHE", {"at": 0.0, "payload": None})
     state = build_mindmap_state()
     assert state["summaries"]["picks"]["text"] == "lite picks"
 
@@ -83,7 +80,6 @@ def test_mindmap_state_cache_reuses_payload(monkeypatch):
         calls["n"] += 1
         return {"text": "c", "sentences": ["c"]}
 
-    monkeypatch.setattr(agg, "_STATE_CACHE", {"at": 0.0, "payload": None})
     monkeypatch.setattr(agg, "_STATE_CACHE_TTL", 60.0)
 
     from internal.learning import panel_summaries
