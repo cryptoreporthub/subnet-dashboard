@@ -1113,3 +1113,119 @@ def test_T6_invalid_id_returns_skipped_and_emits_event(resolve_harness, monkeypa
     out = tracker.on_prediction_resolved(_miss_row(None))
     assert out == {"judges": {}, "skipped": True}
     assert events == ["judge_resolution_skipped"]
+
+
+def test_indicator_scheduler_stop_start_reschedules_job(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    monkeypatch.setattr(
+        indicator_scheduler,
+        "schedule_in_seconds",
+        lambda _job, _fn, seconds: scheduled.append(seconds),
+    )
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    first = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert first.get("started") is True
+    assert scheduled == [60]
+    stop = indicator_scheduler.stop_indicator_scheduler()
+    assert stop.get("stopped") is True
+    second = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert second.get("started") is True, second
+    assert scheduled == [60, 60]
+
+
+def test_indicator_scheduler_start_after_persisted_started_without_job(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    monkeypatch.setattr(
+        indicator_scheduler,
+        "schedule_in_seconds",
+        lambda _job, _fn, seconds: scheduled.append(seconds),
+    )
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    first = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert first.get("started") is True
+    with indicator_scheduler._scheduler_lock:
+        sched = indicator_scheduler._scheduler
+        assert sched is not None
+        sched._job_armed = False
+        sched.liveness.start()
+    second = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert second.get("started") is True, second
+    assert scheduled == [60, 60]
+
+
+def test_indicator_scheduler_start_is_idempotent_while_job_armed(
+    tmp_path, monkeypatch, scheduler_cleanup
+):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    scheduled: List[float] = []
+    monkeypatch.setattr(
+        indicator_scheduler,
+        "schedule_in_seconds",
+        lambda _job, _fn, seconds: scheduled.append(seconds),
+    )
+    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
+    first = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert first.get("started") is True
+    second = indicator_scheduler.start_indicator_scheduler(
+        refresh_minutes=15,
+        soul_map_path=str(soul),
+        engine_factory=lambda: _StubEngine(),
+    )
+    assert second.get("started") is False
+    assert second.get("reason") == "already running"
+    assert scheduled == [60]
+
+
+def test_corrupt_replay_emits_postmortem_skipped(
+    pm_dir, portfolio_path, monkeypatch, caplog
+):
+    monkeypatch.setattr("internal.judges.weights.nudge_judge", lambda *_a, **_k: None)
+    prediction = dict(PREDICTION)
+    for judge in tracker.all_judges():
+        judge.open_position(prediction, size=1.0)
+    first = tracker.on_prediction_resolved(prediction)
+    assert first["judges"]["oracle"]["closed"] is not None
+    (pm_dir / "oracle.json").write_bytes(b"")
+    events: List[str] = []
+    monkeypatch.setattr(
+        tracker,
+        "emit_trail_event",
+        lambda name, **kw: events.append(name),
+    )
+    with caplog.at_level(logging.ERROR):
+        replay = tracker.on_prediction_resolved(prediction)
+    oracle = replay["judges"]["oracle"]
+    assert oracle.get("closed") is None
+    assert oracle.get("postmortem") is None
+    assert oracle.get("postmortem_error") == "PostmortemFileCorrupt"
+    assert "postmortem_skipped" in events
+    assert any("postmortem skipped" in r.getMessage() for r in caplog.records)

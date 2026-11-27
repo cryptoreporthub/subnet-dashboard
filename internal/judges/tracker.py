@@ -46,7 +46,7 @@ def _postmortem_already_recorded(judge_name: str, prediction_id: Any) -> bool:
     try:
         rows = list_for_judge(judge_name)
     except PostmortemFileCorrupt:
-        return True
+        return False
     except ValueError:
         return True
     return any(

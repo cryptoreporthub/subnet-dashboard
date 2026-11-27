@@ -89,6 +89,7 @@ class IndicatorScheduler:
         self._consecutive_failures = 0
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[str] = None
+        self._job_armed = False
         self.liveness = LivenessTracker(
             name="indicator_scheduler",
             interval_seconds=max(60, int(refresh_minutes) * 60),
@@ -101,15 +102,15 @@ class IndicatorScheduler:
             return _scheduler is self
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
-        """Start the scheduler. Idempotent."""
+        """Start the scheduler. Idempotent for this process's scheduled job."""
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        snap = self.liveness.snapshot()
-        if snap.get("lifecycle") == "started":
-            return {"started": False, "reason": "already running"}
         with self._lock:
+            if self._job_armed:
+                return {"started": False, "reason": "already running"}
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
+            self._job_armed = True
         self.liveness.start()
 
         if immediate:
@@ -129,7 +130,9 @@ class IndicatorScheduler:
         """Stop the scheduler and cancel any pending tick."""
         with self._lock:
             self._next_run_at = None
+            self._job_armed = False
         cancel_job(JOB_ID)
+        self.liveness.stop()
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -175,6 +178,7 @@ class IndicatorScheduler:
             self._next_run_at = (
                 datetime.now(timezone.utc).timestamp() + minutes * 60
             )
+            self._job_armed = True
         schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
@@ -291,8 +295,7 @@ def start_indicator_scheduler(
     global _scheduler
     with _scheduler_lock:
         if _scheduler is not None:
-            snap = _scheduler.liveness.snapshot()
-            if snap.get("lifecycle") == "started":
+            if _scheduler._job_armed:
                 return {"started": False, "reason": "already running"}
         else:
             _scheduler = IndicatorScheduler(
