@@ -1247,13 +1247,11 @@ async def api_predictions():
 
 
 @learning_router.get("/api/predictions/resolved")
-async def api_predictions_resolved(resolve: bool = Query(default=False)):
+@limit_or_noop(strict_limit(), override_defaults=True)
+async def api_predictions_resolved(request: Request, resolve: bool = Query(default=False)):
     """Return resolved predictions. Read-only unless ``resolve=true``."""
-    if resolve and not _resolver_allowed_on_this_process():
-        raise HTTPException(
-            status_code=503,
-            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
-        )
+    if resolve:
+        _require_resolver_on_this_process()
     try:
         if resolve:
             from internal.subnets.feed import load_pick_subnets
@@ -1533,6 +1531,14 @@ def _resolver_allowed_on_this_process() -> bool:
     return is_worker_mode() or background_on_web()
 
 
+def _require_resolver_on_this_process() -> None:
+    if not _resolver_allowed_on_this_process():
+        raise HTTPException(
+            status_code=503,
+            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
+        )
+
+
 def _ensure_resolver_scheduler():
     """Start the resolver scheduler singleton if headless (tests / first trigger)."""
     if not _resolver_allowed_on_this_process():
@@ -1555,11 +1561,7 @@ def _ensure_resolver_scheduler():
 @limit_or_noop(strict_limit(), override_defaults=True)
 async def api_learning_trigger(request: Request):
     """Manually run a prediction-resolution cycle and return scheduler state."""
-    if not _resolver_allowed_on_this_process():
-        raise HTTPException(
-            status_code=503,
-            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
-        )
+    _require_resolver_on_this_process()
     scheduler = _ensure_resolver_scheduler()
     cycle: Dict[str, Any] = {}
     if scheduler is not None:
@@ -1582,11 +1584,7 @@ async def api_learning_trigger(request: Request):
 @limit_or_noop(strict_limit(), override_defaults=True)
 async def api_predictions_resolver_run(request: Request):
     """Trigger a single prediction-resolution cycle on demand."""
-    if not _resolver_allowed_on_this_process():
-        raise HTTPException(
-            status_code=503,
-            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
-        )
+    _require_resolver_on_this_process()
     scheduler = _ensure_resolver_scheduler()
     if scheduler is None:
         return {
@@ -1827,13 +1825,10 @@ async def api_weights():
 
 
 @learning_router.get("/api/resolve-predictions")
-async def api_resolve_predictions():
+@limit_or_noop(strict_limit(), override_defaults=True)
+async def api_resolve_predictions(request: Request):
     """Trigger prediction resolution for any due predictions."""
-    if not _resolver_allowed_on_this_process():
-        raise HTTPException(
-            status_code=503,
-            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
-        )
+    _require_resolver_on_this_process()
     try:
         weights_before = load_weights()
         subnets = _subnets_for_tracker()
