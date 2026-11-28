@@ -68,7 +68,6 @@ def test_mindmap_graph_empty_state_success(monkeypatch, tmp_path):
 
     monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: [])
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
-    monkeypatch.setenv("INDICATOR_STATE_PATH", str(tmp_path / "indicator_state.json"))
     monkeypatch.setenv("WHALES_DATA_PATH", str(tmp_path / "whale_intelligence.json"))
     monkeypatch.setattr(WhaleIntelligenceService, "_singleton", None)
 
@@ -104,7 +103,6 @@ def test_mindmap_graph_skips_full_build_mindmap_state(monkeypatch):
     monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: [])
     monkeypatch.setattr(agg, "_build_integration_status", lambda: {"council": "closed"})
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
-    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus: [])
     monkeypatch.setattr(graph_mod, "_load_whale_and_rugger_alerts", lambda focus: {})
 
     graph = get_mindmap_graph()
@@ -177,7 +175,6 @@ def test_mindmap_graph_netuidless_nudge_joins_loop_hub(monkeypatch):
     ]
     monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: trail)
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
-    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus: [])
     monkeypatch.setattr(graph_mod, "_load_whale_and_rugger_alerts", lambda focus: {})
 
     graph = get_mindmap_graph()
@@ -190,16 +187,11 @@ def test_mindmap_graph_netuidless_nudge_joins_loop_hub(monkeypatch):
     )
 
 
-def test_mindmap_graph_wires_whale_rugger_indicator_signals(monkeypatch):
+def test_mindmap_graph_wires_whale_rugger_signals(monkeypatch):
     import internal.mindmap.graph as graph_mod
 
     monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: [])
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
-    monkeypatch.setattr(
-        graph_mod,
-        "_load_indicator_alerts",
-        lambda focus: [{"subnet_id": 64, "event_type": "rsi_bullish_cross"}],
-    )
     monkeypatch.setattr(
         graph_mod,
         "_load_whale_and_rugger_alerts",
@@ -215,7 +207,8 @@ def test_mindmap_graph_wires_whale_rugger_indicator_signals(monkeypatch):
 
     graph = get_mindmap_graph()
     kinds = {n["kind"] for n in graph["nodes"]}
-    assert {"indicator", "whale", "risk"} <= kinds
+    assert {"whale", "risk"} <= kinds
+    assert "indicator" not in kinds
     subnet_edges = {e["source"] for e in graph["edges"]}
     assert "subnet:64" in subnet_edges
     assert graph.get("source") == "registry_heuristic"
@@ -255,7 +248,6 @@ def test_mindmap_graph_cap_keeps_subnet_and_loop_hubs(monkeypatch):
         )
     monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: trail)
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
-    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus: [])
     monkeypatch.setattr(graph_mod, "_load_whale_and_rugger_alerts", lambda focus: {})
 
     graph = get_mindmap_graph()
