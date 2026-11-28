@@ -161,8 +161,6 @@ build pass; seed the Fly volume or configure the external feed/secret instead.
 
 Id-less open judge positions are warned about at resolver start (`resolver._warn_idless_open_positions`) and deliberately left open under the Option I design; cleanup of those positions is a tracked follow-up.
 
-**Indicator scheduler is not started in production.** `start_indicator_scheduler` is not called from `server.py` lifespan or `internal.background_boot.start_background_workers` (listed in `tests/test_scheduler_contract.py` `FOLLOW_UPS_NO_BOOT`). `/api/indicators/scheduler` reports persisted liveness if any. Wiring it into boot would start a new background job — Joshua/TL decision, not silent.
-
 ### Persistent data
 
 Runtime state lives on the Fly volume `data_volume` → `/app/data` (`soul_map.json`, predictions, SQLite). **Do not** create a second volume without human `flyctl` access.

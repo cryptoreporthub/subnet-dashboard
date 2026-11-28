@@ -136,11 +136,6 @@ FOLLOW_UPS_NO_BOOT = [
         "start_symbol": "start_adversarial_scheduler",
         "module": "internal/scheduler.py",
     },
-    {
-        "name": "indicator_scheduler",
-        "start_symbol": "start_indicator_scheduler",
-        "module": "internal/indicators/indicator_scheduler.py",
-    },
 ]
 
 
