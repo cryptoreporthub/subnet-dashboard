@@ -67,6 +67,18 @@ def _isolate_readiness_cache():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_mindmap_state_cache():
+    """Prevent mindmap _STATE_CACHE / last-good leaking between tests."""
+    from internal.learning.mindmap_aggregator import reset_mindmap_state_cache
+
+    reset_mindmap_state_cache()
+    try:
+        yield
+    finally:
+        reset_mindmap_state_cache()
+
+
+@pytest.fixture(autouse=True)
 def _cancel_background_jobs_armed_by_test():
     """Drop shared-scheduler jobs a test armed and never cancelled.
 

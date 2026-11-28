@@ -8,9 +8,15 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-def _sentences(parts: List[str]) -> Dict[str, Any]:
+def _sentences(parts: List[str], *, degraded: bool = False) -> Dict[str, Any]:
     text = " ".join(p.strip() for p in parts if p and p.strip())
-    return {"text": text, "sentences": [p.strip() for p in parts if p and p.strip()]}
+    payload: Dict[str, Any] = {
+        "text": text,
+        "sentences": [p.strip() for p in parts if p and p.strip()],
+    }
+    if degraded:
+        payload["degraded"] = True
+    return payload
 
 
 def summarize_council() -> Dict[str, Any]:
@@ -26,7 +32,8 @@ def summarize_council() -> Dict[str, Any]:
     except ConcurrentWeightUpdate:
         logger.warning("council panel could not load expert weights", exc_info=True)
         return _sentences(
-            ["Council expert weights could not load right now; expert influence is not shown."]
+            ["Council expert weights could not load right now; expert influence is not shown."],
+            degraded=True,
         )
     if not weights:
         return _sentences(["Council expert weights are not loaded yet; all experts sit at default influence."])
@@ -82,6 +89,7 @@ def summarize_judges() -> Dict[str, Any]:
     if not parts:
         parts.append("Oracle, Echo, and Pulse have not recorded paper positions yet.")
 
+    pm_failed = False
     try:
         from internal.judges.postmortems import all_postmortems_with_status
 
@@ -98,10 +106,12 @@ def summarize_judges() -> Dict[str, Any]:
         elif not unavailable:
             parts.append("No judge post-mortems recorded yet; they fire on wrong paper resolutions.")
         if unavailable:
+            pm_failed = True
             parts.append(
                 "Post-mortem store unavailable for: " + ", ".join(unavailable) + "."
             )
     except Exception:
+        pm_failed = True
         parts.append("Post-mortem store unavailable.")
 
     try:
@@ -114,7 +124,7 @@ def summarize_judges() -> Dict[str, Any]:
     except Exception:
         pass
 
-    return _sentences(parts[:5])
+    return _sentences(parts[:5], degraded=pm_failed)
 
 
 def summarize_learning() -> Dict[str, Any]:
@@ -170,7 +180,7 @@ def summarize_learning() -> Dict[str, Any]:
     )
     if pending == 0:
         parts.append("No pending predictions are queued — hour/day pick endpoints will enqueue new rows on the next call.")
-    return _sentences(parts)
+    return _sentences(parts, degraded=weights_failed)
 
 
 def summarize_picks() -> Dict[str, Any]:
@@ -186,7 +196,10 @@ def summarize_picks() -> Dict[str, Any]:
         hour_pick = select_hourly_pick(subnets, ctx) if subnets else {}
         daily = get_or_create_today_pick(subnets, ctx)
     except Exception as exc:
-        return _sentences([f"Pick engine could not load live state: {exc}"])
+        return _sentences(
+            [f"Pick engine could not load live state: {exc}"],
+            degraded=True,
+        )
 
     if hour_pick and hour_pick.get("subnet"):
         sn = (hour_pick.get("subnet") or {}).get("name") or "unknown"
@@ -226,7 +239,7 @@ def summarize_picks_lite() -> Dict[str, Any]:
 
         daily = _find_today(_load()) or {}
     except Exception as exc:
-        return _sentences([f"Pick snapshot unavailable: {exc}"])
+        return _sentences([f"Pick snapshot unavailable: {exc}"], degraded=True)
 
     parts: List[str] = []
     pick = daily.get("pick") if isinstance(daily, dict) else None
