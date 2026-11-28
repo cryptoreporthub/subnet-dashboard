@@ -132,16 +132,6 @@ def _safe_indicators_convergence(subnets: List[Dict[str, Any]]) -> Dict[str, Any
         return {"subnets": [], "error": str(exc)}
 
 
-def _safe_indicator_state() -> Dict[str, Any]:
-    try:
-        from internal.indicators.indicator_engine import IndicatorEngine
-
-        return IndicatorEngine().get_indicator_state()
-    except Exception as exc:
-        logger.warning("Could not load indicator state for root: %s", exc)
-        return {}
-
-
 def _safe_whale_summary() -> Dict[str, Any]:
     try:
         from internal.whales.service import WhaleIntelligenceService
@@ -309,7 +299,6 @@ def build_agent_b_root_context(
         "pump_summary": summarize_pump(pump_analytics),
         "scenario_summary": summarize_scenario(scenario_snapshot),
         "api_indicators_convergence": _safe_indicators_convergence(subnets),
-        "indicator_state": _safe_indicator_state(),
         "whale_intelligence": _safe_whale_summary(),
         "ruggers_watchlist": _safe_ruggers_summary(),
         "enrichment_badge": _safe_enrichment_badge(pick_netuid),

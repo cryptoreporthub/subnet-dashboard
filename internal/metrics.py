@@ -212,10 +212,7 @@ def refresh_from_state() -> None:
     except Exception:
         pass
 
-    for scheduler, getter in (
-        ("resolver", _resolver_state),
-        ("adversarial", _adversarial_state),
-    ):
+    for scheduler, getter in (("resolver", _resolver_state),):
         try:
             info = getter()
             SCHEDULER_RUNNING.labels(scheduler=scheduler).set(1 if info.get("running") else 0)
@@ -344,12 +341,6 @@ def _resolver_state() -> Dict[str, Any]:
     from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
 
     return get_prediction_resolver_scheduler_state()
-
-
-def _adversarial_state() -> Dict[str, Any]:
-    from internal.scheduler import get_adversarial_scheduler_state
-
-    return get_adversarial_scheduler_state()
 
 
 async def metrics_endpoint(request: Request) -> Response:

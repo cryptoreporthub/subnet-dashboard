@@ -107,18 +107,6 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
     except Exception:
         judges = {}
 
-    indicators: Dict[str, Any] = {}
-    try:
-        from internal.indicators.indicator_engine import IndicatorEngine
-
-        state = IndicatorEngine().get_indicator_state()
-        for row in state.get("subnets") or []:
-            if int(row.get("netuid", -1)) == int(netuid):
-                indicators = row
-                break
-    except Exception:
-        pass
-
     history = _subnet_history(netuid)
     drivers = build_subnet_driver_card(subnet)
     decomp = drivers.get("decomposition") or {}
@@ -179,9 +167,6 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
     else:
         lines.append("_No resolved backtest rows for this subnet yet._")
 
-    if indicators:
-        lines.extend(["", "## Technical indicators", f"- State: {indicators.get('signal', '\u2014')}"])
-
     markdown = "\n".join(lines)
     return {
         "status": "success",
@@ -192,7 +177,7 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
         "sections": {
             "registry": subnet,
             "judges": judges,
-            "indicators": indicators or None,
+            "indicators": None,
             "market_drivers": drivers,
             "backtest_history": history,
         },
