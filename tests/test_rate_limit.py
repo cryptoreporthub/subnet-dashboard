@@ -5,64 +5,47 @@ from __future__ import annotations
 import os
 
 import pytest
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 import internal.rate_limit as rl
 import server
-from internal.rate_limit import client_ip, default_limit, mount_rate_limit
+from internal.rate_limit import client_ip, default_limit, limit_or_noop, mount_rate_limit
 
 
-def _bootstrap_rate_limit_middleware_if_needed() -> None:
-    """Import-time: attach SlowAPI before any TestClient runs (reverse order safe)."""
-    if getattr(server.app.state, "_rate_limit_fixture_mounted", False):
-        return
-    if getattr(server.app.state, "limiter", None) is not None:
-        return
-    saved_enable = os.environ.get("ENABLE_RATE_LIMIT")
-    saved_default = os.environ.get("RATE_LIMIT_DEFAULT")
-    os.environ["ENABLE_RATE_LIMIT"] = "1"
-    mount_rate_limit(server.app)
-    server.app.state._rate_limit_fixture_mounted = True
+def _build_isolated_rate_limit_app(*, registry_limit: str = "2/minute") -> FastAPI:
+    """Fresh FastAPI — never mutates global server.app (G2 / ENABLE_RATE_LIMIT=0 safe)."""
     rl._limiter = None
-    lim = rl.get_limiter()
-    assert lim is not None
-    server.app.state.limiter = lim
-    if saved_enable is None:
-        os.environ.pop("ENABLE_RATE_LIMIT", None)
+    app = FastAPI()
+    mount_rate_limit(app)
+
+    @app.get("/api/registry")
+    @limit_or_noop(registry_limit, override_defaults=True)
+    def _registry(request: Request):
+        return []
+
+    @app.get("/health")
+    def _health():
+        return "OK"
+
+    return app
+
+
+@pytest.fixture
+def rate_limited_client(monkeypatch, request):
+    """2/min limiter on isolated app; optional fly mode via @pytest.mark.parametrize(..., indirect=True)."""
+    on_fly = getattr(request, "param", False)
+    prev_enable = os.environ.get("ENABLE_RATE_LIMIT")
+    prev_default = os.environ.get("RATE_LIMIT_DEFAULT")
+    prev_fly = os.environ.get("FLY_APP_NAME")
+    monkeypatch.setenv("ENABLE_RATE_LIMIT", "1")
+    os.environ["RATE_LIMIT_DEFAULT"] = "2/minute"
+    if on_fly:
+        os.environ["FLY_APP_NAME"] = "subnet-dashboard"
     else:
-        os.environ["ENABLE_RATE_LIMIT"] = saved_enable
-    if saved_default is None:
-        os.environ.pop("RATE_LIMIT_DEFAULT", None)
-    else:
-        os.environ["RATE_LIMIT_DEFAULT"] = saved_default
-    if not rl.rate_limit_enabled():
-        rl._limiter = None
-    else:
-        server.app.state.limiter = rl.get_limiter()
-
-
-_bootstrap_rate_limit_middleware_if_needed()
-
-
-def _activate_rate_limit_under_test() -> None:
-    """Enforce 2/min in-fixture even when the runner disabled limits at import time."""
-    os.environ["ENABLE_RATE_LIMIT"] = "1"
-    rl._limiter = None
-    if getattr(server.app.state, "limiter", None) is None:
-        if not getattr(server.app.state, "_rate_limit_fixture_mounted", False):
-            mount_rate_limit(server.app)
-            server.app.state._rate_limit_fixture_mounted = True
-    lim = rl.get_limiter()
-    assert lim is not None
-    server.app.state.limiter = lim
-
-
-def _restore_limiter_env(
-    monkeypatch,
-    prev_default: str | None,
-    prev_fly: str | None,
-    prev_enable: str | None,
-) -> None:
+        os.environ.pop("FLY_APP_NAME", None)
+    app = _build_isolated_rate_limit_app()
+    yield TestClient(app)
     if prev_enable is None:
         os.environ.pop("ENABLE_RATE_LIMIT", None)
     else:
@@ -75,43 +58,7 @@ def _restore_limiter_env(
         os.environ.pop("FLY_APP_NAME", None)
     else:
         os.environ["FLY_APP_NAME"] = prev_fly
-    # ponytail: do not monkeypatch._limiter — pytest undo restores the 2/min singleton.
     rl._limiter = None
-    if getattr(server.app.state, "_rate_limit_fixture_mounted", False):
-        # ponytail: mount_rate_limit cannot be undone; never leave SlowAPI with limiter=None.
-        if not rl.rate_limit_enabled():
-            os.environ["ENABLE_RATE_LIMIT"] = "1"
-        lim = rl.get_limiter()
-        assert lim is not None
-        assert default_limit() == os.environ.get("RATE_LIMIT_DEFAULT", "120/minute")
-        server.app.state.limiter = lim
-        lim.reset()
-    elif rl.rate_limit_enabled():
-        lim = rl.get_limiter()
-        assert lim is not None
-        assert default_limit() == os.environ.get("RATE_LIMIT_DEFAULT", "120/minute")
-        server.app.state.limiter = lim
-        lim.reset()
-    else:
-        server.app.state.limiter = None
-
-
-@pytest.fixture
-def rate_limited_client(monkeypatch, request):
-    """2/min limiter; optional fly mode via @pytest.mark.parametrize(..., indirect=True)."""
-    on_fly = getattr(request, "param", False)
-    prev_enable = os.environ.get("ENABLE_RATE_LIMIT")
-    prev_default = os.environ.get("RATE_LIMIT_DEFAULT")
-    prev_fly = os.environ.get("FLY_APP_NAME")
-    monkeypatch.setenv("ENABLE_RATE_LIMIT", "1")
-    os.environ["RATE_LIMIT_DEFAULT"] = "2/minute"
-    if on_fly:
-        os.environ["FLY_APP_NAME"] = "subnet-dashboard"
-    else:
-        os.environ.pop("FLY_APP_NAME", None)
-    _activate_rate_limit_under_test()
-    yield TestClient(server.app)
-    _restore_limiter_env(monkeypatch, prev_default, prev_fly, prev_enable)
 
 
 def test_under_limit_returns_200(rate_limited_client):
@@ -204,9 +151,17 @@ def test_off_fly_forged_xff_still_one_bucket(rate_limited_client):
     )
 
 
-def test_fixture_teardown_restores_default_limiter():
-    """Collected last: prior tests must not leave a 2/min singleton on the shared app."""
-    assert default_limit() == os.environ.get("RATE_LIMIT_DEFAULT", "120/minute")
-    client = TestClient(server.app)
+def test_rate_limit_module_does_not_mount_on_global_server():
+    """Importing this module must not attach SlowAPI to server.app (hermetic under ENABLE_RATE_LIMIT=0)."""
+    assert not getattr(server.app.state, "_rate_limit_fixture_mounted", False)
+
+
+def test_isolated_fixture_teardown_restores_default_env(monkeypatch):
+    """After fixture env, default_limit() matches restored env (no server.app singleton leak)."""
+    monkeypatch.setenv("ENABLE_RATE_LIMIT", "1")
+    monkeypatch.delenv("RATE_LIMIT_DEFAULT", raising=False)
+    assert default_limit() == "120/minute"
+    app = _build_isolated_rate_limit_app(registry_limit="120/minute")
+    client = TestClient(app)
     for _ in range(3):
         assert client.get("/api/registry").status_code == 200
