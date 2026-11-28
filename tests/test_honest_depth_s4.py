@@ -7,6 +7,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from internal.whales.service import WhaleIntelligenceService
 from server import app
 
 
@@ -33,7 +34,6 @@ def client(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    missing_indicators = tmp_path / "missing_indicator_state.json"
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(
         json.dumps({"soul_map_state": {"learning_trail": [], "message_intel": {}}}),
@@ -42,8 +42,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("WHALES_DATA_PATH", str(empty_intel))
     monkeypatch.setenv("WHALES_CONFIG_PATH", str(tmp_path / "whales.json"))
     (tmp_path / "whales.json").write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("INDICATOR_STATE_PATH", str(missing_indicators))
     monkeypatch.setenv("SOUL_MAP_PATH", str(soul_path))
+    monkeypatch.setattr(WhaleIntelligenceService, "_singleton", None)
     _reset_whales_ruggers_singletons()
     with TestClient(app) as c:
         yield c
@@ -80,17 +80,11 @@ def test_api_ruggers_honest_empty_and_same_ledger(client):
     assert whales["stats"]["total_events"] == summary["stats"]["total_events"]
 
 
-def test_api_indicators_honest_empty(client, monkeypatch):
+def test_api_indicators_convergence_honest_degraded(client, monkeypatch):
     monkeypatch.setattr(
         "internal.indicators.routes._compute_technical_indicators",
         lambda sn: {"degraded": True, "history_source": "unavailable"},
     )
-    body = client.get("/api/indicators").json()
-    assert body["status"] == "success"
-    assert body["data_available"] is False
-    assert body["reason"] == "scheduler_never_ran"
-    assert body["source"] == "none"
-
     conv = client.get("/api/indicators-convergence").json()
     assert conv["data_available"] is False
     assert conv["reason"] == "no_ohlcv"

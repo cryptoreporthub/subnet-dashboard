@@ -17,7 +17,6 @@ from typing import Any, List, Optional
 import pytest
 from fastapi.testclient import TestClient
 
-import internal.indicators.indicator_scheduler as indicator_scheduler
 import internal.judges.postmortems as postmortems
 import internal.judges.tracker as tracker
 from internal.calibration import pipeline as cal
@@ -184,24 +183,6 @@ def _cycle(rows_netuids: Optional[list] = None, *, prices: Optional[dict] = None
     return resolver.resolve_due_predictions(subnets=subnets)
 
 
-@pytest.fixture
-def scheduler_cleanup():
-    yield
-    indicator_scheduler.stop_indicator_scheduler()
-    with indicator_scheduler._scheduler_lock:
-        indicator_scheduler._scheduler = None
-
-
-class _StubEngine:
-    def run_cycle(self):
-        return {"subnets_processed": 1, "signals_emitted": 0}
-
-
-class _BoomEngine:
-    def run_cycle(self):
-        raise RuntimeError("cycle failed")
-
-
 def _hold_writers(path: str, stop: threading.Event) -> None:
     lock = soul_map_io._lock_for(path + ".writers")
     lock.acquire()
@@ -209,102 +190,6 @@ def _hold_writers(path: str, stop: threading.Event) -> None:
         stop.wait(30)
     finally:
         lock.release()
-
-
-def _register_scheduler(soul, monkeypatch, engine_factory):
-    scheduled: List[float] = []
-    monkeypatch.setattr(
-        indicator_scheduler,
-        "schedule_in_seconds",
-        lambda _job, _fn, seconds: scheduled.append(seconds),
-    )
-    indicator_scheduler.stop_indicator_scheduler()
-    with indicator_scheduler._scheduler_lock:
-        sched = indicator_scheduler.IndicatorScheduler(
-            refresh_minutes=15,
-            soul_map_path=str(soul),
-            engine_factory=engine_factory,
-        )
-        indicator_scheduler._scheduler = sched
-        sched.liveness.start()
-    return sched, scheduled
-
-
-def test_indicator_scheduler_reschedules_after_lock_timeout(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(soul_map_io, "_SOUL_MAP_LOCK_DEADLINE_SECONDS", 0.05)
-
-    stop = threading.Event()
-    holder = threading.Thread(
-        target=_hold_writers,
-        args=(str(soul), stop),
-        daemon=True,
-    )
-    holder.start()
-    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _StubEngine())
-    try:
-        result = sched._tick()
-    finally:
-        stop.set()
-        holder.join(timeout=5)
-
-    assert result["ok"] is True
-    assert sched._consecutive_failures == 0
-    assert scheduled == [15 * 60]
-
-
-def test_indicator_scheduler_reschedules_when_liveness_raises(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _StubEngine())
-
-    def _boom(**_kwargs):
-        raise RuntimeError("liveness write failed")
-
-    monkeypatch.setattr(sched.liveness, "record_success", _boom)
-
-    result = sched._tick()
-    assert result.get("ok") is True
-    assert sched._consecutive_failures == 0
-    assert sched._backoff_minutes == 15
-    assert scheduled == [15 * 60]
-
-
-def test_indicator_scheduler_reschedules_when_cycle_raises(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _BoomEngine())
-
-    result = sched._tick()
-    assert result.get("ok") is False
-    assert sched._consecutive_failures == 1
-    assert sched._backoff_minutes == 30
-    assert scheduled == [30 * 60]
-
-
-def test_indicator_scheduler_reschedules_when_refresh_cycle_raises(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    sched, scheduled = _register_scheduler(soul, monkeypatch, lambda: _StubEngine())
-
-    def _boom(*_a, **_k):
-        raise RuntimeError("refresh exploded")
-
-    monkeypatch.setattr(sched, "_run_refresh_cycle", _boom)
-    result = sched._tick()
-    assert result.get("ok") is False
-    assert result.get("error") == "refresh exploded"
-    assert sched._consecutive_failures == 1
-    assert scheduled == [30 * 60]
 
 
 @pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe", b'{"a": 1}'], ids=["empty", "utf16", "object"])
@@ -1113,128 +998,6 @@ def test_T6_invalid_id_returns_skipped_and_emits_event(resolve_harness, monkeypa
     out = tracker.on_prediction_resolved(_miss_row(None))
     assert out == {"judges": {}, "skipped": True}
     assert events == ["judge_resolution_skipped"]
-
-
-def test_indicator_scheduler_stop_start_reschedules_job(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    scheduled: List[float] = []
-    monkeypatch.setattr(
-        indicator_scheduler,
-        "schedule_in_seconds",
-        lambda _job, _fn, seconds: scheduled.append(seconds),
-    )
-    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
-    first = indicator_scheduler.start_indicator_scheduler(
-        refresh_minutes=15,
-        soul_map_path=str(soul),
-        engine_factory=lambda: _StubEngine(),
-    )
-    assert first.get("started") is True
-    assert scheduled == [60]
-    stop = indicator_scheduler.stop_indicator_scheduler()
-    assert stop.get("stopped") is True
-    second = indicator_scheduler.start_indicator_scheduler(
-        refresh_minutes=15,
-        soul_map_path=str(soul),
-        engine_factory=lambda: _StubEngine(),
-    )
-    assert second.get("started") is True, second
-    assert scheduled == [60, 60]
-
-
-def test_indicator_scheduler_start_after_persisted_started_without_job(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    scheduled: List[float] = []
-    monkeypatch.setattr(
-        indicator_scheduler,
-        "schedule_in_seconds",
-        lambda _job, _fn, seconds: scheduled.append(seconds),
-    )
-    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
-    first = indicator_scheduler.start_indicator_scheduler(
-        refresh_minutes=15,
-        soul_map_path=str(soul),
-        engine_factory=lambda: _StubEngine(),
-    )
-    assert first.get("started") is True
-    with indicator_scheduler._scheduler_lock:
-        sched = indicator_scheduler._scheduler
-        assert sched is not None
-        sched._job_armed = False
-        sched.liveness.start()
-    second = indicator_scheduler.start_indicator_scheduler(
-        refresh_minutes=15,
-        soul_map_path=str(soul),
-        engine_factory=lambda: _StubEngine(),
-    )
-    assert second.get("started") is True, second
-    assert scheduled == [60, 60]
-
-
-def test_indicator_scheduler_enqueue_error_allows_retry(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    scheduled: List[float] = []
-    calls = {"n": 0}
-
-    def _schedule(_job, _fn, seconds):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise OSError("enqueue failed")
-        scheduled.append(seconds)
-
-    monkeypatch.setattr(indicator_scheduler, "schedule_in_seconds", _schedule)
-    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
-    with pytest.raises(OSError, match="enqueue failed"):
-        indicator_scheduler.start_indicator_scheduler(
-            refresh_minutes=15,
-            soul_map_path=str(soul),
-            engine_factory=lambda: _StubEngine(),
-        )
-    retry = indicator_scheduler.start_indicator_scheduler(
-        refresh_minutes=15,
-        soul_map_path=str(soul),
-        engine_factory=lambda: _StubEngine(),
-    )
-    assert retry.get("started") is True, retry
-    assert scheduled == [60]
-    assert calls["n"] == 2
-
-
-def test_indicator_scheduler_start_is_idempotent_while_job_armed(
-    tmp_path, monkeypatch, scheduler_cleanup
-):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}", encoding="utf-8")
-    scheduled: List[float] = []
-    monkeypatch.setattr(
-        indicator_scheduler,
-        "schedule_in_seconds",
-        lambda _job, _fn, seconds: scheduled.append(seconds),
-    )
-    monkeypatch.setattr(indicator_scheduler, "cancel_job", lambda _job: None)
-    first = indicator_scheduler.start_indicator_scheduler(
-        refresh_minutes=15,
-        soul_map_path=str(soul),
-        engine_factory=lambda: _StubEngine(),
-    )
-    assert first.get("started") is True
-    second = indicator_scheduler.start_indicator_scheduler(
-        refresh_minutes=15,
-        soul_map_path=str(soul),
-        engine_factory=lambda: _StubEngine(),
-    )
-    assert second.get("started") is False
-    assert second.get("reason") == "already running"
-    assert scheduled == [60]
 
 
 def test_corrupt_replay_emits_postmortem_skipped(
