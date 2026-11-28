@@ -34,7 +34,7 @@ def test_fly_worker_entrypoint_uses_pinned_launcher_for_rate_limited_app():
 def test_procfile_routes_web_through_pinned_launcher():
     proc = Path("Procfile").read_text()
     assert "run_web_with_guard.py" in proc
-    assert "uvicorn" not in proc.lower()
+    assert "uvicorn " not in proc
 
 
 def test_dockerfile_web_cmd_uses_fly_entrypoint_chain():

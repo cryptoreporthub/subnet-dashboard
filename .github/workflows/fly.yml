@@ -69,9 +69,9 @@ jobs:
             echo "GUARD FAIL: fastapi/uvicorn missing from requirements.txt"
             exit 1
           fi
-          echo "=== GUARD 2: Procfile must start the ASGI app via uvicorn ==="
-          if ! grep -qi uvicorn Procfile 2>/dev/null; then
-            echo "GUARD FAIL: Procfile must reference uvicorn"
+          echo "=== GUARD 2: Procfile must start via pinned web launcher ==="
+          if ! grep -q run_web_with_guard.py Procfile 2>/dev/null; then
+            echo "GUARD FAIL: Procfile must reference scripts/run_web_with_guard.py"
             exit 1
           fi
           echo "=== GUARD 3: single foundation — no stray server/ package or server_original.py ==="

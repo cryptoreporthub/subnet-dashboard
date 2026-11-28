@@ -47,7 +47,7 @@ jobs:
           set -e
           grep -qi fastapi requirements.txt
           grep -qi uvicorn requirements.txt
-          grep -qi uvicorn Procfile
+          grep -q run_web_with_guard.py Procfile
           test ! -d server
           test ! -f server_original.py
           python -c "import json; json.load(open('.cursor/mcp.json'))"
