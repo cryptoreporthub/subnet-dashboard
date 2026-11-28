@@ -37,6 +37,12 @@ def test_procfile_routes_web_through_pinned_launcher():
     assert "uvicorn " not in proc
 
 
+def test_replit_workflow_uses_pinned_launcher():
+    replit = Path(".replit").read_text()
+    assert "run_web_with_guard.py" in replit
+    assert "uvicorn server:app" not in replit
+
+
 def test_dockerfile_web_cmd_uses_fly_entrypoint_chain():
     docker = Path("Dockerfile").read_text()
     assert "fly_web_entrypoint.sh" in docker
