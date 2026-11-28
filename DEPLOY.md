@@ -153,9 +153,13 @@ build pass; seed the Fly volume or configure the external feed/secret instead.
 | `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
-| `GET /api/calibration/status` | 200, weights + thresholds |
+| `GET /api/calibration/status` | 200, weights + thresholds (`weights` may be `null` on a concurrent load conflict) |
 | `GET /api/conviction-alerts/status` | 200, `enabled: true` (after Phase P) |
 | `GET /api/signal-hub/status` | 200 |
+
+**Skipped postmortems:** a corrupt judge file is never overwritten, renamed, quarantined, or repaired in-process. Spot it via `ERROR ... postmortem skipped`, a `postmortem_skipped` learning-trail event, or the top-level `unavailable` key on `/api/postmortems*`. Repair `data/postmortems/<judge>.json` by hand on the volume. A `PostmortemLockTimeout` drops that judge's postmortem, logs ERROR, and emits `postmortem_skipped`. It is not retried once `predictions.json` is saved (`resolve_due_predictions` only processes pending rows). Only a crash before that save is recovered.
+
+Id-less open judge positions are warned about at resolver start (`resolver._warn_idless_open_positions`) and deliberately left open under the Option I design; cleanup of those positions is a tracked follow-up.
 
 ### Persistent data
 
@@ -348,9 +352,12 @@ and terminate at Fly.
 send ~150 ``GET`` requests to a rate-limited read-only route (e.g. ``/api/registry``;
 **not** exempt paths like ``/health`` or ``/version``) in a short window, each with a
 **distinct forged** ``Fly-Client-IP`` header
-and a fixed real identity otherwise. If rate limiting keys only on the real client,
-**any** response must be **429**. If all responses stay **200**, treat Fly header overwrite
-as **not** verified — roll back or gate per [#1633](https://github.com/cryptoreporthub/subnet-dashboard/issues/1633).
+and a fixed real identity otherwise. With default ``120/minute``, responses on the real
+client key may stay **200** until the quota is exhausted; **at least one** response **after**
+the configured limit (e.g. request 121+) **must** be **429** if the edge overwrites forged
+``Fly-Client-IP`` to the real client. If **all** ~150 responses stay **200**, forged headers
+are splitting the bucket — treat Fly header overwrite as **not** verified — roll back or
+gate per [#1633](https://github.com/cryptoreporthub/subnet-dashboard/issues/1633).
 Forged headers are out of scope in unit tests; this probe is production-only evidence.
 
 Put **Cloudflare** (or similar) in front of the custom domain:

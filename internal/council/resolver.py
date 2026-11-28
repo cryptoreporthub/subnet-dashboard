@@ -47,10 +47,25 @@ from internal.council.weights import load_weights, nudge_impact_strength, nudge_
 from internal.indicators.price_fetcher import gecko_cache_entry_usable
 
 try:
+    from internal.judges.portfolios import all_portfolios
+    from internal.judges.postmortems import normalize_prediction_id
     from internal.judges.tracker import on_prediction_resolved
 except Exception:  # pragma: no cover
+    logger.exception("judges unavailable: resolver continues without judge close or postmortems")
+
     def on_prediction_resolved(*_args, **_kwargs):
         return {}
+
+    def all_portfolios():
+        return {}
+
+    def normalize_prediction_id(raw):
+        if raw is None or isinstance(raw, bool):
+            return None
+        if isinstance(raw, str):
+            stripped = raw.strip()
+            return stripped or None
+        return str(raw).strip() or None
 
 try:
     from internal.council import scenario_memory
@@ -1428,18 +1443,45 @@ def expire_stale_predictions(
     }
 
 
+def _row_prediction_id(row: Any) -> Optional[str]:
+    if not isinstance(row, dict):
+        return None
+    return normalize_prediction_id(row.get("id"))
+
+
+def _warn_idless_open_positions() -> None:
+    count = 0
+    try:
+        for judge in all_portfolios().values():
+            if not isinstance(judge, dict):
+                continue
+            for pos in judge.get("open_positions") or []:
+                if not isinstance(pos, dict):
+                    continue
+                if normalize_prediction_id(pos.get("id")) is None:
+                    count += 1
+    except Exception:
+        logger.exception("failed counting open positions with no prediction id")
+    if count:
+        logger.warning("open positions with no prediction id: %s", count)
+
+
 def _merge_regraded_resolved(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Re-sync rows regrade_expired_predictions updated on disk (RF-3 follow-up)."""
     fresh = _load_json(PREDICTIONS_PATH, {}).get("resolved") or []
     by_id = {
-        str(row.get("id")): row
+        nid: row
         for row in fresh
-        if isinstance(row, dict) and row.get("id")
+        if (nid := _row_prediction_id(row)) is not None
     }
     if not by_id:
         return resolved
     return [
-        by_id[str(row.get("id"))] if row.get("id") and str(row.get("id")) in by_id else row
+        (
+            by_id[nid]
+            if (nid := _row_prediction_id(row)) is not None and nid in by_id
+            else row
+        )
         for row in resolved
     ]
 
@@ -1468,6 +1510,7 @@ def _resolve_due_predictions(
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
     """Resolve predictions whose horizon has elapsed and persist the result."""
+    _warn_idless_open_positions()
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},

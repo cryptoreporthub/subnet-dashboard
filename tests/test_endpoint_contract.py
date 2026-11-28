@@ -135,9 +135,7 @@ CONTRACT = [
     ),
     ("POST", "/api/ruggers/scan", {"netuids": [1], "top_n": 1}),
     # Technical indicators (slice 7)
-    ("GET", "/api/indicators", None),
     ("GET", "/api/indicators-convergence", None),
-    ("GET", "/api/indicators/scheduler", None),
     # Learning loop write APIs (slice 6)
     (
         "POST",

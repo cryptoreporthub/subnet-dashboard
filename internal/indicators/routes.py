@@ -13,38 +13,10 @@ from internal.council.state_vector import (
     _detect_oversold_convergence,
     _get_price_history,
 )
-from internal.indicators.indicator_engine import IndicatorEngine
-from internal.indicators.indicator_scheduler import get_indicator_scheduler_state
 
 logger = logging.getLogger(__name__)
 
 indicators_router = APIRouter(tags=["indicators"])
-
-
-@indicators_router.get("/api/indicators")
-async def api_indicators():
-    """Return the latest technical-indicator state from the indicator engine."""
-    try:
-        state = IndicatorEngine().get_indicator_state()
-        per_subnet = state.get("per_subnet") or {}
-        has_data = bool(per_subnet)
-        return {
-            "status": "success",
-            "data_available": has_data,
-            "source": "indicator_engine" if has_data else "none",
-            "reason": None if has_data else "scheduler_never_ran",
-            "data": state,
-        }
-    except Exception as exc:
-        logger.error("Error fetching indicator state: %s", exc)
-        return {
-            "status": "error",
-            "data_available": False,
-            "source": "none",
-            "reason": "error",
-            "data": {},
-            "error": str(exc),
-        }
 
 
 @indicators_router.get("/api/indicators-convergence")
@@ -86,19 +58,10 @@ async def api_indicators_convergence():
         has_real = any(not r.get("degraded") for r in rows)
         return {
             "data_available": has_real,
-            "source": "indicator_engine" if has_real else "none",
+            "source": "state_vector" if has_real else "none",
             "reason": None if has_real else "no_ohlcv",
             "subnets": rows,
         }
     except Exception as exc:
         logger.error("Error fetching indicators convergence: %s", exc)
         return {"subnets": [], "error": str(exc)}
-
-
-@indicators_router.get("/api/indicators/scheduler")
-async def api_indicators_scheduler():
-    """Return the current state of the background indicator scheduler."""
-    return {
-        "status": "success",
-        "data": get_indicator_scheduler_state(),
-    }

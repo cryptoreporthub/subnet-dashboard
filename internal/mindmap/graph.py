@@ -112,23 +112,8 @@ def _collect_trail(limit: int = 200) -> List[Dict[str, Any]]:
     return [dict(row) for row in trail if isinstance(row, dict)]
 
 
-def _load_indicator_alerts(focus_netuid: Optional[int]) -> List[Dict[str, Any]]:
-    """RSI/MACD/momentum crossovers — read the engine's own persisted state
-    directly rather than requiring indicators to push through the trail bus."""
-    try:
-        from internal.indicators.indicator_engine import IndicatorEngine
-
-        alerts = IndicatorEngine().get_active_alerts()
-    except Exception as exc:
-        logger.debug("indicator alerts unavailable: %s", exc)
-        return []
-    if focus_netuid is not None:
-        alerts = [a for a in alerts if a.get("subnet_id") == focus_netuid]
-    return alerts
-
-
 def _load_whale_and_rugger_alerts(focus_netuid: Optional[int]) -> Dict[str, List[Dict[str, Any]]]:
-    """Whale/rugger desk alerts — same read-only approach as indicators."""
+    """Whale/rugger desk alerts — read-only from each desk's own store."""
     try:
         from internal.whales.service import WhaleIntelligenceService
 
@@ -426,34 +411,8 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
             weight=weight,
         )
 
-    # Whale / rugger / indicator desks track their own subnets already — read
-    # them directly instead of asking three more subsystems to push through
-    # the trail bus (they're never wrong about the netuid, so this is honest).
-    for alert in _load_indicator_alerts(focus_netuid):
-        netuid = alert.get("subnet_id")
-        if netuid is None:
-            continue
-        event_type = str(alert.get("event_type") or "indicator_signal")
-        subnet_id = f"subnet:{netuid}"
-        if subnet_id not in nodes:
-            _upsert_node(
-                nodes,
-                subnet_id,
-                label=_subnet_label(netuid, None, subnet_names),
-                kind="subnet",
-                metrics={"event_count": 0, "last_event_type": None},
-                updated_at=_utcnow_z(),
-            )
-        indicator_id = f"indicator:{netuid}:{event_type}"
-        _upsert_node(
-            nodes,
-            indicator_id,
-            label=event_type.replace("_", " ").title(),
-            kind="indicator",
-            updated_at=_utcnow_z(),
-        )
-        _append_edge(edges, edge_seen, source=subnet_id, target=indicator_id, kind=event_type, weight=1.0)
-
+    # Whale / rugger desks track their own subnets already — read them directly
+    # instead of asking two more subsystems to push through the trail bus.
     whale_alerts = _load_whale_and_rugger_alerts(focus_netuid)
     for alert in whale_alerts.get("rugger_alerts") or []:
         netuid = alert.get("netuid")

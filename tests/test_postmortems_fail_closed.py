@@ -55,4 +55,4 @@ def test_readers_return_only_object_rows(pm_dir):
     (pm_dir / "oracle.json").write_text(json.dumps([None, "corrupt-row", valid]))
 
     assert postmortems.list_for_judge("oracle") == [valid]
-    assert postmortems.all_postmortems()["oracle"] == [valid]
+    assert postmortems.all_postmortems_with_status()[0]["oracle"] == [valid]

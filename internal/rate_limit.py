@@ -24,10 +24,8 @@ def on_fly() -> bool:
 def client_ip_from_headers(headers: Mapping[str, str], fallback: str) -> str:
     """Shared key for shield telemetry: Fly-Client-IP on Fly; never X-Forwarded-For."""
     if on_fly():
-        raw = headers.get("Fly-Client-IP")
-        if raw is None:
-            raw = headers.get("fly-client-ip")
-        fly_ip = (raw or "").strip()
+        # Starlette Headers and shield._headers() both resolve case-insensitively.
+        fly_ip = (headers.get("fly-client-ip") or "").strip()
         if fly_ip:
             return fly_ip
         return fallback or "unknown"

@@ -432,6 +432,25 @@ def write_soul_map(
         return WriteResult(WriteOutcome.LOCK_WAIT_FAILED, None, detail=str(exc))
 
 
+def write_soul_map_best_effort(
+    mutator: Callable[[Dict[str, Any]], None],
+    path: Optional[str] = None,
+) -> WriteResult:
+    """Soft persist: lock timeout is an outcome, never a raised exception."""
+    try:
+        outcome = write_soul_map(mutator, path, raise_on_lock_timeout=False)
+    except Exception as exc:
+        logger.warning("soul_map persist failed: %s", exc, exc_info=True)
+        return WriteResult(WriteOutcome.PERSIST_ERROR, None, detail=str(exc))
+    if outcome.outcome not in (WriteOutcome.APPLIED, WriteOutcome.DECLINED):
+        logger.warning(
+            "soul_map persist not applied outcome=%s detail=%s",
+            outcome.outcome,
+            outcome.detail,
+        )
+    return outcome
+
+
 def write_soul_map_committed(
     mutator: Callable[[Dict[str, Any]], None],
     path: Optional[str] = None,

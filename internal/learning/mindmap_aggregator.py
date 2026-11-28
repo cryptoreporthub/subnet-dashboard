@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -12,7 +13,27 @@ from internal.learning.trail_bus import CANONICAL_EVENT_TYPES, normalize_event_t
 logger = logging.getLogger(__name__)
 
 _STATE_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_STATE_CACHE_LOCK = threading.Lock()
+_LAST_GOOD_STATE: Optional[Dict[str, Any]] = None
+_STATE_GENERATION: int = 0
 _STATE_CACHE_TTL = float(os.environ.get("MINDMAP_STATE_CACHE_SECONDS", "30"))
+
+
+def reset_mindmap_state_cache() -> None:
+    """Clear fresh + last-good snapshots and bump the in-flight generation fence."""
+    global _LAST_GOOD_STATE, _STATE_GENERATION
+    with _STATE_CACHE_LOCK:
+        _STATE_CACHE.clear()
+        _STATE_CACHE.update({"at": 0.0, "payload": None})
+        _LAST_GOOD_STATE = None
+        _STATE_GENERATION += 1
+
+
+def _payload_is_degraded(summaries: Dict[str, Any]) -> bool:
+    return any(
+        isinstance(v, dict) and bool(v.get("degraded")) for v in summaries.values()
+    )
+
 
 _INTEGRATION_STATUS_VALUES = frozenset(
     {"closed", "partial", "blocked", "display_only", "read_only"}
@@ -364,10 +385,14 @@ def event_type_counts(events: List[Dict[str, Any]]) -> Dict[str, int]:
 
 
 def build_mindmap_state() -> Dict[str, Any]:
+    global _LAST_GOOD_STATE
     now = time.monotonic()
-    cached = _STATE_CACHE.get("payload")
-    if isinstance(cached, dict) and now - float(_STATE_CACHE.get("at") or 0) < _STATE_CACHE_TTL:
-        return dict(cached)
+    with _STATE_CACHE_LOCK:
+        gen = _STATE_GENERATION
+        cached = _STATE_CACHE.get("payload")
+        age = now - float(_STATE_CACHE.get("at") or 0)
+        if isinstance(cached, dict) and age < _STATE_CACHE_TTL:
+            return dict(cached)
 
     from internal.learning import panel_summaries
 
@@ -424,14 +449,19 @@ def build_mindmap_state() -> Dict[str, Any]:
         "runtime_status": _build_runtime_status(),
         "learning_state": learning_state,
     }
-    _STATE_CACHE["at"] = now
-    _STATE_CACHE["payload"] = payload
-    return payload
+    if not _payload_is_degraded(summaries):
+        stored_at = time.monotonic()
+        with _STATE_CACHE_LOCK:
+            if _STATE_GENERATION == gen:
+                _STATE_CACHE["at"] = stored_at
+                _STATE_CACHE["payload"] = payload
+                _LAST_GOOD_STATE = payload
+    return dict(payload)
 
 
 def get_stale_mindmap_state() -> Optional[Dict[str, Any]]:
     """Last-good state payload for timeout fallback (any age)."""
-    cached = _STATE_CACHE.get("payload")
-    if isinstance(cached, dict):
-        return dict(cached)
-    return None
+    with _STATE_CACHE_LOCK:
+        if isinstance(_LAST_GOOD_STATE, dict):
+            return dict(_LAST_GOOD_STATE)
+        return None

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import logging
 import os
 import threading
 import time
@@ -20,6 +21,15 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
+logger = logging.getLogger(__name__)
+
+try:
+    from internal.file_utils import _fsync_dir
+except ImportError:
+    logger.exception("file_utils._fsync_dir unavailable; postmortem dir fsync disabled")
+
+    def _fsync_dir(_path: str) -> None:
+        pass
 _RECORD_LOCK = threading.Lock()
 POSTMORTEM_LOCK_TIMEOUT_SECONDS = 5.0
 
@@ -33,6 +43,16 @@ class PostmortemFileCorrupt(Exception):
 
     Writers must not overwrite it, so this is raised instead of returning [].
     """
+
+
+def normalize_prediction_id(raw: Any) -> Optional[str]:
+    """Return a stripped id string, or None when the value cannot identify a row."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        return stripped or None
+    return str(raw).strip() or None
 
 
 def _path(judge_name: str) -> str:
@@ -58,11 +78,11 @@ def _load(judge_name: str) -> List[Any]:
     so the writer in _record_locked never replaces it with a fresh list."""
     path = _path(judge_name)
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         return []
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as exc:
         raise PostmortemFileCorrupt(f"{path} is unreadable: {exc}") from exc
     if not isinstance(data, list):
         raise PostmortemFileCorrupt(f"{path} root is not a list")
@@ -78,6 +98,8 @@ def _write_tmp_json(tmp: str, entries: List[Dict[str, Any]]) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(entries, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
     except BaseException:
         try:
             os.unlink(tmp)
@@ -92,6 +114,7 @@ def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     tmp = path + ".tmp"
     _write_tmp_json(tmp, entries)
     os.replace(tmp, path)
+    _fsync_dir(os.path.dirname(path) or ".")
 
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:
     """Generate the four scientific-method questions for a wrong pick."""
@@ -191,11 +214,13 @@ def _record_locked(
             raise PostmortemLockTimeout("timed out waiting for postmortem flock")
         try:
             entries = _load(judge_name)
-            pred_id = prediction.get("id")
+            pred_id = normalize_prediction_id(prediction.get("id"))
             actual = round(float(actual_pct or 0), 4)
             if pred_id is not None:
                 for existing in entries:
-                    if isinstance(existing, dict) and existing.get("prediction_id") == pred_id:
+                    if not isinstance(existing, dict):
+                        continue
+                    if normalize_prediction_id(existing.get("prediction_id")) == pred_id:
                         if existing.get("actual_pct") == actual:
                             return existing
                         existing["actual_pct"] = actual
@@ -205,7 +230,7 @@ def _record_locked(
             diagnosis = _diagnosis(prediction, actual_pct)
             entry = {
                 "judge": judge_name.lower(),
-                "prediction_id": prediction.get("id"),
+                "prediction_id": pred_id,
                 "netuid": prediction.get("netuid"),
                 "name": prediction.get("name"),
                 "direction": prediction.get("direction"),
@@ -226,18 +251,17 @@ def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
     return [row for row in reversed(_load(judge_name)) if isinstance(row, dict)]
 
 
-def _list_for_judge_fail_empty(judge_name: str) -> List[Dict[str, Any]]:
-    """Like list_for_judge but returns [] when path validation fails (aggregate reads)."""
-    try:
-        return list_for_judge(judge_name)
-    except ValueError:
-        return []
-
-
-def all_postmortems() -> Dict[str, List[Dict[str, Any]]]:
-    """Return postmortems for all three judges."""
-    return {
-        "oracle": _list_for_judge_fail_empty("oracle"),
-        "echo": _list_for_judge_fail_empty("echo"),
-        "pulse": _list_for_judge_fail_empty("pulse"),
-    }
+def all_postmortems_with_status() -> tuple[Dict[str, List[Dict[str, Any]]], List[str]]:
+    """Return postmortems per judge and judges whose files could not be read."""
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    unavailable: List[str] = []
+    for name in ("oracle", "echo", "pulse"):
+        try:
+            out[name] = list_for_judge(name)
+        except PostmortemFileCorrupt as exc:
+            logger.warning("postmortems unavailable for %s: %s", name, exc)
+            out[name] = []
+            unavailable.append(name)
+        except ValueError:
+            out[name] = []
+    return out, unavailable
