@@ -20,13 +20,29 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
+def _assert_rotating_xff_shares_one_bucket(base_url: str) -> None:
+    """2/min limit: two distinct X-Forwarded-For hops must share one bucket (3rd → 429)."""
+    client = httpx.Client(base_url=base_url, timeout=10.0)
+    assert client.get("/api/registry", headers={"X-Forwarded-For": "198.51.100.1"}).status_code == 200
+    assert client.get("/api/registry", headers={"X-Forwarded-For": "198.51.100.2"}).status_code == 200
+    assert client.get("/api/registry", headers={"X-Forwarded-For": "198.51.100.99"}).status_code == 429
+
+
 @pytest.fixture(scope="module")
-def uvicorn_off_fly_server():
-    env = {**os.environ, "DISABLE_BACKGROUND_SCANS": "1", "ENABLE_RATE_LIMIT": "1", "RATE_LIMIT_DEFAULT": "2/minute"}
+def uvicorn_off_fly_server(request):
+    """Indirect param: False = pinned launch (--no-proxy-headers); True = pre-fix trust path."""
+    use_pre_fix_proxy_launch = bool(getattr(request, "param", False))
+    assert UVICORN_WEB_KWARGS["proxy_headers"] is False
+
+    env = {
+        **os.environ,
+        "DISABLE_BACKGROUND_SCANS": "1",
+        "ENABLE_RATE_LIMIT": "1",
+        "RATE_LIMIT_DEFAULT": "2/minute",
+    }
     env.pop("FLY_APP_NAME", None)
     port = _free_port()
-    kwargs = UVICORN_WEB_KWARGS
-    assert kwargs["proxy_headers"] is False
+    fwd = UVICORN_WEB_KWARGS["forwarded_allow_ips"]
     cmd = [
         sys.executable,
         "-m",
@@ -38,12 +54,13 @@ def uvicorn_off_fly_server():
         str(port),
         "--log-level",
         "warning",
-        f"--forwarded-allow-ips={kwargs['forwarded_allow_ips']}",
+        f"--forwarded-allow-ips={fwd}",
     ]
-    if kwargs.get("proxy_headers"):
+    if use_pre_fix_proxy_launch:
         cmd.append("--proxy-headers")
     else:
         cmd.append("--no-proxy-headers")
+
     proc = subprocess.Popen(
         cmd,
         env=env,
@@ -68,8 +85,16 @@ def uvicorn_off_fly_server():
         proc.wait(timeout=10)
 
 
+@pytest.mark.parametrize("uvicorn_off_fly_server", [False], indirect=True)
 def test_off_fly_uvicorn_xff_does_not_split_limit_buckets(uvicorn_off_fly_server):
-    client = httpx.Client(base_url=uvicorn_off_fly_server, timeout=10.0)
-    assert client.get("/api/registry", headers={"X-Forwarded-For": "198.51.100.1"}).status_code == 200
-    assert client.get("/api/registry", headers={"X-Forwarded-For": "198.51.100.2"}).status_code == 200
-    assert client.get("/api/registry", headers={"X-Forwarded-For": "198.51.100.99"}).status_code == 429
+    _assert_rotating_xff_shares_one_bucket(uvicorn_off_fly_server)
+
+
+@pytest.mark.parametrize("uvicorn_off_fly_server", [True], indirect=True)
+@pytest.mark.xfail(
+    strict=True,
+    reason="Pre-fix launcher (--proxy-headers + loopback forwarded_allow_ips) splits XFF buckets",
+)
+def test_off_fly_uvicorn_xff_pre_fix_proxy_launch_splits_buckets(uvicorn_off_fly_server):
+    """RED guard: same 429 assert as green test; fails on shared-bucket line until launch is pinned."""
+    _assert_rotating_xff_shares_one_bucket(uvicorn_off_fly_server)
