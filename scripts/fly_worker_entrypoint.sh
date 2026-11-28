@@ -19,4 +19,4 @@ exec env RUN_MODE=worker \
   LIVE_SUBNETS_FETCH_MODE="${LIVE_SUBNETS_FETCH_MODE:-lite}" \
   MESSAGE_INTEL_LISTENER="${MESSAGE_INTEL_LISTENER:-on}" \
   TELEGRAM_GROUP_ID="${TELEGRAM_GROUP_ID:-}" \
-  uvicorn server:app --host 0.0.0.0 --port "$PORT"
+  UVICORN_TARGET=server:app PORT="$PORT" python scripts/run_web_with_guard.py

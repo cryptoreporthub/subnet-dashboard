@@ -1,1 +1,1 @@
-web: uvicorn asgi_entry:app --host 0.0.0.0 --port 8080
+web: python scripts/run_web_with_guard.py

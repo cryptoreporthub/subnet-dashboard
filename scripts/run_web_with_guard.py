@@ -23,7 +23,10 @@ if __name__ == "__main__":
 
     # Spawned multiprocessing children re-import this module as __main__ on Fly;
     # never install the learning snapshot guard / prewarm thread in fetch children.
-    if os.environ.get("LIVE_SUBNETS_FETCH_CHILD") != "1":
+    if (
+        os.environ.get("LIVE_SUBNETS_FETCH_CHILD") != "1"
+        and os.environ.get("RUN_MODE") != "worker"
+    ):
         install()
 
     import uvicorn
@@ -32,8 +35,9 @@ if __name__ == "__main__":
 
     # Do not read FORWARDED_ALLOW_IPS from env here — pinned in UVICORN_WEB_KWARGS.
     os.environ.pop("FORWARDED_ALLOW_IPS", None)
+    asgi_target = os.environ.get("UVICORN_TARGET", "asgi_entry:app")
     uvicorn.run(
-        "asgi_entry:app",
+        asgi_target,
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8080")),
         **UVICORN_WEB_KWARGS,

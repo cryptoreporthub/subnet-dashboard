@@ -4,9 +4,9 @@ Why not "server:app" directly: PR #894's transport perf changes (gzip +
 immutable static caching) are applied as an ASGI wrapper here so server.py
 itself is untouched (it is the center of the #1058 hydration work).
 
-Uvicorn boots this via scripts/run_web_with_guard.py (and the Procfile
-fallback). The dedicated worker (fly_worker_entrypoint.sh) intentionally
-keeps serving server:app directly.
+Uvicorn boots this via scripts/run_web_with_guard.py (Procfile + Fly web).
+The dedicated worker HTTP serves ``server:app`` via the same launcher with
+``UVICORN_TARGET=server:app`` so rate-limit keys share ``UVICORN_WEB_KWARGS``.
 """
 
 from __future__ import annotations

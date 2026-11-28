@@ -155,7 +155,7 @@ jobs:
           flake8 server.py internal tests --max-line-length 88 --statistics
       - name: Runtime health check
         run: |
-          uvicorn server:app --host 0.0.0.0 --port 8080 &
+          uvicorn server:app --host 0.0.0.0 --port 8080 --no-proxy-headers &
           sleep 5
           curl --fail http://localhost:8080/health
           curl --fail http://localhost:8080/api/subnets

@@ -122,7 +122,8 @@ def test_fly_worker_v2_toml_worker_vm():
 def test_fly_worker_entrypoint_runs_uvicorn_worker_mode():
     script = Path("scripts/fly_worker_entrypoint.sh").read_text(encoding="utf-8")
     assert "RUN_MODE=worker" in script
-    assert "uvicorn server:app" in script
+    assert "UVICORN_TARGET=server:app" in script
+    assert "run_web_with_guard.py" in script
     assert "MESSAGE_INTEL_LISTENER" in script
 
 

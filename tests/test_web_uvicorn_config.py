@@ -20,6 +20,28 @@ def test_fly_web_entrypoint_uses_run_web_with_guard():
     entry = Path("scripts/fly_web_entrypoint.sh").read_text()
     assert "run_web_with_guard.py" in entry
     assert "FORWARDED_ALLOW_IPS" not in entry
+    assert "uvicorn " not in entry or "run_web_with_guard.py" in entry
+
+
+def test_fly_worker_entrypoint_uses_pinned_launcher_for_rate_limited_app():
+    """Worker HTTP serves server:app (mount_rate_limit at server.py:472) — same kwargs as web."""
+    entry = Path("scripts/fly_worker_entrypoint.sh").read_text()
+    assert "run_web_with_guard.py" in entry
+    assert "UVICORN_TARGET=server:app" in entry
+    assert "--proxy-headers" not in entry
+
+
+def test_procfile_routes_web_through_pinned_launcher():
+    proc = Path("Procfile").read_text()
+    assert "run_web_with_guard.py" in proc
+    assert "uvicorn" not in proc.lower()
+
+
+def test_dockerfile_web_cmd_uses_fly_entrypoint_chain():
+    docker = Path("Dockerfile").read_text()
+    assert "fly_web_entrypoint.sh" in docker
+    assert "CMD" in docker
+    assert "uvicorn asgi_entry" not in docker
 
 
 def test_run_web_with_guard_uvicorn_run_receives_pinned_kwargs():
