@@ -274,7 +274,7 @@ def _compute_bollinger(closes: List[float], period: int = 20, num_std: float = 2
 
 def _compute_mfi(highs: List[float], lows: List[float], closes: List[float], volumes: List[float], period: int = 14) -> Dict[str, Any]:
     if len(closes) < period + 1:
-        return {"mfi": 50.0, "signal": "neutral"}
+        return {"value": 50.0, "signal": "neutral"}
     typical = [(highs[i] + lows[i] + closes[i]) / 3.0 for i in range(len(closes))]
     pos_flow, neg_flow = 0.0, 0.0
     for i in range(1, period + 1):
@@ -289,12 +289,12 @@ def _compute_mfi(highs: List[float], lows: List[float], closes: List[float], vol
     else:
         mfi = 100 - (100 / (1 + pos_flow / neg_flow))
     sig = "oversold" if mfi < 20 else "overbought" if mfi > 80 else "neutral"
-    return {"mfi": round(mfi, 1), "signal": sig}
+    return {"value": round(mfi, 1), "signal": sig}
 
 
 def _compute_cci(highs: List[float], lows: List[float], closes: List[float], period: int = 20) -> Dict[str, Any]:
     if len(closes) < period:
-        return {"cci": 0.0, "signal": "neutral"}
+        return {"value": 0.0, "signal": "neutral"}
     typical = [(highs[i] + lows[i] + closes[i]) / 3.0 for i in range(len(closes))]
     window = typical[-period:]
     sma_t = sum(window) / period
@@ -304,12 +304,12 @@ def _compute_cci(highs: List[float], lows: List[float], closes: List[float], per
     else:
         cci = (typical[-1] - sma_t) / (0.015 * mean_dev)
     sig = "oversold" if cci < -100 else "overbought" if cci > 100 else "neutral"
-    return {"cci": round(cci, 1), "signal": sig}
+    return {"value": round(cci, 1), "signal": sig}
 
 
 def _compute_williams_r(highs: List[float], lows: List[float], closes: List[float], period: int = 14) -> Dict[str, Any]:
     if len(closes) < period:
-        return {"williams_r": -50.0, "signal": "neutral"}
+        return {"value": -50.0, "signal": "neutral"}
     hh = max(highs[-period:])
     ll = min(lows[-period:])
     if hh - ll == 0:
@@ -317,7 +317,7 @@ def _compute_williams_r(highs: List[float], lows: List[float], closes: List[floa
     else:
         wr = ((hh - closes[-1]) / (hh - ll)) * -100
     sig = "oversold" if wr < -80 else "overbought" if wr > -20 else "neutral"
-    return {"williams_r": round(wr, 1), "signal": sig}
+    return {"value": round(wr, 1), "signal": sig}
 
 
 def _compute_keltner(closes: List[float], highs: List[float], lows: List[float], period: int = 20, mult: float = 2.0) -> Dict[str, Any]:
@@ -417,7 +417,7 @@ def _score_mfi(mfi_raw: Dict[str, Any]) -> float:
     """Score MFI: <20 oversold=bullish, >80 overbought=bearish, 20-80 linear."""
     if not isinstance(mfi_raw, dict):
         return 0.5
-    val = float(mfi_raw.get("mfi", 50))
+    val = float(mfi_raw.get("value", 50))
     if val < 20:
         return round(0.7 + (20 - val) / 20.0 * 0.3, 4)
     elif val > 80:
@@ -430,7 +430,7 @@ def _score_cci(cci_raw: Dict[str, Any]) -> float:
     """Score CCI: <-100 oversold=bullish, >100 overbought=bearish, -100-100 linear."""
     if not isinstance(cci_raw, dict):
         return 0.5
-    val = float(cci_raw.get("cci", 0))
+    val = float(cci_raw.get("value", 0))
     if val < -100:
         return round(0.7 + min(100, abs(val) - 100) / 100.0 * 0.3, 4)
     elif val > 100:
@@ -443,7 +443,7 @@ def _score_williams(williams_raw: Dict[str, Any]) -> float:
     """Score Williams %R: <-80 oversold=bullish, >-20 overbought=bearish."""
     if not isinstance(williams_raw, dict):
         return 0.5
-    val = float(williams_raw.get("williams_r", -50))
+    val = float(williams_raw.get("value", -50))
     if val < -80:
         return round(0.7 + min(20, abs(val) - 80) / 20.0 * 0.3, 4)
     elif val > -20:
@@ -545,12 +545,12 @@ def _degraded_technical_indicators(hist: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "rsi": {"value": 50.0, "signal": "neutral"},
         "stochastic": {"k": 50.0, "d": 50.0, "signal": "neutral"},
-        "bollinger": {"upper": 0.0, "middle": 0.0, "lower": 0.0, "signal": "neutral"},
+        "bollinger": {"upper": 0.0, "middle": 0.0, "lower": 0.0, "width": 0.0, "signal": "neutral"},
         "mfi": {"value": 50.0, "signal": "neutral"},
         "cci": {"value": 0.0, "signal": "neutral"},
-        "williams_r": {"value": -50.0, "signal": "neutral"},
+        "williams": {"value": -50.0, "signal": "neutral"},
         "keltner": {"upper": 0.0, "middle": 0.0, "lower": 0.0, "signal": "neutral"},
-        "macd": {"macd": 0.0, "signal": 0.0, "histogram": 0.0},
+        "macd": {"macd": 0.0, "signal": 0.0, "histogram": 0.0, "crossover": "neutral"},
         "ma_cross": {"signal": "neutral"},
         "history_source": hist.get("source", "unavailable"),
         "history_length": len(hist.get("closes") or []),
@@ -602,7 +602,7 @@ def _compute_technical_indicators(
         "bollinger": boll_raw,
         "mfi": mfi_raw,
         "cci": cci_raw,
-        "williams_r": williams_raw,
+        "williams": williams_raw,
         "keltner": keltner_raw,
         "macd": macd_raw,
         "ma_cross": _compute_ma_cross(closes),
@@ -690,7 +690,7 @@ def _compute_technical_score(
 # Convergence detection
 # ---------------------------------------------------------------------------
 def _detect_oversold_convergence(indicators: Dict[str, Any]) -> Dict[str, Any]:
-    keys = ["rsi", "stochastic", "mfi", "williams_r", "cci", "bollinger", "keltner"]
+    keys = ["rsi", "stochastic", "mfi", "williams", "cci", "bollinger", "keltner"]
     hits = []
     for k in keys:
         v = indicators.get(k, {})
@@ -708,7 +708,7 @@ def _detect_oversold_convergence(indicators: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _detect_overbought_convergence(indicators: Dict[str, Any]) -> Dict[str, Any]:
-    keys = ["rsi", "stochastic", "mfi", "williams_r", "cci", "bollinger", "keltner"]
+    keys = ["rsi", "stochastic", "mfi", "williams", "cci", "bollinger", "keltner"]
     hits = []
     for k in keys:
         v = indicators.get(k, {})
@@ -849,76 +849,85 @@ def _compute_signal_impact(
             "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-' if direction == 'bearish' else ''}{mag:.1f}% within {horizon_hours} hours",
         })
 
-    rsi = indicators.get("rsi", {})
-    rsi_val = float(rsi.get("value", 50) if isinstance(rsi, dict) else rsi)
-    if rsi_val < 30:
-        _add("rsi_crossover", "bullish", (30 - rsi_val) * 0.12, 24, 75, f"RSI {rsi_val:.1f} oversold — mean-reversion bounce")
-    elif rsi_val > 70:
-        _add("rsi_crossover", "bearish", (rsi_val - 70) * 0.12, 24, 75, f"RSI {rsi_val:.1f} overbought — pullback risk")
+    if indicators.get("degraded"):
+        _add("rsi_crossover", "neutral", 0.0, 24, 0, "RSI unavailable (no price history)")
+        _add("macd_cross", "neutral", 0.0, 48, 0, "MACD unavailable (no price history)")
+        _add("stochastic_reversal", "neutral", 0.0, 8, 0, "Stochastic unavailable (no price history)")
+        _add("bollinger_squeeze", "neutral", 0.0, 24, 0, "Bollinger unavailable (no price history)")
+        _add("mfi_divergence", "neutral", 0.0, 16, 0, "MFI unavailable (no price history)")
+        _add("cci_extreme", "neutral", 0.0, 12, 0, "CCI unavailable (no price history)")
+        _add("williams_r_reversal", "neutral", 0.0, 10, 0, "Williams %R unavailable (no price history)")
     else:
-        _add("rsi_crossover", "neutral", 0.8, 24, 50, f"RSI {rsi_val:.1f} neutral — no edge")
-
-    macd = indicators.get("macd", {})
-    if isinstance(macd, dict):
-        hist = float(macd.get("histogram", 0))
-        crossover = macd.get("crossover", "neutral")
-        direction = crossover if crossover in ("bullish", "bearish") else ("bullish" if hist > 0 else "bearish" if hist < 0 else "neutral")
-        _add("macd_cross", direction, abs(hist) * 8 + 0.5, 48, 70, f"MACD histogram {hist:+.2f} ({crossover})")
-    else:
-        _add("macd_cross", "neutral", 0.5, 48, 50, "MACD unavailable")
-
-    stoch = indicators.get("stochastic", {})
-    if isinstance(stoch, dict):
-        k = float(stoch.get("k", 50))
-        signal = stoch.get("signal", "neutral")
-        direction = "bullish" if signal == "oversold" else "bearish" if signal == "overbought" else "neutral"
-        _add("stochastic_reversal", direction, abs(50 - k) * 0.08, 8, 65, f"Stochastic %K {k:.1f} ({signal})")
-    else:
-        _add("stochastic_reversal", "neutral", 0.5, 8, 50, "Stochastic unavailable")
-
-    boll = indicators.get("bollinger", {})
-    if isinstance(boll, dict):
-        boll_signal = boll.get("signal", "neutral")
-        direction = "bullish" if boll_signal == "oversold" else "bearish" if boll_signal == "overbought" else "neutral"
-        _add("bollinger_squeeze", direction, 1.2 if direction != "neutral" else 0.4, 24, 60, f"Bollinger {boll_signal} (width {boll.get('bandwidth', 0):.2f})")
-    else:
-        _add("bollinger_squeeze", "neutral", 0.4, 24, 50, "Bollinger unavailable")
-
-    mfi = indicators.get("mfi", {})
-    if isinstance(mfi, dict):
-        mfi_val = float(mfi.get("value", 50))
-        if mfi_val < 30:
-            _add("mfi_divergence", "bullish", (30 - mfi_val) * 0.1, 16, 62, f"MFI {mfi_val:.1f} oversold")
-        elif mfi_val > 70:
-            _add("mfi_divergence", "bearish", (mfi_val - 70) * 0.1, 16, 62, f"MFI {mfi_val:.1f} overbought")
+        rsi = indicators.get("rsi", {})
+        rsi_val = float(rsi.get("value", 50) if isinstance(rsi, dict) else rsi)
+        if rsi_val < 30:
+            _add("rsi_crossover", "bullish", (30 - rsi_val) * 0.12, 24, 75, f"RSI {rsi_val:.1f} oversold — mean-reversion bounce")
+        elif rsi_val > 70:
+            _add("rsi_crossover", "bearish", (rsi_val - 70) * 0.12, 24, 75, f"RSI {rsi_val:.1f} overbought — pullback risk")
         else:
-            _add("mfi_divergence", "neutral", 0.5, 16, 50, f"MFI {mfi_val:.1f} neutral")
-    else:
-        _add("mfi_divergence", "neutral", 0.5, 16, 50, "MFI unavailable")
+            _add("rsi_crossover", "neutral", 0.8, 24, 50, f"RSI {rsi_val:.1f} neutral — no edge")
 
-    cci = indicators.get("cci", {})
-    if isinstance(cci, dict):
-        cci_val = float(cci.get("value", 0))
-        if cci_val < -100:
-            _add("cci_extreme", "bullish", abs(cci_val + 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply oversold")
-        elif cci_val > 100:
-            _add("cci_extreme", "bearish", (cci_val - 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply overbought")
+        macd = indicators.get("macd", {})
+        if isinstance(macd, dict):
+            hist = float(macd.get("histogram", 0))
+            crossover = macd.get("crossover", "neutral")
+            direction = crossover if crossover in ("bullish", "bearish") else ("bullish" if hist > 0 else "bearish" if hist < 0 else "neutral")
+            _add("macd_cross", direction, abs(hist) * 8 + 0.5, 48, 70, f"MACD histogram {hist:+.2f} ({crossover})")
         else:
-            _add("cci_extreme", "neutral", 0.5, 12, 50, f"CCI {cci_val:.1f} neutral")
-    else:
-        _add("cci_extreme", "neutral", 0.5, 12, 50, "CCI unavailable")
+            _add("macd_cross", "neutral", 0.5, 48, 50, "MACD unavailable")
 
-    wr = indicators.get("williams_r", {})
-    if isinstance(wr, dict):
-        wr_val = float(wr.get("value", -50))
-        if wr_val < -80:
-            _add("williams_r_reversal", "bullish", abs(wr_val + 80) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} oversold")
-        elif wr_val > -20:
-            _add("williams_r_reversal", "bearish", (wr_val + 20) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} overbought")
+        stoch = indicators.get("stochastic", {})
+        if isinstance(stoch, dict):
+            k = float(stoch.get("k", 50))
+            signal = stoch.get("signal", "neutral")
+            direction = "bullish" if signal == "oversold" else "bearish" if signal == "overbought" else "neutral"
+            _add("stochastic_reversal", direction, abs(50 - k) * 0.08, 8, 65, f"Stochastic %K {k:.1f} ({signal})")
         else:
-            _add("williams_r_reversal", "neutral", 0.5, 10, 50, f"Williams %R {wr_val:.1f} neutral")
-    else:
-        _add("williams_r_reversal", "neutral", 0.5, 10, 50, "Williams %R unavailable")
+            _add("stochastic_reversal", "neutral", 0.5, 8, 50, "Stochastic unavailable")
+
+        boll = indicators.get("bollinger", {})
+        if isinstance(boll, dict):
+            boll_signal = boll.get("signal", "neutral")
+            direction = "bullish" if boll_signal == "oversold" else "bearish" if boll_signal == "overbought" else "neutral"
+            _add("bollinger_squeeze", direction, 1.2 if direction != "neutral" else 0.4, 24, 60, f"Bollinger {boll_signal} (width {boll.get('width', 0):.2f})")
+        else:
+            _add("bollinger_squeeze", "neutral", 0.4, 24, 50, "Bollinger unavailable")
+
+        mfi = indicators.get("mfi", {})
+        if isinstance(mfi, dict):
+            mfi_val = float(mfi.get("value", 50))
+            if mfi_val < 30:
+                _add("mfi_divergence", "bullish", (30 - mfi_val) * 0.1, 16, 62, f"MFI {mfi_val:.1f} oversold")
+            elif mfi_val > 70:
+                _add("mfi_divergence", "bearish", (mfi_val - 70) * 0.1, 16, 62, f"MFI {mfi_val:.1f} overbought")
+            else:
+                _add("mfi_divergence", "neutral", 0.5, 16, 50, f"MFI {mfi_val:.1f} neutral")
+        else:
+            _add("mfi_divergence", "neutral", 0.5, 16, 50, "MFI unavailable")
+
+        cci = indicators.get("cci", {})
+        if isinstance(cci, dict):
+            cci_val = float(cci.get("value", 0))
+            if cci_val < -100:
+                _add("cci_extreme", "bullish", abs(cci_val + 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply oversold")
+            elif cci_val > 100:
+                _add("cci_extreme", "bearish", (cci_val - 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply overbought")
+            else:
+                _add("cci_extreme", "neutral", 0.5, 12, 50, f"CCI {cci_val:.1f} neutral")
+        else:
+            _add("cci_extreme", "neutral", 0.5, 12, 50, "CCI unavailable")
+
+        wr = indicators.get("williams", {})
+        if isinstance(wr, dict):
+            wr_val = float(wr.get("value", -50))
+            if wr_val < -80:
+                _add("williams_r_reversal", "bullish", abs(wr_val + 80) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} oversold")
+            elif wr_val > -20:
+                _add("williams_r_reversal", "bearish", (wr_val + 20) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} overbought")
+            else:
+                _add("williams_r_reversal", "neutral", 0.5, 10, 50, f"Williams %R {wr_val:.1f} neutral")
+        else:
+            _add("williams_r_reversal", "neutral", 0.5, 10, 50, "Williams %R unavailable")
 
     if abs(chg) >= 5:
         direction = "bullish" if chg > 0 else "bearish"

@@ -4388,14 +4388,18 @@
   }
 
   function renderIndicators(rows) {
-    if (!rows || !rows.length) return;
+    if (!rows || !rows.length) {
+      replaceSectionContent(
+        'section-indicators',
+        '<div class="card card-muted"><p class="empty">Technical indicators warming up — oscillator panel populates after price snapshots and candle history accumulate.</p></div>',
+        '.picks, .card-muted'
+      );
+      return;
+    }
     var cards = rows.slice(0, 6).map(function (row) {
       var os = row.oversold || {};
       var ob = row.overbought || {};
-      var heat = (Number(os.count) || 0) + (Number(ob.count) || 0);
-      var heatTotal = Number(os.total) || 7;
-      var heatPct = Math.round((heat / (heatTotal || 7)) * 100);
-      var heatClass = heatPct > 66 ? 'high' : heatPct > 33 ? 'core' : 'low';
+      var degraded = !!row.degraded;
       var sparks = row.spark_closes;
       var sparkHtml = '';
       if (sparks && sparks.length >= 2) {
@@ -4405,18 +4409,30 @@
       } else {
         sparkHtml = '<div class="spark-empty" aria-hidden="true">—</div>';
       }
-      var tags = '';
-      if (os.convergent) tags += '<span class="badge badge-buy">OVERSOLD ' + esc(os.count) + '/' + esc(os.total) + '</span>';
-      if (ob.convergent) tags += '<span class="badge badge-sell">OVERBOUGHT ' + esc(ob.count) + '/' + esc(ob.total) + '</span>';
-      if (!os.convergent && !ob.convergent) tags = '<span class="badge badge-watch">NEUTRAL</span>';
+      var body = '';
+      if (degraded) {
+        body =
+          '<p class="section-sub section-sub--compact">No price data — awaiting OHLCV history.</p>' +
+          '<div class="tags tags-tight"><span class="badge badge-watch">Awaiting price history</span></div>';
+      } else {
+        var heat = (Number(os.count) || 0) + (Number(ob.count) || 0);
+        var heatTotal = Number(os.total) || 7;
+        var heatPct = Math.round((heat / (heatTotal || 7)) * 100);
+        var heatClass = heatPct > 66 ? 'high' : heatPct > 33 ? 'core' : 'low';
+        var tags = '';
+        if (os.convergent) tags += '<span class="badge badge-buy">OVERSOLD ' + esc(os.count) + '/' + esc(os.total) + '</span>';
+        if (ob.convergent) tags += '<span class="badge badge-sell">OVERBOUGHT ' + esc(ob.count) + '/' + esc(ob.total) + '</span>';
+        if (!os.convergent && !ob.convergent) tags = '<span class="badge badge-watch">NEUTRAL</span>';
+        body =
+          '<div class="ti-heat-row vol-cluster-row"><span class="vol-cluster-label">Signal heat</span>' +
+          '<div class="vol-cluster-bar-wrap"><div class="vol-cluster-bar vol-bar-' + heatClass + '" style="width:' + Math.min(heatPct, 100) + '%;"></div></div>' +
+          '<span class="vol-cluster-value">' + heatPct + '%</span></div>' +
+          '<div class="tags tags-tight">' + tags + '</div>';
+      }
       return (
         '<div class="pick-card card"><div class="ti-head"><div>' +
         '<div class="pick-name">' + esc(row.name || 'SN' + row.netuid) + '</div>' +
-        '<div class="pick-meta">SN' + esc(row.netuid) + '</div></div>' + sparkHtml + '</div>' +
-        '<div class="ti-heat-row vol-cluster-row"><span class="vol-cluster-label">Signal heat</span>' +
-        '<div class="vol-cluster-bar-wrap"><div class="vol-cluster-bar vol-bar-' + heatClass + '" style="width:' + Math.min(heatPct, 100) + '%;"></div></div>' +
-        '<span class="vol-cluster-value">' + heatPct + '%</span></div>' +
-        '<div class="tags tags-tight">' + tags + '</div></div>'
+        '<div class="pick-meta">SN' + esc(row.netuid) + '</div></div>' + sparkHtml + '</div>' + body + '</div>'
       );
     }).join('');
     replaceSectionContent('section-indicators', '<div class="picks">' + cards + '</div>', '.picks, .card-muted');

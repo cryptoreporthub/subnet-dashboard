@@ -82,7 +82,7 @@ def test_api_ruggers_honest_empty_and_same_ledger(client):
 
 def test_api_indicators_convergence_honest_degraded(client, monkeypatch):
     monkeypatch.setattr(
-        "internal.indicators.routes._compute_technical_indicators",
+        "internal.indicators.convergence._compute_technical_indicators",
         lambda sn: {"degraded": True, "history_source": "unavailable"},
     )
     conv = client.get("/api/indicators-convergence").json()

@@ -88,8 +88,11 @@
   }
 
   function signalCount(g) {
+    var liveIndicators = (g.indicators || []).filter(function (row) {
+      return !row.degraded;
+    }).length;
     return (
-      g.indicators.length +
+      liveIndicators +
       g.hour_picks.length +
       g.day_picks.length +
       g.trail.length +
@@ -117,6 +120,10 @@
     var items = '';
 
     g.indicators.forEach(function (row) {
+      if (row.degraded) {
+        items += renderChild('Indicators', 'No price history');
+        return;
+      }
       var os = row.oversold || {};
       var ob = row.overbought || {};
       var parts = [];

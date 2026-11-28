@@ -103,30 +103,9 @@ def spark_closes_cached_only(sn: Dict[str, Any]) -> List[float]:
 
 def _safe_indicators_convergence(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     try:
-        from internal.council.state_vector import (
-            _compute_technical_indicators,
-            _detect_overbought_convergence,
-            _detect_oversold_convergence,
-        )
+        from internal.indicators.convergence import build_indicators_convergence
 
-        ranked = sorted(
-            subnets,
-            key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)),
-            reverse=True,
-        )
-        rows = []
-        for sn in ranked[:6]:
-            indicators = _compute_technical_indicators(sn)
-            rows.append(
-                {
-                    "netuid": sn.get("netuid"),
-                    "name": sn.get("name"),
-                    "oversold": _detect_oversold_convergence(indicators),
-                    "overbought": _detect_overbought_convergence(indicators),
-                    "spark_closes": _spark_closes_for_subnet(sn),
-                }
-            )
-        return {"subnets": rows}
+        return build_indicators_convergence(subnets)
     except Exception as exc:
         logger.warning("Could not load indicators convergence for root: %s", exc)
         return {"subnets": [], "error": str(exc)}

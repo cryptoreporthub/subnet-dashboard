@@ -39,22 +39,22 @@ def test_removed_indicator_routes_are_404():
 
 
 def test_convergence_source_names_state_vector(monkeypatch):
-    import internal.indicators.routes as routes
+    import internal.indicators.convergence as conv
     import server
 
     rows = [{"netuid": 7, "name": "SN7", "emission": 1.0}]
     monkeypatch.setattr(server, "_get_subnets_with_source", lambda: (rows, "registry"))
-    monkeypatch.setattr(routes, "_get_price_history", lambda n, sn: {"closes": [], "source": "unavailable"})
-    monkeypatch.setattr(routes, "_detect_oversold_convergence", lambda ind: {"convergent": False, "count": 0})
-    monkeypatch.setattr(routes, "_detect_overbought_convergence", lambda ind: {"convergent": False, "count": 0})
+    monkeypatch.setattr(conv, "_get_price_history", lambda n, sn: {"closes": [1.0, 1.1], "source": "cache"})
+    monkeypatch.setattr(conv, "_detect_oversold_convergence", lambda ind: {"convergent": False, "count": 0})
+    monkeypatch.setattr(conv, "_detect_overbought_convergence", lambda ind: {"convergent": False, "count": 0})
 
-    monkeypatch.setattr(routes, "_compute_technical_indicators", lambda sn: {"degraded": False})
+    monkeypatch.setattr(conv, "_compute_technical_indicators", lambda sn: {"degraded": False})
     with _client() as c:
         body = c.get("/api/indicators-convergence").json()
     assert body["data_available"] is True
     assert body["source"] == "state_vector"
 
-    monkeypatch.setattr(routes, "_compute_technical_indicators", lambda sn: {"degraded": True})
+    monkeypatch.setattr(conv, "_compute_technical_indicators", lambda sn: {"degraded": True, "history_source": "unavailable"})
     with _client() as c:
         body = c.get("/api/indicators-convergence").json()
     assert body["data_available"] is False
