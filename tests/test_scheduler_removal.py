@@ -2,12 +2,28 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 REPO = Path(__file__).resolve().parents[1]
+DELETED_MODULES = {
+    "internal.indicators.indicator_scheduler",
+    "internal.indicators.indicator_engine",
+    "internal.indicators.bollinger",
+    "internal.indicators.cci",
+    "internal.indicators.crossover_detector",
+    "internal.indicators.keltner",
+    "internal.indicators.macd",
+    "internal.indicators.mfi",
+    "internal.indicators.momentum",
+    "internal.indicators.rsi",
+    "internal.indicators.technical",
+    "internal.scheduler",
+    "internal.council.emission_monitor",
+}
 
 
 def _client():
@@ -66,3 +82,25 @@ def test_pump_convergence_ignores_stale_indicator_file(monkeypatch, tmp_path):
     monkeypatch.setenv("INDICATOR_STATE_PATH", str(tmp_path / "data" / "indicator_state.json"))
     tracker = PumpTracker(state_path=str(tmp_path / "pump_state.json"))
     assert tracker.compute_signal_convergence(1) == 0.5
+
+
+def test_no_runtime_module_imports_a_deleted_module():
+    offenders = []
+    for path in REPO.rglob("*.py"):
+        rel = path.relative_to(REPO).as_posix()
+        if rel.startswith(("tests/", ".venv/", "venv/", "node_modules/")) or "/site-packages/" in rel:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module] + [f"{node.module}.{a.name}" for a in node.names]
+            for n in names:
+                if n in DELETED_MODULES:
+                    offenders.append(f"{rel}:{node.lineno} {n}")
+    assert not offenders, offenders
