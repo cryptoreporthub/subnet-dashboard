@@ -145,6 +145,18 @@ def test_allowed_tools_is_the_pinned_allowlist():
     }
 
 
+def test_review_job_has_a_thirty_minute_timeout():
+    assert _load()["jobs"]["review"]["timeout-minutes"] == 30
+
+
+def test_review_job_allows_gh_pr_view_for_the_pr_title_and_body():
+    # Agent mode only gets the workflow prompt, so the bot needs `gh pr view`
+    # to read the PR title and body the adversarial instructions refer to.
+    assert "Bash(gh pr view:*)" in _allowed_tools(_load())
+    assert "gh pr view" in _prompt(_load())
+    assert "gh pr diff" in _prompt(_load())
+
+
 def test_review_job_uses_only_user_setting_sources():
     # Ignore .claude settings and hooks a PR can add. The action writes its own
     # settings to ~/.claude/settings.json, which is the user source, so its MCP
@@ -282,6 +294,17 @@ def test_marker_is_unique_to_the_run_and_required_by_the_prompt():
     assert marker in prompt
     assert "first line of the summary" in prompt
     # The heredoc form is the one the CLI lets through when the text has newlines and `#`.
+    assert "--body \"$(cat <<'EOF'" in prompt
+
+
+def test_prompt_requires_untested_labels_and_keeps_the_marker():
+    # Adversarial review lives in the prompt, not as runner skills. Keep the
+    # posting contract: the marker and heredoc form must still be required.
+    prompt = _prompt(_load())
+    assert "UNTESTED" in prompt
+    marker = "<!-- claude-review-run:${{ github.run_id }}-${{ github.run_attempt }} -->"
+    assert marker in prompt
+    assert "first line of the summary" in prompt
     assert "--body \"$(cat <<'EOF'" in prompt
 
 

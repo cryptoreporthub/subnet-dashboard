@@ -20,6 +20,7 @@ jobs:
     if: >-
       github.event.pull_request.draft == false &&
       github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,6 +65,12 @@ jobs:
 
             Review this pull request for bugs, security issues and unclear code.
             The PR's merge commit is checked out. Use `gh pr diff` for the changes.
+            Use `gh pr view` for the PR title and body.
+            Verify every claim in the PR against the actual code, not the description.
+            Try to break the change: edge cases, error paths, concurrency, and security.
+            Look for issues the PR does not mention, including blast radius on callers.
+            Label anything you did not actually check as UNTESTED.
+            Report findings by severity with file:line. Do not approve on vibes.
             Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`)
             for issues in specific lines.
             Post one summary with exactly this form (the number first, then `--body`, and the
