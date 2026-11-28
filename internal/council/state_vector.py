@@ -586,8 +586,6 @@ def _compute_technical_indicators(
     volumes = hist.get("volumes", [])
 
     rsi_raw = _compute_rsi_series(closes, 14)
-    if len(closes) < 15:
-        rsi_raw = 50.0
 
     macd_raw = _compute_macd_series(closes)
     stoch_raw = _compute_stochastic(highs, lows, closes)
@@ -870,10 +868,10 @@ def _compute_signal_impact(
 
         macd = indicators.get("macd", {})
         if isinstance(macd, dict):
-            hist = float(macd.get("histogram", 0))
+            macd_hist = float(macd.get("histogram", 0))
             crossover = macd.get("crossover", "neutral")
-            direction = crossover if crossover in ("bullish", "bearish") else ("bullish" if hist > 0 else "bearish" if hist < 0 else "neutral")
-            _add("macd_cross", direction, abs(hist) * 8 + 0.5, 48, 70, f"MACD histogram {hist:+.2f} ({crossover})")
+            direction = crossover if crossover in ("bullish", "bearish") else ("bullish" if macd_hist > 0 else "bearish" if macd_hist < 0 else "neutral")
+            _add("macd_cross", direction, abs(macd_hist) * 8 + 0.5, 48, 70, f"MACD histogram {macd_hist:+.2f} ({crossover})")
         else:
             _add("macd_cross", "neutral", 0.5, 48, 50, "MACD unavailable")
 
