@@ -75,7 +75,8 @@ def _restore_limiter_env(
         os.environ.pop("FLY_APP_NAME", None)
     else:
         os.environ["FLY_APP_NAME"] = prev_fly
-    monkeypatch.setattr(rl, "_limiter", None)
+    # ponytail: do not monkeypatch._limiter — pytest undo restores the 2/min singleton.
+    rl._limiter = None
     if getattr(server.app.state, "_rate_limit_fixture_mounted", False):
         # ponytail: mount_rate_limit cannot be undone; never leave SlowAPI with limiter=None.
         if not rl.rate_limit_enabled():
@@ -204,3 +205,11 @@ def test_off_fly_forged_xff_still_one_bucket(rate_limited_client):
         rate_limited_client.get("/api/registry", headers={"X-Forwarded-For": "198.51.100.99"}).status_code
         == 429
     )
+
+
+def test_fixture_teardown_restores_default_limiter():
+    """Collected last: prior tests must not leave a 2/min singleton on the shared app."""
+    assert default_limit() == os.environ.get("RATE_LIMIT_DEFAULT", "120/minute")
+    client = TestClient(server.app)
+    for _ in range(3):
+        assert client.get("/api/registry").status_code == 200
