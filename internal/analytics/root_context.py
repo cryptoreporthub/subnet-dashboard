@@ -107,8 +107,10 @@ def _safe_indicators_convergence(subnets: List[Dict[str, Any]]) -> Dict[str, Any
 
         return build_indicators_convergence(subnets)
     except Exception as exc:
+        from internal.indicators.convergence import indicators_convergence_error_payload
+
         logger.warning("Could not load indicators convergence for root: %s", exc)
-        return {"subnets": [], "error": str(exc)}
+        return indicators_convergence_error_payload(exc)
 
 
 def _safe_whale_summary() -> Dict[str, Any]:

@@ -4396,13 +4396,14 @@
       );
       return;
     }
-    var cards = rows.slice(0, 6).map(function (row) {
+    var visibleRows = rows.slice(0, 6);
+    var cards = visibleRows.map(function (row) {
       var os = row.oversold || {};
       var ob = row.overbought || {};
       var degraded = !!row.degraded;
       var sparks = row.spark_closes;
       var sparkHtml = '';
-      if (sparks && sparks.length >= 2) {
+      if (!degraded && sparks && sparks.length >= 2) {
         sparkHtml =
           '<div class="spark-wrap chart-canvas-wrap"><div class="spark" data-spark="' +
           esc(sparks.join(',')) + '" role="img" aria-label="Price sparkline for ' + esc(row.name || 'subnet') + '"></div></div>';
@@ -4435,7 +4436,7 @@
         '<div class="pick-meta">SN' + esc(row.netuid) + '</div></div>' + sparkHtml + '</div>' + body + '</div>'
       );
     }).join('');
-    var allDegraded = rows.length > 0 && rows.every(function (row) { return row.degraded; });
+    var allDegraded = visibleRows.length > 0 && visibleRows.every(function (row) { return row.degraded; });
     var banner = allDegraded
       ? '<p class="section-sub section-sub--compact ti-degraded-banner">Oscillator panel awaiting price history — no live convergence yet.</p>'
       : '';

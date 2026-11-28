@@ -13,6 +13,7 @@ from internal.council.state_vector import (
     _compute_williams_r,
     _degraded_technical_indicators,
     _detect_oversold_convergence,
+    _detect_overbought_convergence,
     _compute_hot_signals,
     _compute_sell_signals,
 )
@@ -56,7 +57,7 @@ def test_williams_overbought_emits_bearish_reversal_impact():
         _compute_sell_signals(
             sn,
             indicators,
-            _detect_oversold_convergence(indicators),
+            _detect_overbought_convergence(indicators),
         ),
     )
     williams = next(i for i in si["impacts"] if i["signal_type"] == "williams_r_reversal")
@@ -146,6 +147,93 @@ def test_indicators_convergence_error_payload_shape():
     assert body["data_available"] is False
     assert body["source"] == "none"
     assert body["reason"] == "error"
+    assert body["error"] == "indicators_convergence_unavailable"
+    assert "boom" not in str(body)
+
+
+def test_degraded_rows_omit_spark_closes(monkeypatch):
+    import internal.indicators.convergence as conv
+
+    subnets = [{"netuid": 1, "name": "SN1", "emission": 1.0}]
+    monkeypatch.setattr(
+        conv,
+        "_compute_technical_indicators",
+        lambda sn, **kw: {"degraded": True, "history_source": "cache"},
+    )
+    monkeypatch.setattr(
+        conv,
+        "_get_price_history",
+        lambda n, sn: {"closes": [1.0, 1.1, 1.2], "source": "cache"},
+    )
+    row = build_indicators_convergence(subnets)["subnets"][0]
+    assert row["degraded"] is True
+    assert row["spark_closes"] == []
+
+
+def test_build_indicators_convergence_survives_hist_none(monkeypatch):
+    import internal.indicators.convergence as conv
+
+    subnets = [{"netuid": 2, "name": "SN2", "emission": 1.0}]
+    monkeypatch.setattr(conv, "_get_price_history", lambda n, sn: None)
+    monkeypatch.setattr(
+        conv,
+        "_compute_technical_indicators",
+        lambda sn, **kw: {"degraded": True, "history_source": "no_ohlcv"},
+    )
+    payload = build_indicators_convergence(subnets)
+    assert len(payload["subnets"]) == 1
+
+
+def test_build_indicators_convergence_sorts_with_null_emission(monkeypatch):
+    import internal.indicators.convergence as conv
+
+    subnets = [
+        {"netuid": 1, "name": "A", "emission": None, "apy": 1.0},
+        {"netuid": 2, "name": "B", "emission": 2.0, "apy": 0.0},
+    ]
+    monkeypatch.setattr(
+        conv,
+        "_get_price_history",
+        lambda n, sn: {"closes": [], "source": "unavailable"},
+    )
+    monkeypatch.setattr(
+        conv,
+        "_compute_technical_indicators",
+        lambda sn, **kw: {"degraded": True, "history_source": "unavailable"},
+    )
+    rows = build_indicators_convergence(subnets)["subnets"]
+    assert rows[0]["netuid"] == 2
+
+
+def test_root_safe_convergence_matches_error_payload(monkeypatch):
+    import internal.indicators.convergence as conv
+
+    monkeypatch.setattr(conv, "build_indicators_convergence", lambda subnets: (_ for _ in ()).throw(ValueError("secret-path")))
+    from internal.analytics.root_context import _safe_indicators_convergence
+
+    body = _safe_indicators_convergence([])
+    assert body == indicators_convergence_error_payload(ValueError("secret-path"))
+    assert "secret" not in str(body)
+
+
+def test_template_all_degraded_uses_visible_slice_only():
+    live_tail = {
+        "netuid": 99,
+        "name": "Live",
+        "degraded": False,
+        "spark_closes": [1.0, 1.1],
+        "oversold": {"count": 0, "total": 7},
+        "overbought": {"count": 0, "total": 7},
+    }
+    rows = [{"netuid": i, "name": f"SN{i}", "degraded": True, "spark_closes": []} for i in range(6)]
+    rows.append(live_tail)
+    html = templates.get_template("partials/premium/indicators.html").render(ti_rows=rows)
+    assert "Oscillator panel awaiting price history" in html
+
+    mixed_visible = [{"netuid": i, "name": f"SN{i}", "degraded": True, "spark_closes": []} for i in range(5)]
+    mixed_visible.append(live_tail)
+    html_mixed = templates.get_template("partials/premium/indicators.html").render(ti_rows=mixed_visible)
+    assert "Oscillator panel awaiting price history" not in html_mixed
 
 
 @pytest.fixture

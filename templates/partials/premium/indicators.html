@@ -4,15 +4,14 @@
   <h2 class="section-title" id="indicators-title">Oscillator Panel</h2>
   <p class="section-sub">Sparkline momentum and heat-bar signal strength across top subnets.</p>
   {% if ti_rows %}
-  {% set all_degraded = ti_rows|selectattr('degraded')|list|length == ti_rows|length %}
+  {% set visible_rows = ti_rows[:6] %}
+  {% set all_degraded = visible_rows|length > 0 and (visible_rows|selectattr('degraded')|list|length == visible_rows|length) %}
   <div class="picks">
-    {% for row in ti_rows[:6] %}
-    {% set spark_pts = row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else [] %}
+    {% for row in visible_rows %}
     {% set os = row.oversold if row.oversold is mapping else {} %}
     {% set ob = row.overbought if row.overbought is mapping else {} %}
     {% set degraded = row.degraded %}
-    {% set heat = (os.count|default(0))|int + (ob.count|default(0))|int %}
-    {% set heat_pct = ((heat / (os.total|default(7)|int or 7)) * 100)|round %}
+    {% set spark_pts = [] if degraded else (row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else []) %}
     <div class="pick-card card">
       <div class="ti-head">
         <div>
@@ -33,6 +32,8 @@
         <span class="badge badge-watch">Awaiting price history</span>
       </div>
       {% else %}
+      {% set heat = (os.count|default(0))|int + (ob.count|default(0))|int %}
+      {% set heat_pct = ((heat / (os.total|default(7)|int or 7)) * 100)|round %}
       <div class="ti-heat-row vol-cluster-row">
         <span class="vol-cluster-label">Signal heat</span>
         <div class="vol-cluster-bar-wrap">
@@ -50,7 +51,7 @@
     {% endfor %}
   </div>
   {% if all_degraded %}
-  <p class="section-sub section-sub--compact">Oscillator panel awaiting price history — no live convergence yet.</p>
+  <p class="section-sub section-sub--compact ti-degraded-banner">Oscillator panel awaiting price history — no live convergence yet.</p>
   {% endif %}
   {% else %}
   <div class="card card-muted"><p class="empty">Technical indicators warming up — oscillator panel populates after price snapshots and candle history accumulate.</p></div>
