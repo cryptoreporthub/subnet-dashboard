@@ -169,8 +169,7 @@ def test_fly_missing_header_ignores_xff_for_key(monkeypatch):
 
     class _Req:
         headers = {"X-Forwarded-For": "1.1.1.1, 9.9.9.9"}
-
-        client = type("C", (), {"host": "203.0.113.9"})()
+        scope = {"client": ("203.0.113.9", 12345)}
 
     assert client_ip(_Req()) == "203.0.113.9"
 
@@ -181,8 +180,7 @@ def test_fly_client_ip_header_strips_whitespace(monkeypatch):
 
     class _Req:
         headers = Headers({"Fly-Client-IP": "  203.0.113.77  "})
-
-        client = type("C", (), {"host": "127.0.0.1"})()
+        scope = {"client": ("127.0.0.1", 12345)}
 
     assert client_ip(_Req()) == "203.0.113.77"
 
@@ -192,10 +190,9 @@ def test_off_fly_xff_ignored_for_key(monkeypatch):
 
     class _Req:
         headers = {"X-Forwarded-For": "1.2.3.4", "Fly-Client-IP": "9.9.9.9"}
+        scope = {"client": ("10.20.30.40", 12345)}
 
-        client = type("C", (), {"host": "127.0.0.1"})()
-
-    assert client_ip(_Req()) == "127.0.0.1"
+    assert client_ip(_Req()) == "10.20.30.40"
 
 
 def test_off_fly_forged_xff_still_one_bucket(rate_limited_client):

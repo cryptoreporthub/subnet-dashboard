@@ -95,6 +95,7 @@ jobs:
             tests/test_rate_limit.py \
             tests/test_shield_bot.py \
             tests/test_web_uvicorn_config.py \
+            tests/test_rate_limit_uvicorn_xff.py \
             tests/test_deploy_blockers_resilience.py \
             tests/test_issue_1637_panel_postmortem.py \
             tests/test_mindmap_state_cache.py -q 2>&1 | tee ci-test-output.txt

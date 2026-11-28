@@ -6,7 +6,6 @@ import os
 from typing import Callable, Mapping, Optional, TypeVar
 
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 _STRICT_LIMIT = "30/minute"
 _EXEMPT_EXACT = frozenset({"/health", "/api/health", "/api/ops/live", "/metrics", "/version"})
@@ -19,6 +18,14 @@ F = TypeVar("F", bound=Callable)
 
 def on_fly() -> bool:
     return bool(os.environ.get("FLY_APP_NAME", "").strip())
+
+
+def socket_peer_host(request) -> str:
+    """ASGI TCP peer; must not pass through uvicorn ProxyHeadersMiddleware (proxy_headers=False)."""
+    client = request.scope.get("client")
+    if client:
+        return str(client[0])
+    return "unknown"
 
 
 def client_ip_from_headers(headers: Mapping[str, str], fallback: str) -> str:
@@ -45,7 +52,7 @@ def client_ip(request) -> str:
     (https://fly.io/docs/networking/request-headers/). Run the DEPLOY.md pre-enable probe
     before relying on client-supplied ``Fly-Client-IP`` being ignored.
     """
-    return client_ip_from_headers(request.headers, get_remote_address(request))
+    return client_ip_from_headers(request.headers, socket_peer_host(request))
 
 
 def rate_limit_enabled() -> bool:

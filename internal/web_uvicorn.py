@@ -1,9 +1,10 @@
 """Pinned uvicorn launch kwargs for the web process (#1633).
 
-``FORWARDED_ALLOW_IPS='*'`` lets clients forge ``X-Forwarded-For``; slowapi's
-``get_remote_address`` (used when ``Fly-Client-IP`` is absent on Fly) would then
-trust spoofed hops. Pin to loopback-only so only the local reverse proxy may set
-forwarded headers. Fly edge must use ``Fly-Client-IP`` for per-client keys.
+``proxy_headers=True`` with ``forwarded_allow_ips=127.0.0.1`` lets loopback peers
+trust client ``X-Forwarded-For`` into ``request.client``, which re-opens #1633 off-Fly.
+We keep ``proxy_headers=False`` and key limits on the TCP peer (``socket_peer_host``).
+``FORWARDED_ALLOW_IPS`` must not widen trust in prod; the launcher pops it.
+Fly edge must use ``Fly-Client-IP`` for per-client keys on Fly.
 """
 
 from __future__ import annotations
@@ -13,5 +14,5 @@ UVICORN_FORWARDED_ALLOW_IPS: str = "127.0.0.1"
 
 UVICORN_WEB_KWARGS = {
     "forwarded_allow_ips": UVICORN_FORWARDED_ALLOW_IPS,
-    "proxy_headers": True,
+    "proxy_headers": False,
 }

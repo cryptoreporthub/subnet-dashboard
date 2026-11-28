@@ -326,16 +326,17 @@ a trusted client-IP source (e.g. `CF-Connecting-IP`; follow-up only, not in #163
 an orange-cloud-off path to Fly. The app does **not** parse `X-Forwarded-For` for rate
 limits (client-spoofable).
 
-**Uvicorn forwarded headers:** production web boots via `scripts/fly_web_entrypoint.sh` →
-`scripts/run_web_with_guard.py` → ``uvicorn.run(...)`` (line ~35) with
-``forwarded_allow_ips=127.0.0.1`` from `internal/web_uvicorn.py`. Do **not** set a Fly
-secret/env ``FORWARDED_ALLOW_IPS`` (e.g. ``*``) — it would let clients rotate
-``X-Forwarded-For`` past the fail-closed fallback when ``Fly-Client-IP`` is missing.
-Confirm no such override before deploy (tracked in [#1633](https://github.com/cryptoreporthub/subnet-dashboard/issues/1633)).
+**Uvicorn launch:** production web boots via `scripts/fly_web_entrypoint.sh` →
+`scripts/run_web_with_guard.py` → ``uvicorn.run(..., **UVICORN_WEB_KWARGS)`` with
+``proxy_headers=False`` and ``forwarded_allow_ips=127.0.0.1`` from `internal/web_uvicorn.py`.
+``proxy_headers`` must stay **off** so client ``X-Forwarded-For`` cannot rewrite the TCP
+peer used by ``socket_peer_host`` (Replit #1636 P2). Do **not** set Fly env
+``FORWARDED_ALLOW_IPS=*`` — the launcher pops it, but a manual override plus re-enabling
+``proxy_headers`` would reopen XFF bucket splits.
 
 **#1633 deliberate departure:** when ``Fly-Client-IP`` is missing on Fly, we do **not**
 fall back to the last ``X-Forwarded-For`` hop (issue body suggestion). That hop is
-client-spoofable on 6PN; we use ``get_remote_address`` instead (fail-closed bucket).
+client-spoofable on 6PN; we use the TCP socket peer instead (fail-closed bucket).
 
 **Fly private network (6PN / `.internal`):** traffic between Fly apps can skip the public
 edge proxy; callers may supply their own ``Fly-Client-IP``. Acceptable while no other app
@@ -343,10 +344,9 @@ in the org calls this web service on the private network — revisit before open
 callers.
 
 **Shield / limits off Fly:** when ``FLY_APP_NAME`` is unset, Shield and the rate limiter key
-on the logged socket IP (`event["ip"]` / `get_remote_address`) and **ignore**
-``X-Forwarded-For``. A non-Fly reverse proxy in front of the process therefore collapses
-per-client Shield subjects to the proxy's single peer address unless you set ``FLY_APP_NAME``
-and terminate at Fly.
+on the ASGI TCP peer (`socket_peer_host` / logged socket ``event["ip"]``) and **never** parse
+``X-Forwarded-For``. A reverse proxy in front of the process therefore collapses clients to
+that proxy's single peer address unless you set ``FLY_APP_NAME`` and terminate at Fly.
 
 **Pre-enable probe (Fly-Client-IP overwrite):** After deploy, from **one** client host
 send ~150 ``GET`` requests to a rate-limited read-only route (e.g. ``/api/registry``;

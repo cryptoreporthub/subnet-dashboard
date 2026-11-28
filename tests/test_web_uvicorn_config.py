@@ -13,7 +13,7 @@ from internal.web_uvicorn import UVICORN_FORWARDED_ALLOW_IPS, UVICORN_WEB_KWARGS
 def test_uvicorn_forwarded_allow_ips_pinned_loopback():
     assert UVICORN_FORWARDED_ALLOW_IPS == "127.0.0.1"
     assert UVICORN_WEB_KWARGS["forwarded_allow_ips"] == "127.0.0.1"
-    assert UVICORN_WEB_KWARGS["proxy_headers"] is True
+    assert UVICORN_WEB_KWARGS["proxy_headers"] is False
 
 
 def test_fly_web_entrypoint_uses_run_web_with_guard():
@@ -51,4 +51,4 @@ def test_run_web_with_guard_uvicorn_run_receives_pinned_kwargs():
 
     assert "kwargs" in captured
     assert captured["kwargs"]["forwarded_allow_ips"] == "127.0.0.1"
-    assert captured["kwargs"]["proxy_headers"] is True
+    assert captured["kwargs"]["proxy_headers"] is False
