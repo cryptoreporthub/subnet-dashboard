@@ -40,6 +40,7 @@ from internal.ops.bot_policy import (
 )
 from internal.ops.notify import notify, redact
 from internal.rate_limit import (
+    client_ip_from_headers,
     default_limit,
     is_exempt_path,
     rate_limit_enabled,
@@ -130,15 +131,12 @@ def _headers(event: Mapping[str, Any]) -> Dict[str, str]:
 
 
 def _client_ip(event: Mapping[str, Any], headers: Mapping[str, str]) -> str:
-    """Match Fly X-Forwarded-For first-hop keying used by rate_limit._fly_client_ip."""
-    forwarded = (headers.get("x-forwarded-for") or "").strip()
-    if forwarded:
-        return forwarded.split(",")[0].strip() or "unknown"
+    """Match rate_limit client_ip keying (Fly-Client-IP on Fly; never X-Forwarded-For)."""
     for key in ("ip", "client_ip", "remote_addr"):
         value = str(event.get(key) or "").strip()
         if value:
-            return value
-    return "unknown"
+            return client_ip_from_headers(headers, value)
+    return client_ip_from_headers(headers, "unknown")
 
 
 def _status_of(event: Mapping[str, Any]) -> Optional[int]:

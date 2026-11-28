@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Callable, Optional, TypeVar
+from typing import Callable, Mapping, Optional, TypeVar
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -17,12 +17,35 @@ _limiter: Optional[Limiter] = None
 F = TypeVar("F", bound=Callable)
 
 
-def _fly_client_ip(request) -> str:
-    """Trust Fly's X-Forwarded-For first hop when present."""
-    forwarded = request.headers.get("X-Forwarded-For", "").strip()
-    if forwarded:
-        return forwarded.split(",")[0].strip() or get_remote_address(request)
-    return get_remote_address(request)
+def on_fly() -> bool:
+    return bool(os.environ.get("FLY_APP_NAME", "").strip())
+
+
+def client_ip_from_headers(headers: Mapping[str, str], fallback: str) -> str:
+    """Shared key for shield telemetry: Fly-Client-IP on Fly; never X-Forwarded-For."""
+    if on_fly():
+        # Starlette Headers and shield._headers() both resolve case-insensitively.
+        fly_ip = (headers.get("fly-client-ip") or "").strip()
+        if fly_ip:
+            return fly_ip
+        return fallback or "unknown"
+    return fallback or "unknown"
+
+
+def client_ip(request) -> str:
+    """slowapi key_func: Fly-Client-IP on Fly, else request.client; never X-Forwarded-For.
+
+    On Fly, missing ``Fly-Client-IP`` means the request did not arrive through Fly's edge
+    proxy as expected (e.g. another CDN in front). We deliberately do **not** parse
+    ``X-Forwarded-For`` (client-spoofable; see #1633 /tl).
+
+    **Assumption (not verified in this repo):** direct traffic to Fly's proxy yields a
+    ``Fly-Client-IP`` header added by Fly Proxy and not spoofable by the client. Fly docs
+    describe the header as added by Fly Proxy
+    (https://fly.io/docs/networking/request-headers/). Run the DEPLOY.md pre-enable probe
+    before relying on client-supplied ``Fly-Client-IP`` being ignored.
+    """
+    return client_ip_from_headers(request.headers, get_remote_address(request))
 
 
 def rate_limit_enabled() -> bool:
@@ -51,7 +74,7 @@ def get_limiter() -> Optional[Limiter]:
         return None
     if _limiter is None:
         _limiter = Limiter(
-            key_func=_fly_client_ip,
+            key_func=client_ip,
             default_limits=[default_limit()],
         )
     return _limiter

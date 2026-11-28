@@ -384,22 +384,75 @@ def test_redacts_authorization_from_report_and_audit():
         assert "header-secret" not in str(row)
 
 
-def test_fly_xff_first_hop_is_the_client_key(monkeypatch):
+def test_shield_off_fly_subject_uses_event_ip_despite_rotating_xff(monkeypatch):
+    monkeypatch.delenv("FLY_APP_NAME", raising=False)
     monkeypatch.setenv("RATE_LIMIT_DEFAULT", "5/minute")
     events = [
         _event(
-            ip="0.0.0.0",
-            xff="203.0.113.77, 10.0.0.1",
+            ip="10.0.0.12",
+            xff="198.51.100.1, 10.0.0.1",
             path="/api/registry",
             status=429,
             seconds_ago=1,
         ),
         _event(
-            ip="0.0.0.0",
-            xff="203.0.113.77, 10.0.0.1",
+            ip="10.0.0.12",
+            xff="198.51.100.2, 10.0.0.1",
             path="/api/registry",
             status=429,
             seconds_ago=0,
+        ),
+    ]
+    report = run_shield(events, now=NOW)
+    rate = [f for f in report["findings"] if f["monitor"] == "rate_limits"]
+    assert rate
+    assert rate[0]["subject"]["ip"] == "10.0.0.12"
+
+
+def test_shield_on_fly_missing_fly_header_uses_event_ip(monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.setenv("RATE_LIMIT_DEFAULT", "5/minute")
+    events = [
+        _event(
+            ip="198.51.100.55",
+            xff="1.1.1.1, 9.9.9.9",
+            path="/api/registry",
+            status=429,
+            seconds_ago=1,
+        ),
+        _event(
+            ip="198.51.100.55",
+            xff="2.2.2.2, 9.9.9.9",
+            path="/api/registry",
+            status=429,
+            seconds_ago=0,
+        ),
+    ]
+    report = run_shield(events, now=NOW)
+    rate = [f for f in report["findings"] if f["monitor"] == "rate_limits"]
+    assert rate
+    assert rate[0]["subject"]["ip"] == "198.51.100.55"
+
+
+def test_fly_client_ip_ignores_rotating_xff(monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.setenv("RATE_LIMIT_DEFAULT", "5/minute")
+    events = [
+        _event(
+            ip="10.0.0.5",
+            xff="198.51.100.1, 10.0.0.1",
+            path="/api/registry",
+            status=429,
+            seconds_ago=1,
+            extra_headers={"Fly-Client-IP": "203.0.113.77"},
+        ),
+        _event(
+            ip="10.0.0.5",
+            xff="198.51.100.2, 10.0.0.1",
+            path="/api/registry",
+            status=429,
+            seconds_ago=0,
+            extra_headers={"Fly-Client-IP": "203.0.113.77"},
         ),
     ]
     report = run_shield(events, now=NOW)
