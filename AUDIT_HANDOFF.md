@@ -32,7 +32,7 @@ Browser → web (HTTP only, no heavy jobs)
          worker (owns data_volume + schedulers)
 ```
 
-Intent: stop background CPU from starving uvicorn on a 2GB shared-cpu box.
+Intent: stop background CPU from starving uvicorn on the web VM. (Sizing note: this section describes the topology **as it stood in July 2026**, when the box was `shared-cpu-1x` / 2GB. PR #1312 later moved prod to `shared-cpu-2x` / 1GB. The intent is historical; the sizing is not current.)
 
 ## What actually broke on v2 (root causes to investigate)
 
