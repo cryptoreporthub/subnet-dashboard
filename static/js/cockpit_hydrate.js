@@ -4435,7 +4435,15 @@
         '<div class="pick-meta">SN' + esc(row.netuid) + '</div></div>' + sparkHtml + '</div>' + body + '</div>'
       );
     }).join('');
-    replaceSectionContent('section-indicators', '<div class="picks">' + cards + '</div>', '.picks, .card-muted');
+    var allDegraded = rows.length > 0 && rows.every(function (row) { return row.degraded; });
+    var banner = allDegraded
+      ? '<p class="section-sub section-sub--compact ti-degraded-banner">Oscillator panel awaiting price history — no live convergence yet.</p>'
+      : '';
+    replaceSectionContent(
+      'section-indicators',
+      '<div class="picks">' + cards + '</div>' + banner,
+      '.picks, .card-muted, .ti-degraded-banner'
+    );
   }
 
   function paintCharts() {

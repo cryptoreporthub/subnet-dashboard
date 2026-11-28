@@ -48,13 +48,13 @@ def test_convergence_source_names_state_vector(monkeypatch):
     monkeypatch.setattr(conv, "_detect_oversold_convergence", lambda ind: {"convergent": False, "count": 0})
     monkeypatch.setattr(conv, "_detect_overbought_convergence", lambda ind: {"convergent": False, "count": 0})
 
-    monkeypatch.setattr(conv, "_compute_technical_indicators", lambda sn: {"degraded": False})
+    monkeypatch.setattr(conv, "_compute_technical_indicators", lambda sn, **kw: {"degraded": False})
     with _client() as c:
         body = c.get("/api/indicators-convergence").json()
     assert body["data_available"] is True
     assert body["source"] == "state_vector"
 
-    monkeypatch.setattr(conv, "_compute_technical_indicators", lambda sn: {"degraded": True, "history_source": "unavailable"})
+    monkeypatch.setattr(conv, "_compute_technical_indicators", lambda sn, **kw: {"degraded": True, "history_source": "unavailable"})
     with _client() as c:
         body = c.get("/api/indicators-convergence").json()
     assert body["data_available"] is False

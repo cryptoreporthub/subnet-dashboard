@@ -570,9 +570,10 @@ def _compute_technical_indicators(
     sn: Dict[str, Any],
     *,
     allow_hydration: bool = True,
+    price_history: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Compute all 8 indicators and return per-signal scores."""
-    hist = _get_price_history(
+    hist = price_history if price_history is not None else _get_price_history(
         sn.get("netuid"),
         sn,
         allow_hydration=allow_hydration,

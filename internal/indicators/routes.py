@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter
 
-from internal.indicators.convergence import build_indicators_convergence
+from internal.indicators.convergence import build_indicators_convergence, indicators_convergence_error_payload
 
 logger = logging.getLogger(__name__)
 
@@ -24,4 +24,4 @@ async def api_indicators_convergence():
         return build_indicators_convergence(subnets)
     except Exception as exc:
         logger.error("Error fetching indicators convergence: %s", exc)
-        return {"subnets": [], "error": str(exc)}
+        return indicators_convergence_error_payload(exc)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+import pytest
 
 from internal.analytics.root_context import _safe_indicators_convergence
 from internal.council.state_vector import (
@@ -16,8 +16,8 @@ from internal.council.state_vector import (
     _compute_hot_signals,
     _compute_sell_signals,
 )
-from internal.indicators.convergence import build_indicators_convergence
-from server import app
+from internal.indicators.convergence import build_indicators_convergence, indicators_convergence_error_payload
+from server import app, templates
 
 
 def _live_shell(**overrides):
@@ -44,6 +44,24 @@ def test_raw_oscillator_value_keys_no_score_collision():
     assert degraded["cci"]["value"] == 0.0
     assert degraded["bollinger"]["width"] == 0.0
     assert degraded["macd"]["crossover"] == "neutral"
+
+
+def test_williams_overbought_emits_bearish_reversal_impact():
+    indicators = _live_shell(williams={"value": -10.0, "signal": "overbought"})
+    sn = {"netuid": 1, "price_change_24h": 0.0, "apy": 1.0, "emission": 0.1}
+    si = _compute_signal_impact(
+        sn,
+        indicators,
+        {"active": False},
+        _compute_sell_signals(
+            sn,
+            indicators,
+            _detect_oversold_convergence(indicators),
+        ),
+    )
+    williams = next(i for i in si["impacts"] if i["signal_type"] == "williams_r_reversal")
+    assert williams["direction"] == "bearish"
+    assert "Williams %R -10.0 overbought" in williams["description"]
 
 
 def test_williams_oversold_counts_in_convergence():
@@ -102,31 +120,43 @@ def test_williams_mfi_cci_compute_helpers_emit_value_key():
     assert "value" in _compute_cci(highs, lows, closes)
 
 
-def test_build_indicators_convergence_matches_root_and_api(monkeypatch):
+def test_build_indicators_convergence_matches_root_and_api(client, monkeypatch):
     import internal.indicators.convergence as conv
+    import server
 
     subnets = [{"netuid": 9, "name": "SN9", "emission": 2.0}]
+    monkeypatch.setattr(server, "_get_subnets_with_source", lambda: (subnets, "registry"))
     monkeypatch.setattr(
         conv,
         "_compute_technical_indicators",
-        lambda sn: {"degraded": True, "history_source": "unavailable"},
+        lambda sn, **kw: {"degraded": True, "history_source": "unavailable"},
     )
     monkeypatch.setattr(conv, "_get_price_history", lambda n, sn: {"closes": [], "source": "unavailable"})
     payload = build_indicators_convergence(subnets)
     root = _safe_indicators_convergence(subnets)
     assert payload == root
+    assert client.get("/api/indicators-convergence").json() == payload
     assert payload["data_available"] is False
     assert payload["subnets"][0]["degraded"] is True
     assert payload["subnets"][0]["oversold"]["reason"] == "no_ohlcv"
 
 
-def test_server_rendered_indicators_degraded_skip_neutral_badge():
-    from server import app as fastapi_app
+def test_indicators_convergence_error_payload_shape():
+    body = indicators_convergence_error_payload(RuntimeError("boom"))
+    assert body["data_available"] is False
+    assert body["source"] == "none"
+    assert body["reason"] == "error"
 
-    templates = fastapi_app.state.templates if hasattr(fastapi_app.state, "templates") else None
-    if templates is None:
-        from server import templates as tpl
-        templates = tpl
+
+@pytest.fixture
+def client():
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as c:
+        yield c
+
+
+def test_server_rendered_indicators_degraded_skip_neutral_badge():
     html = templates.get_template("partials/premium/indicators.html").render(
         ti_rows=[
             {

@@ -83,7 +83,7 @@ def test_api_ruggers_honest_empty_and_same_ledger(client):
 def test_api_indicators_convergence_honest_degraded(client, monkeypatch):
     monkeypatch.setattr(
         "internal.indicators.convergence._compute_technical_indicators",
-        lambda sn: {"degraded": True, "history_source": "unavailable"},
+        lambda sn, **kw: {"degraded": True, "history_source": "unavailable"},
     )
     conv = client.get("/api/indicators-convergence").json()
     assert conv["data_available"] is False
