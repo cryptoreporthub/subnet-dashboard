@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 
+import internal.judges.postmortems as postmortems
 from internal.council import weights as council_weights
 from internal.learning import mindmap_aggregator as agg
 from internal.learning import panel_summaries
@@ -140,3 +141,71 @@ def test_reset_mindmap_state_cache_clears_both_fresh_and_stale():
     assert agg._STATE_CACHE.get("payload") is None
     assert get_stale_mindmap_state() is None
     assert agg._STATE_CACHE.get("at") == 0.0
+
+
+def test_picks_except_not_cached_and_preserves_last_good(monkeypatch):
+    monkeypatch.setattr(
+        panel_summaries, "summarize_picks_lite", panel_summaries.summarize_picks
+    )
+    healthy = build_mindmap_state()
+    healthy_picks = (healthy.get("summaries") or {}).get("picks", {}).get("text", "")
+    assert healthy_picks
+    assert "could not load live state" not in healthy_picks
+
+    _expire_fresh_cache()
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("pick feed down")
+
+    monkeypatch.setattr("internal.subnets.feed.load_pick_subnets", _boom)
+    degraded = build_mindmap_state()
+    degraded_picks = (degraded.get("summaries") or {}).get("picks", {}).get("text", "")
+    assert "could not load live state" in degraded_picks
+    assert agg._STATE_CACHE["payload"] is None
+    stale = get_stale_mindmap_state()
+    assert stale is not None
+    assert (stale.get("summaries") or {}).get("picks", {}).get("text") == healthy_picks
+
+
+def test_judges_postmortem_except_not_cached_and_preserves_last_good(monkeypatch):
+    healthy = build_mindmap_state()
+    healthy_judges = (healthy.get("summaries") or {}).get("judges", {}).get("text", "")
+    assert healthy_judges
+    assert "Post-mortem store unavailable." not in healthy_judges
+
+    _expire_fresh_cache()
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("pm store down")
+
+    monkeypatch.setattr(postmortems, "all_postmortems_with_status", _boom)
+    degraded = build_mindmap_state()
+    degraded_judges = (degraded.get("summaries") or {}).get("judges", {}).get("text", "")
+    assert "Post-mortem store unavailable." in degraded_judges
+    assert agg._STATE_CACHE["payload"] is None
+    stale = get_stale_mindmap_state()
+    assert stale is not None
+    assert (stale.get("summaries") or {}).get("judges", {}).get("text") == healthy_judges
+
+
+def test_judges_postmortem_unavailable_list_not_cached_and_preserves_last_good(
+    monkeypatch,
+):
+    healthy = build_mindmap_state()
+    healthy_judges = (healthy.get("summaries") or {}).get("judges", {}).get("text", "")
+    assert healthy_judges
+    assert "Post-mortem store unavailable for:" not in healthy_judges
+
+    _expire_fresh_cache()
+
+    def _unavailable():
+        return {"oracle": [], "echo": [], "pulse": []}, ["oracle"]
+
+    monkeypatch.setattr(postmortems, "all_postmortems_with_status", _unavailable)
+    degraded = build_mindmap_state()
+    degraded_judges = (degraded.get("summaries") or {}).get("judges", {}).get("text", "")
+    assert "Post-mortem store unavailable for: oracle" in degraded_judges
+    assert agg._STATE_CACHE["payload"] is None
+    stale = get_stale_mindmap_state()
+    assert stale is not None
+    assert (stale.get("summaries") or {}).get("judges", {}).get("text") == healthy_judges

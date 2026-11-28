@@ -89,6 +89,7 @@ def summarize_judges() -> Dict[str, Any]:
     if not parts:
         parts.append("Oracle, Echo, and Pulse have not recorded paper positions yet.")
 
+    pm_failed = False
     try:
         from internal.judges.postmortems import all_postmortems_with_status
 
@@ -105,10 +106,12 @@ def summarize_judges() -> Dict[str, Any]:
         elif not unavailable:
             parts.append("No judge post-mortems recorded yet; they fire on wrong paper resolutions.")
         if unavailable:
+            pm_failed = True
             parts.append(
                 "Post-mortem store unavailable for: " + ", ".join(unavailable) + "."
             )
     except Exception:
+        pm_failed = True
         parts.append("Post-mortem store unavailable.")
 
     try:
@@ -121,7 +124,7 @@ def summarize_judges() -> Dict[str, Any]:
     except Exception:
         pass
 
-    return _sentences(parts[:5])
+    return _sentences(parts[:5], degraded=pm_failed)
 
 
 def summarize_learning() -> Dict[str, Any]:
@@ -193,7 +196,10 @@ def summarize_picks() -> Dict[str, Any]:
         hour_pick = select_hourly_pick(subnets, ctx) if subnets else {}
         daily = get_or_create_today_pick(subnets, ctx)
     except Exception as exc:
-        return _sentences([f"Pick engine could not load live state: {exc}"])
+        return _sentences(
+            [f"Pick engine could not load live state: {exc}"],
+            degraded=True,
+        )
 
     if hour_pick and hour_pick.get("subnet"):
         sn = (hour_pick.get("subnet") or {}).get("name") or "unknown"
@@ -233,7 +239,7 @@ def summarize_picks_lite() -> Dict[str, Any]:
 
         daily = _find_today(_load()) or {}
     except Exception as exc:
-        return _sentences([f"Pick snapshot unavailable: {exc}"])
+        return _sentences([f"Pick snapshot unavailable: {exc}"], degraded=True)
 
     parts: List[str] = []
     pick = daily.get("pick") if isinstance(daily, dict) else None
