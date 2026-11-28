@@ -79,7 +79,9 @@ jobs:
             tests/test_no_handrolled_liveness.py \
             tests/test_resolver_scheduler.py \
             tests/test_pump_ladder_scheduler.py \
-            tests/test_scheduler.py \
+            tests/test_scheduler_contract.py \
+            tests/test_indicators.py \
+            tests/test_scheduler_removal.py \
             tests/test_activity_receipts.py \
             tests/test_cockpit_picks_state.py \
             tests/test_top_picks_snapshot_read.py \
@@ -89,7 +91,10 @@ jobs:
             tests/test_pick_scheduler.py \
             tests/test_subnet_universe.py \
             tests/test_universe_stale_stamp.py \
-            tests/test_owner_guard.py -q 2>&1 | tee ci-test-output.txt
+            tests/test_owner_guard.py \
+            tests/test_deploy_blockers_resilience.py \
+            tests/test_issue_1637_panel_postmortem.py \
+            tests/test_mindmap_state_cache.py -q 2>&1 | tee ci-test-output.txt
       - name: Upload test output artifact
         if: failure()
         continue-on-error: true

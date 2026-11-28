@@ -148,8 +148,6 @@ class PumpTracker:
         self.sentiment_state: Dict[int, Dict[str, Any]] = {}
         # netuid -> latest technical indicator values (Enhancement 3)
         self.indicator_state: Dict[int, Dict[str, Any]] = {}
-        self._indicator_file_cache: Optional[Dict[str, Any]] = None
-        self._indicator_file_cache_time: float = 0.0
         self.meta: Dict[str, Any] = {
             "version": "2.0",
             "created": _now_iso(),
@@ -718,33 +716,6 @@ class PumpTracker:
         except Exception as exc:
             logger.warning("pump_tracker: update_indicators failed: %s", exc)
 
-    def _read_indicator_state_file(self, nid: int) -> Dict[str, Any]:
-        """Fallback: read indicator values from data/indicator_state.json.
-
-        Results are cached for 30 seconds to avoid repeated disk reads
-        when the in-memory indicator_state is empty (e.g. cold start).
-        """
-        import time
-        try:
-            now = time.time()
-            if self._indicator_file_cache is None or (now - self._indicator_file_cache_time) > 30:
-                path = os.environ.get("INDICATOR_STATE_PATH", "data/indicator_state.json")
-                if not os.path.exists(path):
-                    self._indicator_file_cache = {}
-                else:
-                    with open(path, "r", encoding="utf-8") as fh:
-                        data = json.load(fh) or {}
-                    self._indicator_file_cache = data.get("per_subnet", {})
-                self._indicator_file_cache_time = now
-            per = self._indicator_file_cache.get(str(nid), {})
-            return {
-                "rsi": per.get("rsi"),
-                "macd_histogram": per.get("macd_histogram"),
-                "stochastic_k": per.get("stochastic_k"),
-            }
-        except Exception:
-            return {}
-
     @staticmethod
     def _ind_value(ind: Dict[str, Any], key: str) -> Optional[float]:
         """Extract a numeric indicator value from either nested or flat shape."""
@@ -776,8 +747,6 @@ class PumpTracker:
             with self._lock:
                 if indicator_values is None:
                     indicator_values = self.indicator_state.get(nid)
-                if not indicator_values:
-                    indicator_values = self._read_indicator_state_file(nid)
                 if not indicator_values:
                     return 0.5
 

@@ -670,10 +670,8 @@ def test_api_letter_weekly_timeout_returns_degraded(monkeypatch):
 
 
 def test_api_mindmap_state_timeout_returns_degraded(monkeypatch):
-    import internal.learning.mindmap_aggregator as agg
     import internal.learning.routes as learning_routes
 
-    monkeypatch.setattr(agg, "_STATE_CACHE", {"at": 0.0, "payload": None})
     monkeypatch.setattr(learning_routes, "MINDMAP_STATE_HANDLER_TIMEOUT", 0.05)
 
     def _slow():
@@ -701,7 +699,7 @@ def test_api_mindmap_state_timeout_serves_stale_cache(monkeypatch):
         "trail_count": 1,
         "summaries": {"council": {"text": "cached"}},
     }
-    monkeypatch.setattr(agg, "_STATE_CACHE", {"at": time.time() - 999, "payload": stale})
+    monkeypatch.setattr(agg, "_LAST_GOOD_STATE", stale)
     monkeypatch.setattr(learning_routes, "MINDMAP_STATE_HANDLER_TIMEOUT", 0.05)
 
     def _slow():

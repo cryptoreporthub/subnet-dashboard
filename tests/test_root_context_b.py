@@ -10,7 +10,6 @@ def test_build_agent_b_root_context_keys():
         "pump_summary",
         "scenario_summary",
         "api_indicators_convergence",
-        "indicator_state",
         "whale_intelligence",
         "ruggers_watchlist",
         "enrichment_badge",

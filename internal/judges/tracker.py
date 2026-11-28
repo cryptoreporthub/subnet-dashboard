@@ -11,14 +11,55 @@ expert-weight nudges.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
 
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.judges import all_judges
+from internal.judges.postmortems import (
+    PostmortemFileCorrupt,
+    PostmortemLockTimeout,
+    list_for_judge,
+    normalize_prediction_id,
+)
+
+logger = logging.getLogger(__name__)
+
+try:
+    from internal.learning.trail_events import emit_trail_event
+except ImportError:
+    logger.exception("trail_events unavailable; judge trail emits are no-ops")
+
+    def emit_trail_event(*_args, **_kwargs) -> None:
+        pass
 
 
 class _SkipJudgeNudge(Exception):
     """Internal: skip this judge nudge without treating it as an error."""
+
+
+def _postmortem_already_recorded(judge_name: str, prediction_id: Any) -> bool:
+    """True when this judge already has a postmortem row for the prediction."""
+    pred_id = normalize_prediction_id(prediction_id)
+    if pred_id is None:
+        return True
+    try:
+        rows = list_for_judge(judge_name)
+    except PostmortemFileCorrupt as exc:
+        logger.error(
+            "postmortem file corrupt judge=%s prediction=%s: %s",
+            judge_name,
+            pred_id,
+            exc,
+        )
+        return False
+    except ValueError:
+        return True
+    return any(
+        isinstance(row, dict)
+        and normalize_prediction_id(row.get("prediction_id")) == pred_id
+        for row in rows
+    )
 
 
 def _actual_pct(prediction: Dict[str, Any]) -> float:
@@ -46,6 +87,8 @@ def on_prediction_created(
         "echo": echo_judge.evaluate(prediction, signal_impact=signal_impact, expert_weights=expert_weights),
         "pulse": pulse_judge.evaluate(prediction, signal_impact=signal_impact, subnet=subnet),
     }
+    if normalize_prediction_id(prediction.get("id")) is None:
+        return scores
     for judge in all_judges():
         block = scores.get(judge.name) or {}
         conf = float(block.get("confidence", 0.5) or 0.5)
@@ -65,9 +108,23 @@ def on_prediction_resolved(
     actual_pct = _actual_pct(prediction)
     outcome = prediction.get("outcome", "unknown")
     wrong = not prediction.get("correct", outcome == "hit")
+    pred_id = normalize_prediction_id(prediction.get("id"))
+    if pred_id is None:
+        logger.error(
+            "judge resolution skipped invalid prediction id=%r",
+            prediction.get("id"),
+        )
+        try:
+            emit_trail_event(
+                "judge_resolution_skipped",
+                evidence={"prediction_id": prediction.get("id")},
+            )
+        except Exception:
+            logger.exception("judge_resolution_skipped trail emit failed")
+        return {"judges": {}, "skipped": True}
 
     summary: Dict[str, Any] = {
-        "prediction_id": prediction.get("id"),
+        "prediction_id": pred_id,
         "actual_pct": round(actual_pct, 4),
         "outcome": outcome,
         "wrong": wrong,
@@ -133,13 +190,52 @@ def on_prediction_resolved(
             except Exception:
                 pass
         postmortem = None
-        # close_position returns None only on replay, so a replay must not append a second postmortem.
-        if wrong and closed:
-            postmortem = judge.record_postmortem(prediction, actual_pct)
-        summary["judges"][judge.name] = {
+        # PostmortemLockTimeout drops this judge's row (ERROR + postmortem_skipped).
+        # Replay only if predictions.json never saved, so the row is still pending.
+        postmortem_error = None
+        should_record = bool(wrong) and (
+            bool(closed)
+            or (
+                closed is None
+                and not _postmortem_already_recorded(judge.name, pred_id)
+            )
+        )
+        if should_record:
+            try:
+                postmortem = judge.record_postmortem(prediction, actual_pct)
+            except Exception as exc:
+                if not isinstance(exc, (PostmortemFileCorrupt, PostmortemLockTimeout)):
+                    raise
+                logger.error(
+                    "postmortem skipped judge=%s prediction=%s: %s",
+                    judge.name,
+                    prediction.get("id"),
+                    exc,
+                )
+                postmortem = None
+                postmortem_error = type(exc).__name__
+                try:
+                    emit_trail_event(
+                        "postmortem_skipped",
+                        judge=judge.name,
+                        evidence={
+                            "prediction_id": prediction.get("id"),
+                            "error_type": postmortem_error,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "postmortem_skipped trail emit failed judge=%s prediction=%s",
+                        judge.name,
+                        prediction.get("id"),
+                    )
+        judge_summary: Dict[str, Any] = {
             "closed": closed,
             "postmortem": postmortem,
         }
+        if postmortem_error:
+            judge_summary["postmortem_error"] = postmortem_error
+        summary["judges"][judge.name] = judge_summary
         try:
             from internal.learning.trail_bus import emit_judge_pnl, emit_judge_postmortem
 
