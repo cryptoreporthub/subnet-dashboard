@@ -48,18 +48,23 @@ def test_raw_oscillator_value_keys_no_score_collision():
 
 
 def test_williams_overbought_emits_bearish_reversal_impact():
-    indicators = _live_shell(williams={"value": -10.0, "signal": "overbought"})
-    sn = {"netuid": 1, "price_change_24h": 0.0, "apy": 1.0, "emission": 0.1}
-    si = _compute_signal_impact(
-        sn,
-        indicators,
-        {"active": False},
-        _compute_sell_signals(
-            sn,
-            indicators,
-            _detect_overbought_convergence(indicators),
-        ),
+    """F8: sell path must receive overbought convergence (not oversold) so Williams counts toward bearish setup."""
+    indicators = _live_shell(
+        williams={"value": -10.0, "signal": "overbought"},
+        rsi={"value": 80.0, "signal": "overbought"},
+        stochastic={"k": 90.0, "d": 85.0, "signal": "overbought"},
+        mfi={"value": 85.0, "signal": "overbought"},
     )
+    overbought_conv = _detect_overbought_convergence(indicators)
+    assert "williams" in overbought_conv["indicators"]
+    assert overbought_conv["type"] == "overbought"
+    assert overbought_conv["convergent"] is True
+
+    sn = {"netuid": 1, "price_change_24h": 0.0, "apy": 1.0, "emission": 0.1}
+    sell = _compute_sell_signals(sn, indicators, overbought_conv)
+    assert any("Overbought convergence" in r for r in sell["reasons"])
+
+    si = _compute_signal_impact(sn, indicators, {"active": False}, sell)
     williams = next(i for i in si["impacts"] if i["signal_type"] == "williams_r_reversal")
     assert williams["direction"] == "bearish"
     assert "Williams %R -10.0 overbought" in williams["description"]
