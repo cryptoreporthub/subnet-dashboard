@@ -114,7 +114,8 @@
     var name = meta.name || ('SN' + key);
     var id = subnetKey(meta) || key;
     var count = signalCount(g);
-    if (count === 0) return '';
+    var hasIndicatorRows = (g.indicators || []).length > 0;
+    if (count === 0 && !hasIndicatorRows) return '';
 
     var open = localStorage.getItem(STORAGE_PREFIX + key) === '1';
     var items = '';

@@ -81,6 +81,15 @@ jobs:
             tests/test_pump_ladder_scheduler.py \
             tests/test_scheduler_contract.py \
             tests/test_indicators.py \
+            tests/test_indicators_routes.py \
+            tests/test_issue_1639_oscillators.py \
+            tests/test_subnet_grouping_degraded.py \
+            tests/test_honest_depth_s4.py \
+            tests/test_root_context_b.py \
+            tests/test_call_reasons_signal_impact.py \
+            tests/test_check_score_snapshot_seed.py \
+            tests/test_committed_seed.py \
+            tests/test_scorer_identity.py \
             tests/test_scheduler_removal.py \
             tests/test_activity_receipts.py \
             tests/test_cockpit_picks_state.py \
