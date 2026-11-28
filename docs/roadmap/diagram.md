@@ -1,0 +1,306 @@
+## Bug roadmap diagrams
+
+Hand-maintained since 2026-11-26. The generator build_diagram.py is not in the repo. Counts are typed. The 45 blocker and 18 decision edges were re-counted by hand on 2026-11-26. The file `diagram_counts.txt` is not in the repo, so edge counts, unresolved references, orphan rows and the critical path check have no checked-in source and are hand-maintained.
+
+### Gating view (21 nodes)
+
+Read top to bottom. Dashed arrows are owner decisions that gate a row (10 drawn). Solid arrows are one row blocking another (13 drawn, thick ones included). The red outline marks every node on the critical path from section 7.3, in the order that section gives: PATHFILTER, D3, STACKVERIFY, SKIPROW, NB1, R0GATE, then lanes R0 to R9. Thick arrows are only the path steps that have a direct blocker edge in the row data (3 of 6). The other path steps are 1 drawn as a dashed decision edge and 2 with no arrow, which section 7.3 orders alone. No file in the repo lists them; they are hand-maintained. Rows with no gate are left out here and appear in the full graph.
+
+```mermaid
+flowchart TB
+  classDef dec fill:#fde68a,stroke:#92400e,color:#1c1917,stroke-width:2px
+  classDef unit fill:#bfdbfe,stroke:#1e3a8a,color:#0f172a
+  classDef need fill:#e5e7eb,stroke:#4b5563,color:#111827,stroke-dasharray:4 3
+  classDef gate fill:#bbf7d0,stroke:#166534,color:#052e16,stroke-width:2px
+  classDef crit stroke:#b91c1c,stroke-width:3px
+  subgraph L0["Decide first"]
+    direction LR
+    n_OD12["OD12 held items stay held (go)"]:::dec
+    n_OD19["OD19 measure F48 on 1 GB Fly"]:::dec
+    n_F12["F12 one owner per file (OD20)"]:::dec
+    n_NB1["NB1 hermetic fixtures"]:::dec
+    n_STATEVECTOR["STATEVECTOR scorer restamp (OD4)"]:::dec
+  end
+  subgraph L1["Land the stack"]
+    direction LR
+    n_PATHFILTER["PATHFILTER 1605 path filter"]:::unit
+    n_D3["D3 land 1599 to 1605"]:::unit
+    n_F48["F48 1 GB ledger measurement"]:::need
+    n_D2["D2 land 1591"]:::unit
+    n_STACKVERIFY["STACKVERIFY rerun repros on main"]:::unit
+    n_SKIPROW["SKIPROW skip row overwrite"]:::unit
+  end
+  subgraph L2["Beside the path"]
+    direction LR
+    n_NB5["NB5 exception text swap"]:::unit
+    n_D1["D1 sweep script in CI"]:::unit
+  end
+  subgraph L3["Gate and refactor"]
+    direction LR
+    n_R0GATE["R0GATE refactor start gate"]:::unit
+    n_RCHAIN["R0 to R9 ten lanes in series"]:::unit
+    n_R10["R10 interaction lane"]:::unit
+    n_R11["R11 interaction lane"]:::unit
+    n_R12["R12 last lane"]:::unit
+    n_FINAL["FINAL re-run inventory"]:::unit
+    n_D6["D6 route exception text"]:::unit
+  end
+  subgraph L4["After the decision"]
+    direction LR
+    n_LOCKSWEEP["LOCK sweep, 4 rows + analytics 2 rows"]:::unit
+  end
+  n_D3 --> n_NB1
+  n_STATEVECTOR -.->|decides| n_R11
+  n_OD12 -.->|decides| n_D1
+  n_PATHFILTER --> n_D1
+  n_OD12 -.->|decides| n_D2
+  n_OD12 -.->|decides| n_D3
+  n_OD19 -.->|decides| n_D3
+  n_PATHFILTER ==> n_D3
+  n_D3 ==> n_STACKVERIFY
+  n_R10 --> n_D6
+  n_NB5 --> n_RCHAIN
+  n_D3 --> n_R0GATE
+  n_NB1 -.->|decides| n_R0GATE
+  n_D3 --> n_SKIPROW
+  n_OD12 -.->|decides| n_PATHFILTER
+  n_F12 -.->|decides| n_LOCKSWEEP
+  n_OD19 -.->|decides| n_F48
+  n_R12 --> n_FINAL
+  n_R0GATE ==> n_RCHAIN
+  n_NB1 -.->|decides| n_RCHAIN
+  n_RCHAIN --> n_R10
+  n_R10 --> n_R11
+  n_R11 --> n_R12
+  class n_PATHFILTER,n_D3,n_STACKVERIFY,n_SKIPROW,n_NB1,n_R0GATE,n_RCHAIN crit
+```
+
+### Lifecycle of one work row
+
+This is the lifecycle each roadmap row goes through, from proposed to merged, including its blocked state. It is not Grok's runtime statecharts, which are in Part 8.
+
+```mermaid
+stateDiagram-v2
+  [*] --> proposed
+  proposed --> decided : owner decision made (class a only)
+  proposed --> repro_needed : no failing test yet (class c)
+  repro_needed --> proposed : failing test or measurement exists
+  decided --> scheduled : wave and slot assigned
+  proposed --> scheduled : class b unit, no decision needed
+  scheduled --> in_progress : failing test written first, WIP limit allows
+  in_progress --> verified : test passes, check_invariants reports 0 new
+  verified --> merged : PR lands on main
+  merged --> [*]
+  scheduled --> blocked : a blocker row is not merged
+  in_progress --> blocked : a blocker row is not merged
+  blocked --> scheduled : every blocker merged
+  verified --> in_progress : review asks for changes
+```
+
+<details>
+<summary>Full graph, all 120 rows</summary>
+
+Amber is an owner decision, blue is a PR-sized unit, grey dashed is a row that needs a repro first. Dashed arrows are decisions, solid arrows are blockers.
+
+```mermaid
+flowchart LR
+  classDef dec fill:#fde68a,stroke:#92400e,color:#1c1917,stroke-width:2px
+  classDef unit fill:#bfdbfe,stroke:#1e3a8a,color:#0f172a
+  classDef need fill:#e5e7eb,stroke:#4b5563,color:#111827,stroke-dasharray:4 3
+  classDef gate fill:#bbf7d0,stroke:#166534,color:#052e16,stroke-width:2px
+  classDef crit stroke:#b91c1c,stroke-width:3px
+  subgraph g_a["Owner decisions (23)"]
+    direction TB
+    n_OD6["OD6"]:::dec
+    n_OD7["OD7"]:::dec
+    n_OD8["OD8"]:::dec
+    n_OD9["OD9"]:::dec
+    n_OD10["OD10"]:::dec
+    n_OD12["OD12"]:::dec
+    n_OD13["OD13"]:::dec
+    n_OD14["OD14"]:::dec
+    n_OD17["OD17"]:::dec
+    n_OD19["OD19"]:::dec
+    n_OD23["OD23"]:::dec
+    n_OD24["OD24"]:::dec
+    n_F04["F04"]:::dec
+    n_F12["F12"]:::dec
+    n_F36["F36"]:::dec
+    n_F79["F79"]:::dec
+    n_NB2["NB2"]:::dec
+    n_NB1["NB1"]:::dec
+    n_NB4["NB4"]:::dec
+    n_NB6["NB6"]:::dec
+    n_D5["D5"]:::dec
+    n_STATEVECTOR["STATEVECTOR"]:::dec
+    n_ISSUES_LIVE["ISSUES_LIVE"]:::dec
+  end
+  subgraph g_b["PR-sized units (52)"]
+    direction TB
+    n_D1["D1"]:::unit
+    n_D2["D2"]:::unit
+    n_D3["D3"]:::unit
+    n_STACKVERIFY["STACKVERIFY"]:::unit
+    n_D4["D4"]:::unit
+    n_F1A["F1A"]:::unit
+    n_F2A["F2A"]:::unit
+    n_D5B["D5B"]:::unit
+    n_D5C["D5C"]:::unit
+    n_D6["D6"]:::unit
+    n_NB5["NB5"]:::unit
+    n_NB3["NB3"]:::unit
+    n_GATES["GATES"]:::unit
+    n_R0GATE["R0GATE"]:::unit
+    n_SKIPROW["SKIPROW"]:::unit
+    n_PATHFILTER["PATHFILTER"]:::unit
+    n_NITS["NITS"]:::unit
+    n_F26["F26"]:::unit
+    n_F27["F27"]:::unit
+    n_F28["F28"]:::unit
+    n_LOCKPUMP["LOCKPUMP"]:::unit
+    n_LOCKTRACE["LOCKTRACE"]:::unit
+    n_LOCKCONV["LOCKCONV"]:::unit
+    n_LOCKJUDGE["LOCKJUDGE"]:::unit
+    n_F31["F31"]:::unit
+    n_ANALYTICS_TORN["ANALYTICS_TORN"]:::unit
+    n_ANALYTICS_CURSOR["ANALYTICS_CURSOR"]:::unit
+    n_F21["F21"]:::unit
+    n_F01["F01"]:::unit
+    n_F15["F15"]:::unit
+    n_F14["F14"]:::unit
+    n_F13["F13"]:::unit
+    n_F22["F22"]:::unit
+    n_F11["F11"]:::unit
+    n_F20["F20"]:::unit
+    n_FINAL["FINAL"]:::unit
+    n_RULE["RULE"]:::unit
+    n_SCORECACHE["SCORECACHE"]:::unit
+    n_W120["W120 review infrastructure"]:::unit
+    n_R0["R0"]:::unit
+    n_R1["R1"]:::unit
+    n_R2["R2"]:::unit
+    n_R3["R3"]:::unit
+    n_R4["R4"]:::unit
+    n_R5["R5"]:::unit
+    n_R6["R6"]:::unit
+    n_R7["R7"]:::unit
+    n_R8["R8"]:::unit
+    n_R9["R9"]:::unit
+    n_R10["R10"]:::unit
+    n_R11["R11"]:::unit
+    n_R12["R12"]:::unit
+  end
+  subgraph g_c["Needs a repro (45)"]
+    direction TB
+    n_F48["F48"]:::need
+    n_RECHECK["RECHECK"]:::need
+    n_F46["F46"]:::need
+    n_UNVERIFIED["UNVERIFIED"]:::need
+    n_GEMSEC["GEMSEC"]:::need
+    n_GEMWATCH["GEMWATCH"]:::need
+    n_GEMDOM["GEMDOM"]:::need
+    n_GEMLOCK["GEMLOCK"]:::need
+    n_GEMHYG["GEMHYG"]:::need
+    n_PRODLOGS["PRODLOGS"]:::need
+    n_H1["H1"]:::need
+    n_H2["H2"]:::need
+    n_H3["H3"]:::need
+    n_H5["H5"]:::need
+    n_H6["H6"]:::need
+    n_H7["H7"]:::need
+    n_COVPART["COVPART"]:::need
+    n_NB7["NB7"]:::need
+    n_FAILTESTS["FAILTESTS"]:::need
+    n_POSTMORTEM["POSTMORTEM"]:::need
+    n_WEIGHTS["WEIGHTS"]:::need
+    n_RECEIPTS["RECEIPTS"]:::need
+    n_TELEGRAM["TELEGRAM"]:::need
+    n_PICKSCHED["PICKSCHED"]:::need
+    n_RETRAIN["RETRAIN"]:::need
+    n_LOCKAUDIT["LOCKAUDIT"]:::need
+    n_JRESID["JRESID"]:::need
+    n_ISSUES_RESOLVER["ISSUES_RESOLVER"]:::need
+    n_MEMITEMS["MEMITEMS"]:::need
+    n_MPR1["MPR1"]:::need
+    n_MPR2["MPR2"]:::need
+    n_MPR3["MPR3"]:::need
+    n_MPR4["MPR4"]:::need
+    n_MPR5["MPR5"]:::need
+    n_MPR6["MPR6"]:::need
+    n_MPJ1["MPJ1"]:::need
+    n_MPJ2["MPJ2"]:::need
+    n_MPJ3["MPJ3"]:::need
+    n_MPJ4["MPJ4"]:::need
+    n_MPJ5["MPJ5"]:::need
+    n_MPJ6["MPJ6"]:::need
+    n_MPJ7["MPJ7"]:::need
+    n_OIGATEBOT["OIGATEBOT"]:::need
+    n_MEMFIXED["MEMFIXED"]:::need
+    n_DROP1["DROP1"]:::need
+  end
+  n_D3 --> n_F04
+  n_D3 --> n_NB1
+  n_D3 --> n_NB4
+  n_STATEVECTOR -.-> n_R11
+  n_OD12 -.-> n_D1
+  n_PATHFILTER --> n_D1
+  n_OD12 -.-> n_D2
+  n_OD12 -.-> n_D3
+  n_OD19 -.-> n_D3
+  n_PATHFILTER --> n_D3
+  n_D3 --> n_STACKVERIFY
+  n_D3 --> n_D4
+  n_OD12 -.-> n_F1A
+  n_OD12 -.-> n_F2A
+  n_F2A --> n_D5B
+  n_F1A --> n_D5C
+  n_R10 --> n_D6
+  n_NB5 --> n_R0
+  n_D3 --> n_GATES
+  n_D3 --> n_R0GATE
+  n_NB1 -.-> n_R0GATE
+  n_D3 --> n_SKIPROW
+  n_OD12 -.-> n_PATHFILTER
+  n_PATHFILTER --> n_NITS
+  n_D3 --> n_F26
+  n_F12 -.-> n_LOCKPUMP
+  n_F12 -.-> n_LOCKTRACE
+  n_F12 -.-> n_LOCKCONV
+  n_F12 -.-> n_LOCKJUDGE
+  n_F12 -.-> n_ANALYTICS_TORN
+  n_F12 -.-> n_ANALYTICS_CURSOR
+  n_ANALYTICS_TORN --> n_ANALYTICS_CURSOR
+  n_OD8 -.-> n_F15
+  n_OD19 -.-> n_F48
+  n_R12 --> n_FINAL
+  n_D3 --> n_ISSUES_RESOLVER
+  n_D3 --> n_MPR1
+  n_D3 --> n_MPR2
+  n_D3 --> n_MPR3
+  n_D3 --> n_MPR4
+  n_D3 --> n_MPR5
+  n_D3 --> n_MPR6
+  n_D3 --> n_MPJ1
+  n_D3 --> n_MPJ2
+  n_D3 --> n_MPJ3
+  n_D3 --> n_MPJ4
+  n_D3 --> n_MPJ5
+  n_D3 --> n_MPJ6
+  n_R1 --> n_DROP1
+  n_R0GATE --> n_R0
+  n_NB1 -.-> n_R0
+  n_R0 --> n_R1
+  n_R1 --> n_R2
+  n_R2 --> n_R3
+  n_R3 --> n_R4
+  n_R4 --> n_R5
+  n_R5 --> n_R6
+  n_R6 --> n_R7
+  n_R7 --> n_R8
+  n_R8 --> n_R9
+  n_R9 --> n_R10
+  n_R10 --> n_R11
+  n_R11 --> n_R12
+```
+
+</details>
